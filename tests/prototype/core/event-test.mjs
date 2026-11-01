@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const { oldInstall } = await import(new URL('../fixtures/old-install.mjs', import.meta.url).href);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
@@ -42,6 +43,7 @@ function proofread(edits) {
 const shown = P => [P.title, P.context, ...P.questions.flatMap(q => [q.ask, q.judge, q.why, q.value, ...(q.options || []).map(o => o.text)])];
 
 try {
+  await usePass(BASE);
   await waitFor(async () => { try { return (await get('/api/status')).ok; } catch { return false; } }, 15000);
   ok('伺服器版本同程式一致（' + lib.SERVER_VERSION + '）', (await get('/api/status')).version === lib.SERVER_VERSION, (await get('/api/status')).version);
   await post('/api/setup', { action: 'certify', host: 'test' });

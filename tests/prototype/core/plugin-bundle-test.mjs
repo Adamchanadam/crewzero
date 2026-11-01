@@ -9,6 +9,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { installPass } from '../lib/testkit.mjs';
+let unpair = () => { };
 const [PROTO, OUT, PORT, FAKE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -50,8 +52,9 @@ try {
   ok('喺嗰度執行 program/install.mjs <空資料夾>：安裝成功，VERSION 取自插件資訊檔', r1.status === 0 && fs.existsSync(path.join(T, 'ask.mjs')) && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === pj.version && fs.readdirSync(path.join(T, 'data')).length === 0, { status: r1.status, out: r1.stdout, err: r1.stderr });
   const r2 = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env, timeout: 30000, cwd: PROJ });
   const url = (r2.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];
-  const st = url ? await (await fetch(url + 'api/status')).json() : {};
+  const st = url ? await (await fetch(url + 'api/health')).json() : {};
   pid = Number(st.pid) || 0;
+  if (url) unpair = await installPass(lib.rootId(path.join(T, 'data')), url, path.join(T, 'data'));
   ok('開得到 Founder Desk，伺服器用新安裝嘅 data/', !!url && /Founder Desk/.test(await (await fetch(url)).text()) && st.root === lib.rootId(path.join(T, 'data')), { out: r2.stdout, root: st.root });
   const post = async (p, body) => { const r = await fetch(url + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: url.replace(/\/$/, '') }, body: JSON.stringify(body) }); return r.status; };
   if (url) await post('api/setup', { action: 'certify', host: 'test' });
@@ -65,6 +68,7 @@ try {
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {
+  unpair();
   if (pid) { try { process.kill(pid); } catch { } }
   await sleep(500);
   try { fs.rmSync(AWAY, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); } catch { }

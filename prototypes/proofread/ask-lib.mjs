@@ -20,6 +20,28 @@ export function localIso(d = clockNow()) {
 }
 export const stamp = (d = clockNow()) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 export const readJSON = (f, dflt) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return dflt; } };
+// Founder 回覆由入口及外殼共用同一套解析規則：標頭不可重複，且只能有一個 JSON 區塊。
+// 否則入口與下游可能各自取到不同內容，令保護檢查失效。
+export function parseFounderReply(text) {
+  const source = String(text || ''), lines = source.split(/\r?\n/), head = {}, seen = new Set(), duplicates = new Set();
+  let end = lines.findIndex(line => !line.trim());
+  if (end < 0) end = lines.length;
+  for (const line of lines.slice(0, end)) {
+    const m = /^([A-Za-z][A-Za-z0-9-]*):[ \t]?(.*)$/.exec(line);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    if (seen.has(key)) duplicates.add(key);
+    seen.add(key); head[key] = m[2].trim();
+  }
+  const blocks = [...source.matchAll(/```json[ \t]*\r?\n([\s\S]*?)```/gi)];
+  let machine = null;
+  try { machine = blocks.length === 1 ? JSON.parse(blocks[0][1]) : null; } catch { machine = null; }
+  const duplicateFields = [...duplicates];
+  return {
+    head, machine, duplicateFields, duplicateVia: duplicates.has('via'),
+    ok: duplicateFields.length === 0 && blocks.length === 1 && !!machine && typeof machine === 'object' && !Array.isArray(machine)
+  };
+}
 // Windows：另一個程序啱啱讀緊同一個檔時，改名覆蓋會暫時被拒（EPERM／EBUSY），等一陣再試
 export function writeJSON(f, obj) {
   const tmp = f + '.tmp';
@@ -37,7 +59,7 @@ export function fnv(str) {
 
 // 伺服器用嚟認返自己（同一個資料夾）；ask.mjs 用嚟搵返開緊嘅伺服器
 export const rootId = root => Buffer.from(String(root).toLowerCase()).toString('base64url').slice(-24);
-export const SERVER_VERSION = 'proofread-chain-0.32';
+export const SERVER_VERSION = 'proofread-chain-0.33';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

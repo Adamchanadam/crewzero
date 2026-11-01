@@ -1,10 +1,10 @@
 ---
 name: desk
-description: "Founder Desk（startup-os 創辦人做決定嘅本機頁面）。Use when the founder asks to open Founder Desk, 決定紀錄 or 公司概覽 (e.g. 「打開 Founder Desk」, /startup-os:desk). Also use whenever you need the founder to decide something or supply information: put the questions on Founder Desk as a question pack instead of asking in chat."
+description: "Founder Desk（startup-os 創辦人做決定嘅本機頁面）。Use when the founder asks to open Founder Desk, 決定紀錄 or 公司概覽 (e.g. 「打開 Founder Desk」, /startup-os:desk in Claude Code, $startup-os:desk in Codex, /desk in Antigravity). Also use whenever you need the founder to decide something or supply information: put the questions on Founder Desk as a question pack instead of asking in chat."
 ---
 
 <!--
-startup-os 插件入面嘅 Founder Desk 指令：/startup-os:desk（只係轉接層，核心係項目入面 startup-os/ 嘅 ask.mjs，換其他 AI 一樣用）。
+startup-os 插件入面嘅 Founder Desk 指令（只係轉接層，核心係項目入面 startup-os/ 嘅 ask.mjs；Claude Code、Codex、Antigravity 三種工具同一份）。
 呢個檔唔寫任何本機絕對路徑：安裝位置由對話工作資料夾向上搵。創辦人唔使執行任何檔案：伺服器由下面嘅命令自動喺背景開，舊版會自動換新。
 -->
 
@@ -14,7 +14,7 @@ Founder Desk 係創辦人做決定嘅頁面：AI 有嘢要佢決定，就放上�
 
 由你而家對話嘅工作資料夾開始，逐層向上搵 `startup-os/ask.mjs`。搵到嘅 `startup-os` 資料夾就係安裝位置（下面寫做 `<安裝>`）。
 
-搵唔到：講「這個項目未安裝 startup-os」，請創辦人輸入 `/startup-os:install` 安裝，然後停。唔好用其他位置嘅 startup-os 代替。
+搵唔到：講「這個項目未安裝 startup-os」，請創辦人輸入安裝指令（按佢用緊嘅工具：Claude Code `/startup-os:install`、Codex `$startup-os:install`、Antigravity `/install`）安裝，然後停。唔好用其他位置嘅 startup-os 代替。
 
 ## 創辦人想打開 Founder Desk
 

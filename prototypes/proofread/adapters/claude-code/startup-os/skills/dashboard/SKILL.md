@@ -1,10 +1,10 @@
 ---
 name: dashboard
-description: "營運監察台（startup-os 公司日常運作頁面：業務路徑圖、待你處理、未來兩星期日程、工作看板、時間線、AI 團隊現況）。Use when the founder asks to open 營運監察台, dashboard, 看板, 時間線 or 日程 (e.g. 「打開營運監察台」, /startup-os:dashboard), or wants to see the fictional demo (「睇示範」). Decisions and answers still happen on Founder Desk."
+description: "營運監察台（startup-os 公司日常運作頁面：業務路徑圖、待你處理、未來兩星期日程、工作看板、時間線、AI 團隊現況）。Use when the founder asks to open 營運監察台, dashboard, 看板, 時間線 or 日程 (e.g. 「打開營運監察台」, /startup-os:dashboard in Claude Code, $startup-os:dashboard in Codex, /dashboard in Antigravity), or wants to see the fictional demo (「睇示範」). Decisions and answers still happen on Founder Desk."
 ---
 
 <!--
-startup-os 插件入面嘅營運監察台指令：/startup-os:dashboard（只係轉接層，核心係項目入面 startup-os/ 嘅 ask.mjs，換其他 AI 一樣用）。
+startup-os 插件入面嘅營運監察台指令（只係轉接層，核心係項目入面 startup-os/ 嘅 ask.mjs；Claude Code、Codex、Antigravity 三種工具同一份）。
 同 Founder Desk 同一個本機伺服器、同一份資料；監察台只睇同跳轉，所有作答都喺 Founder Desk。呢個檔唔寫任何本機絕對路徑。
 -->
 
@@ -14,7 +14,7 @@ startup-os 插件入面嘅營運監察台指令：/startup-os:dashboard（只係
 
 由你而家對話嘅工作資料夾開始，逐層向上搵 `startup-os/ask.mjs`。搵到嘅 `startup-os` 資料夾就係安裝位置（下面寫做 `<安裝>`）。
 
-搵唔到：講「這個項目未安裝 startup-os」，請創辦人輸入 `/startup-os:install` 安裝，然後停。
+搵唔到：講「這個項目未安裝 startup-os」，請創辦人輸入安裝指令（按佢用緊嘅工具：Claude Code `/startup-os:install`、Codex `$startup-os:install`、Antigravity `/install`）安裝，然後停。
 
 ## 創辦人想打開營運監察台
 

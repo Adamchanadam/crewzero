@@ -13,11 +13,12 @@ import { folderHash } from './folder-hash.mjs';
 import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeRewriteJSON, mergeRewriteMd, deCodeInfo, deCodeJSONInfo, folderAssumptions, displayDir, displayPath, displayIndex } from './plain-lib.mjs';
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
 import { fileURLToPath } from 'node:url';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, NAMES } from './ask-lib.mjs';
+import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, NAMES, parseFounderReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf } from './dash-lib.mjs';
 const U = NAMES.ui;
+const parseReply = parseFounderReply;
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DIR = dataDirs(ROOT);
@@ -209,18 +210,8 @@ function registry(page) {
 const show = (e, v) => e && e.kind === 'grade' ? NAMES.evName(v) : v;
 const showAns = (q, v) => Array.isArray(v) ? v.join('、') : String(v ?? '');
 
-function parseReply(text) {
-  const head = {};
-  for (const line of text.split(/\r?\n/)) {
-    if (!line.trim()) break;
-    const m = /^([A-Za-z]+):\s?(.*)$/.exec(line);
-    if (m) head[m[1]] = m[2];
-  }
-  const m = /```json\s*([\s\S]*?)```/.exec(text);
-  let machine = null;
-  try { machine = m ? JSON.parse(m[1]) : null; } catch { machine = null; }
-  return { head, machine };
-}
+// 由伺服器填入；舊終端回覆沒有此欄仍按終端處理，避免把任意文字寫入決定紀錄。
+const replyVia = v => /^browser:[a-f0-9]{6}$/i.test(String(v || '')) || /^device:[a-f0-9]{8}$/i.test(String(v || '')) ? String(v) : 'terminal';
 
 /* ---------- 俾 AI 睇嘅確認版公司概覽（通用，唔分邊間公司） ---------- */
 function confirmedMarkdown(page, reg, values, c) {
@@ -1178,9 +1169,13 @@ async function handleProofread(run, files) {
   run.ref = page.page.id;
   step(run, 'received', U.stepReceivedConfirm, 'done', `${files.length} 份回覆`);
   const latest = files[files.length - 1];
-  const { head, machine } = parseReply(fs.readFileSync(path.join(DIR.replies, latest), 'utf8'));
+  const parsed = parseFounderReply(fs.readFileSync(path.join(DIR.replies, latest), 'utf8'));
+  const { head, machine, duplicateVia } = parsed;
+  const via = replyVia(head.via);
   let why = '';
-  if (head.kind !== 'proofread' || !machine) why = '回覆格式不正確，無法套用';
+  if (!parsed.ok && duplicateVia) why = '回覆來源重複，無法套用';
+  else if (!parsed.ok) why = '回覆格式不正確，無法套用';
+  else if (head.kind !== 'proofread' || !machine) why = '回覆格式不正確，無法套用';
   else if (head.ref !== page.page.id) why = '回覆與目前的公司概覽不相符';
   else if (head.hash !== hash) why = '你確認時所見的版本已經更改，請重新開啟頁面再確認';
   if (why) { archive(files); step(run, 'applied', U.stepApplyConfirm, 'failed', why); return finish(run, 'failed', why); }
@@ -1198,7 +1193,7 @@ async function handleProofread(run, files) {
   archive(files);
   syncLedger();
   // 紀錄：你改咗嘅每項、你答咗嘅「要你決定」、次序、其餘一句
-  const at = localIso(), base = { at, source: 'proofread', packId: page.page.id, packTitle: U.company, reply: latest, runId: run.id };
+  const at = localIso(), base = { at, source: 'proofread', via, packId: page.page.id, packTitle: U.company, reply: latest, runId: run.id };
   const effectIds = new Set(listOf(page.detail && page.detail.rules).filter(r => r.effect).map(r => r.id));
   const entries = c.edits.map(e => ({ ...base, qid: e.id, question: e.label, ai: e.ai, answer: e.founder, changed: true, effect: effectIds.has(e.id) ? 'now' : 'tentative' }));
   const editedIds = new Set(c.edits.map(e => e.id));
@@ -1258,12 +1253,16 @@ async function aiAfterAsk(run, pack) {
 }
 async function handleAsk(run, file) {
   run.kind = 'ask';
-  const { head, machine } = parseReply(fs.readFileSync(path.join(DIR.replies, file), 'utf8'));
+  const parsed = parseFounderReply(fs.readFileSync(path.join(DIR.replies, file), 'utf8'));
+  const { head, machine, duplicateVia } = parsed;
+  const via = replyVia(head.via);
   const pack = loadPack(DIR, head.ref);
   run.ref = head.ref;
   step(run, 'received', U.stepReceivedAns, 'done', pack ? pack.title : '');
   let why = '';
-  if (head.kind !== 'ask-answer' || !machine) why = '回覆格式不正確，無法套用';
+  if (!parsed.ok && duplicateVia) why = '回覆來源重複，無法套用';
+  else if (!parsed.ok) why = '回覆格式不正確，無法套用';
+  else if (head.kind !== 'ask-answer' || !machine) why = '回覆格式不正確，無法套用';
   else if (!pack) why = '找不到此問題包';
   else if (head.hash !== fnv(JSON.stringify(pack))) why = '問題包已經更改，請重新開啟頁面再作答';
   if (why) { archive([file]); step(run, 'applied', U.stepApplyAns, 'failed', why); return finish(run, 'failed', why); }
@@ -1274,7 +1273,7 @@ async function handleAsk(run, file) {
     const q = qs[a.id];
     if (!q) continue;
     store.answers[a.id] = { value: a.value, changed: !!a.changed, at, reply: file, runId: run.id, ...(machine.allSame && !a.changed ? { confirmedSame: true } : {}) };
-    entries.push({ at, source: 'ask', packId: pack.id, packTitle: pack.title, qid: q.id, question: q.ask, ai: showAns(q, q.value), answer: showAns(q, a.value), changed: !!a.changed, effect: q.effect || 'tentative', reply: file, runId: run.id, ...(a.value === U.unknownLater ? { unknown: true } : {}), ...(machine.allSame && !a.changed ? { confirmedSame: true } : {}) });
+    entries.push({ at, source: 'ask', via, packId: pack.id, packTitle: pack.title, qid: q.id, question: q.ask, ai: showAns(q, q.value), answer: showAns(q, a.value), changed: !!a.changed, effect: q.effect || 'tentative', reply: file, runId: run.id, ...(a.value === U.unknownLater ? { unknown: true } : {}), ...(machine.allSame && !a.changed ? { confirmedSame: true } : {}) });
   }
   writeJSON(path.join(DIR.answers, pack.id + '.json'), store);
   archive([file]);

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -30,6 +31,7 @@ const prefillDone = id => waitFor(async () => { const r = await get('/api/prefil
 const scan = (dir, out) => spawnSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'prefill-scan.mjs'), dir, ...(out ? [out] : [])], { encoding: 'utf8' });
 
 try {
+  await usePass(BASE);
   await waitFor(async () => { try { return (await get('/api/status')).j.ok; } catch { return false; } }, 60000);
   await post('/api/setup', { action: 'certify', host: 'test' });
   const cert = await waitFor(async () => { const s = (await get('/api/setup')).j; return s.certify && s.certify.state !== 'running' ? s.certify : null; });
@@ -116,6 +118,7 @@ try {
   try {
     const sget = async p => { const r = await fetch(SB2 + p); return r.json(); };
     const spost = async (p, body) => (await fetch(SB2 + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: SB2 }, body: JSON.stringify(body) })).json();
+    await usePass(SB2);
     await waitFor(async () => { try { return (await sget('/api/status')).ok; } catch { return false; } });
     await spost('/api/setup', { action: 'certify', host: 'test' });
     await waitFor(async () => { const s = await sget('/api/setup'); return s.certify && s.certify.state !== 'running'; });

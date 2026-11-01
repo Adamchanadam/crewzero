@@ -146,12 +146,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 }
 </style>
 <script src="names.js"></script>
+<script src="pair.js"></script>
 <script src="desk.js"></script>
 </head>
 <body>
 <div class="shell" id="app">
   <div class="layer"><span class="eyebrow">載入中……</span>
-    <p class="guide">如畫面一直停留於此，表示 Founder Desk 尚未開啟。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，即可重新開啟此頁。</p></div>
+    <p class="guide" id="boot-guide">如畫面一直停留於此，表示 Founder Desk 尚未開啟。請在 AI 對話打開 Founder Desk，即可重新開啟此頁。</p></div>
 </div>
 <div class="cbar" id="cbar" hidden></div>
 <div id="modal-root"></div>
@@ -247,7 +248,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   function fail(msg) {
     setApp(DESK.nav('pending', 0), h('div', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.offline), h('p', null, msg),
-      h('p', { class: 'guide' }, 'Founder Desk 尚未開啟：請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，即可重新開啟。')));
+      h('p', { class: 'guide' }, 'Founder Desk 尚未開啟：' + N.ui.reopenDesk + '，即可重新開啟。')));
   }
 
   /* ---------- AI 未設定：置頂阻塞卡（待決事項、交資料、答題都有） ---------- */
@@ -1014,7 +1015,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }).catch(function (e) {
         btn.disabled = false; btn.textContent = N.ui.resend;
         if (e.message === 'pack-not-here') { msg.replaceChildren('目前的伺服器找不到此問題包，可能是舊分頁。', h('a', { class: 'btn', href: '/#/' }, N.ui.backPending)); return; }
-        msg.textContent = '未能送出（' + e.message + '）。Founder Desk 可能已停止：請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」重新開啟，然後再按送出。';
+        msg.textContent = '未能送出（' + e.message + '）。Founder Desk 可能已停止：' + N.ui.reopenDesk + '重新開啟，然後再按送出。';
       });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
@@ -1135,13 +1136,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         (hosts.some(function (x) { return x.installed; }) ? hosts.filter(function (x) { return x.installed; }) : hosts).map(function (x) {
           var on = x.id === SET.pick;
           return h('button', { type: 'button', class: 'opt' + (on ? ' cur' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-host': x.id, disabled: running ? true : null, onclick: function () { SET.pick = x.id; showSetup(); } },
-            h('span', { class: 'dot' }), h('span', null, x.label, ' ', x.installed ? h('span', { class: 'o-note' }, x.version) : tag(N.ui.notInstalled, 'qn'), !x.installed && x.why ? h('span', { class: 'o-note' }, x.why) : null));
+            h('span', { class: 'dot' }), h('span', null, x.label, ' ', x.installed ? h('span', { class: 'o-note' }, x.version) : tag(N.ui.notInstalled, 'qn'), x.why ? h('span', { class: 'o-note' }, x.why) : null));
         }),
         hosts.some(function (x) { return x.installed; }) && hosts.some(function (x) { return !x.installed; })
           ? h('p', { class: 'note-line' }, '此電腦未能使用：' + hosts.filter(function (x) { return !x.installed; }).map(function (x) { return x.label + '（' + (x.why || '未安裝，或此電腦未支援') + '）'; }).join('、') + '。') : null,
         h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary big', id: 'certify-go', disabled: (running || !picked || !picked.installed) ? true : null, onclick: startCertify },
           c && c.state === 'failed' ? N.ui.certifyRetry : N.ui.certifyGo)));
-      setApp(head('setup', st), current, result, pickCard);
+      // 已配對的瀏覽器與手機（裝置通行證）：撤銷經 /api/setup；撤銷自己呢部之後下一次讀回會見到配對指引
+      var devCard = h('section', { class: 'layer', id: 'devices-card' }, h('span', { class: 'eyebrow' }, N.ui.devices),
+        DESK.devices(s.devices || [], { onRevoke: function (id) { post('/api/setup', { action: 'revoke', id: id }).then(function () { toast(N.ui.deviceRevoked); showSetup(); }).catch(function () { toast(N.ui.deviceGone); showSetup(); }); } }));
+      setApp(head('setup', st), current, result, pickCard, devCard);
       DESK.title('setup');
       if (running) V.pollTimer = setTimeout(showSetup, 1500);
     }).catch(function () { fail('無法連接本機伺服器。'); });
@@ -1426,7 +1430,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var groups = [], byKey = {};
       entries.forEach(function (e) {
         var k = e.reply || e.at;
-        if (!byKey[k]) { byKey[k] = { key: k, at: e.at, title: e.packTitle, runId: e.runId, items: [] }; groups.push(byKey[k]); }
+        if (!byKey[k]) { byKey[k] = { key: k, at: e.at, title: e.packTitle, runId: e.runId, via: e.via || 'terminal', items: [] }; groups.push(byKey[k]); }
         byKey[k].items.push(e);
       });
       var body = [], lastDay = '';
@@ -1436,7 +1440,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         var runBox = h('div');
         var changedAny = g.items.some(function (e) { return e.changed; });
         body.push(h('section', { class: 'layer log-item' + (changedAny ? ' chg' : '') },
-          h('span', { class: 'eyebrow' }, hm(g.at) + ' · ' + T('answeredN', { n: g.items.filter(function (e) { return e.qid !== 'rest'; }).length })),
+          h('span', { class: 'eyebrow' }, hm(g.at) + ' · ' + T('answeredN', { n: g.items.filter(function (e) { return e.qid !== 'rest'; }).length }), ' ', tag(/^device:/.test(g.via) ? N.ui.sentViaPhone : /^browser:/.test(g.via) ? N.ui.sentViaBrowser : N.ui.sentViaTerminal)),
           h('h2', { class: 'layer-title' }, N.fix(g.title)),
           h('ul', { class: 'qa' }, g.items.map(function (e) {
             return h('li', null, h('div', { class: 'q' }, N.fix(e.question)),

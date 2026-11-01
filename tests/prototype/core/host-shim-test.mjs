@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -57,11 +58,12 @@ try {
   const ADP = path.join(OUT, 'badai.json');
   fs.writeFileSync(ADP, JSON.stringify({ id: 'test', label: '測試工具', command: 'badai', args: [], versionArgs: ['--version'] }));
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: path.join(OUT, 'data'), SOS_ADAPTER: ADP, SOS_NO_OPEN: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  await usePass(`http://127.0.0.1:${PORT}`);
   let s = null; for (let i = 0; i < 60 && !s; i++) { await sleep(500); try { s = await (await fetch(`http://127.0.0.1:${PORT}/api/setup`)).json(); } catch { } }
   const t = s && (s.hosts || []).find(x => x.id === 'test');
   ok('設定頁資料：認唔出嘅工具未安裝並附原因', !!t && t.installed === false && /不會經命令視窗啟動/.test(t.why || ''), s && s.hosts);
   const ask = fs.readFileSync(path.join(PROTO, 'ask.html'), 'utf8');
-  ok('設定頁會顯示原因（「此電腦未能使用」一句同工具按鈕）', /x\.why \|\| '未安裝，或此電腦未支援'/.test(ask) && /!x\.installed && x\.why/.test(ask));
+  ok('設定頁會顯示原因（「此電腦未能使用」一句同工具按鈕）', /x\.why \|\| '未安裝，或此電腦未支援'/.test(ask) && /x\.why \? h\(/.test(ask));
 } catch (e) {
   if (e !== null) ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {

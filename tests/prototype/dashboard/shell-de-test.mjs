@@ -11,6 +11,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -40,9 +41,11 @@ try {
   setFake([S('de0000000002', 'idle', '整理餐廳回饋', 0)]);
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DEMO, SOS_ADAPTER: ADAPTER, SOS_OBSERVER: path.join(HERE, 'fake-observe.mjs') }, stdio: 'ignore' });
   const B = `http://127.0.0.1:${PORT}`;
+  await usePass(B);
   for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
   const api = async p => (await fetch(B + p)).json();
   c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
+  await usePass(B, c);
   const orb = () => c.ev(`(()=>{const f=document.querySelector('.o-canvas');const o=document.querySelector('#orbit');return f?{lit:+f.dataset.lit,pts:+f.dataset.particles,moving:+f.dataset.moving,sub:+f.dataset.sub,twoHop:+f.dataset.twoHop,level:+(o.dataset.level||0),last:f.dataset.lastPulse,hp:f.dataset.humanPulse,working:document.querySelectorAll('.o-node.working').length}:null})()`);
   const shot = n => c.shot(path.join(OUT, n));
 

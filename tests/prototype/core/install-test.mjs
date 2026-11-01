@@ -6,6 +6,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { installPass } from '../lib/testkit.mjs';
+let unpair = () => { };
 const [PROTO, OUT, PORT, FAKE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -52,8 +54,10 @@ try {
   const r4 = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env, timeout: 30000 });
   const url = (r4.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];
   ok('node startup-os/ask.mjs --desk：開到 Founder Desk', r4.status === 0 && !!url, { out: r4.stdout, err: r4.stderr });
-  const st = url ? await (await fetch(url + 'api/status')).json() : {};
+  const st = url ? await (await fetch(url + 'api/health')).json() : {};
   pid = Number(st.pid) || 0;
+  // 正實例冇測試鉤：測試自己扮已配對嘅瀏覽器（寫雜湊入用戶設定資料夾，完畢即刪）
+  if (url) unpair = await installPass(lib.rootId(path.join(T, 'data')), url, path.join(T, 'data'));
   ok('伺服器認得新安裝嘅資料夾（同一個 data/）', st.root === lib.rootId(path.join(T, 'data')), { root: st.root, want: lib.rootId(path.join(T, 'data')) });
   const page = url ? await (await fetch(url)).text() : '';
   ok('首頁係 Founder Desk', /Founder Desk/.test(page), page.slice(0, 200));
@@ -65,6 +69,7 @@ try {
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {
+  unpair();
   if (pid) { try { process.kill(pid); } catch { } }
   await sleep(300);
   const pass = results.filter(r => r.pass).length;

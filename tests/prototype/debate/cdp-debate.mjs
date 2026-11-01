@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, SHOTS] = process.argv.slice(2);
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
@@ -16,8 +17,10 @@ await kit.certifyDirect(DATA, PROTO, ADAPTER);
 const rvf = path.join(DATA, 'brain', 'reveal.json'), rv = JSON.parse(fs.readFileSync(rvf, 'utf8')); rv.seededAt = new Date(Date.now() - 900000).toISOString(); fs.writeFileSync(rvf, JSON.stringify(rv));
 const BASE = `http://127.0.0.1:${PORT}`;
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER }, stdio: 'ignore' });
+await usePass(BASE);
 for (let i = 0; i < 40; i++) { try { if ((await fetch(BASE + '/api/status')).ok) break; } catch { } await sleep(250); }
 const c = await openChrome(CHROME, path.join(OUT, 'profile'), 9471);
+await usePass(BASE, c);
 const { ev, go, click, shot } = c;
 const has = sel => ev(`!!document.querySelector(${JSON.stringify(sel)})`);
 const count = sel => ev(`document.querySelectorAll(${JSON.stringify(sel)}).length`);

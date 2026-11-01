@@ -18,7 +18,7 @@ const target = path.join(proj, 'startup-os');
 if (fs.existsSync(target)) {
   let v = ''; try { v = fs.readFileSync(path.join(target, 'VERSION'), 'utf8').trim(); } catch { }
   const nv = pluginVersion(ROOT), older = compareVersions(v, nv) < 0;
-  say(`已安裝：${target}${v ? '（版本 ' + v + '）' : ''}。今次沒有改動任何檔案。${older ? '插件已有新版本 ' + nv + '，要更新程式請在對話輸入 /startup-os:update。' : '要登記或移除排程，請在對話輸入「安裝排程」或「移除排程」。'}`);
+  say(`已安裝：${target}${v ? '（版本 ' + v + '）' : ''}。今次沒有改動任何檔案。${older ? '插件已有新版本 ' + nv + '，要更新程式請在對話輸入更新指令（Claude Code：/startup-os:update；Codex：$startup-os:update；Antigravity：/update）。' :'要登記或移除排程，請在對話輸入「安裝排程」或「移除排程」。'}`);
   process.exit(2);
 }
 if (path.resolve(ROOT).toLowerCase().startsWith(path.resolve(target).toLowerCase() + path.sep)) { say('不可以裝入程式自己的資料夾'); process.exit(1); }

@@ -56,6 +56,10 @@
   "versionArgs": [
     "--version"
   ],
+  "settingsProbe": {
+    "relative": ".claude/settings.local.json",
+    "content": "{\"permissions\":{\"allow\":[\"Bash\"]}}"
+  },
   "required": {
     "mustHave": [
       "--restricted",
@@ -107,6 +111,7 @@
     ],
     "note": "網絡：所有 AI 工作都可以對外讀取（搜尋、讀網頁、下載公開資料），一定要禁止本機同私人網段（規劃書 5.2 第 3、4 點、決定十六）"
   },
+  "denialProof": { "tool": "WebFetch", "method": "GET", "urlField": "url", "noPostTool": true },
   "chat": {
     "note": "情景演練扮對方（原型試行）：冇工具、唔讀設定、清走 MCP；伺服器開，等創辦人決定正式規則",
     "args": [

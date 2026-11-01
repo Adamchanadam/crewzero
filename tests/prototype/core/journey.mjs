@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, MODE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 真 AI：JOURNEY_HOST=claude、JOURNEY_SLOW=8（等候時間乘大）、adapter 參數寫 none
@@ -13,6 +14,7 @@ const DATA = path.join(OUT, 'data');
 const BASE = `http://127.0.0.1:${PORT}/`;
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, ...(ADAPTER !== 'none' ? { SOS_ADAPTER: ADAPTER } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
 let srvLog = ''; srv.stdout.on('data', d => { srvLog += d; }); srv.stderr.on('data', d => { srvLog += d; });
+await usePass(BASE);
 for (let i = 0; i < 40; i++) { try { if ((await fetch(BASE + 'api/status')).ok) break; } catch { } await sleep(250); }
 const mode = m => fs.writeFileSync(path.join(DATA, 'fake-mode.txt'), m + '\n');
 
@@ -28,6 +30,7 @@ ws.onmessage = m => {
   if (d.method === 'Runtime.exceptionThrown') errors.push(d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text);
 };
 const send = (method, params = {}) => new Promise((res, rej) => { const i = ++seq; pend.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
+await usePass(BASE, { send });
 const ev = async e => { const r = await send('Runtime.evaluate', { expression: e, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(e + ' -> ' + (r.exceptionDetails.exception?.description || r.exceptionDetails.text)); return r.result.value; };
 const text = sel => ev(`(document.querySelector(${JSON.stringify(sel)})||{}).innerText||''`);
 const has = sel => ev(`!!document.querySelector(${JSON.stringify(sel)})`);
@@ -87,7 +90,8 @@ try {
     // 設定 AI → 交資料 → 公司概覽 → 確認 → AI 跟進
     const okSetup = await setupTest();
     ok('系統設定：認證通過', okSetup && (await has('#setup-done')), await text('#certify'));
-    ok('系統設定：逐項顯示通過', (await ev(`document.querySelectorAll('#certify .tr-ic.done').length`)) === 7, await text('#certify'));
+    const certRows = await ev(`(()=>{const all=document.querySelectorAll('#certify .tr-steps > li').length,done=document.querySelectorAll('#certify .tr-ic.done').length;return {all,done}})()`);
+    ok('系統設定：逐項顯示通過', certRows && certRows.all >= 8 && certRows.done === certRows.all, { certRows, text: await text('#certify') });
     await shot('j2-setup-passed.png');
     await click('#setup-done');
     await waitFor(async () => (await ev('location.hash')) === '#/intake', 6000);
@@ -159,6 +163,8 @@ try {
     ok('超時重試：完成', !!re2);
   }
   ok('頁面冇程式錯誤', errors.length === 0, errors.slice(0, 5));
+  // 剛轉頁時 body 可能未建好：等到有 body 先讀
+  await waitFor(async () => await ev('!!document.body'), 10000);
   ok('頁面冇「null／undefined」字', !/\bnull\b|undefined|\[object/.test(await ev('document.body.innerText')));
 } catch (e) {
   ok('測試中斷', false, String(e && e.stack || e));

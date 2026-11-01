@@ -269,6 +269,17 @@ footer p { margin: 3px 0; }
 .final-art { display: block; width: min(560px, 100%); height: auto; margin: 0 auto 28px; border-radius: 20px; }
 @media (max-width: 1000px) { .ind { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 600px) { .ind { grid-template-columns: minmax(0,1fr); } .pill-img { width: calc(100% + 40px); margin: -20px -20px 16px; border-radius: 16px 16px 0 0; } }
+.cmd code{overflow-wrap:anywhere}
+/* 三種 AI 工具的安裝輸入 */
+.tools { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin-top: 28px; text-align: left; }
+.tools .card { padding: 20px 22px; }
+.tools h3 { font-size: var(--fs-title); margin: 0 0 4px; }
+.tools .k { display: block; font-size: var(--fs-label); color: #8f9ab0; letter-spacing: .08em; margin: 10px 0 2px; }
+.tools p { margin: 0; font-size: var(--fs-sub); color: #b9c0cd; }
+.tools code { white-space: normal; display: inline-block; margin: 2px 0; overflow-wrap: anywhere; }
+.tools-note { margin: 16px 0 0; font-size: var(--fs-sub); color: #aab2c1; max-width: 760px; }
+.final .tools-note { margin-left: auto; margin-right: auto; }
+@media (max-width: 1000px) { .tools { grid-template-columns: minmax(0,1fr); } }
 </style>
 </head>
 <body>
@@ -276,8 +287,8 @@ footer p { margin: 3px 0; }
 <header class="bar">
   <div class="wrap">
     <a class="logo" href="#top"><i aria-hidden="true">os</i>startup-os</a>
-    <nav aria-label="頁內導覽"><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a></nav>
-    <details class="menu"><summary aria-label="頁內導覽選單">選單</summary><div><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a></div></details>
+    <nav aria-label="頁內導覽"><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a><a href="https://github.com/Adamchanadam/startup-os">GitHub</a></nav>
+    <details class="menu"><summary aria-label="頁內導覽選單">選單</summary><div><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a><a href="https://github.com/Adamchanadam/startup-os">GitHub</a></div></details>
     <a class="btn primary" href="#start">開始使用</a>
   </div>
 </header>
@@ -287,12 +298,12 @@ footer p { margin: 3px 0; }
     <div class="art" role="img" aria-label="插圖：陶土造的 AI 團隊各自做準備，統籌成員把做好的文件遞給你，舉手等你決定，旁邊的信未寄出"></div>
     <div class="wrap">
       <div class="hero-copy">
-        <span class="chip"><b aria-hidden="true"></b>給已在用 Claude Code 的創辦人與小團隊 · 在你的電腦運行</span>
+        <span class="chip"><b aria-hidden="true"></b>給已在用 Claude Code、Codex 或 Antigravity 的創辦人與小團隊 · 在你的電腦運行</span>
         <h1 class="slogan" id="slogan">你定方向，<br><em>AI 團隊推進。</em></h1>
-        <p class="lead">startup-os 令你已在用的 AI，成為一支按計劃自己開工、對外的事一定先問你的團隊。例如：晚上 AI 按你交入的會面紀錄擬好合作簡介；第二天你打開頁面，按一下接受，或寫一句原因退回。</p>
+        <p class="lead">創業初期，你一個人要做一整隊人的事：見完客人要整理，報價要跟進，下一步要想清楚。startup-os 讓你已在用的 AI 變成一支晚上開工的團隊，你休息時它整理、研究、擬稿；你醒來打開 Founder Desk，看它做了甚麼，再決定哪些接受、哪些退回重做。</p>
         <div class="cta"><a class="btn primary" href="#start">看看怎樣開始</a><a class="btn" href="#product">看產品畫面</a></div>
-        <p class="need">你需要：一部 Windows 電腦、已安裝並登入的 Claude Code，以及 Node.js（免費的程式執行環境）。</p>
-        <div class="hero-meta"><span>不限行業</span><span>配合 Claude Code 使用</span><span>公司紀錄留在你的電腦</span></div>
+        <p class="need">你需要：一部 Windows 電腦、Node.js（免費的程式執行環境），以及已安裝並登入的 Claude Code、Codex 或 Antigravity 其中一個。</p>
+        <div class="hero-meta"><span>不限行業</span><span>配合 Claude Code、Codex 或 Antigravity</span><span>公司紀錄留在你的電腦</span></div>
       </div>
     </div>
   </section>
@@ -372,7 +383,7 @@ footer p { margin: 3px 0; }
         <h3 id="pd-title">公司現況</h3>
         <ul id="pd-points"><li>答四條問題：現在做甚麼、卡在哪裏、誰要決定、依據在哪裏。</li><li>運作環只在 AI 真正工作時才亮起。</li><li>即時事件流、各範疇狀態一覽、生意大腦摘要。</li></ul>
       </div>
-      <p class="stage-note">全部在同一個頁面。在 AI 對話輸入 <code>/startup-os:desk</code> 開到待決事項，輸入 <code>/startup-os:dashboard</code> 開到公司現況。</p>
+      <p class="stage-note">全部在同一個頁面。在 AI 對話輸入 Founder Desk 指令開到待決事項，輸入營運監察台指令開到公司現況（三種工具的寫法見<a href="#tools">怎樣開始</a>）。</p>
     </div>
   </section>
 
@@ -417,11 +428,11 @@ footer p { margin: 3px 0; }
       <div class="phases">
         <div class="card phase"><span class="pn">第 1 步 · 約 5 分鐘</span>
           <button class="thumb" type="button" data-lb="assets/step-install.webp" data-cap="安裝後：待決事項置頂「AI 未設定」卡與「前往設定」" aria-label="放大：安裝後的畫面"><img src="assets/step-install.webp" alt="" loading="lazy"></button>
-          <h3>安裝</h3><p>先在 Claude Code 安裝 startup-os 插件（每部電腦一次）；再到你項目的 AI 對話輸入 <code>/startup-os:install</code>，答「好」，並批准每日排程。</p>
+          <h3>安裝</h3><p>先安裝插件（每部電腦一次），再在項目的 AI 對話輸入安裝指令（三種工具的寫法見下方）；答「好」，並批准每日排程。</p>
           <p class="next"><b>下一步</b>按「前往設定」</p></div>
         <div class="card phase"><span class="pn">第 2 步 · 約 3 分鐘</span>
           <button class="thumb" type="button" data-lb="assets/step-setup.webp" data-cap="系統分頁：選擇 AI 工具並按「設定 AI」" aria-label="放大：系統分頁"><img src="assets/step-setup.webp" alt="" loading="lazy"></button>
-          <h3>設定 AI</h3><p>按「前往設定」到系統分頁，選擇 Claude Code，按「設定 AI」；系統逐項檢查，全部通過就可以交資料。</p>
+          <h3>設定 AI</h3><p>按「前往設定」到系統分頁，選擇你用的 AI 工具（Claude Code、Codex 或 Antigravity），按「設定 AI」；系統逐項檢查，全部通過就可以交資料。</p>
           <p class="next"><b>下一步</b>按「交資料」</p></div>
         <div class="card phase"><span class="pn">第 3 步 · 第一日</span>
           <button class="thumb" type="button" data-lb="assets/step-intake.webp" data-cap="交資料：拖入文件、由文件預填、五條必填" aria-label="放大：交資料表格"><img src="assets/step-intake.webp" alt="" loading="lazy"></button>
@@ -429,9 +440,21 @@ footer p { margin: 3px 0; }
           <p class="next"><b>下一步</b>驗收第一份產出</p></div>
         <div class="card phase"><span class="pn">第 4 步 · 每日</span>
           <button class="thumb" type="button" data-lb="assets/feat-pending.webp" data-cap="待決事項：「上次離開之後」一行與等你回答的問題" aria-label="放大：待決事項"><img src="assets/feat-pending.webp" alt="" loading="lazy"></button>
-          <h3>每日打開</h3><p>AI 每晚按排程開工；你每日輸入 <code>/startup-os:desk</code>，看上次離開之後發生了甚麼，回答等你的問題。</p>
+          <h3>每日打開</h3><p>AI 每晚按排程開工；你每日在 AI 對話輸入 Founder Desk 指令（見下方），看上次離開之後發生了甚麼，回答等你的問題。</p>
           <p class="next"><b>下一步</b>看公司現況</p></div>
       </div>
+      <div class="tools" id="tools">
+        <div class="card"><h3>Claude Code</h3><p>已安裝並登入的 Claude Code。</p>
+          <span class="k">安裝插件（在對話輸入）</span><p><code>/plugin marketplace add Adamchanadam/startup-os</code> 再 <code>/plugin install startup-os@startup-os</code></p>
+          <span class="k">指令叫法</span><p><code>/startup-os:install</code> <code>/startup-os:desk</code> <code>/startup-os:dashboard</code> <code>/startup-os:update</code></p></div>
+        <div class="card"><h3>Codex</h3><p>已安裝並登入的 OpenAI Codex CLI。</p>
+          <span class="k">安裝插件（在命令列輸入）</span><p><code>codex plugin marketplace add Adamchanadam/startup-os</code> 再 <code>codex plugin add startup-os@startup-os</code></p>
+          <span class="k">指令叫法</span><p><code>$startup-os:install</code> <code>$startup-os:desk</code> <code>$startup-os:dashboard</code> <code>$startup-os:update</code></p></div>
+        <div class="card"><h3>Antigravity</h3><p>已安裝並登入的 Google Antigravity CLI（<code>agy</code>）。</p>
+          <span class="k">安裝插件（在命令列輸入）</span><p><code>agy plugin install https://github.com/Adamchanadam/startup-os</code></p>
+          <span class="k">指令叫法</span><p><code>/install</code> <code>/desk</code> <code>/dashboard</code> <code>/update</code></p></div>
+      </div>
+      <p class="tools-note">三種工具用同一份插件、同一套頁面與資料；情景演練與紅藍對打在 Claude Code 提供。</p>
     </div>
   </section>
 
@@ -442,8 +465,8 @@ footer p { margin: 3px 0; }
         <h2 id="h-faq">用之前，你可能想知道。</h2>
       </div>
       <div class="facts">
-        <div class="card"><h3>AI 用量</h3><ul><li>AI 工作用你自己的 Claude Code 帳戶額度。</li><li>每次工作最長 30 分鐘，每日最多開工 40 次。</li><li>系統分頁列出每次開工的時間、用時與結果。</li></ul></div>
-        <div class="card"><h3>資料去了哪裏</h3><ul><li>公司紀錄存放在你項目內的 startup-os 資料夾。</li><li>AI 工作時，相關內容交給你選用的 AI 工具處理；商機掃描等工作會上網讀取公開資料。</li><li>startup-os 不會把你的資料發送給其他人。</li></ul></div>
+        <div class="card"><h3>AI 用量</h3><ul><li>AI 工作用你自己的 Claude Code、Codex 或 Antigravity 帳戶額度。</li><li>每次工作最長 30 分鐘，每日最多開工 40 次。</li><li>系統分頁列出每次開工的時間、用時與結果。</li></ul></div>
+        <div class="card"><h3>資料去了哪裏</h3><ul><li>公司紀錄存放在你項目內的 startup-os 資料夾。</li><li>AI 工作時，相關內容交給你選用的 AI 工具處理；使用 Claude Code 時，商機掃描等工作會上網讀取公開資料；使用 Codex 或 Antigravity 時，只用你交的資料。</li><li>startup-os 不會把你的資料發送給其他人。</li></ul></div>
         <div class="card"><h3>想停下來，或者出錯</h3><ul><li>連續兩次做不出新進展，AI 會停下來問你，你可以選擇暫停。</li><li>不想每晚自動開工：在 AI 對話輸入「移除排程」。</li><li>工作出錯會寫明原因，可按「重試」。完全移除：先移除排程，再刪除項目內的 startup-os 資料夾。</li></ul></div>
       </div>
     </div>
@@ -453,9 +476,8 @@ footer p { margin: 3px 0; }
     <div class="wrap">
       <img class="final-art" src="assets/clay-ready.webp" width="1536" height="1024" alt="插圖：陶土 AI 團隊在工作枱前排好隊，準備開工" loading="lazy">
       <p class="eyebrow">準備好了？</p>
-      <h2 id="h-final">裝好插件，從一句話開始。</h2>
-      <div class="cmd"><code>/startup-os:install</code></div>
-      <div class="cta" style="justify-content:center"><a class="btn primary" href="#start">看四步開始</a><a class="btn" href="#product">再看產品畫面</a></div>
+      <h2 id="h-final">裝好插件，今晚就開工。</h2>
+      <div class="cta" style="justify-content:center"><a class="btn primary" href="#tools">看安裝方法</a><a class="btn" href="https://github.com/Adamchanadam/startup-os">GitHub 原始碼</a></div>
     </div>
   </section>
 </main>

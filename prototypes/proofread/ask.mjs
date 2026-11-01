@@ -30,12 +30,21 @@ if (si >= 0) {
 }
 const DIR = dataDirs(ROOT);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+let legacyServer = null;
 
 async function findServer() {
+  legacyServer = null;
   for (let p = PORT0; p < PORT0 + 10; p++) {
     try {
-      const j = await (await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) })).json();
+      const response = await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(800) });
+      const j = response.ok ? await response.json() : null;
       if (j && j.version === SERVER_VERSION && j.root === rootId(DIR.data)) return `http://127.0.0.1:${p}/`;
+    } catch { }
+    // 舊版只有公開 /api/status，沒有通行證；發現後不可沿用，交由新版開機流程關閉或安全地阻擋。
+    try {
+      const response = await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) });
+      const j = response.ok ? await response.json() : null;
+      if (j && j.root === rootId(DIR.data) && Number(j.pid) > 0) legacyServer = { port: p, busy: !!j.busy };
     } catch { }
   }
   return null;
@@ -47,9 +56,16 @@ async function ensureServer() {
   for (let i = 0; i < 20 && !url; i++) { await sleep(500); url = await findServer(); }
   return url;
 }
-function openBrowser(url) {
-  if (process.platform === 'win32') spawn('cmd.exe', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-  else spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+// 打開頁面：唔係自己開瀏覽器，而係請伺服器開（裝置通行證，設計 2026-10-31 第 3.2 節）。伺服器自己產生一次性連結交畀系統瀏覽器，
+// 回應唔含連結，所以呢個程式（同叫佢嘅 AI 對話）永遠攞唔到通行證；呢度印出嘅網址只係普通網址。
+async function openPage(url, page) {
+  if (args.includes('--no-open') || process.env.SOS_NO_OPEN) return { ok: true, skipped: true };
+  try {
+    const response = await fetch(url + 'api/pass/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page }), signal: AbortSignal.timeout(5000) });
+    let body = null; try { body = await response.json(); } catch { }
+    if (response.ok && body && body.ok === true) return { ok: true };
+    return { ok: false, message: typeof body?.message === 'string' ? body.message : `伺服器拒絕開頁（HTTP ${response.status}）。` };
+  } catch { return { ok: false, message: '無法聯絡本機伺服器，瀏覽器未有打開。' }; }
 }
 
 // 生意大腦本機選項：指向一個試驗資料夾（只讀固定檔名）；--brain off 取消
@@ -94,11 +110,13 @@ if (oi >= 0) {
 }
 if (args.includes('--desk') || args.includes('--dashboard')) {
   const url = await ensureServer();
-  if (!url) { console.log('無法啟動本機伺服器。'); process.exit(1); }
+  if (!url) { console.log(legacyServer?.busy ? '沒有通行證功能的舊版 Founder Desk 正在處理工作；為保護資料，瀏覽器未有打開，完成後再試。' : '無法啟動本機伺服器。'); process.exit(1); }
   // 營運監察台同 Founder Desk 同一個伺服器，只係打開唔同頁
   const page = args.includes('--dashboard') ? url + 'dashboard' : url;
-  console.log((args.includes('--dashboard') ? '營運監察台' : 'Founder Desk') + (args.includes('--demo') ? '（示範：虛構公司）' : si >= 0 ? '（模擬實例：不是生意證據）' : '') + '：' + page);
-  if (!args.includes('--no-open') && !process.env.SOS_NO_OPEN) openBrowser(page);
+  const label = (args.includes('--dashboard') ? '營運監察台' : 'Founder Desk') + (args.includes('--demo') ? '（示範：虛構公司）' : si >= 0 ? '（模擬實例：不是生意證據）' : '');
+  const opened = await openPage(url, args.includes('--dashboard') ? 'dashboard' : 'desk');
+  if (!opened.ok) { console.log(`${label} 已準備好，但瀏覽器未有打開：${opened.message}`); process.exit(1); }
+  console.log(label + '：' + page);
   process.exit(0);
 }
 if (args.includes('--list')) {
@@ -127,7 +145,8 @@ if (!prep.packs.length) { console.log('全部題目先前均已回答，沒有�
 const placed = placePacks(DIR, prep.packs);
 const url = await ensureServer();
 for (const p of placed) console.log(`已放上 Founder Desk：${p.title}（共 ${p.count} 條；每次先問最重要的 3 條）`);
-if (!url) { console.log('無法啟動 Founder Desk 的本機伺服器；問題包已放好，下次打開 Founder Desk 即可查看。'); process.exit(0); }
+if (!url) { console.log(legacyServer?.busy ? '問題包已放好；沒有通行證功能的舊版正在處理工作，為保護資料瀏覽器未有打開，完成後再試。' : '無法啟動 Founder Desk 的本機伺服器；問題包已放好，下次打開 Founder Desk 即可查看。'); process.exit(legacyServer?.busy ? 1 : 0); }
 const link = `${url}#/ask/${placed[0].id}`;
+const opened = await openPage(url, 'ask/' + placed[0].id);
+if (!opened.ok) { console.log('問題包已放好，但瀏覽器未有打開：' + opened.message); process.exit(1); }
 console.log('Founder Desk：' + link);
-if (!args.includes('--no-open') && !process.env.SOS_NO_OPEN) openBrowser(link);

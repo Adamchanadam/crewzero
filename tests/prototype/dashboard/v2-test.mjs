@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -19,6 +20,7 @@ const servers = [];
 async function startServer(DATA, port) {
   const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(port)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_OBSERVER: path.join(HERE, 'fake-observe.mjs') }, stdio: 'ignore' });
   servers.push(srv); const B = `http://127.0.0.1:${port}`;
+  await usePass(B);
   for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
   return B;
 }
@@ -106,6 +108,7 @@ try {
   setFake({ sessions: [S_WORK, S_IDLE] });
   await waitFor(async () => (await get('/api/dashboard')).work.meta.workingSessions === 2, 15000);
   c = await openChrome(CHROME, path.join(OUT, 'profile'), 9483);
+  await usePass(B, c);
   await c.go(B + '/dashboard', 1440, 3000);
   // 運作環第三版：畫布資料屬性、工作中會話節點、立方體（.orbit.has-work）、AI 核心一行
   const flow = `(()=>{const f=document.querySelector('#flow');return {lit:+f.getAttribute('data-lit'),pts:+f.getAttribute('data-particles'),working:document.querySelectorAll('.o-node.working').length,engine:document.querySelector('#orbit').classList.contains('has-work'),ai:document.querySelector('.o-core .o-status').textContent}})()`;
@@ -229,6 +232,7 @@ try {
   const bfBefore = hashDir(BF);
   await kit.certifyDirect(TRIAL, PROTO, ADAPTER);
   const B2 = await startServer(TRIAL, Number(PORT) + 1);
+  await usePass(B2, c); // 第二個伺服器用另一個資料夾：Chrome 要換成佢嘅通行證
   await c.go(B2 + '/dashboard', 1440, 2500);
   ok('未交資料＋試驗資料夾：阻塞卡新句', await c.ev(`document.querySelector('#block-title').textContent`) === '未交資料 · 生意大腦正讀取試驗資料夾', await c.ev(`(document.querySelector('#block-card')||{}).textContent`));
   ok('公司現況摘要有來源徽章', await c.ev(`/來源：試驗資料夾 · 未入公司概覽/.test(document.querySelector('#brain-strip').textContent)`));
@@ -241,6 +245,7 @@ try {
   ok('取消試驗資料夾：再新增一份 {off}，生意大腦唔再讀', !/測試內容/.test(await (await fetch(B2 + '/api/dashboard')).text()));
 
   /* ---------- J. 系統頁：觀察資料夾清單、移除、AI 團隊工作 15 分鐘冇新步驟轉待核實 ---------- */
+  await usePass(B, c); // 返回第一個伺服器：Chrome 換返佢嘅通行證
   await c.go(B + '/dashboard/system', 1440, 2500);
   ok('系統頁：觀察資料夾只列顯示名，有移除、加入同關閉觀測', await c.ev(`(()=>{const s=document.querySelector('#sys-observe');return !!s && /company-folder/.test(s.querySelector('.obs-list').textContent) && !!s.querySelector('[data-obs-remove]') && !!s.querySelector('#obs-add') && document.querySelector('#obs-toggle').textContent==='關閉觀測'})()`), await c.ev(`(document.querySelector('#sys-observe')||{}).textContent`));
   ok('系統頁冇顯示資料夾路徑', !pathHits(await c.ev(`document.body.innerText`)));

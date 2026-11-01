@@ -6,6 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER, START_ARG] = process.argv.slice(2);
 const START = START_ARG || '2026-10-29T12:00:00';
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), U = N.ui;
@@ -75,6 +76,7 @@ try {
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_SIM: '1', SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' }, stdio: 'ignore' });
   // 機器忙時伺服器可能遲啲先起好：最多等 60 秒，起唔到就清楚報錯
   let up = false;
+  await usePass(BASE);
   for (let i = 0; i < 200 && !up; i++) { try { up = !!(await get('/api/status')).ok; } catch { } if (!up) await sleep(300); }
   if (!up) throw new Error('伺服器 60 秒內未起好');
   const s0 = await get('/api/status');

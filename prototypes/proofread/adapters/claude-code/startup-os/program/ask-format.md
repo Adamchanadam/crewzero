@@ -77,5 +77,5 @@
 
 - **AI 做緊嘢時**：將問題包寫入 `out/ask.json`，外殼核對後會放上 Founder Desk「等你決定」。
 - **任何時候（命令）**：`node ask.mjs <問題包.json>`，會開頁面畀創辦人答。
-- **Claude Code**：`adapters/claude-code/startup-os/` 係技能（skill）接口：創辦人打 `/startup-os:desk` 或者講「打開 Founder Desk」就會打開；AI 要創辦人決定時亦會自己用佢出題。
+- **AI 工具**：插件提供 Founder Desk 入口；Claude Code 可輸入 `/startup-os:desk`、Codex 可輸入 `$startup-os:desk`、Antigravity 可輸入 `/desk`，或者直接說「打開 Founder Desk」。AI 要創辦人決定時亦會用同一個程式出題。
 - **打開 Founder Desk（唔出題）**：`node ask.mjs --desk`；冇開就喺背景開，唔使任何視窗。

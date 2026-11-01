@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT0, ADAPTER] = process.argv.slice(2);
 const { oldInstall } = await import(new URL('../fixtures/old-install.mjs', import.meta.url).href);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
@@ -17,6 +18,7 @@ async function start(name, port, seed) {
   DATA = path.join(OUT, name, 'data'); BASE = `http://127.0.0.1:${port}`;
   fs.mkdirSync(DATA, { recursive: true }); if (seed) seed(DATA);
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(port)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER }, stdio: 'ignore' });
+  await usePass(BASE);
   for (let i = 0; i < 60; i++) { try { if ((await get('/api/status')).ok) break; } catch { } await sleep(300); }
   await post('/api/setup', { action: 'certify', host: 'test' });
   for (let i = 0; i < 80; i++) { const s = await get('/api/setup'); if (s.certify && s.certify.state !== 'running') return s.certify.state; await sleep(400); }

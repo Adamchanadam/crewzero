@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
@@ -45,6 +46,7 @@ try {
   ok('訪問當日到期唔算逾期，期限照列', td.find(t => t.id === 'ask-c').overdueDays === 0 && td.find(t => t.id === 'ask-c').due === day(0));
   const ds = dash.dashboardState(DIR, { now });
   ok('營運監察台用同一份清單同次序', JSON.stringify(ds.todo.map(t => t.id)) === JSON.stringify(WANT), ds.todo.map(t => t.id));
+  await usePass(`http://127.0.0.1:${PORT}`);
   let a = null; for (let i = 0; i < 240 && !a; i++) { try { a = await (await fetch(`http://127.0.0.1:${PORT}/api/asks`)).json(); } catch { await sleep(250); } }
   ok('Founder Desk（/api/asks）回傳同一份清單同次序', a && JSON.stringify(a.todo.map(t => t.id)) === JSON.stringify(WANT), a && a.todo.map(t => t.id));
   ok('每項都有類型名稱同圖示', td.every(t => lib.NAMES.dash['ty_' + t.type] && lib.NAMES.TODO_ICON[t.type]), td.filter(t => !lib.NAMES.dash['ty_' + t.type] || !lib.NAMES.TODO_ICON[t.type]).map(t => t.type));

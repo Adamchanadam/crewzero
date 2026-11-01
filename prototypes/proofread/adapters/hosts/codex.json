@@ -6,6 +6,7 @@
   "args": [
     "exec",
     "--ignore-user-config",
+    "--ignore-rules",
     "-c",
     "windows.sandbox=\"unelevated\"",
     "-C",
@@ -18,6 +19,12 @@
     "web_search=\"disabled\"",
     "-c",
     "project_doc_max_bytes=0",
+    "-c",
+    "skills.include_instructions=false",
+    "-c",
+    "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+    "-c",
+    "sandbox_workspace_write.exclude_slash_tmp=true",
     "--disable",
     "apps",
     "--disable",
@@ -48,6 +55,7 @@
     "model_reasoning_effort=\"medium\"",
     "--skip-git-repo-check",
     "--ephemeral",
+    "--json",
     "-o",
     "{outfile}",
     "{prompt}"
@@ -58,13 +66,169 @@
     "--version"
   ],
   "outputFile": "last-message.txt",
+  "outputFormat": "jsonl",
+  "sandboxProbe": {
+    "command": "codex",
+    "args": [
+      "sandbox",
+      "-c",
+      "windows.sandbox=\"unelevated\"",
+      "-c",
+      "sandbox_mode=\"workspace-write\"",
+      "-c",
+      "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+      "-c",
+      "sandbox_workspace_write.exclude_slash_tmp=true",
+      "powershell",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Set-Content -LiteralPath '{target}' -Value '{content}'"
+    ],
+    "timeoutMs": 15000,
+    "posixArgs": [
+      "sandbox",
+      "-c",
+      "windows.sandbox=\"unelevated\"",
+      "-c",
+      "sandbox_mode=\"workspace-write\"",
+      "-c",
+      "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+      "-c",
+      "sandbox_workspace_write.exclude_slash_tmp=true",
+      "sh",
+      "-c",
+      "printf %s '{content}' > '{target}'"
+    ]
+  },
+  "env": {
+    "CODEX_HOME": "{dataDir}/codex-home",
+    "HOME": "{dataDir}/codex-home",
+    "USERPROFILE": "{dataDir}/codex-home"
+  },
+  "settingsProbe": {
+    "absolute": "{codexHome}/config.toml",
+    "content": "sandbox_mode = \"danger-full-access\""
+  },
+  "loginProbe": {
+    "args": [
+      "login",
+      "status"
+    ],
+    "okExit": 0
+  },
   "required": {
     "mustHave": [
       "-s",
       "workspace-write",
       "approval_policy=\"never\"",
       "web_search=\"disabled\"",
-      "--ignore-user-config"
+      "--ignore-user-config",
+      "--ignore-rules",
+      "--json"
+    ],
+    "pairs": [
+      [
+        "-s",
+        "workspace-write"
+      ],
+      [
+        "-c",
+        "windows.sandbox=\"unelevated\""
+      ],
+      [
+        "-c",
+        "approval_policy=\"never\""
+      ],
+      [
+        "-c",
+        "web_search=\"disabled\""
+      ],
+      [
+        "-c",
+        "project_doc_max_bytes=0"
+      ],
+      [
+        "-c",
+        "skills.include_instructions=false"
+      ],
+      [
+        "-c",
+        "sandbox_workspace_write.exclude_tmpdir_env_var=true"
+      ],
+      [
+        "-c",
+        "sandbox_workspace_write.exclude_slash_tmp=true"
+      ],
+      [
+        "-c",
+        "model_reasoning_effort=\"medium\""
+      ],
+      [
+        "--model",
+        "gpt-6.1-terra"
+      ],
+      [
+        "--disable",
+        "apps"
+      ],
+      [
+        "--disable",
+        "browser_use"
+      ],
+      [
+        "--disable",
+        "browser_use_external"
+      ],
+      [
+        "--disable",
+        "computer_use"
+      ],
+      [
+        "--disable",
+        "plugins"
+      ],
+      [
+        "--disable",
+        "remote_plugin"
+      ],
+      [
+        "--disable",
+        "image_generation"
+      ],
+      [
+        "--disable",
+        "multi_agent"
+      ],
+      [
+        "--disable",
+        "goals"
+      ],
+      [
+        "--disable",
+        "memories"
+      ],
+      [
+        "--disable",
+        "hooks"
+      ],
+      [
+        "--disable",
+        "in_app_browser"
+      ]
+    ],
+    "aliases": {
+      "-c": [
+        "--config"
+      ],
+      "-s": [
+        "--sandbox"
+      ]
+    },
+    "forbiddenFlags": [
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--full-auto",
+      "--yolo"
     ]
   }
 }

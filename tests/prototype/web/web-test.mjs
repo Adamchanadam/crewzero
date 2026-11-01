@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -36,6 +37,7 @@ try {
   fs.rmSync(path.join(DATA, 'ledger', 'adapter-cert.json'), { force: true });
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER }, stdio: 'ignore' });
   const B = `http://127.0.0.1:${PORT}`;
+  await usePass(B);
   for (let i = 0; i < 40; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
   const post = async (p, body) => { const r = await fetch(B + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: B }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; };
   const certify = async () => { await post('/api/setup', { action: 'certify', host: 'test' }); return waitFor(async () => { const s = (await (await fetch(B + '/api/setup')).json()).certify; return s && s.state !== 'running' && s.items && s.items.length ? s : null; }); };
@@ -53,7 +55,7 @@ try {
   c = await certify();
   ok('讀唔到公開網頁 → ' + (online ? '認證唔過' : '電腦離線唔算失敗'), c && (online ? named(c, '讀得到公開網頁').pass === false : named(c, '讀得到公開網頁').pass === true), c && named(c, '讀得到公開網頁'));
   c = await certify();
-  ok('認證九項全過（包括私人網段被拒）', c && c.state === 'passed' && c.items.length === 9 && c.items.every(x => x.pass), c && c.items.map(x => x.name + ':' + x.pass + ':' + x.detail));
+  ok('認證十項全過（包括私人網段被拒、未配對不能讀寫）', c && c.state === 'passed' && c.items.length === 10 && c.items.every(x => x.pass), c && c.items.map(x => x.name + ':' + x.pass + ':' + x.detail));
   ok('認證紀錄寫入', fs.existsSync(path.join(DATA, 'ledger', 'adapter-cert.json')));
 
   /* ---------- C. 所有工作都用同一組網絡規則 ---------- */

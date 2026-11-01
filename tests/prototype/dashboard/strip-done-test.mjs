@@ -9,6 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -36,6 +37,7 @@ try {
   fs.writeFileSync(FAKE, JSON.stringify({ sessions: [S('de0000000001', '核對牌照要求', 3), S('de0000000003', '比較保險報價', 3), S('de0000000002', '治理設置與路徑覆核', 0)] }));
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DEMO, SOS_ADAPTER: ADAPTER, SOS_OBSERVER: path.join(HERE, 'fake-observe.mjs'), SOS_NO_OPEN: '1' }, stdio: 'ignore' });
   const B = `http://127.0.0.1:${PORT}`;
+  await usePass(B);
   for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
   const get = async p => (await fetch(B + p)).json();
   const post = async (p, body) => { const r = await fetch(B + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: B }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; };
@@ -51,6 +53,7 @@ try {
     return post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
   }
   c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
+  await usePass(B, c);
   const strip = () => c.ev(`(()=>{const st=[...document.querySelectorAll('#strip .st-stage[data-ms]')].map(b=>({id:b.dataset.ms,now:b.classList.contains('now'),small:(b.querySelector('small')||{}).textContent||'',fl:!!b.querySelector('.fl'),pend:!!b.querySelector('.fl.pend')}));const cap=(document.querySelector('.strip-cap')||{}).innerText||'';return {st,cap,bn3:(document.querySelector('.o-bn3')||{}).innerText||''}})()`);
   const msShort = id => (readSt().milestones.find(m => m.id === id) || {}).short;
 

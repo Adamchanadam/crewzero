@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -26,6 +27,7 @@ fs.cpSync(PROTO, OLD, { recursive: true, filter: src => path.relative(PROTO, src
 const libOld = path.join(OLD, 'ask-lib.mjs');
 fs.writeFileSync(libOld, fs.readFileSync(libOld, 'utf8').replace(/SERVER_VERSION = '[^']+'/, "SERVER_VERSION = 'proofread-chain-old'"));
 const old = startServer(OLD);
+await usePass(BASE);
 const s1 = await waitFor(async () => { const s = await status(); return s && s.version === 'proofread-chain-old' ? s : null; });
 ok('舊版伺服器起到', !!s1, old.log.slice(0, 200));
 
@@ -49,6 +51,7 @@ const ws = new WebSocket(pg.webSocketDebuggerUrl); await new Promise(r => { ws.o
 let seq = 0; const pend = new Map();
 ws.onmessage = m => { const d = JSON.parse(m.data); if (d.id && pend.has(d.id)) { const p = pend.get(d.id); pend.delete(d.id); d.error ? p.rej(new Error(JSON.stringify(d.error))) : p.res(d.result); } };
 const send = (method, params = {}) => new Promise((res, rej) => { const i = ++seq; pend.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
+await usePass(BASE, { send });
 const ev = async e => (await send('Runtime.evaluate', { expression: e, returnByValue: true, awaitPromise: true })).result.value;
 async function click(sel) {
   // 搵唔到元素就講明（唔好成個測試靜靜地死咗、冇結果）
@@ -68,7 +71,9 @@ await send('Page.navigate', { url: `${BASE}#/ask/${PACK}` }); await sleep(1500);
 ok('舊版頁面打開到問題包', /第一條/.test(await ev('document.body.innerText')));
 
 // 4. 開新版：應該自動閂舊版、用返同一個埠
-neu = startServer(PROTO);
+// 真實換版係原地：同一個程式資料夾換入新版檔，再開新版（新版只會關同一資料夾、經作業系統核對到嘅舊程序）
+fs.copyFileSync(path.join(PROTO, 'ask-lib.mjs'), libOld);
+neu = startServer(OLD);
 const s2 = await waitFor(async () => { const s = await status(); return s && s.version === lib.SERVER_VERSION ? s : null; }, 15000);
 ok('新版接手同一個埠', !!s2 && s2.pid === neu.pid, neu.log);
 ok('新版話已經閂咗舊版', /發現舊版正在運行/.test(neu.log), neu.log);
@@ -90,7 +95,7 @@ ok('冇寫入任何回覆', fs.readdirSync(DIR.replies).length === 0, fs.readdir
 await shot('pack-not-here.png');
 
 // 7. 再雙擊「開始」（同版）：沿用而家嗰個，唔會開第二個
-again = startServer(PROTO);
+again = startServer(OLD);
 await waitFor(async () => again.exited, 8000);
 ok('同版再開會沿用', again.exited && /已在運行/.test(again.log), again.log);
 const s3 = await status();

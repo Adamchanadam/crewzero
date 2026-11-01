@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, SHOTS] = process.argv.slice(2);
 const REAL = ADAPTER === 'none';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -20,6 +21,7 @@ const env = { ...process.env, SOS_DATA: DATA }; if (REAL) delete env.SOS_ADAPTER
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env, stdio: 'ignore' });
 // 機器忙時伺服器可能遲啲先起好：最多等 60 秒
 let up = false;
+await usePass(BASE);
 for (let i = 0; i < 240 && !up; i++) { try { up = (await fetch(BASE + 'api/status')).ok; } catch { } if (!up) await sleep(250); }
 if (!up) { console.log('FAIL 伺服器 60 秒內未起好'); process.exit(1); }
 const cport = 9461;
@@ -34,6 +36,7 @@ ws.onmessage = m => {
   if (d.method === 'Runtime.exceptionThrown') errors.push(d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text);
 };
 const send = (method, params = {}) => new Promise((res, rej) => { const i = ++seq; pend.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
+await usePass(BASE, { send });
 const ev = async e => { const r = await send('Runtime.evaluate', { expression: e, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(e + ' -> ' + (r.exceptionDetails.exception?.description || r.exceptionDetails.text)); return r.result.value; };
 const has = sel => ev(`!!document.querySelector(${JSON.stringify(sel)})`);
 const text = sel => ev(`(document.querySelector(${JSON.stringify(sel)})||{}).innerText||''`);

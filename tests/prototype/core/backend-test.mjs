@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
@@ -26,6 +27,7 @@ try {
       detail: { rules: { title: 't', items: [{ id: 'ru1', label: 'l', value: 'v', origin: 'ai' }], boxes: { auto: ['a'] } }, missing: { title: '缺', how: 'h' }, assumptions: { title: 't', items: [] } } };
     const r = checkCompanyPage(pg);
     ok('公司概覽清單區段寫成物件：外殼規整成清單（boxes 放第一項、單一項變一項清單）', Array.isArray(r.page.detail.rules) && r.page.detail.rules[0].boxes && r.page.detail.missing.length === 1 && Array.isArray(r.page.detail.assumptions), r.page.detail); }
+  await usePass(BASE);
   await waitFor(async () => { try { return (await get('/api/status')).ok; } catch { return false; } }, 15000);
   const st0 = await get('/api/status');
   ok('開始時未有認證、未有公司概覽', st0.cert === null && st0.company.ready === false, { cert: st0.cert, company: st0.company });

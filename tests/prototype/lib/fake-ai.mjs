@@ -17,7 +17,20 @@ function mode(type) {
   if (lines.length) fs.writeFileSync(f, lines.join('\n') + '\n'); else fs.rmSync(f, { force: true });
   return m.includes(':') ? m.split(':')[1] : m;
 }
-function done(extra) { console.log(JSON.stringify({ is_error: false, total_cost_usd: 0, duration_ms: 1200, permission_denials: [], ...extra })); }
+const outputMode = process.argv.includes('--fake-output') ? process.argv[process.argv.indexOf('--fake-output') + 1] : '';
+function done(extra) {
+  const value = { is_error: false, total_cost_usd: 0, duration_ms: 1200, permission_denials: [], ...extra };
+  if (outputMode === 'jsonl') {
+    console.log(JSON.stringify({ type: 'turn.started' }));
+    for (const d of value.commandExecutions || []) console.log(JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', status: 'failed', exit_code: 1, aggregated_output: 'Access denied', ...d } }));
+    console.log(JSON.stringify({ type: 'turn.completed', ...value }));
+  } else if (outputMode === 'agy') {
+    // agy-generic-error：只有一般參數錯誤（唔係權限拒絕），唔可以當成被擋
+    for (const d of value.permission_denials || []) console.log(JSON.stringify({ event: 'step_update', step_update: M === 'agy-generic-error' ? { state: 'ERROR', step_type: 'tool', tool_name: d.tool_name, error: { code: 'INVALID_ARGUMENT', message: 'invalid argument' }, tool_info: { parameters: d.tool_input } } : { state: 'DENIED', step_type: 'tool', tool_name: d.tool_name, tool_info: { parameters: d.tool_input } } }));
+    console.log(JSON.stringify({ event: 'result', result: { status: 'SUCCESS', ...value } }));
+  }
+  else console.log(JSON.stringify(value));
+}
 function ready(p) {
   const T = { by: 'ai', until: '2026-11-20', test: '測試：問對方' };
   p.glance.rows.splice(1, 0, { id: 'g2', plan: 'G2', label: '下一個檢查期', kind: 'text', value: '四星期內：兩個農場書面答覆是否供貨', origin: 'ai', tentative: T },
@@ -33,6 +46,18 @@ function ready(p) {
 }
 function farmPage() { return JSON.parse(fs.readFileSync(FIX, 'utf8').trim().replace(/^window\.STARTUP_OS_PAGE\s*=\s*/, '').replace(/;\s*$/, '')); }
 
+const sandboxAt = process.argv.indexOf('--sandbox-probe');
+if (sandboxAt >= 0) {
+  const target = process.argv[sandboxAt + 1] || '', content = process.argv[sandboxAt + 2] || '';
+  let probeMode = ''; try { probeMode = fs.readFileSync(path.resolve(process.cwd(), '..', '..', 'fake-mode.txt'), 'utf8').trim(); } catch { }
+  const inWorkspace = path.resolve(target).startsWith(path.resolve(process.cwd()) + path.sep);
+  // 模擬真 Codex 沙盒：擋住時印權限拒絕字句；壞咗就印一般錯誤；no-attempt＝冇試寫、結束碼 0（唔可以當被擋）
+  if (probeMode === 'sandbox-broken') { console.error('The filename, directory name, or volume label syntax is incorrect.'); process.exitCode = 1; }
+  else if (!inWorkspace && probeMode === 'sandbox-no-attempt') process.exitCode = 0;
+  else if (!inWorkspace && probeMode !== 'sandbox-allows-escape') { console.error(`Set-Content : Access to the path '${target}' is denied.`); process.exitCode = 1; }
+  else fs.writeFileSync(target, content + '\n');
+  process.exit();
+}
 const job = fs.existsSync('job.json') ? JSON.parse(fs.readFileSync('job.json', 'utf8')) : null;
 const M = mode(job ? job.type : '');
 if (M === 'fail') { console.log(JSON.stringify({ is_error: true, result: 'fake failure' })); process.exit(1); }
@@ -46,21 +71,36 @@ fs.writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));
 const type = job && job.type;
 // 留低今次收到嘅工作說明（外殼之後叫改寫會覆寫 task.md；測試要核對 AI 原本收到乜）
 if (type !== 'rewrite') fs.copyFileSync('task.md', 'task-seen.md');
+// 模擬 Codex 已知問題：Windows 一般權限安全模式拒絕分開的可寫位置，一條指令都執行不到
+if (type === 'certify' && M === 'codex-split-root') { console.error('ERROR codex_core::tools::router: error=exec_command failed: windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed'); process.exit(0); }
 if (type === 'certify') {
   fs.writeFileSync('probe-ok.txt', 'ok');
   if (M === 'certify-escape' && job.outside) { fs.mkdirSync(path.dirname(job.outside), { recursive: true }); fs.writeFileSync(job.outside, 'escaped'); }
-  fs.writeFileSync('probe-report.json', JSON.stringify({ t1: '成功', t2: M === 'certify-escape' ? '成功' : '被拒', t3: '被拒', t4: '冇呢個工具', t5: '冇呢個工具' }));
+  if (M === 'certify-settings-escape' && job.settingsPath) { fs.mkdirSync(path.dirname(job.settingsPath), { recursive: true }); fs.writeFileSync(job.settingsPath, 'escaped'); }
+  fs.writeFileSync('probe-report.json', JSON.stringify({ t1: '成功', t2: M === 'certify-escape' ? '成功' : '被拒', t3: M === 'certify-settings-escape' ? '成功' : '被拒', t4: M === 'certify-report-adjacent-success' ? '搜尋被拒' : '冇呢個工具', t5: M === 'certify-report-adjacent-success' ? '其他步驟成功' : '被拒', t6: '被拒' }));
   // 上網宿主（job 有 publicUrl）：讀公開網頁寫標題；本機同私人網段被拒（模式 web-local-hit／web-lan-hit 真係連、web-nopublic 讀唔到公開網頁）
   const webDen = [];
   if (job.publicUrl) {
     if (M !== 'web-nopublic') fs.writeFileSync(path.join('out', 'public.txt'), 'Example Domain');
-    if (M === 'web-local-hit') { try { await fetch(job.probeUrl); } catch { } } else webDen.push({ tool_name: 'WebFetch', tool_input: { url: job.probeUrl } });
-    if (job.lanUrl) { if (M === 'web-lan-hit') { try { await fetch(job.lanUrl, { signal: AbortSignal.timeout(3000) }); } catch { } } else webDen.push({ tool_name: 'WebFetch', tool_input: { url: job.lanUrl } }); }
+    if (M === 'web-local-hit') { try { await fetch(job.probeUrl); } catch { } } else webDen.push({ tool_name: 'WebFetch', tool_input: { url: job.probeUrl, method: 'GET' } });
+    if (job.lanUrl) { if (M === 'web-lan-hit') { try { await fetch(job.lanUrl, { signal: AbortSignal.timeout(3000) }); } catch { } } else webDen.push({ tool_name: 'WebFetch', tool_input: { url: job.lanUrl, method: 'GET' } }); }
   }
-  // 扮 Claude：試寫出界同改權限設定都被拒，留低拒絕紀錄
-  done(M === 'certify-escape' ? {} : { permission_denials: [
-    { tool_name: 'Write', tool_input: { file_path: job.outside } },
-    { tool_name: 'Write', tool_input: { file_path: path.join(process.cwd(), '.claude', 'settings.local.json') } }, ...webDen] });
+  const isWebHost = process.argv.includes('--tools');
+  const passDen = [];
+  if (job.readUrl && job.writeUrl && !['certify-no-pass-attempt', 'certify-self-report', 'agy-no-self-test'].includes(M)) {
+    if (isWebHost) {
+      passDen.push({ tool_name: 'WebFetch', tool_input: { url: job.readUrl, method: 'GET' } }, { tool_name: 'WebFetch', tool_input: { url: job.writeUrl, method: M === 'certify-wrong-method' ? 'GET' : 'POST' } });
+    } else {
+      try { await fetch(job.readUrl); } catch { }
+      try { await fetch(job.writeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'proofread', ref: 'fake', text: 'kind: proofread' }) }); } catch { }
+    }
+  }
+  // 扮 Claude：試寫出界同改權限設定都被拒，留低拒絕紀錄；其餘兩種模式用同一假結果驗證 JSONL／status 解析。
+  const settingsDenial = ['certify-settings-escape', 'agy-no-self-test'].includes(M) ? [] : [{ tool_name: 'Write', tool_input: { file_path: job.settingsPath || path.join(process.cwd(), '.claude', 'settings.local.json') } }];
+  const writeDenial = ['certify-escape', 'agy-no-self-test'].includes(M) ? [] : [{ tool_name: 'Write', tool_input: { file_path: job.outside } }];
+  const denialList = [...writeDenial, ...settingsDenial, ...webDen, ...passDen];
+  done({ attempts: { settings: M === 'certify-settings-escape' ? 'changed' : 'denied', ...(M === 'certify-no-pass-attempt' ? {} : { read: 'refused', write: 'refused' }) }, permission_denials: denialList,
+    ...(outputMode === 'jsonl' ? { permission_denials: [], commandExecutions: denialList.filter(d => d.tool_input?.file_path).map(d => ({ command: `cmd /c echo escaped> \"${d.tool_input.file_path}\"` })) } : {}) });
 } else if (type === 'intake' || type === 'intake-repair') {
   const page = M === 'intake-noready' || fs.existsSync('noready') ? farmPage() : ready(farmPage());
   if (M === 'intake-noready') fs.writeFileSync('noready', '1');

@@ -1,0 +1,49 @@
+{
+  "id": "agy",
+  "label": "Antigravity",
+  "name": "Antigravity",
+  "command": "agy",
+  "args": [
+    "-p",
+    "{prompt}",
+    "--output-format",
+    "stream-json",
+    "--mode",
+    "accept-edits",
+    "--sandbox",
+    "--disable-slash-commands",
+    "--print-timeout",
+    "10m"
+  ],
+  "prompt": "請先讀呢個資料夾入面嘅 task.md，然後完全照入面嘅指示做；所有產出只可以寫入 out 資料夾。",
+  "timeoutMinutes": 10,
+  "versionArgs": ["--version"],
+  "outputFormat": "stream-json",
+  "denialProof": {
+    "streamToolEvent": {
+      "event": "step_update",
+      "stepType": "tool",
+      "rejectStates": ["FAILED", "ERROR", "DENIED", "REJECTED"]
+    }
+  },
+  "env": {
+    "USERPROFILE": "{dataDir}/agy-home",
+    "HOME": "{dataDir}/agy-home"
+  },
+  "settingsProbe": {
+    "absolute": "{agyHome}/.gemini/antigravity-cli/settings.json",
+    "content": "{\"toolPermission\":\"always-proceed\"}"
+  },
+  "loginProbe": {
+    "args": ["models"],
+    "okExit": 0
+  },
+  "required": {
+    "mustHave": ["--output-format", "stream-json", "--disable-slash-commands"],
+    "mustNotHave": ["--dangerously-skip-permissions", "--add-dir", "auto"],
+    "pairs": [
+      ["--output-format", "stream-json"], ["--mode", "accept-edits"], ["--print-timeout", "10m"]
+    ],
+    "forbiddenFlags": ["--dangerously-skip-permissions", "--add-dir"]
+  }
+}

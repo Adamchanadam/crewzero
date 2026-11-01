@@ -120,6 +120,24 @@ h1{font-size:var(--fs-h1);font-weight:650;margin:2px 0;letter-spacing:-.01em;lin
 /* 卡（玻璃層、頂緣高光；外框平時靜止，決定二十六）；進場只喺開頁或轉分頁時播一次 */
 .layer,.panel{position:relative;background:var(--panel);background-image:var(--glass);border:1px solid rgba(255,255,255,.08);border-radius:var(--r-card);box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 18px 40px -24px rgba(0,0,0,.8);animation:cardin .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*35ms)}
 .layer{padding:16px 20px;margin-top:12px}
+/* 已配對裝置清單（系統設定頁）同未配對指引（全頁）：共用檔只畫一次 */
+.dev-list{list-style:none;margin:0 0 8px;padding:0}
+.dev-list li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:9px 0;border-top:1px solid var(--line)}
+.dev-list li:first-child{border-top:0}
+.dev-list li .dev-name{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.dev-list li .dev-meta{flex:1 1 100%;font-size:var(--fs-sub);color:var(--muted)}
+.dev-list li .btn{margin-left:auto}
+.no-pass{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px 16px;background:radial-gradient(900px 640px at 50% 38%,#0c0e14 0%,#060608 72%)}
+.no-pass .layer{max-width:600px;margin:0;padding:22px 26px}
+.no-pass h2{margin:4px 0 10px;font-size:var(--fs-page);line-height:1.3}
+.no-pass p{margin:0 0 10px}
+.no-pass .cmd{font-family:var(--mono);font-size:var(--fs-sub);color:var(--mint)}
+.pair-modal{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.68)}
+.pair-modal .layer{width:min(520px,100%);margin:0;padding:20px}
+.pair-modal h2{margin:3px 0 8px;font-size:var(--fs-page)}
+.pair-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.pair-qr{display:block;width:220px;height:220px;background:#fff;padding:16px;margin:16px auto;border-radius:4px}
+.pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
+.phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
 .layer:after,.panel:after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);pointer-events:none}
 body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
 @keyframes cardin{from{transform:translateY(10px) scale(.992)}to{transform:none}}
@@ -203,6 +221,7 @@ body.paused .bg *{animation:none!important}
   .modal{width:100%;max-height:none;height:100%;border-radius:0;border:0}
   .toast{bottom:120px}
 }
+@media (max-width:600px){.pair-modal{padding:0}.pair-modal .layer{width:100%;min-height:100vh;border:0;border-radius:0;display:flex;flex-direction:column;justify-content:center}.pair-qr{width:220px;height:220px}.btn{min-height:44px}.btn.small{min-height:36px}.phone-bar .btn{width:100%;margin-left:0}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `;
   // 共用樣式放喺最前，頁面自己嘅樣式（包括手機版調整）喺後面可以覆蓋
@@ -301,11 +320,45 @@ body.paused .bg *{animation:none!important}
   function toolbar(cur, counts) {
     return el('div', { cls: 'toolbar' }, nav(cur, counts),
       el('div', { cls: 'tool-right' }, liveBadge(),
+        el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
         el('button', { type: 'button', cls: 'btn small', id: 'pause', 'aria-pressed': ST.paused ? 'true' : 'false', onclick: togglePause }, ST.paused ? D.resume : D.pause)));
   }
   function toast(t) { var e = document.getElementById('toast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { e.hidden = true; }, 4000); }
+  function setupPost(body) { return fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || j.error || 'failed'); return j; }); }); }
+  function phoneDialog() {
+    var modal = el('div', { cls: 'pair-modal', role: 'dialog', 'aria-modal': 'true' });
+    var card = el('section', { cls: 'layer' }, el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phoneOpenTitle), el('p', null, U.phoneOpenHint));
+    var close = function () { clearInterval(modal.timer); modal.remove(); };
+    var begin = el('button', { type: 'button', cls: 'btn primary big', onclick: function () { begin.disabled = true; setupPost({ action: 'phone-open' }).then(function (v) { showPhoneCode(v); }, function (e) { begin.disabled = false; toast(e.message || U.phoneOpenFailed); }); } }, U.phoneEnable);
+    card.append(el('div', { cls: 'pair-actions' }, begin, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))); modal.append(card); document.body.append(modal);
+    function showPhoneCode(v) {
+      card.replaceChildren(el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phonePairTitle));
+      var qr = el('div', { cls: 'pair-qr-box' });
+      try { qr.innerHTML = g.SOS_PAIR.qr(v.pairUrl); } catch (e) { qr.textContent = U.phoneOpenFailed; }
+      var bare = String(v.pairUrl || '').split('#')[0], url = el('span', { cls: 'pair-url' }, U.phonePairUrl + '：' + bare), clock = el('p', { cls: 'small muted' });
+      var state = el('div', { cls: 'phone-bar', hidden: true });
+      var closePhone = el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-close' }).then(close, function (e) { toast(e.message || U.phoneOpenFailed); }); } }, U.phoneClose);
+      card.append(qr, url, clock, state, el('div', { cls: 'pair-actions' }, closePhone, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉')));
+      var until = new Date(v.expiresAt || 0).getTime(), openedAt = Date.now(), decided = false;
+      function showState() {
+        var a = Array.prototype.slice.call(arguments); state.hidden = false; state.replaceChildren.apply(state, a);
+      }
+      function poll() {
+        var left = Math.max(0, Math.ceil((until - Date.now()) / 1000)); clock.textContent = N.t('phonePairExpires', { n: left });
+        fetch('/api/setup', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+          var phone = j.phone || {}, p = phone.pending && phone.pending[0], paired = phone.paired && phone.paired[0];
+          if (p) return showState(el('span', null, U.phonePending + ' · ' + U.phoneCode + '：'), el('strong', null, p.confirmationCode || ''), el('button', { type: 'button', cls: 'btn primary', onclick: function () { setupPost({ action: 'phone-accept', id: p.id }).then(function () { decided = true; poll(); }); } }, U.phoneAccept), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-reject', id: p.id }).then(function () { decided = true; poll(); }); } }, U.phoneReject));
+          if (paired) return showState(el('span', null, U.phoneConnected), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'revoke', id: paired.id }).then(poll); } }, U.deviceRevoke));
+          if (decided) return showState(el('span', null, U.phoneGone));
+          if (Date.now() - openedAt >= 60000) return showState(el('span', null, U.phonePairHelp));
+          state.hidden = true;
+        }).catch(function () { showState(el('span', null, U.phoneOffline)); });
+      }
+      poll(); modal.timer = setInterval(poll, 1000);
+    }
+  }
   function togglePause() {
     if (REDUCED) { toast(D.reducedNote); return; }
     ST.paused = !ST.paused;
@@ -457,8 +510,52 @@ body.paused .bg *{animation:none!important}
   }
   if (document.body) mountBg(); else document.addEventListener('DOMContentLoaded', mountBg);
 
+  /* ---------- 裝置通行證（設計 2026-10-31 第 3 節）：三頁共用 ----------
+     讀回收到 403 {error:'pass'}（呢個瀏覽器未配對）：攔截 fetch 一次，全頁顯示配對指引；頁面唔使逐個請求自己處理。
+     指引只講創辦人要做嘅一步（喺 AI 對話打開頁面）；唔會顯示任何連結或密碼。 */
+  var realFetch = g.fetch, noPassShown = false;
+  function noPass() {
+    if (noPassShown || !document.body) return; noPassShown = true;
+    var dash = /^\/dashboard/.test(location.pathname);
+    var box = el('div', { cls: 'no-pass', id: 'no-pass', role: 'alertdialog', 'aria-labelledby': 'no-pass-title' },
+      el('section', { cls: 'layer' }, el('span', { cls: 'eyebrow' }, U.brand),
+        el('h2', { id: 'no-pass-title' }, U.noPassTitle),
+        el('p', null, dash ? U.noPassDashboard : U.noPassDesk),
+        el('p', { cls: 'small muted' }, U.noPassWhy)));
+    document.body.append(box);
+    try { document.title = U.noPassTitle + ' · ' + U.brand; } catch (e) { }
+  }
+  if (typeof realFetch === 'function') g.fetch = function () {
+    return realFetch.apply(g, arguments).then(function (r) {
+      if (r && r.status === 403) { try { r.clone().json().then(function (j) { if (j && j.error === 'pass') noPass(); }, function () { }); } catch (e) { } }
+      return r;
+    });
+  };
+  // 已配對裝置清單：每項有名稱、配對／最後使用／到期日期、「撤銷」（按兩次先真係撤銷，唔彈對話框）；opts.onRevoke(id, button)
+  function fullDay(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? (+m[1]) + ' 年 ' + (+m[2]) + ' 月 ' + (+m[3]) + ' 日' : '—'; }
+  function devices(list, opts) {
+    list = list || []; opts = opts || {};
+    return el('div', { id: 'devices' },
+      list.length ? el('ul', { cls: 'dev-list' }, list.map(function (d) {
+        if (d.state === 'pending') {
+          var accept = el('button', { type: 'button', cls: 'btn primary', onclick: function () { accept.disabled = true; (opts.onAccept || function (id) { return setupPost({ action: 'phone-accept', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { accept.disabled = false; toast(e.message || U.phoneGone); }); } }, U.phoneAccept);
+          var reject = el('button', { type: 'button', cls: 'btn', onclick: function () { reject.disabled = true; (opts.onReject || function (id) { return setupPost({ action: 'phone-reject', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { reject.disabled = false; toast(e.message || U.phoneGone); }); } }, U.phoneReject);
+          return el('li', { 'data-device': d.id, 'data-current': 'false', cls: 'phone-pending' }, el('span', { cls: 'dev-name' }, d.name || U.devicePhone), el('span', { class: 'tag amber' }, U.phonePending), accept, reject, el('span', { cls: 'dev-meta' }, U.phoneCode + '：' + (d.confirmationCode || '—')));
+        }
+        var btn = el('button', { type: 'button', cls: 'btn small', 'data-revoke': d.id, onclick: function (e) {
+          if (btn.getAttribute('data-arm') !== '1') { btn.setAttribute('data-arm', '1'); btn.textContent = U.deviceRevokeConfirm; return; }
+          btn.disabled = true; if (opts.onRevoke) opts.onRevoke(d.id, btn);
+        } }, U.deviceRevoke);
+        return el('li', { 'data-device': d.id, 'data-current': d.current ? 'true' : 'false' },
+          el('span', { cls: 'dev-name' }, d.name || (d.kind === 'phone' ? U.devicePhone : U.deviceBrowser), d.current ? el('span', { cls: 'tag mint' }, U.deviceThis) : null),
+          btn,
+          el('span', { cls: 'dev-meta' }, U.devicePaired + '：' + fullDay(d.createdAt) + ' · ' + U.deviceLastUsed + '：' + fullDay(d.lastUsedAt) + ' · ' + U.deviceExpires + '：' + fullDay(d.expiresAt)));
+      })) : el('p', { cls: 'muted' }, U.devicesNone),
+      el('p', { cls: 'small muted' }, U.deviceNote));
+  }
+
   g.SOS_DESK = {
-    shell: shell, header: header, title: title, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
+    shell: shell, header: header, devices: devices, title: title, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast,
     paused: function () { return !!ST.paused; }, fx: function () { return !!ST.fx; }, reduced: !!REDUCED,
     onPause: function (f) { ST.cbs.pause.push(f); }, onFx: function (f) { ST.cbs.fx.push(f); }, onRefresh: function (f) { ST.cbs.refresh.push(f); },

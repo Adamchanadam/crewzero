@@ -1,6 +1,6 @@
 # startup-os
 
-給已在用 Claude Code 的創辦人與小團隊：一隊在你電腦上運行的 AI 團隊，先替你準備資料、草稿和練習；見客、收款、簽約仍由你決定和去做。
+給已在用 Claude Code、Codex 或 Antigravity 的創辦人與小團隊：一隊在你電腦上運行的 AI 團隊，先替你準備資料、草稿和練習；見客、收款、簽約仍由你決定和去做。
 
 介紹頁：https://adamchanadam.github.io/startup-os/
 
@@ -33,14 +33,34 @@ startup-os 由「陶土 AI 團隊」代表：一位統籌成員，按工作分�
 | 位置 | 內容 |
 |---|---|
 | `prototypes/proofread/` | 程式本體（零依賴 Node.js）：本機伺服器、Founder Desk、營運監察台、AI 外殼 |
-| `prototypes/proofread/adapters/claude-code/startup-os/` | Claude Code 插件（`/startup-os:install`、`/startup-os:desk`、`/startup-os:dashboard`），`program/` 由 `build-plugin.mjs` 生成 |
+| `prototypes/proofread/adapters/claude-code/startup-os/` | 插件（Claude Code、Codex、Antigravity 共用同一份；四個指令 install、desk、dashboard、update），`program/` 由 `build-plugin.mjs` 生成 |
 | `tests/prototype/` | 全套測試（隔離資料夾、假 AI、零費用）：`node tests/prototype/run-all.mjs` |
 | `docs/` | 創辦人簡報、規劃書、設計規格、品牌角色與圖像 |
 | `site/` | 介紹頁 |
 
 ## 開始
 
-需要 Windows 電腦、已安裝並登入的 Claude Code，以及 Node.js。安裝插件後，在 Claude Code 對話輸入 `/startup-os:install`，之後用 `/startup-os:desk` 打開 Founder Desk。有新版時，用 `/startup-os:update` 更新。
+需要 Windows 電腦、Node.js，以及已安裝並登入的 Claude Code、OpenAI Codex CLI 或 Google Antigravity CLI（`agy`）其中一個。同一份插件三種工具都用得，只是指令的叫法不同。
+
+1. 安裝插件（每部電腦一次）：
+
+   | 工具 | 輸入 |
+   |---|---|
+   | Claude Code | 在對話輸入 `/plugin marketplace add Adamchanadam/startup-os`，再 `/plugin install startup-os@startup-os` |
+   | Codex | 在命令列輸入 `codex plugin marketplace add Adamchanadam/startup-os`，再 `codex plugin add startup-os@startup-os` |
+   | Antigravity | 在命令列輸入 `agy plugin install https://github.com/Adamchanadam/startup-os`（已在用 Claude Code 的話，`agy plugin import claude` 亦可） |
+
+2. 到你項目的 AI 對話輸入安裝指令，答「好」，並批准每日排程。
+3. 之後用 Founder Desk 指令打開 Founder Desk；有新版時先在你的工具換入新版插件，再輸入更新指令。
+
+| 指令 | Claude Code | Codex | Antigravity |
+|---|---|---|---|
+| 安裝 | `/startup-os:install` | `$startup-os:install` | `/install` |
+| Founder Desk | `/startup-os:desk` | `$startup-os:desk` | `/desk` |
+| 營運監察台 | `/startup-os:dashboard` | `$startup-os:dashboard` | `/dashboard` |
+| 更新 | `/startup-os:update` | `$startup-os:update` | `/update` |
+
+Codex 與 Antigravity 版本目前 AI 工作不上網做研究：生意體檢與商機掃描只用你交的資料，情景演練與紅藍對打暫不提供；Claude Code 版本齊備。
 
 ## 不在本倉庫的東西
 

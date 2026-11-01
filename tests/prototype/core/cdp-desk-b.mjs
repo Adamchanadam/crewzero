@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const { seedCompany } = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
@@ -25,6 +26,7 @@ function server(DATA, port) {
 }
 const srvA = server(DA, PA), srvB = server(DB, PB);
 const api = (port, p, body) => fetch(`http://127.0.0.1:${port}${p}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: `http://127.0.0.1:${port}` }, body: JSON.stringify(body) } : {}).then(async r => { let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; });
+for (const port of [PA, PB]) await usePass(`http://127.0.0.1:${port}`);
 for (const port of [PA, PB]) for (let i = 0; i < 240; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/api/status`)).ok) break; } catch { } await sleep(250); }
 async function certify(port) { await api(port, '/api/setup', { action: 'certify', host: 'test' }); for (let i = 0; i < 120; i++) { const s = (await api(port, '/api/setup')).j; if (s.certify && s.certify.state !== 'running') return s.certify.state; await sleep(500); } }
 
@@ -67,6 +69,7 @@ try {
 
   /* A：未確認公司概覽 → 今日要做的事＝校對；第一次打開冇「上次離開之後」；第二次先有；輪詢唔算打開 */
   const A = `http://127.0.0.1:${PA}/`;
+  await usePass(A, { send });
   await go(A);
   ok('今日要做的事卡：待校對公司概覽，入口去校對', (await ev(`(document.querySelector('#today-card')||{}).dataset.key`)) === 'proofread' && (await ev(`document.querySelector('#today-go').getAttribute('href')`)) === '/proofread.html', await text('#today-card'));
   ok('今日要做的事卡：一句要做的事、一句不會自動發生，文字來自 FIRST-WEEK.md', /檢視 AI 擬定的公司概覽/.test(await text('#today-do')) && (await text('#today-not')).startsWith(N.ui.todayNotAuto), await text('#today-card'));
@@ -87,6 +90,7 @@ try {
   pack(DB, 'ask-next', { todoType: 'question', next: { task: '按創辦人答案整理一份測試清單。' }, afterConfirm: 'AI 會按答案整理清單' }, ago(3));
   pack(DB, 'ask-plain', { todoType: 'question', next: null }, ago(4));
   const B = `http://127.0.0.1:${PB}/`;
+  await usePass(B, { send });
   await go(B + '#/');
   const asks = (await api(PB, '/api/asks')).j;
   const want = asks.todo.map(t => t.id);

@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, SHOTS] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -19,12 +20,14 @@ try {
   await kit.certifyDirect(DEMO, PROTO, ADAPTER);
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_DATA: DEMO, SOS_ADAPTER: ADAPTER }, stdio: 'ignore' });
   const B = `http://127.0.0.1:${PORT}`;
+  await usePass(B);
   for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
   const get = async p => (await fetch(B + p)).json();
   const post = async (p, body) => { const r = await fetch(B + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: B }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; };
   let d;
   // 「工作中」同光流嘅檢查已搬去 v2-test.mjs（設計稿 2026-10-28：冇新鮮度窗）
   c = await openChrome(CHROME, path.join(OUT, 'profile'), 9477);
+  await usePass(B, c);
 
   /* ---------- 3. 記錄型工作唔當 AI 完成 ---------- */
   const before = (await get('/api/dashboard')).deck.freshness.lastRunAt;

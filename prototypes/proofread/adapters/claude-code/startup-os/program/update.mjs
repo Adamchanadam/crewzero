@@ -9,12 +9,15 @@
 // 測試用：環境變數 SOS_UPDATE_FAIL_AFTER=<n> 換入第 n 個檔之後故意失敗（驗證由備份還原）。
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { programFiles, pluginVersion, INSTALL_SKIP, GENERATED, compareVersions, writeGenerated, manifestOf, parseManifest, sha256 } from './bundle-rules.mjs';
 import { rootId, BASE_PORT } from './ask-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const say = s => console.log('[startup-os] ' + s);
+// 指令叫法按宿主唔同（同一份插件）：命令本身唔知創辦人用邊種工具，所以三種都印
+const CMD = n => `Claude Code：/startup-os:${n}；Codex：$startup-os:${n}；Antigravity：/${n}`;
 const argv = process.argv.slice(2), has = k => argv.includes('--' + k);
 const arg = argv.find(a => !a.startsWith('--'));
 if (!arg) { say('用法：node update.mjs <項目根> [--apply] [--rollback]'); process.exit(1); }
@@ -22,8 +25,8 @@ const proj = path.resolve(arg);
 let isDir = false; try { isDir = fs.statSync(proj).isDirectory(); } catch { }
 if (!isDir) { say('找不到項目資料夾：' + proj); process.exit(1); }
 const target = path.join(proj, 'startup-os'), DATA = path.join(target, 'data');
-if (!fs.existsSync(path.join(target, 'ask.mjs'))) { say(`這個項目未安裝 startup-os（${target}）。要安裝請在對話輸入 /startup-os:install。`); process.exit(2); }
-if (path.resolve(ROOT).toLowerCase().startsWith(path.resolve(target).toLowerCase() + path.sep) || path.resolve(ROOT).toLowerCase() === path.resolve(target).toLowerCase()) { say('不可以用安裝資料夾自己更新自己；請經插件的 /startup-os:update 執行。'); process.exit(1); }
+if (!fs.existsSync(path.join(target, 'ask.mjs'))) { say(`這個項目未安裝 startup-os（${target}）。要安裝請在對話輸入安裝指令（${CMD('install')}）。`); process.exit(2); }
+if (path.resolve(ROOT).toLowerCase().startsWith(path.resolve(target).toLowerCase() + path.sep) || path.resolve(ROOT).toLowerCase() === path.resolve(target).toLowerCase()) { say(`不可以用安裝資料夾自己更新自己；請經插件的更新指令執行（${CMD('update')}）。`); process.exit(1); }
 const APPLY = has('apply'), ROLLBACK = has('rollback');
 const FAIL_AFTER = Number(process.env.SOS_UPDATE_FAIL_AFTER) || 0;
 
@@ -62,11 +65,30 @@ async function runningServers() {
   const found = [], want = rootId(DATA);
   for (let p = BASE_PORT; p < BASE_PORT + 10; p++) {
     try {
-      const j = await (await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) })).json();
-      if (j && j.root === want) found.push({ port: p, pid: Number(j.pid) || 0, busy: !!j.busy, version: String(j.version || '') });
+      const response = await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(800) });
+      const j = response.ok ? await response.json() : null;
+      if (j && j.root === want) { found.push({ port: p, pid: Number(j.pid) || 0, busy: !!j.busy, version: String(j.version || ''), legacy: false }); continue; }
+    } catch { }
+    // 舊版只公開 /api/status；必須同樣列入忙碌判斷及關閉名單，不能遺留無通行證入口。
+    try {
+      const response = await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) });
+      const j = response.ok ? await response.json() : null;
+      if (j && j.root === want && Number(j.pid) > 0) found.push({ port: p, pid: Number(j.pid), busy: !!j.busy, version: String(j.version || 'legacy-no-pass'), legacy: true });
     } catch { }
   }
   return found;
+}
+function ownsServerPort(port, reportedPid) {
+  if (process.platform !== 'win32' || !Number.isInteger(Number(reportedPid)) || Number(reportedPid) <= 0) return false;
+  // 由作業系統讀該埠嘅監聽 socket 擁有者（本機位址係該埠嘅任何一行都屬伺服器程序；唔睇狀態欄同遠端：部分 Windows 版本監聽行會顯示成其他狀態甚至唔列出），再核對命令列；任何一步讀唔到都當未能確認
+  let netstat = '';
+  try { netstat = String(spawnSync('netstat.exe', ['-ano', '-p', 'tcp'], { encoding: 'utf8', windowsHide: true, timeout: 5000 }).stdout || ''); } catch { return false; }
+  const owner = netstat.split(/\r?\n/).map(s => s.trim().split(/\s+/)).some(c => c[0] === 'TCP' && c[1] === `127.0.0.1:${Number(port)}` &&Number(c[c.length - 1]) === Number(reportedPid));
+  if (!owner) return false;
+  let command = '';
+  try { command = String(spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = ${Number(reportedPid)}").CommandLine`], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).stdout || ''); } catch { return false; }
+  const norm = s => String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US');
+  return norm(command).includes(norm(path.join(target, 'server.mjs')));
 }
 const RUN_LOCK = path.join(DATA, 'ledger', '.lock');
 // 同 run.mjs 同一個鎖、同一個 20 分鐘過期規則
@@ -79,10 +101,19 @@ function takeRunLock() {
 }
 const servers = await runningServers();
 if (servers.some(s => s.busy) || runLockHeld()) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
+if (APPLY && servers.some(s => s.pid && !ownsServerPort(s.port, s.pid))) {
+  say('無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
+  process.exit(4);
+}
 function closeServers() {
-  let closed = 0;
-  for (const s of servers) if (s.pid) { try { process.kill(s.pid); closed++; } catch { } }
+  let closed = 0, unverified = 0;
+  for (const s of servers) if (s.pid) {
+    if (!ownsServerPort(s.port, s.pid)) { unverified++; continue; }
+    try { process.kill(s.pid); closed++; } catch { }
+  }
   if (closed) say('已關閉開着的 Founder Desk（舊版程式）；下次打開便是現在的版本。');
+  if (unverified) say('無法獨立核對開着的 Founder Desk 程序身份，沒有終止該程序；已停止換版。');
+  return unverified === 0;
 }
 
 /* ---------- 還原上一個版本 ---------- */
@@ -109,7 +140,7 @@ if (ROLLBACK) {
   if (bad.length) { say(`還原未完成，有 ${bad.length} 個檔與備份不符：${bad.slice(0, 5).join('、')}。備份仍在 ${backup}，請再試一次；${DATA} 沒有改動。`); process.exit(1); }
   closeServers();
   say(`已還原 startup-os 到版本 ${bVersion}（${bFiles.length} 個檔已逐一核對）。備份資料夾保留在 ${backup}；沒有改動 ${DATA}。`);
-  say('下一步：打開 Founder Desk（/startup-os:desk）。');
+  say(`下一步：打開 Founder Desk（${CMD('desk')}）。`);
   process.exit(0);
 }
 
@@ -185,4 +216,4 @@ try { fs.rmSync(stage, { recursive: true, force: true }); } catch { }
 release();
 closeServers();
 say(`已更新 startup-os：版本 ${oldLabel} → ${newVersion}（${files.length} 個程式檔已逐一核對${stale.length ? '，刪除了 ' + stale.length + ' 個新版已沒有的舊程式檔' : ''}）。舊版備份在 ${backup}；沒有改動 ${DATA}。`);
-say('下一步：打開 Founder Desk（/startup-os:desk）；原有資料照用。若新版有問題，在對話輸入「還原上一個版本」。');
+say(`下一步：打開 Founder Desk（${CMD('desk')}）；原有資料照用。若新版有問題，在對話輸入「還原上一個版本」。`);

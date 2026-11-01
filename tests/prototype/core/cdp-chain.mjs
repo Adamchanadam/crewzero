@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { seedCompany, certify } from '../lib/testkit.mjs';
+import { seedCompany, certify, usePass } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT, MODE, WAIT] = process.argv.slice(2);
 fs.rmSync(OUT, { recursive: true, force: true });
@@ -21,6 +21,7 @@ let srvLog = '';
 srv.stdout.on('data', d => { srvLog += d; });
 srv.stderr.on('data', d => { srvLog += d; });
 const BASE = `http://127.0.0.1:${PORT}/`;
+await usePass(BASE);
 for (let i = 0; i < 40; i++) { try { const r = await fetch(BASE + 'api/status'); if (r.ok) break; } catch { } await sleep(250); }
 seedCompany(DATA, PROTO);
 if (MODE !== 'missing') await certify(BASE);
@@ -40,6 +41,7 @@ ws.onmessage = m => {
   if (d.method === 'Log.entryAdded' && d.params.entry.level === 'error') errors.push(d.params.entry.text);
 };
 const send = (method, params = {}) => new Promise((res, rej) => { const i = ++seq; pend.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
+await usePass(BASE, { send });
 await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable');
 const ev = async expr => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(expr + ' -> ' + r.exceptionDetails.exception?.description); return r.result.value; };
 const shot = async name => { const r = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(r.data, 'base64')); };

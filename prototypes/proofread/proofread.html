@@ -230,13 +230,14 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 }
 </style>
 <script src="names.js"></script>
+<script src="pair.js"></script>
 <script src="desk.js"></script>
 </head>
 <body>
 <div class="shell" id="app">
   <div class="layer">
     <span class="eyebrow">載入中……</span>
-    <p class="guide">如畫面一直停留於此，表示此視窗未有執行網頁程式（例如應用程式內的預覽）。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽。</p>
+    <p class="guide">如畫面一直停留於此，表示此視窗未有執行網頁程式（例如應用程式內的預覽）。請在 AI 對話打開 Founder Desk，再於該處打開公司概覽。</p>
   </div>
 </div>
 <div class="cbar" id="cbar" hidden></div>
@@ -403,7 +404,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   var NOCO = false;
   function noCompany() {
     NOCO = true;
-    fetch('/api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; }).then(function (st) {
+    fetch('/api/status', { cache: 'no-store' }).then(function (r) { if (r.status === 403) throw new Error('pass'); return r.json(); }).catch(function (e) { return e && e.message === 'pass' ? 'pass' : null; }).then(function (st) {
+      // 未配對（403）：共用殼已全頁顯示配對指引，唔再畫「未有公司概覽」
+      if (st === 'pass') return;
       $('#cbar').hidden = true;
       $('#app').replaceChildren(DESK.header({ page: 'company', company: st && st.company, pending: st ? st.openAsks : 0, sim: !!(st && st.sim) }),
         h('section', { class: 'layer', id: 'no-company' }, h('span', { class: 'eyebrow' }, N.ui.company),
@@ -851,7 +854,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         h('span', null, '你在確認後再作了修改。如需 AI 按新內容處理，請再按頁底「再確認一次」。')));
     } else if (S.confirmed && !S.confirmed.sent) {
       box.append(h('div', { class: 'notice' },
-        h('span', null, '已確認（' + S.confirmed.at + '），但只下載了回覆檔，AI 尚未收到。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽並再次確認，AI 才會跟進。')));
+        h('span', null, '已確認（' + S.confirmed.at + '），但只下載了回覆檔，AI 尚未收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並再次確認，AI 才會跟進。')));
     } else if (S.restored) {
       box.append(h('div', { class: 'notice' },
         h('span', null, '已還原你上次未確認的修改。'),
@@ -1258,7 +1261,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function retryRun() {
     fetch('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); })
-      .catch(function () { toast('Founder Desk 已停止：請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」'); });
+      .catch(function () { toast('Founder Desk 已停止：' + N.ui.reopenDesk); });
   }
   function renderTrack() {
     var root = $('#track');
@@ -1268,7 +1271,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, N.ui.reload)));
     if (!S.server) {
       root.append(h('div', { class: 'track off' }, h('b', null, N.ui.offlineView + '：'),
-        '可以修改及確認，但無法交予 AI。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽；確認後才會自動交予 AI 跟進。'));
+        '可以修改及確認，但無法交予 AI。' + N.ui.reopenDesk + '，再於該處打開公司概覽；確認後才會自動交予 AI 跟進。'));
       return;
     }
     var st = S.server, r = myRun(), ready = st.ai && st.ai.ready, aiName = (st.ai && st.ai.name) || 'AI';
@@ -1302,7 +1305,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           h('span', null, x.label, x.sub ? h('span', { class: 'tr-sub' }, x.sub) : null));
       })));
     if (state === 'waiting') card.append(h('p', null, (ai && ai.detail) || 'AI 尚未設定，設定完成後將自動繼續。'), h('div', { class: 'p-foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
-    if (S.lost) card.append(h('p', { class: 'tr-sub' }, 'Founder Desk 已停止。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，即可繼續；已收到的確認不會遺失。'));
+    if (S.lost) card.append(h('p', { class: 'tr-sub' }, 'Founder Desk 已停止。' + N.ui.reopenDesk + '，即可繼續；已收到的確認不會遺失。'));
     if (state === 'failed') {
       add(card, [(ai && ai.detail === r.error) ? null : h('p', null, '原因：' + (r.error || '未知')),
         failedStep(r) === 'applied'
@@ -1435,7 +1438,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var online = !!S.server;
     if (!online) {
       body.append(h('div', { class: 'warn' },
-        h('span', null, '未連接 AI：此次確認只會下載為檔案，AI 不會收到。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽並確認，AI 才會自動跟進。')));
+        h('span', null, '未連接 AI：此次確認只會下載為檔案，AI 不會收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並確認，AI 才會自動跟進。')));
     }
     // 預覽只講四件事：下一步、目標、路線、AI 權限；其餘收埋
     var g5 = FLAGFIELD, g1id = byPlan('G1') || (D.glance.rows[0] && D.glance.rows[0].id), g1 = g1id && REG[g1id];
@@ -1506,7 +1509,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         })
         .catch(function (e) {
           btnMain.disabled = false; btnMain.textContent = N.ui.resend;
-          copyHolder.replaceChildren(h('p', { class: 'p-judge' }, '未能送出（' + e.message + '）。Founder Desk 可能已停止：請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」重新開啟，然後再按送出。'));
+          copyHolder.replaceChildren(h('p', { class: 'p-judge' }, '未能送出（' + e.message + '）。Founder Desk 可能已停止：' + N.ui.reopenDesk + '重新開啟，然後再按送出。'));
         });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { seedCompany, certifyDirect } from '../lib/testkit.mjs';
+import { seedCompany, certifyDirect, usePass } from '../lib/testkit.mjs';
 const [PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fnv = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return ('0000000' + x.toString(16)).slice(-8); };
@@ -19,6 +19,7 @@ fs.mkdirSync(path.join(data, 'founder', 'replies'), { recursive: true });
 fs.writeFileSync(path.join(data, 'founder', 'replies', `2026-10-26-000000-proofread-${page.page.id}.md`), text);
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_ADAPTER: ADAPTER, SOS_DATA: data }, stdio: ['ignore', 'pipe', 'pipe'] });
 let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
+await usePass(`http://127.0.0.1:${PORT}`);
 let st = null;
 for (let i = 0; i < 40; i++) {
   await sleep(500);
@@ -38,6 +39,7 @@ fs.writeFileSync(path.join(data, 'founder', 'inbox', '2026-10-27-000000-001-inta
 fs.writeFileSync(path.join(data, 'founder', 'inbox', '2026-10-27-000000-001-intake-01-計劃.md'), '# 測試計劃\n');
 const srv2 = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_ADAPTER: ADAPTER, SOS_DATA: data }, stdio: ['ignore', 'pipe', 'pipe'] });
 let log2 = ''; srv2.stdout.on('data', d => { log2 += d; }); srv2.stderr.on('data', d => { log2 += d; });
+await usePass(`http://127.0.0.1:${PORT}`);
 let st2 = null;
 for (let i = 0; i < 60; i++) { await sleep(500); try { st2 = await (await fetch(`http://127.0.0.1:${PORT}/api/status`)).json(); } catch { } if (st2 && st2.intake && /done|failed/.test(st2.intake.state)) break; }
 srv2.kill();

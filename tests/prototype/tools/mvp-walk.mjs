@@ -32,7 +32,7 @@ const { openChrome } = await import(pathToFileURL(path.join(HERE, '..', 'lib', '
 async function openDesk() {
   const r = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env: envSrv, timeout: 60000, cwd: PROJ });
   B = ((r.stdout || '').match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0] || '';
-  if (B) { const st = await (await fetch(B + 'api/status')).json(); pid = Number(st.pid) || 0; }
+  if (B) { const st = await (await fetch(B + 'api/health')).json(); pid = Number(st.pid) || 0; }
   return r;
 }
 async function waitFor(fn, ms) { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(600); } return null; }

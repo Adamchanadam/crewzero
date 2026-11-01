@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' file:; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>公司概覽 · Founder Desk</title>
+<style>
+.steps{display:flex;gap:8px;margin:20px 0 4px;flex-wrap:wrap}
+.step{all:unset;box-sizing:border-box;cursor:pointer;height:30px;padding:0 12px;border:1px solid var(--line);border-radius:7px;
+  font-size:var(--fs-sub);color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.step:hover{border-color:var(--text);color:var(--text)}
+.step.on{border-color:var(--amber);color:var(--text)}
+.step.done{border-color:rgba(153,215,188,.5);color:var(--mint)}
+.step:focus-visible,.btn:focus-visible,.opt:focus-visible,.ed-val:focus-visible,.handle:focus-visible,.layer-toggle:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+.notice{margin-top:12px;border:1px solid var(--line);border-left:3px solid var(--wait);border-radius:12px;padding:10px 14px;background:var(--panel);
+  font-size:var(--fs-sub);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.notice.ok{border-left-color:var(--mint)}
+.layer-toggle{all:unset;box-sizing:border-box;display:flex;width:100%;align-items:center;gap:12px;cursor:pointer;border-radius:7px}
+.layer-toggle .lt-main{flex:1;min-width:0}
+.layer-toggle .lt-sum{font-size:var(--fs-sub);color:var(--muted)}
+.layer-toggle .chev{font-size:var(--fs-body);color:var(--amber);border:1px solid rgba(232,141,79,.45);border-radius:7px;height:30px;min-width:30px;display:grid;place-items:center;padding:0 8px}
+.layer.closed .layer-toggle .chev{background:rgba(232,141,79,.08)}
+.layer.closed .layer-toggle{flex-wrap:wrap;align-items:flex-end}
+.layer.closed .lt-main{flex:1 1 380px}
+.route{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 6px;font-size:var(--fs-sub)}
+.route .stop{border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--text);white-space:nowrap}
+.route .stop.flag{border-color:var(--amber);color:var(--amber)}
+.route .stop.deep{border-style:dashed;border-color:rgba(131,141,158,.8)}
+.route .arrow{color:var(--muted)}
+.pv{display:flex;flex-direction:column;gap:3px;margin:8px 0 4px;font-size:var(--fs-sub);color:var(--muted)}
+.pv b{color:var(--text);font-weight:600}
+.pv .eff{color:var(--red)}
+.guide{color:var(--muted);font-size:var(--fs-sub);margin:10px 0 12px}
+.tip{border:1px solid rgba(232,141,79,.26);border-left:3px solid var(--amber);border-radius:12px;padding:10px 14px;background:rgba(232,141,79,.045);margin:0 0 14px}
+.tip .t-h{font-size:var(--fs-body);font-weight:600;margin:3px 0 2px}
+.tip .t-w{font-size:var(--fs-sub);color:var(--muted);margin:0}
+.alt{margin-top:8px;font-size:var(--fs-sub);color:var(--muted)}
+.alt summary{cursor:pointer;color:var(--text);opacity:.9}
+.alt p{margin:4px 0}
+.tag.doc{border-color:rgba(156,163,179,.4);color:#c5cad5}
+.tag.tent{border:1px dashed rgba(239,179,127,.75);color:var(--wait)}
+.tag.miss{border:1px dashed rgba(242,162,158,.75);color:var(--red)}
+.tag.deep{background:rgba(131,141,158,.12);color:var(--amber);border:1px dashed rgba(131,141,158,.75)}
+.tag.flag{border-color:var(--amber);color:var(--amber);background:rgba(232,141,79,.08)}
+.rows{display:flex;flex-direction:column}
+.row{padding:12px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0;padding-top:4px}
+.row-label{font-size:var(--fs-sub);color:var(--muted);margin-bottom:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row-sub{font-size:var(--fs-sub);color:var(--wait);margin-top:4px}
+.row-due{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:var(--fs-sub);color:var(--muted);margin:2px 0 4px}
+.row-due .ed{flex:1 1 auto}
+.row-due .ed.compact .ed-val,.row-due .ed.compact .ed-val.edited{margin-left:0}
+.p-date{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.p-date input[type=date]{font:var(--fs-sub) var(--ui);color:var(--text);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:7px;height:32px;padding:0 8px}
+.p-date input[type=date]:focus{outline:2px solid var(--mint);outline-offset:1px}
+.ed{min-width:0}
+.ed-val{all:unset;box-sizing:border-box;display:block;cursor:pointer;font-size:var(--fs-title);line-height:1.5;color:var(--text);border-radius:7px;
+  padding:4px 8px;margin:0 -8px;border:1px solid transparent;word-break:break-word}
+.ed-val:hover{border-color:var(--line);background:rgba(255,255,255,.025)}
+.ed-val .pen{color:var(--muted);font-size:var(--fs-sub);margin-left:6px;opacity:.6}
+.ed-val.empty{color:var(--red)}
+.ed-val.edited{box-shadow:inset 3px 0 0 var(--mint);padding-left:11px}
+.ed-val[aria-expanded="true"]{border-color:rgba(232,141,79,.5)}
+.small .ed-val,.ed.small .ed-val{font-size:var(--fs-sub)}
+.ed.compact{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:2px}
+.ed.compact .ed-val{display:inline-block;margin:0 0 0 -8px}
+.ed.compact .ed-val.edited{margin-left:-11px}
+.ed.compact .ed-meta{margin-top:0}
+.ed.compact .panel{flex-basis:100%}
+.st-facts .ed.compact .ed-val{padding-top:3px;padding-bottom:3px}
+.ed-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:3px;font-size:var(--fs-label);color:var(--muted)}
+.ed-meta .orig{text-decoration:line-through;text-decoration-color:rgba(156,163,179,.5)}
+.panel{margin-top:8px;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:12px;padding:12px 14px;background:rgba(18,19,24,.96)}
+.p-ask{font-size:var(--fs-body);font-weight:600;line-height:1.5}
+.p-judge{font-size:var(--fs-sub);color:var(--muted)}
+.p-why{font-size:var(--fs-sub);color:var(--muted);margin:6px 0 2px}
+.p-why b{color:var(--text);font-weight:600;opacity:.85}
+.opt .o-note{display:block;color:var(--muted);font-size:var(--fs-label)}
+.p-free{margin-top:10px}
+.p-lab{display:block;font-size:var(--fs-sub);color:var(--muted);margin-bottom:4px}
+textarea,.note-in{width:100%;font:var(--fs-sub)/1.55 var(--mono);color:var(--text);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+textarea{min-height:72px;resize:vertical}
+textarea:focus,.note-in:focus{outline:2px solid var(--mint);outline-offset:1px}
+.p-hint{font-size:var(--fs-label);color:var(--muted);margin-top:3px}
+.p-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.status{margin-top:6px;border-top:1px solid var(--line);padding-top:12px}
+.prepared{font-size:var(--fs-sub);margin:6px 0 4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.prepared .ok{color:var(--mint)}
+.st-list{display:flex;flex-direction:column;margin-top:6px}
+.st-item{display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;align-items:center;padding:7px 0;border-top:1px dashed rgba(255,255,255,.06)}
+/* 狀態（唔可以撳）：實心色塊；動作（要撳）：方角框按鈕。兩者唔可以似 */
+.q-ok{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:7px;border:1px solid var(--text);color:var(--text);background:rgba(255,255,255,.04);font-size:var(--fs-sub);font-weight:600;cursor:pointer;white-space:nowrap}
+.q-ok:hover{background:rgba(153,215,188,.14);border-color:var(--mint);color:var(--mint)}
+.q-ok:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+.order-q{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding:10px 12px;border:1px dashed rgba(232,141,79,.45);border-radius:12px;font-size:var(--fs-sub)}
+.prog-n{font-weight:600}
+.lt-sum.q-left{color:var(--amber)}
+.st-item:first-child{border-top:0}
+.st-item .ed{display:contents}
+.st-item .panel{grid-column:1/-1}
+.st-item .ed-meta{grid-column:1/-1;justify-content:flex-end}
+.st-text{font-size:var(--fs-body)}
+.ed-val.pill{font-size:var(--fs-sub);padding:3px 10px;margin:0;border:1px solid var(--line);border-radius:999px;color:var(--muted);text-align:center;white-space:nowrap}
+.ed-val.pill.g-said{border-color:rgba(239,179,127,.7);color:var(--wait)}
+.ed-val.pill.g-did{border-color:rgba(194,214,250,.7);color:var(--blue)}
+.ed-val.pill.g-paid{border-color:rgba(153,215,188,.75);color:var(--mint)}
+.ed-val.pill.edited{box-shadow:none;padding-left:10px;background:rgba(153,215,188,.06)}
+.gaps{margin-top:12px;font-size:var(--fs-sub);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
+.map{position:relative;margin:4px 0 16px;padding:22px 6px 2px}
+.map-cap{position:absolute;left:6px;top:0;font-size:var(--fs-min);color:var(--muted);letter-spacing:.04em}
+.map-track{position:absolute;left:46px;right:46px;top:53px;border-top:2px dashed rgba(255,255,255,.13)}
+.map-nodes{display:flex;justify-content:space-between;position:relative}
+.node{display:flex;flex-direction:column;align-items:center;width:84px;text-align:center}
+.node .f{height:16px;font-size:var(--fs-min);color:var(--amber);white-space:nowrap}
+.node .c{width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--muted);display:grid;place-items:center;font:600 var(--fs-min) var(--mono);color:var(--muted);background:#0b0c10;margin-top:4px}
+.node.flag .c{border-color:var(--amber);color:var(--amber)}
+.node.beyond .c{border-style:dotted;opacity:.7}
+.node .l{font-size:var(--fs-label);color:var(--muted);margin-top:6px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stations{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.station{position:relative;display:flex;gap:6px;background:rgba(255,255,255,.018);border:1px solid var(--line);border-radius:12px;padding:12px 14px 12px 6px;
+  transition:border-color .25s,box-shadow .25s,background .25s}
+.station.flagged{border-left:3px solid var(--amber)}
+.station.beyond{opacity:.86}
+.station.dragging{z-index:5;border-color:var(--amber);background:#111319;box-shadow:0 14px 40px rgba(0,0,0,.6);transition:none}
+body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.handle{all:unset;box-sizing:border-box;flex:none;width:30px;min-height:44px;display:flex;align-items:flex-start;justify-content:center;padding-top:6px;
+  color:var(--muted);font-size:var(--fs-title);letter-spacing:-2px;border-radius:7px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.handle:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.st-main{flex:1;min-width:0}
+.st-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:2px}
+.st-no{font:600 var(--fs-label) var(--mono);color:var(--amber);letter-spacing:.04em}
+.st-short{font-weight:600;font-size:var(--fs-title)}
+.st-badges{display:inline-flex;gap:6px;flex-wrap:wrap}
+.st-facts{display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:baseline;margin-top:6px;font-size:var(--fs-sub)}
+.st-facts .k{color:var(--muted);padding-top:5px}
+.st-why{font-size:var(--fs-sub);color:var(--muted);margin:8px 0 6px}
+.st-why b{color:var(--text);opacity:.8;font-weight:600}
+.moved{color:var(--wait)}
+.st-detail{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.four{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}
+.four .k,.whys .q,.watch .k{font-size:var(--fs-label);color:var(--muted)}
+.d-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:var(--fs-sub);font-weight:600;margin:14px 0 4px}
+.whys{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.whys .test{font-size:var(--fs-label);color:var(--muted);margin-top:2px}
+.watch{display:flex;gap:16px;flex-wrap:wrap;font-size:var(--fs-sub)}
+.sub{margin-top:18px}
+.sub h3{font-size:var(--fs-sub);font-weight:600;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sub .p-judge{margin:-2px 0 6px}
+.miss-item,.kv{padding:9px 0;border-top:1px dashed rgba(255,255,255,.07)}
+.miss-item:first-of-type,.kv:first-of-type{border-top:0}
+.m-title,.kv .k{font-size:var(--fs-sub);color:var(--muted)}
+.m-how{font-size:var(--fs-label);color:var(--muted);margin-top:2px}
+.lens-why{font-size:var(--fs-sub);color:var(--muted);margin:4px 0 0}
+.boxes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+.box{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.box h4{margin:0 0 4px;font-size:var(--fs-sub)}
+.box ul{margin:0;padding-left:16px;font-size:var(--fs-sub);color:var(--muted)}
+.box.ask{border-color:rgba(242,162,158,.35)}
+.srcs{margin:0;padding-left:16px;font-size:var(--fs-sub);color:var(--muted)}
+.srcs b{color:var(--text);font-weight:600}
+.foot{margin:22px 0 0;font-size:var(--fs-label);color:var(--muted);display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.foot-tools{display:flex;gap:8px;flex-wrap:wrap}
+.st-main > .btn.small{height:auto;min-height:26px;white-space:normal;text-align:left;padding:4px 10px}
+.cbar-txt{font-size:var(--fs-sub);color:var(--muted)}
+.cbar-txt b{color:var(--text);font-weight:600}
+.m-head p{margin:0;font-size:var(--fs-sub);color:var(--muted)}
+.m-sec{margin-top:12px}
+.m-sec h4{margin:0 0 4px;font-size:var(--fs-sub);display:flex;gap:8px;align-items:center}
+.m-sec ul,.m-sec ol{margin:0;padding-left:18px;font-size:var(--fs-sub)}
+.m-sec li{margin:2px 0}
+.effect{border:1px solid rgba(232,141,79,.35);border-left:3px solid var(--amber);border-radius:12px;padding:10px 14px;background:rgba(232,141,79,.04)}
+.warn{border:1px solid rgba(239,179,127,.4);border-radius:12px;padding:10px 14px;font-size:var(--fs-sub);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:8px}
+.chg .was{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(156,163,179,.5)}
+.chg .now{color:var(--mint)}
+.copybox{margin-top:8px}
+.copybox textarea{min-height:120px}
+.decide{margin-top:18px}
+.dq-top{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.dq > .p-judge{margin:4px 0 2px 32px}
+.dq > .opt,.dq > .chips,.dq > .grade-row,.dq > .dq-foot,.dq > .prepared,.dq > .dq-custom,.dq > .p-free{margin-left:32px}
+.dq > .opt{width:calc(100% - 32px)}
+.dq-custom{font-size:var(--fs-sub);margin-top:8px}
+.dq > .prepared{display:block;font-size:var(--fs-sub);color:var(--muted)}
+.dq > .prepared .ok{margin-right:6px}
+.dq-foot{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip:focus-visible,.seg:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+.grade-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-sub)}
+.gr-l{color:var(--muted)}
+.seg{all:unset;box-sizing:border-box;cursor:pointer;padding:3px 10px;border:1px solid var(--line);border-radius:7px;font-size:var(--fs-sub)}
+.seg.on{border-color:var(--mint);color:var(--mint);background:rgba(153,215,188,.08)}
+.rs-line{display:block}
+.rs-line .route{display:inline-flex;margin:0 0 0 4px;vertical-align:middle}
+.rest .eff{color:var(--red)}
+.tent-line{color:var(--wait)}
+.m-rest{margin:10px 0 0}
+.tr-result{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.tr-result h4{margin:10px 0 4px;font-size:var(--fs-sub)}
+.tr-result ul{margin:0;padding-left:18px}
+.tr-result details{border:1px solid var(--line);border-radius:7px;padding:6px 10px;margin-top:6px;background:rgba(255,255,255,.015)}
+.tr-result summary{cursor:pointer;font-weight:600}
+.tr-result pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.65 var(--ui);margin:8px 0 2px;color:var(--text)}
+.tr-live{color:var(--amber)}
+.asks-next{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.asks-next a{text-decoration:none}
+.fatal p{margin:6px 0}
+@media (max-width:600px){
+  .steps{gap:6px}
+  .step{flex:1 1 0;justify-content:center;height:36px;padding:0 6px;font-size:var(--fs-label)}
+  .p-date input[type=date]{height:44px;flex:1 1 160px;font-size:var(--fs-title)}
+  .q-ok{height:36px;padding:0 14px;font-size:var(--fs-sub)}
+  .st-item{grid-template-columns:1fr auto;}
+  .st-item .q-ok{grid-column:2}
+  .dq > .p-judge,.dq > .opt,.dq > .chips,.dq > .grade-row,.dq > .dq-foot,.dq > .prepared,.dq > .dq-custom,.dq > .p-free{margin-left:0}
+  .dq > .opt{width:100%}
+  .seg{padding:9px 12px;font-size:var(--fs-sub)}
+  .cbar-in .prog-top .btn.small{width:auto;height:34px;margin-left:auto;flex:none}
+  .prog-top .cbar-txt{display:none}
+  .ed-val{padding:8px 8px}
+  .ed-val.pill{padding:8px 12px}
+  .map{display:none}
+  .station{padding:12px 12px 12px 4px}
+  .handle{width:36px;font-size:var(--fs-title)}
+  .four{grid-template-columns:1fr}
+  .boxes{grid-template-columns:1fr}
+  .cbar-in .btn{width:100%}
+  .m-foot .btn{flex:1 1 30%}
+}
+</style>
+<script src="names.js"></script>
+<script src="desk.js"></script>
+</head>
+<body>
+<div class="shell" id="app">
+  <div class="layer">
+    <span class="eyebrow">載入中……</span>
+    <p class="guide">如畫面一直停留於此，表示此視窗未有執行網頁程式（例如應用程式內的預覽）。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽。</p>
+  </div>
+</div>
+<div class="cbar" id="cbar" hidden></div>
+<div id="modal-root"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="sr" id="live" aria-live="polite"></div>
+<script src="md.js"></script>
+<script>
+(function () {
+  'use strict';
+  var DEFAULT_DATA = 'company-page.js';
+
+  // 證據級：key 係資料值（none／said／did／paid，唔改）；畫面只顯示 names.js 嘅名稱（ev_）同解釋（evd_），唔顯示級數
+  var EV = window.SOS_NAMES.dash;
+  var GRADES = [['none', 0], ['said', 1], ['did', 2], ['paid', 3]].map(function (g) { return { key: g[0], text: EV['ev_' + g[1]], hint: EV['evd_' + g[1]] }; });
+  var DEPTH_Q = ['對方為何會同意？', '對方如何決定、需時多久？', '需要先具備甚麼條件？', '最常見的失敗原因是甚麼？', '為何定於這個日期／數字？'];
+  var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var N = window.SOS_NAMES, T = N.t, DESK = window.SOS_DESK;
+  var D = null, REG = {}, SRC = {}, S = null, HASH = '', FLAGFIELD = null;
+
+  /* ---------- 小工具 ---------- */
+  function $(s, r) { return (r || document).querySelector(s); }
+  function h(tag, props) {
+    var el = document.createElement(tag);
+    if (props) for (var k in props) {
+      var v = props[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k.slice(0, 2) === 'on' && typeof v === 'function') el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (var i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function add(el, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { add(el, x); }); return; }
+    el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  function tag(text, kind, title) { return h('span', { class: 'tag ' + (kind || ''), title: title || null }, text); }
+  function clip(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function md(iso) {
+    var m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(String(iso || ''));
+    if (!m) return String(iso || '');
+    var y = +m[1] !== new Date().getFullYear() ? m[1] + ' 年 ' : '';
+    return m[3] ? y + (+m[2]) + ' 月 ' + (+m[3]) + ' 日' : m[1] + ' 年 ' + (+m[2]) + ' 月';
+  }
+  var WD = ['日', '一', '二', '三', '四', '五', '六'];
+  function isoDay(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parseDay(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+  function quarterEnd(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 0); }
+  // 2026-11-23 → 「11 月 23 日（一）」；唔同年份先加年
+  function fmtDay(s, suffix) {
+    var d = parseDay(s);
+    if (!d) return String(s || '');
+    var y = d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + ' 年 ' : '';
+    return y + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日（' + WD[d.getDay()] + '）' + (suffix || '');
+  }
+  function localIso(d) {
+    var off = -d.getTimezoneOffset(), sign = off >= 0 ? '+' : '-', a = Math.abs(off);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + sign + pad(Math.floor(a / 60)) + ':' + pad(a % 60);
+  }
+  function stamp(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); }
+  function human(d) { return d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function fnv(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; }
+    return ('0000000' + x.toString(16)).slice(-8);
+  }
+  function safeName(s) { return String(s).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 40); }
+  function announce(t) { var l = $('#live'); l.textContent = ''; setTimeout(function () { l.textContent = t; }, 30); }
+  var toastTimer = null;
+  function toast(t) {
+    var el = $('#toast'); el.textContent = t; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 4000);
+  }
+  function go(el) { if (el) el.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }); }
+
+  /* ---------- 載入資料 ---------- */
+  function loadData() {
+    if (window.STARTUP_OS_PAGE) return start(window.STARTUP_OS_PAGE);
+    var p = new URLSearchParams(location.search).get('data') || DEFAULT_DATA;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(p) && !/^file:/i.test(p)) p = DEFAULT_DATA;
+    var s = document.createElement('script');
+    s.src = p;
+    s.onload = function () {
+      if (window.STARTUP_OS_PAGE) start(window.STARTUP_OS_PAGE);
+      else fatal('已讀取資料檔，但其中沒有公司概覽資料。');
+    };
+    // 經伺服器開而未有公司概覽：帶去交資料，唔當錯誤
+    s.onerror = function () { if (/^https?:$/.test(location.protocol)) noCompany(); else fatal('找不到公司概覽資料檔。'); };
+    document.head.append(s);
+    // 有啲預覽視窗會靜靜雞擋住資料檔，咁就唔會有 onload 亦冇 onerror
+    setTimeout(function () {
+      if (!D && !NOCO) fatal('等候 5 秒仍未讀取到公司概覽資料檔。請用 Chrome 或 Edge 直接開啟此網頁，或選擇資料檔。');
+    }, 5000);
+  }
+  function check(d) {
+    if (!d || typeof d !== 'object') return '資料格式不正確。';
+    if (String(d.format || '').indexOf('startup-os.proofread/') !== 0) return '此檔案不是公司概覽資料。';
+    if (!d.page || !d.page.id) return '資料缺少頁面編號。';
+    if (!d.company || !d.company.name) return '資料缺少公司名稱。';
+    if (!d.glance || !Array.isArray(d.glance.rows)) return '資料缺少第一層內容。';
+    if (!d.path || !Array.isArray(d.path.milestones) || !d.path.milestones.length) return '資料缺少里程碑路線。';
+    return '';
+  }
+  function walk(o) {
+    if (Array.isArray(o)) { o.forEach(walk); return; }
+    if (!o || typeof o !== 'object') return;
+    if (typeof o.id === 'string' && 'value' in o && 'label' in o) REG[o.id] = o;
+    for (var k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+  }
+  // 欄名由格式決定（names.js 嘅 field，按資料嘅 plan）；資料入面 AI 寫嘅 label 只係後備。
+  // 要喺計完版本指紋（HASH）之後先換，唔係外殼會以為版本變咗。
+  function schemaLabels() {
+    var inMs = {};
+    D.path.milestones.forEach(function (m, i) {
+      (function mark(o) {
+        if (Array.isArray(o)) { o.forEach(mark); return; }
+        if (!o || typeof o !== 'object') return;
+        if (typeof o.id === 'string' && o.plan && N.field[o.plan]) inMs[o.id] = T('milestoneN', { n: i + 1 }) + '：' + N.field[o.plan];
+        for (var k in o) if (o[k] && typeof o[k] === 'object') mark(o[k]);
+      })(m);
+    });
+    for (var id in REG) {
+      var e = REG[id];
+      if (inMs[id]) e.label = inMs[id];
+      else if (e.plan && N.field[e.plan] && e.kind !== 'grade') e.label = N.field[e.plan];
+    }
+  }
+  function start(data) {
+    var err = check(data);
+    if (err) { fatal(err); return; }
+    D = data; REG = {}; SRC = {};
+    (D.sources || []).forEach(function (s) { SRC[s.id] = s; });
+    walk(D);
+    FLAGFIELD = null;
+    for (var id in REG) if (REG[id].flagTo) { FLAGFIELD = REG[id]; break; }
+    buildQuestions();
+    HASH = fnv(JSON.stringify(D));
+    // 區段寫成 { title, items, boxes } 都照顯示（格式容許各區有 title；畫面按清單畫）；喺計完簽收雜湊之後先規整，唔影響回覆核對
+    if (D.detail) ['rules', 'missing', 'reading', 'assumptions'].forEach(function (k) {
+      var x = D.detail[k];
+      if (x && !Array.isArray(x)) D.detail[k] = Array.isArray(x.items) ? x.items.map(function (it, i) { return i === 0 && x.boxes && !it.boxes ? Object.assign({}, it, { boxes: x.boxes }) : it; }) : typeof x === 'object' && (x.title || x.label || x.id) ? [x] : [];
+    });
+    schemaLabels();
+    S = {
+      edits: {}, drafts: {}, order: D.path.milestones.map(function (m) { return m.id; }),
+      openedPath: false, pathOpen: false, detailOpen: false, altOpen: false, note: '',
+      confirmed: null, shownAt: new Date(), open: null, focus: null, expanded: {}, restored: false, clearArmed: false,
+      sent: null, server: null, lost: false, ok: {}, kinds: {}
+    };
+    restore();
+    DESK.title('company', D.company.name);
+    render();
+    probeServer();
+  }
+  var NOCO = false;
+  function noCompany() {
+    NOCO = true;
+    fetch('/api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).catch(function () { return null; }).then(function (st) {
+      $('#cbar').hidden = true;
+      $('#app').replaceChildren(DESK.header({ page: 'company', company: st && st.company, pending: st ? st.openAsks : 0, sim: !!(st && st.sim) }),
+        h('section', { class: 'layer', id: 'no-company' }, h('span', { class: 'eyebrow' }, N.ui.company),
+          h('h2', { class: 'layer-title' }, N.ui.noCompany),
+          h('p', { class: 'guide' }, '請先提交公司背景資料，AI 會為你擬定公司概覽。'),
+          h('div', { class: 'p-foot' }, h('a', { class: 'btn primary big', href: '/#/intake' }, N.ui.goIntake))));
+      DESK.title('company');
+    });
+  }
+  function fatal(msg) {
+    $('#cbar').hidden = true;
+    $('#app').replaceChildren(h('div', { class: 'layer fatal' },
+      h('span', { class: 'eyebrow' }, N.ui.loadFail),
+      h('p', null, msg),
+      h('p', { class: 'guide' }, '可選擇一份公司概覽資料檔：'),
+      h('button', { type: 'button', class: 'btn primary', onclick: pickFile }, N.ui.pickFile)));
+  }
+  function pickFile() {
+    var inp = h('input', { type: 'file', accept: '.json,.js,application/json,text/javascript' });
+    inp.addEventListener('change', function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        try {
+          var t = String(rd.result).replace(/^﻿/, '').trim()
+            .replace(/^window\.STARTUP_OS_PAGE\s*=\s*/, '').replace(/;\s*$/, '');
+          var obj = JSON.parse(t), err = check(obj);
+          if (err) { toast(err); return; }
+          window.STARTUP_OS_PAGE = obj;
+          closeModal(); start(obj); window.scrollTo(0, 0);
+          toast('已載入：' + obj.company.name);
+        } catch (e) { toast('無法讀取此檔案：' + e.message); }
+      };
+      rd.readAsText(f, 'utf-8');
+    });
+    inp.click();
+  }
+
+  /* ---------- 草稿（只存喺呢部機） ---------- */
+  function skey() { return 'sos-proofread:' + D.page.id + ':' + (D.page.revision || 0) + ':' + HASH; }
+  function save() {
+    try {
+      localStorage.setItem(skey(), JSON.stringify({ edits: S.edits, order: S.order, openedPath: S.openedPath, note: S.note, confirmed: S.confirmed, sent: S.sent, ok: S.ok, kinds: S.kinds }));
+    } catch (e) { /* 私密視窗等情況：唔存都照用 */ }
+  }
+  function restore() {
+    try {
+      var raw = localStorage.getItem(skey());
+      if (!raw) return;
+      var x = JSON.parse(raw);
+      if (x.edits) for (var id in x.edits) if (REG[id]) S.edits[id] = String(x.edits[id]);
+      if (Array.isArray(x.order) && x.order.slice().sort().join() === S.order.slice().sort().join()) S.order = x.order;
+      S.openedPath = !!x.openedPath; S.note = x.note || ''; S.confirmed = x.confirmed || null; S.sent = x.sent || null;
+      if (x.ok) for (var qk in x.ok) if (REG[qk]) S.ok[qk] = true;
+      if (x.kinds) for (var mk in x.kinds) if (byId()[mk] && (x.kinds[mk] === 'real' || x.kinds[mk] === 'task')) S.kinds[mk] = x.kinds[mk];
+      S.restored = !S.confirmed && (Object.keys(S.edits).length > 0 || orderChanged());
+    } catch (e) { /* 草稿壞咗就由頭嚟 */ }
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(skey()); } catch (e) { }
+    var d = D; window.STARTUP_OS_PAGE = d; start(d);
+    toast('已清除你的修改，恢復 AI 建議');
+  }
+
+  /* ---------- 狀態計算 ---------- */
+  function cur(id) { return Object.prototype.hasOwnProperty.call(S.edits, id) ? S.edits[id] : String(REG[id].value == null ? '' : REG[id].value); }
+  function isEdited(id) { return Object.prototype.hasOwnProperty.call(S.edits, id); }
+  function gradeText(k) { for (var i = 0; i < GRADES.length; i++) if (GRADES[i].key === k) return GRADES[i].text; return ''; }
+  function showVal(e, v) { return e.kind === 'grade' ? gradeText(v) : e.kind === 'date' ? fmtDay(v, e.suffix) : v; }
+  function all() { return Object.keys(REG).map(function (k) { return REG[k]; }); }
+  function proposed() { return D.path.milestones.map(function (m) { return m.id; }); }
+  function orderChanged() { return S.order.join('|') !== proposed().join('|'); }
+  function byId() { var o = {}; D.path.milestones.forEach(function (m) { o[m.id] = m; }); return o; }
+  function flagged() {
+    if (!FLAGFIELD) return null;
+    var v = cur(FLAGFIELD.id), to = FLAGFIELD.flagTo;
+    (FLAGFIELD.options || []).forEach(function (o) { if (o.text === v && o.flagTo) to = o.flagTo; });
+    return byId()[to] || null;
+  }
+  function depthInfo(m) {
+    var ds = m.depth || [], missing = Math.max(0, 5 - ds.length), assumed = 0;
+    ds.forEach(function (d) {
+      var v = cur(d.id);
+      if (!v) missing++;
+      else if (!isEdited(d.id) && d.origin === 'ai') assumed++;
+    });
+    var ok = missing === 0 && assumed <= 3;
+    var reason = missing ? '尚有 ' + missing + ' 個「為甚麼」未有答案' : (assumed > 3 ? 'AI 推測的答案多於三個' : '');
+    return { ok: ok, missing: missing, assumed: assumed, reason: reason };
+  }
+  // 真事／工作（規劃書 7.4）：AI 建議放喺 m.kind；你按一下改，成頁確認時記錄
+  function kindOf(m) { return S.kinds[m.id] || (m.kind === 'task' ? 'task' : 'real'); }
+  function kindChanged() { return Object.keys(S.kinds).filter(function (k) { var m = byId()[k]; return m && S.kinds[k] !== (m.kind === 'task' ? 'task' : 'real'); }); }
+  function kindName(k) { return k === 'task' ? N.ui.kindTask : N.ui.kindReal; }
+  // 就緒清單（規劃書 3.1）：未有值嘅欄；里程碑四格（事件、決策者、見證人、證明）
+  var READY_PLANS = ['G1', 'G2', 'G3', 'G5', 'G6', 'G7', 'G8', 'G9', 'G10'];
+  function notReady() {
+    var out = [], boxes = ((D.detail && D.detail.rules) || []).some(function (r) { return r.boxes; });
+    READY_PLANS.forEach(function (p) { var id = byPlan(p); if (p === 'G7' && !id && boxes) return; if (!id || !String(cur(id)).trim()) out.push(N.field[p]); });
+    if (!statusItems().length) out.push(N.field.G4);
+    return out;
+  }
+  function cellsOf(m) { return [m.event, m.actor, m.witness, m.proof].map(function (f) { return !!(f && String(cur(f.id)).trim()); }); }
+  var CELL_NAMES = [N.field['milestone.event'], N.field['milestone.actor'], N.field['milestone.witness'], N.field['milestone.evidence']];
+  function tentCount() { return all().filter(function (e) { return e.tentative && !isEdited(e.id); }).length; }
+  function missingList() { return all().filter(function (e) { return e.kind !== 'grade' && !cur(e.id); }); }
+  function srcText(e) {
+    return (e.src || []).map(function (s) {
+      var t = SRC[s.from] ? SRC[s.from].title : s.from;
+      return t + (s.at ? '．' + s.at : '');
+    }).join('；');
+  }
+
+  /* ---------- 要你決定：每批最多三條（規劃書 3.1：先問 G4、G5、G1） ---------- */
+  // 資料檔可以用 decide.items 指定；冇指定就用「而家去到邊、下一個對外動作、本季目標」，邊間公司都一樣
+  var QIDS = [];
+  function statusItems() { return (D.glance.status && D.glance.status.items) || []; }
+  function byPlan(p) { for (var k in REG) if (REG[k].plan === p) return k; return null; }
+  function buildQuestions() {
+    var list = [];
+    function push(id) {
+      if (!id || list.indexOf(id) >= 0) return;
+      if (id === '@status' ? statusItems().length : REG[id]) list.push(id);
+    }
+    var want = D.decide && D.decide.items;
+    if (want) want.forEach(push);
+    else {
+      push('@status');
+      push(byPlan('G5') || (FLAGFIELD && FLAGFIELD.id));
+      push(byPlan('G1') || (D.glance.rows[0] && D.glance.rows[0].id));
+    }
+    QIDS = list.slice(0, 3);
+  }
+  function isQ(id) { return QIDS.indexOf(id) >= 0; }
+  function answered(id) {
+    if (id === '@status') return !!S.ok['@status'] || statusItems().some(function (it) { return isEdited(it.id); });
+    return isEdited(id) || !!S.ok[id];
+  }
+  function qStats() {
+    var done = QIDS.filter(answered).length;
+    return { total: QIDS.length, done: done, left: QIDS.length - done };
+  }
+  function qChip(id) {
+    if (!isQ(id)) return null;
+    return answered(id) ? tag(N.ui.answered, 'qdone') : tag(N.ui.unanswered, 'qn');
+  }
+  function qDom(id) { return id === '@status' ? 'status' : String(id).replace(/[^\w-]/g, '_'); }
+  function acceptQ(id) {
+    S.ok[id] = true;
+    if (S.confirmed) S.changedAfter = true;
+    save();
+    S.focus = { sel: '#dq-' + qDom(id) };
+    render();
+    var st = qStats();
+    announce(T('pendingProgress', { n: st.done, t: st.total }));
+  }
+  function nextQ() {
+    var id = QIDS.filter(function (q) { return !answered(q); })[0];
+    if (!id) { toast('需要你決定的事項已全部作答，可以開始'); return; }
+    var el = document.getElementById('dq-' + qDom(id));
+    if (!el) return;
+    el.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'center' });
+    el.classList.add('flash');
+    setTimeout(function () { el.classList.remove('flash'); }, 1600);
+    el.focus({ preventScroll: true });
+  }
+  function mainLabel() {
+    var st = qStats();
+    if (S.confirmed && !S.changedAfter) return '再確認一次';
+    return !st.total || st.done === 0 ? N.ui.adoptStart : st.left ? N.ui.adoptRestStart : N.ui.confirmStart;
+  }
+
+  /* ---------- 可撳一下改嘅項目 ---------- */
+  function setVal(id, v, key) {
+    var e = REG[id];
+    if (isQ(id)) S.ok[id] = true;
+    if (v === String(e.value == null ? '' : e.value)) delete S.edits[id]; else S.edits[id] = v;
+    delete S.drafts[key];
+    S.open = null; S.focus = { key: key };
+    if (S.confirmed) S.changedAfter = true;
+    save(); render();
+    announce(isEdited(id) ? '已改：' + e.label : '已還原 AI 建議：' + e.label);
+  }
+  function toggleEd(key) {
+    S.open = S.open === key ? null : key;
+    S.focus = S.open ? { panel: key } : { key: key };
+    render();
+  }
+  function ed(id, ctx, cls) {
+    var e = REG[id];
+    if (!e) return null;
+    var key = ctx + '~' + id, v = cur(id), edited = isEdited(id), open = S.open === key;
+    var grade = e.kind === 'grade', empty = !grade && !v;
+    var btn = h('button', {
+      type: 'button', 'data-k': key, 'aria-expanded': open ? 'true' : 'false',
+      'aria-label': e.label + '：' + (empty ? '未有答案' : showVal(e, v)) + '。按一下修改',
+      class: 'ed-val' + (grade ? ' pill g-' + v : '') + (empty ? ' empty' : '') + (edited ? ' edited' : ''),
+      onclick: function () { toggleEd(key); }
+    }, empty ? N.ui.fillIn : showVal(e, v), grade ? ' ▾' : h('span', { class: 'pen', 'aria-hidden': 'true' }, '✎'));
+    var wrap = h('div', { class: 'ed' + (cls ? ' ' + cls : ''), 'data-eid': id }, btn);
+    var meta = metaLine(e, v, edited, empty, /\bcompact\b/.test(cls || ''));
+    if (meta) wrap.append(meta);
+    if (open) wrap.append(panel(e, key));
+    return wrap;
+  }
+  function metaLine(e, v, edited, empty, compact) {
+    var m = h('div', { class: 'ed-meta' });
+    if (edited) {
+      m.append(tag(N.ui.changed, 'mine'));
+      if (!compact) m.append(h('span', { class: 'orig' }, 'AI：' + clip(showVal(e, e.value) || N.ui.fillShort, 48)));
+      return m;
+    }
+    if (e.kind === 'grade') return null;
+    if (compact) {
+      // 一行版：只留短標籤，出處喺撳開嘅面板睇
+      if (e.origin === 'doc') m.append(tag(N.ui.docShort, 'doc', N.ui.fromDoc));
+      else if (e.origin === 'ai') m.append(tag('AI', 'ai', N.ui.tent_ai));
+      else if (e.origin === 'default') m.append(tag('預設', ''));
+      if (e.tentative && e.tentative.until) m.append(tag(N.ui.tentative + ' ' + md(e.tentative.until), 'tent', (N.ui['tent_' + e.tentative.by] || N.ui.tent_ai) + '，' + md(e.tentative.until) + '再詢問你'));
+      return m.childNodes.length ? m : null;
+    }
+    if (e.origin === 'doc') m.append(tag(N.ui.fromDoc, 'doc'));
+    else if (e.origin === 'ai') m.append(tag(N.ui.tent_ai, 'ai'));
+    else if (e.origin === 'default') m.append(tag('預設', ''));
+    else if (e.origin === 'missing' && !empty) m.append(tag(N.ui.aiUnknown, 'miss'));
+    if (e.tentative && e.tentative.until) m.append(tag(N.ui.tentative + ' · ' + md(e.tentative.until) + '再詢問你（' + (N.ui['tent_' + e.tentative.by] || N.ui.tent_ai) + '）', 'tent'));
+    if (e.effect) m.append(tag(N.ui.nowAfter, 'eff'));
+    var s = srcText(e);
+    if (s) m.append(h('span', null, s));
+    return m.childNodes.length ? m : null;
+  }
+  function panel(e, key) {
+    var v = cur(e.id), grade = e.kind === 'grade';
+    var p = h('div', {
+      class: 'panel', role: 'group', 'aria-label': '修改：' + e.label,
+      onkeydown: function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); S.open = null; S.focus = { key: key }; render(); } }
+    });
+    if (e.ask) p.append(h('div', { class: 'p-ask' }, e.ask));
+    if (e.judge) p.append(h('div', { class: 'p-judge' }, e.judge));
+    if (e.why) p.append(h('p', { class: 'p-why' }, h('b', null, N.ui.why + '：'), e.why));
+    if (e.test) p.append(h('p', { class: 'p-why' }, h('b', null, '最低成本的測試：'), e.test));
+    if (e.tentative && e.tentative.test) p.append(h('p', { class: 'p-why' }, h('b', null, '到期處理方式：'), e.tentative.test));
+    var src = srcText(e);
+    if (src) p.append(h('p', { class: 'p-why' }, h('b', null, '出處：'), src));
+    var isDate = e.kind === 'date';
+    var opts = grade
+      ? GRADES.map(function (g) { return { text: g.text, val: g.key, note: g.hint, rec: g.key === e.value }; })
+      : isDate ? dateOpts(e)
+      : (e.options || []).map(function (o) { return { text: o.text, val: o.text, note: o.note, rec: !!o.rec }; });
+    opts.forEach(function (o) {
+      p.append(h('button', {
+        type: 'button', class: 'opt' + (o.val === v ? ' cur' : ''), 'aria-pressed': o.val === v ? 'true' : 'false',
+        onclick: function () { setVal(e.id, o.val, key); }
+      }, h('span', { class: 'dot' }), h('span', null, o.text, o.rec ? h('span', { class: 'badge-ai' }, grade ? N.ui.aiPrefill : N.ui.aiRec) : null,
+        o.note ? h('span', { class: 'o-note' }, o.note) : null)));
+    });
+    if (isDate) {
+      var di = h('input', { type: 'date', 'aria-label': N.ui.pickDate + '：' + e.label, value: parseDay(v) ? v : null });
+      var useDate = function () { if (!parseDay(di.value)) { di.focus(); return; } setVal(e.id, di.value, key); };
+      di.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); useDate(); } });
+      p.append(h('div', { class: 'p-date' }, h('label', { class: 'p-lab' }, N.ui.orCalendar + '：'), di,
+        h('button', { type: 'button', class: 'btn primary', onclick: useDate }, N.ui.useDate)));
+    }
+    var free = !grade && !isDate && e.kind !== 'choice' && e.free !== false, ta = null;
+    function useText() {
+      var t = ta.value.trim();
+      if (!t) { ta.focus(); return; }
+      setVal(e.id, t, key);
+    }
+    if (free) {
+      var custom = !opts.some(function (o) { return o.val === v; });
+      ta = h('textarea', { rows: '3', placeholder: e.hint || '自行填寫……', 'aria-label': '自行填寫：' + e.label });
+      ta.value = S.drafts[key] != null ? S.drafts[key] : (opts.length ? (custom ? v : '') : v);
+      ta.addEventListener('input', function () { S.drafts[key] = ta.value; grow(ta); });
+      ta.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); useText(); } });
+      p.append(h('div', { class: 'p-free' },
+        h('label', { class: 'p-lab' }, opts.length ? '或自行填寫：' : '改為：'), ta,
+        h('div', { class: 'p-hint' }, '可使用系統語音輸入；寫完請按「' + N.ui.useCustom + '」')));
+    }
+    var foot = h('div', { class: 'p-foot' });
+    if (free) foot.append(h('button', { type: 'button', class: 'btn primary', onclick: useText }, N.ui.useCustom));
+    if (isEdited(e.id)) foot.append(h('button', { type: 'button', class: 'btn', onclick: function () { setVal(e.id, String(e.value == null ? '' : e.value), key); } }, N.ui.restore));
+    foot.append(h('button', { type: 'button', class: 'btn', onclick: function () { S.open = null; S.focus = { key: key }; render(); } }, N.ui.collapse));
+    p.append(foot);
+    return p;
+  }
+  // 日子快捷鍵：AI 建議、一／兩／四星期後、今季最後一日（由今日計，重複嘅只出一次）
+  function dateOpts(e) {
+    var t = new Date(), seen = {}, out = [];
+    function push(label, d, rec) {
+      var val = typeof d === 'string' ? d : isoDay(d);
+      if (!parseDay(val) || seen[val]) return;
+      seen[val] = true;
+      out.push({ text: (label ? label + '：' : '') + fmtDay(val, e.suffix), val: val, rec: !!rec });
+    }
+    push('', String(e.value || ''), true);
+    push('一星期後', addDays(t, 7));
+    push('兩星期後', addDays(t, 14));
+    push('四星期後', addDays(t, 28));
+    push('本季最後一日', quarterEnd(t));
+    return out;
+  }
+  function grow(ta) { ta.style.height = 'auto'; ta.style.height = Math.max(72, ta.scrollHeight + 2) + 'px'; }
+
+  /* ---------- 畫面 ---------- */
+  function render() {
+    var app = $('#app');
+    var parts = [header(), h('div', { id: 'track', 'aria-live': 'polite' }), notices(), hero(), decideBlock(), restBlock()];
+    if (S.fullOpen) parts.push(layer1(), layer2(), layer3());
+    parts.push(footer());
+    app.replaceChildren.apply(app, parts.filter(Boolean));
+    renderTrack();
+    renderBar();
+    app.querySelectorAll('textarea').forEach(grow);
+    var f = S.focus; S.focus = null;
+    if (f) {
+      var el = null;
+      if (f.panel) {
+        var b = app.querySelector('[data-k="' + CSS.escape(f.panel) + '"]');
+        var p = b && b.parentElement.querySelector('.panel');
+        if (p) { el = p.querySelector('.opt.cur') || p.querySelector('.opt') || p.querySelector('textarea'); p.scrollIntoView({ block: 'nearest' }); }
+      } else if (f.key) el = app.querySelector('[data-k="' + CSS.escape(f.key) + '"]');
+      else if (f.sel) el = app.querySelector(f.sel);
+      if (el) el.focus({ preventScroll: !f.panel ? false : true });
+    }
+  }
+  function header() {
+    var srcs = (D.sources || []).map(function (s) { return s.title + (s.date ? '（' + md(s.date) + '）' : ''); }).join('、');
+    return DESK.header({
+      page: 'company', company: D.company, nav: !!S.server, pending: S.server ? S.server.openAsks : 0, sim: !!(S.server && S.server.sim),
+      basis: 'AI 根據' + (srcs ? '：' + srcs : '你的資料') + ' 擬定 · 約 ' + (D.page.minutes || 3) + ' 分鐘可閱畢'
+    });
+  }
+  /* ---------- 第一眼：一個大掣、三張卡、其餘收埋（但直接講內容） ---------- */
+  function hero() {
+    var st = qStats(), next = FLAGFIELD ? cur(FLAGFIELD.id) : '';
+    return h('section', { class: 'hero' },
+      h('span', { class: 'eyebrow' }, N.ui.company + ' · ' + N.ui.companyReady +
+        (S.server && S.server.ai && S.server.ai.ready ? ' · 已連接 ' + S.server.ai.name + '，確認後將自動提交' : '')),
+      h('h2', { class: 'hero-t' }, st.total ? T('companyHero', { n: st.total }) : N.ui.companyHeroNone),
+      h('p', { class: 'hero-p' }, '確認後，AI 將隨即為你準備' + (next ? '「' + clip(next, 30) + '」' : '下一步') + '的草稿；不會對外發送。'),
+      h('div', { class: 'hero-act' },
+        h('button', { type: 'button', class: 'btn primary big', id: 'go-main', onclick: openModal }, mainLabel()),
+        st.left ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null));
+  }
+  function decideBlock() {
+    if (!QIDS.length) return null;
+    var st = qStats();
+    var box = h('section', { class: 'decide', 'aria-labelledby': 'dqt' },
+      h('div', { class: 'dq-top' },
+        h('h2', { class: 'layer-title', id: 'dqt' }, T('pendingTitle', { n: st.done, t: st.total })),
+        h('span', { class: 'lt-sum' }, st.left ? '按一下即可選擇；未作答的將按 AI 建議' : '✓ 已全部作答，可以開始')));
+    QIDS.forEach(function (id, i) { box.append(id === '@status' ? statusCard(i) : optionCard(id, i)); });
+    return box;
+  }
+  function cardShell(id, i, title, judge) {
+    return h('div', { class: 'dq' + (answered(id) ? ' done' : ''), id: 'dq-' + qDom(id), tabindex: '-1' },
+      h('div', { class: 'dq-head' }, h('span', { class: 'dq-n' }, String(i + 1)), h('span', { class: 'dq-q' }, title), qChip(id)),
+      judge ? h('div', { class: 'p-judge' }, judge) : null);
+  }
+  function optionCard(id, i) {
+    var e = REG[id], v = cur(id), key = 'q~' + id;
+    var card = cardShell(id, i, e.ask || e.label, e.judge);
+    var opts = (e.options || []).map(function (o) { return { text: o.text, rec: !!o.rec, note: o.note }; });
+    if (!opts.length) opts = [{ text: String(e.value == null ? '' : e.value), rec: true }];
+    opts.forEach(function (o) {
+      card.append(h('button', {
+        type: 'button', class: 'opt' + (o.text === v ? ' cur' : ''), 'aria-pressed': o.text === v ? 'true' : 'false',
+        onclick: function () { setVal(id, o.text, key); }
+      }, h('span', { class: 'dot' }), h('span', null, o.text, o.rec ? h('span', { class: 'badge-ai' }, N.ui.aiRec) : null,
+        o.note ? h('span', { class: 'o-note' }, o.note) : null)));
+    });
+    if (v && !opts.some(function (o) { return o.text === v; })) card.append(h('div', { class: 'dq-custom' }, h('b', null, N.ui.customIs + '：'), v));
+    var row = D.glance.rows.filter(function (r) { return r.id === id; })[0];
+    var foot = h('div', { class: 'dq-foot' });
+    if (row && row.due) foot.append(h('span', { class: 'row-due' }, h('span', null, '期限'), ed(row.due.id, 'q', 'small compact')));
+    if (S.open === key) {
+      var ta = h('textarea', { rows: '2', placeholder: '自行填寫……（可使用系統語音輸入）', 'aria-label': '自行填寫：' + e.label });
+      ta.value = S.drafts[key] != null ? S.drafts[key] : (opts.some(function (o) { return o.text === v; }) ? '' : v);
+      ta.addEventListener('input', function () { S.drafts[key] = ta.value; grow(ta); });
+      card.append(h('div', { class: 'p-free' }, ta, h('div', { class: 'p-foot' },
+        h('button', { type: 'button', class: 'btn primary', onclick: function () { var t = ta.value.trim(); if (t) setVal(id, t, key); else ta.focus(); } }, N.ui.useCustom),
+        h('button', { type: 'button', class: 'btn', onclick: function () { S.open = null; render(); } }, N.ui.collapse))));
+    } else {
+      foot.append(h('button', { type: 'button', class: 'btn small', onclick: function () { S.open = key; S.focus = { sel: '#dq-' + qDom(id) + ' textarea' }; render(); } }, N.ui.custom));
+    }
+    card.append(foot);
+    return card;
+  }
+  function statusCard(i) {
+    var st = D.glance.status, items = statusItems();
+    var card = cardShell('@status', i, st.ask || '以下事項是否已經發生？', '未發生則毋須選擇；已選擇的項目，請再選擇其進展程度。');
+    if (st.prepared) card.append(h('div', { class: 'prepared' }, h('span', { class: 'ok' }, '✓'), st.prepared));
+    card.append(h('div', { class: 'chips' }, items.map(function (it) {
+      var on = cur(it.id) !== 'none';
+      return h('button', {
+        type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false',
+        onclick: function () { setVal(it.id, on ? 'none' : 'said', 'q~' + it.id); }
+      }, on ? '' : '+ ', it.label);
+    })));
+    items.filter(function (it) { return cur(it.id) !== 'none'; }).forEach(function (it) {
+      var v = cur(it.id);
+      card.append(h('div', { class: 'grade-row' }, h('span', { class: 'gr-l' }, it.label + '：'),
+        GRADES.slice(1).map(function (g) {
+          return h('button', { type: 'button', class: 'seg' + (v === g.key ? ' on' : ''), title: g.hint, onclick: function () { setVal(it.id, g.key, 'q~' + it.id); } }, g.text);
+        })));
+    });
+    if (!answered('@status')) card.append(h('div', { class: 'dq-foot' },
+      h('button', { type: 'button', class: 'q-ok', onclick: function () { acceptQ('@status'); } }, N.ui.allNotYet)));
+    return card;
+  }
+  function restBlock() {
+    var open = S.fullOpen, fm = flagged(), dt = D.detail || {};
+    var pv = h('span', { class: 'pv' });
+    pv.append(h('span', { class: 'rs-line' }, h('b', null, '路線 ' + D.path.milestones.length + ' 站：'), routePreview(fm)));
+    D.glance.rows.filter(function (r) { return !isQ(r.id); }).forEach(function (r) {
+      pv.append(h('span', { class: 'rs-line' }, h('b', null, r.label + '：'), clip(showVal(r, cur(r.id)), 60)));
+    });
+    (dt.rules || []).filter(function (r) { return r.effect; }).forEach(function (r) {
+      pv.append(h('span', { class: 'rs-line' }, h('b', null, r.label + '：'), cur(r.id), h('span', { class: 'eff' }, '（' + N.ui.nowAfter + '）')));
+    });
+    var more = [N.ui.previewOwners];
+    if (D.path.milestones.some(function (m) { return m.depth && m.depth.length; })) more.push(N.ui.previewDepth);
+    if (dt.missing && dt.missing.length) more.push(T('missingN', { n: dt.missing.length }));
+    if (dt.assumptions && dt.assumptions.length) more.push(T('assumptionsN', { n: dt.assumptions.length }));
+    if (dt.reading) more.push(N.ui.readingTitle);
+    if (D.sources && D.sources.length) more.push(N.ui.sourcesName);
+    pv.append(h('span', { class: 'rs-line' }, h('b', null, N.ui.more + '：'), more.join('、')));
+    var t = tentCount();
+    if (t) pv.append(h('span', { class: 'rs-line tent-line' }, '當中 ' + t + ' 項為「' + N.ui.tentative + '」' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '起' : '') + '每次最多詢問你 3 條。'));
+    return h('section', { class: 'layer rest' + (open ? '' : ' closed'), id: 'rest' },
+      h('button', {
+        type: 'button', class: 'layer-toggle', id: 'rest-toggle', 'aria-expanded': open ? 'true' : 'false',
+        onclick: function () { S.fullOpen = !S.fullOpen; render(); if (S.fullOpen) go($('#layer1')); }
+      },
+        h('span', { class: 'lt-main' }, h('span', { class: 'eyebrow' }, N.ui.restAI),
+          h('span', { class: 'layer-title' }, '毋須現在作答；如需查看或修改，請按此'), open ? null : pv),
+        h('span', { class: 'chev', 'aria-hidden': 'true' }, open ? N.ui.collapseUp : N.ui.viewEditOpen)));
+  }
+  function notices() {
+    var box = h('div');
+    if (S.confirmed && S.changedAfter) {
+      box.append(h('div', { class: 'notice' },
+        h('span', null, '你在確認後再作了修改。如需 AI 按新內容處理，請再按頁底「再確認一次」。')));
+    } else if (S.confirmed && !S.confirmed.sent) {
+      box.append(h('div', { class: 'notice' },
+        h('span', null, '已確認（' + S.confirmed.at + '），但只下載了回覆檔，AI 尚未收到。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽並再次確認，AI 才會跟進。')));
+    } else if (S.restored) {
+      box.append(h('div', { class: 'notice' },
+        h('span', null, '已還原你上次未確認的修改。'),
+        h('button', { type: 'button', class: 'btn small', onclick: clearDraft }, N.ui.discardRestart)));
+    }
+    return box;
+  }
+  function tipBox(t) {
+    if (!t) return null;
+    return h('div', { class: 'tip' },
+      h('span', { class: 'eyebrow' }, N.ui.tent_ai),
+      h('p', { class: 't-h' }, t.headline),
+      t.why ? h('p', { class: 't-w' }, t.why) : null);
+  }
+
+  function layer1() {
+    var g = D.glance, fm = flagged();
+    var rows = h('div', { class: 'rows' });
+    g.rows.forEach(function (r) {
+      var row = h('div', { class: 'row' },
+        h('div', { class: 'row-label' }, qChip(r.id), r.label, r.flagTo ? tag('⚑ 下一步', 'flag') : null),
+        r.due ? h('div', { class: 'row-due' }, h('span', null, '期限'), ed(r.due.id, 'g', 'small compact')) : null,
+        ed(r.id, 'g'));
+      if (r.flagTo && fm) {
+        var pos = S.order.indexOf(fm.id) + 1;
+        row.append(h('div', { class: 'row-sub' }, '⚑ 對應：第 ' + pos + ' 站「' + fm.short + '」' +
+          (pos !== 1 ? '。此站目前並非排第一，是否正確？' : '')));
+      }
+      rows.append(row);
+    });
+    var sec = h('section', { class: 'layer', id: 'layer1', 'aria-labelledby': 'l1t' },
+      h('span', { class: 'eyebrow' }, N.ui.glanceEyebrow),
+      h('h2', { class: 'layer-title', id: 'l1t' }, N.ui.glanceTitle),
+      h('p', { class: 'guide' }, '按任何一句均可修改；不作修改則按 AI 建議。'),
+      notReady().length ? h('p', { class: 'notice', id: 'ready-miss' }, N.t('readinessMissing', { list: notReady().join('、') })) : null,
+      tipBox(g.tip), rows);
+    if (g.status) sec.append(statusBlock(g.status));
+    add(sec, gaps());
+    return sec;
+  }
+  function statusBlock(st) {
+    var list = h('div', { class: 'st-list' });
+    (st.items || []).forEach(function (it) {
+      list.append(h('div', { class: 'st-item' }, h('div', { class: 'st-text' }, qChip(it.id), ' ', it.label), ed(it.id, 's')));
+    });
+    return h('div', { class: 'status' },
+      h('div', { class: 'row-label' }, N.ui.statusNow),
+      st.judge ? h('div', { class: 'p-judge' }, st.judge) : null,
+      st.prepared ? h('div', { class: 'prepared' }, h('span', { class: 'ok' }, '✓'), st.prepared, tag(N.ui.fromDoc, 'doc')) : null,
+      list);
+  }
+  function gaps() {
+    var t = tentCount(), miss = missingList().length, parts = [];
+    if (t) parts.push('AI 以「' + N.ui.tentative + '」值處理了 ' + t + ' 項' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
+    if (miss) parts.push((t ? '另有 ' : '有 ') + miss + ' 項未有答案');
+    if (!parts.length) return null;
+    var txt = parts.join('；') + '。毋須現在全部作答。';
+    return h('div', { class: 'gaps' }, h('span', null, txt),
+      h('button', { type: 'button', class: 'btn small', onclick: function () { S.detailOpen = true; render(); go($('#missing') || $('#layer3')); } }, N.ui.viewItems));
+  }
+
+  // 收埋時都要見到內容：直接列出路線同要你處理嘅位
+  function routePreview(fm) {
+    var ms = byId();
+    return h('span', { class: 'route' }, S.order.map(function (mid, i) {
+      var m = ms[mid], f = fm && fm.id === mid, ok = depthInfo(m).ok;
+      return [i ? h('span', { class: 'arrow' }, '→') : null,
+        h('span', { class: 'stop' + (f ? ' flag' : '') + (ok ? '' : ' deep') }, (i + 1) + ' ' + m.short + (f ? ' ⚑' : ''))];
+    }));
+  }
+  function layer2() {
+    var p = D.path, n = p.milestones.length, open = S.pathOpen, fm = flagged();
+    var shallow = p.milestones.filter(function (m) { return !depthInfo(m).ok; }).length;
+    var sum = (orderChanged() ? N.ui.orderChanged : N.ui.orderAI) +
+      (shallow ? ' · ' + T('needDepthN', { n: shallow }) : '') + (fm ? ' · ' + N.ui.flagIsNext : '') +
+      (function () { var kt = S.order.filter(function (mid) { return kindOf(byId()[mid]) === 'task'; }).length; return kt ? ' · ' + kt + ' 站為「' + N.ui.kindTask + '」' : ''; })();
+    var sec = h('section', { class: 'layer' + (open ? '' : ' closed'), id: 'layer2' },
+      h('button', {
+        type: 'button', class: 'layer-toggle', 'aria-expanded': open ? 'true' : 'false',
+        onclick: function () { S.pathOpen = !S.pathOpen; if (S.pathOpen) S.openedPath = true; save(); render(); }
+      },
+        h('span', { class: 'lt-main' }, h('span', { class: 'eyebrow' }, N.ui.route),
+          h('span', { class: 'layer-title' }, T('routeTitle', { n: n })),
+          open ? null : routePreview(fm),
+          h('span', { class: 'lt-sum' }, sum)),
+        h('span', { class: 'chev', 'aria-hidden': 'true' }, open ? N.ui.collapseUp : N.ui.viewRoute)));
+    if (!open) return sec;
+    if (p.guide) sec.append(h('p', { class: 'guide' }, p.guide));
+    var tip = tipBox(p.tip);
+    if (tip && p.alt && p.alt.length) {
+      p.alt.forEach(function (a) {
+        var d = h('details', { class: 'alt' }, h('summary', null, a.title),
+          a.sequence ? h('p', null, a.sequence) : null,
+          a.why ? h('p', null, '好處：' + a.why) : null,
+          a.cost ? h('p', null, '代價：' + a.cost) : null);
+        if (S.altOpen) d.open = true;
+        d.addEventListener('toggle', function () { S.altOpen = d.open; });
+        tip.append(d);
+      });
+    }
+    if (tip) sec.append(tip);
+    var fm = flagged();
+    sec.append(h('div', { class: 'order-q', id: 'order-q' },
+      h('span', null, orderChanged() ? '你已調整次序；確認後生效。' : '此次序為 AI 建議；如不合適，請按住左邊把手拖動排序；毋須更改則無須理會。')));
+    if (fm && S.order[0] !== fm.id) sec.append(h('div', { class: 'row-sub' }, '⚑ 你下一個對外動作屬於「' + fm.short + '」，但該站目前排第 ' + (S.order.indexOf(fm.id) + 1) + ' 站。下一步所屬的站通常排第一，是否需要移回首位？'));
+    sec.append(miniMap(fm), stationList(fm));
+    return sec;
+  }
+  function miniMap(fm) {
+    var ms = byId(), nodes = h('div', { class: 'map-nodes' });
+    S.order.forEach(function (mid, i) {
+      var m = ms[mid], f = fm && fm.id === mid;
+      nodes.append(h('div', { class: 'node' + (f ? ' flag' : '') + (m.beyondGoal ? ' beyond' : ''), title: m.short },
+        h('div', { class: 'f' }, f ? '⚑ 下一步' : (m.beyondGoal ? '目標之後' : '')),
+        h('div', { class: 'c' }, String(i + 1)),
+        h('div', { class: 'l' }, clip(m.short, 10))));
+    });
+    return h('div', { class: 'map', 'aria-hidden': 'true' },
+      h('div', { class: 'map-cap' }, orderChanged() ? N.ui.mapChanged : N.ui.mapAI),
+      h('div', { class: 'map-track' }), nodes);
+  }
+  function stationList(fm) {
+    var ol = h('ol', { class: 'stations', id: 'stations' }), ms = byId();
+    S.order.forEach(function (mid, i) { ol.append(stationCard(ms[mid], i, fm)); });
+    return ol;
+  }
+  function stationCard(m, i, fm) {
+    var pi = proposed().indexOf(m.id), dq = depthInfo(m), exp = !!S.expanded[m.id], f = fm && fm.id === m.id;
+    var li = h('li', { class: 'station' + (f ? ' flagged' : '') + (m.beyondGoal ? ' beyond' : ''), 'data-mid': m.id });
+    var handle = h('button', {
+      type: 'button', class: 'handle', 'data-h': m.id, title: '按住上下拖動；或使用鍵盤上下鍵',
+      'aria-label': '第 ' + (i + 1) + ' 站「' + m.short + '」。按住拖動以排序，或使用上下鍵'
+    }, '⋮⋮');
+    handle.addEventListener('pointerdown', function (ev) { startDrag(ev, li, handle); });
+    handle.addEventListener('keydown', function (ev) { keyMove(ev, m.id); });
+    var badges = h('span', { class: 'st-badges' },
+      f ? tag('⚑ 下一個對外動作', 'flag') : null,
+      !dq.ok ? tag(N.ui.needDepth, 'deep', dq.reason) : null,
+      tag(kindName(kindOf(m)), kindOf(m) === 'task' ? 'deep' : 'doc', N.ui.kindHint),
+      (function () { var c = cellsOf(m), n = c.filter(Boolean).length; return n < 4 ? tag(N.t('fourCells', { n: n }), 'deep', N.t('fourMissing', { list: CELL_NAMES.filter(function (x, k) { return !c[k]; }).join('、') })) : null; })(),
+      m.beyondGoal ? tag(N.ui.afterGoal, '') : null);
+    var main = h('div', { class: 'st-main' },
+      h('div', { class: 'st-top' }, h('span', { class: 'st-no' }, T('milestoneN', { n: i + 1 })), h('span', { class: 'st-short' }, m.short), badges),
+      m.event ? ed(m.event.id, 'm', 'compact') : null,
+      h('div', { class: 'st-facts' },
+        m.owner ? [h('span', { class: 'k' }, N.field.G6), ed(m.owner.id, 'm', 'small compact')] : null,
+        m.target ? [h('span', { class: 'k' }, N.field['milestone.targetDate']), ed(m.target.id, 'm', 'small compact')] : null),
+      h('div', { class: 'st-kind' }, h('span', { class: 'small muted' }, N.t(S.kinds[m.id] ? 'kindYou' : 'kindAI', { k: kindName(kindOf(m)) }) + (!S.kinds[m.id] && m.kindWhy ? '：' + m.kindWhy : '')), ' ',
+        h('button', { type: 'button', class: 'btn small', 'data-kind': m.id, onclick: function () { var nk = kindOf(m) === 'task' ? 'real' : 'task'; if (nk === (m.kind === 'task' ? 'task' : 'real')) delete S.kinds[m.id]; else S.kinds[m.id] = nk; save(); render(); } }, N.t('kindFlip', { k: kindName(kindOf(m) === 'task' ? 'real' : 'task') }))),
+      h('p', { class: 'st-why' }, h('b', null, N.ui.orderWhy + '：'), m.why || '',
+        pi !== i ? h('span', { class: 'moved' }, T('orderMoved', { n: pi + 1 })) : null),
+      h('button', {
+        type: 'button', class: 'btn small', 'aria-expanded': exp ? 'true' : 'false',
+        onclick: function () { if (exp) delete S.expanded[m.id]; else S.expanded[m.id] = true; render(); }
+      }, exp ? N.ui.detailClose : T('detailToggle', { gap: dq.ok ? '' : dq.missing ? T('gapN', { n: dq.missing }) : N.ui.gapGuess })));
+    if (exp) main.append(stationDetail(m, dq));
+    li.append(handle, main);
+    return li;
+  }
+  function stationDetail(m, dq) {
+    function cell(k, o) { return o ? h('div', null, h('div', { class: 'k' }, k), ed(o.id, 'd', 'small')) : null; }
+    var whys = h('ol', { class: 'whys' });
+    (m.depth || []).forEach(function (d, k) {
+      var showTest = d.test && !isEdited(d.id) && d.origin === 'ai';
+      whys.append(h('li', null, h('div', { class: 'q' }, (k + 1) + '. ' + (d.ask || DEPTH_Q[k] || '')), ed(d.id, 'w', 'small'),
+        showTest ? h('div', { class: 'test' }, N.ui.cheapTest + '：' + d.test) : null));
+    });
+    var box = h('div', { class: 'st-detail' },
+      h('div', { class: 'four' }, cell(N.field['milestone.actor'], m.actor), cell(N.field['milestone.witness'], m.witness), cell(N.field['milestone.evidence'], m.proof), cell(N.field['milestone.deliveryCondition'], m.deliver)),
+      h('div', { class: 'd-head' }, N.ui.depthCheck, dq.ok ? tag(N.ui.complete, 'mine') : tag(N.ui.needDepth + ' · ' + dq.reason, 'deep')),
+      whys);
+    if (m.watch && m.watch.length) {
+      box.append(h('div', { class: 'd-head' }, N.ui.watch),
+        h('div', { class: 'watch' }, m.watch.map(function (w) { return h('span', null, h('span', { class: 'k' }, w.label + '：'), w.value); })));
+    }
+    return box;
+  }
+
+  /* ---------- 拖嚟排次序（滑鼠、手指、鍵盤都得） ---------- */
+  function startDrag(ev, li, handle) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    ev.preventDefault();
+    var list = li.parentElement, pid = ev.pointerId;
+    try { handle.setPointerCapture(pid); } catch (e) { }
+    var gap = parseFloat(getComputedStyle(list).rowGap) || 10;
+    var lastY = ev.clientY, off = 0, moved = false;
+    var barH = ($('#cbar') && $('#cbar').offsetHeight) || 0;
+    li.classList.add('dragging'); document.body.classList.add('is-dragging');
+    // 只搬旁邊嘅卡、唔搬被拖嗰張，咁瀏覽器唔會中途甩咗指標；放手事件喺成個視窗聽。
+    function onMove(e) {
+      if (e.pointerId !== pid) return;
+      off += e.clientY - lastY; lastY = e.clientY;
+      if (Math.abs(off) > 3) moved = true;
+      var vh = window.innerHeight, sc = 0;
+      if (e.clientY < 70) sc = -16; else if (e.clientY > vh - barH - 60) sc = 16;
+      if (sc) { var y0 = window.scrollY; window.scrollBy(0, sc); off += window.scrollY - y0; }
+      li.style.transform = 'translateY(' + off + 'px)';
+      // 被拖卡片嘅中線過咗隔籬卡片嘅中線，就同佢換位
+      for (var guard = 0; guard < 50; guard++) {
+        var r = li.getBoundingClientRect(), c = r.top + r.height / 2;
+        var nx = li.nextElementSibling, pv = li.previousElementSibling, nr, pr;
+        if (nx && c > (nr = nx.getBoundingClientRect()).top + nr.height / 2) {
+          list.insertBefore(nx, li); off -= nx.offsetHeight + gap;
+        } else if (pv && c < (pr = pv.getBoundingClientRect()).top + pr.height / 2) {
+          list.insertBefore(pv, li.nextElementSibling); off += pv.offsetHeight + gap;
+        } else break;
+        li.style.transform = 'translateY(' + off + 'px)';
+      }
+    }
+    function onUp(e) {
+      if (e && e.pointerId !== pid) return;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      li.classList.remove('dragging'); li.style.transform = ''; document.body.classList.remove('is-dragging');
+      var order = Array.prototype.map.call(list.children, function (x) { return x.dataset.mid; });
+      if (order.join('|') !== S.order.join('|')) {
+        S.order = order; save();
+        if (S.confirmed) S.changedAfter = true;
+        S.focus = { sel: '[data-h="' + CSS.escape(li.dataset.mid) + '"]' };
+        render();
+        announce('已移到第 ' + (order.indexOf(li.dataset.mid) + 1) + ' 站');
+      } else if (!moved) {
+        toast('按住此把手上下拖動即可更改次序；使用鍵盤則按上下鍵。');
+      }
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  }
+  function keyMove(ev, mid) {
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+    ev.preventDefault();
+    var i = S.order.indexOf(mid), j = ev.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (j < 0 || j >= S.order.length) return;
+    var o = S.order.slice(); o.splice(i, 1); o.splice(j, 0, mid);
+    S.order = o; save();
+    if (S.confirmed) S.changedAfter = true;
+    S.focus = { sel: '[data-h="' + CSS.escape(mid) + '"]' };
+    render();
+    announce('已移到第 ' + (j + 1) + ' 站');
+  }
+
+  function layer3() {
+    var dt = D.detail || {}, open = S.detailOpen;
+    var miss = missingList().length;
+    var sec = h('section', { class: 'layer' + (open ? '' : ' closed'), id: 'layer3' },
+      h('button', {
+        type: 'button', class: 'layer-toggle', 'aria-expanded': open ? 'true' : 'false',
+        onclick: function () { S.detailOpen = !S.detailOpen; render(); }
+      },
+        h('span', { class: 'lt-main' }, h('span', { class: 'eyebrow' }, N.ui.details),
+          h('span', { class: 'layer-title' }, N.ui.detailsTitle),
+          open ? (miss ? h('span', { class: 'lt-sum' }, miss + ' 項未有答案') : null) : detailPreview(dt)),
+        h('span', { class: 'chev', 'aria-hidden': 'true' }, open ? N.ui.collapseUp : N.ui.viewAll)));
+    if (!open) return sec;
+    if (dt.guide) sec.append(h('p', { class: 'guide' }, dt.guide));
+    add(sec, tipBox(dt.tip));
+    if (dt.missing && dt.missing.length) {
+      var ml = h('div', { class: 'sub', id: 'missing' }, h('h3', null, N.ui.missingTitle, tag(N.ui.missingTag, 'tent')));
+      dt.missing.forEach(function (it) {
+        var id = it.ref || (it.edit && it.edit.id);
+        ml.append(h('div', { class: 'miss-item' }, h('div', { class: 'm-title' }, qChip(id), ' ', it.title), ed(id, 'x'),
+          it.how ? h('div', { class: 'm-how' }, N.ui.howFind + '：' + it.how) : null));
+      });
+      sec.append(ml);
+    }
+    if (dt.reading && dt.reading.length) {
+      sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.readingTitle),
+        dt.reading.map(function (r) { return h('div', { class: 'kv' }, h('div', { class: 'k' }, r.label), ed(r.id, 'r', 'small')); })));
+    }
+    if (dt.actors && dt.actors.items) {
+      sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.actorsTitle),
+        dt.actors.judge ? h('div', { class: 'p-judge' }, dt.actors.judge) : null,
+        dt.actors.items.map(function (a) { return h('div', { class: 'kv' }, h('div', { class: 'k' }, a.label), ed(a.id, 'a', 'small')); })));
+    }
+    if (dt.lens) {
+      sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.lensTitle), ed(dt.lens.id, 'l', 'small'),
+        dt.lens.why && !isEdited(dt.lens.id) ? h('p', { class: 'lens-why' }, dt.lens.why) : null));
+    }
+    if (dt.assumptions && dt.assumptions.length) {
+      sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.assumptionsTitle, tag(N.ui.unverified, 'ai')),
+        dt.assumptions.map(function (a) {
+          return h('div', { class: 'kv' }, ed(a.id, 'as', 'small'), a.test ? h('div', { class: 'm-how' }, N.ui.cheapTest + '：' + a.test) : null);
+        })));
+    }
+    if (dt.rules && dt.rules.length) {
+      var rs = h('div', { class: 'sub' }, h('h3', null, N.ui.rulesTitle));
+      dt.rules.forEach(function (r) {
+        var kv = h('div', { class: 'kv' }, h('div', { class: 'k' }, qChip(r.id), ' ', r.label), ed(r.id, 'u', 'small'));
+        if (r.boxes) {
+          kv.append(h('div', { class: 'boxes' },
+            boxCol('AI 自行處理', r.boxes.auto, ''), boxCol('完成後通知你', r.boxes.tellAfter, ''), boxCol('必須先詢問你', r.boxes.askFirst, 'ask')));
+        }
+        rs.append(kv);
+      });
+      sec.append(rs);
+    }
+    if (D.sources && D.sources.length) {
+      sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.sourcesTitle),
+        h('ul', { class: 'srcs' }, D.sources.map(function (s) {
+          return h('li', null, h('b', null, s.title), s.date ? '（' + md(s.date) + '）' : '', s.note ? '：' + s.note : '');
+        }))));
+    }
+    return sec;
+  }
+  function detailPreview(dt) {
+    var pv = h('span', { class: 'pv' });
+    function line(head, items) {
+      if (items && items.length) pv.append(h('span', null, h('b', null, head + '：'), clip(items.join('；'), 64)));
+    }
+    if (dt.missing) line(T('missingN', { n: dt.missing.length }), dt.missing.map(function (m) { return m.title; }));
+    if (dt.assumptions) line(T('assumptionsN', { n: dt.assumptions.length }), dt.assumptions.map(function (a) { return String(a.label).replace(/^假設：/, ''); }));
+    ((dt.rules || []).filter(function (r) { return r.effect; })).forEach(function (r) {
+      pv.append(h('span', null, h('b', null, r.label + '：'), cur(r.id), h('span', { class: 'eff' }, '（' + N.ui.nowAfter + '）')));
+    });
+    var more = [];
+    if (dt.reading) more.push(N.ui.readingTitle);
+    if (dt.actors) more.push(N.ui.actorsStatus);
+    if (dt.lens) more.push(N.ui.lensTitle);
+    if (dt.rules) more.push(N.ui.rulesTitle);
+    if (D.sources && D.sources.length) more.push(N.ui.sourcesName);
+    line(N.ui.more, more.length ? [more.join('、')] : null);
+    return pv;
+  }
+  function boxCol(t, items, cls) {
+    return h('div', { class: 'box ' + cls }, h('h4', null, t), h('ul', null, (items || []).map(function (x) { return h('li', null, x); })));
+  }
+  function footer() {
+    var n = Object.keys(S.edits).length + (orderChanged() ? 1 : 0) + kindChanged().length;
+    return h('footer', { class: 'foot' },
+      h('span', null, 'AI 擬於 ' + md(D.page.preparedAt) + ' · 第 ' + (D.page.revision || 1) + ' 版 · 只儲存在你的電腦'),
+      h('span', { class: 'foot-tools' },
+        n ? h('button', {
+          type: 'button', class: 'btn small', onclick: function () {
+            if (!S.clearArmed) { S.clearArmed = true; render(); return; }
+            clearDraft();
+          }
+        }, S.clearArmed ? N.ui.clearArmed : N.ui.clearMine) : null,
+        h('button', { type: 'button', class: 'btn small', onclick: pickFile }, N.ui.demoLoad)));
+  }
+  function renderBar() {
+    var bar = $('#cbar'), n = Object.keys(S.edits).length, q = qStats();
+    var pct = q.total ? Math.round(q.done / q.total * 100) : 100;
+    bar.hidden = false;
+    bar.replaceChildren(h('div', { class: 'cbar-in' },
+      h('div', { class: 'prog' },
+        h('div', { class: 'prog-top' },
+          aiBusy() ? h('span', { class: 'tr-live' }, '⏳ ' + N.ui.trackRunning) : null,
+          h('b', { class: 'prog-n' }, q.total ? (q.left ? T('pendingProgress', { n: q.done, t: q.total }) : N.ui.pendingAllDone) : N.ui.noPending),
+          n ? h('span', { class: 'cbar-txt' }, T('changedN', { n: n })) : null,
+          q.left ? h('button', { type: 'button', class: 'btn small', onclick: nextQ }, N.ui.next) : null),
+        h('div', {
+          class: 'prog-bar' + (q.left ? '' : ' full'), role: 'progressbar', 'aria-label': N.ui.pending,
+          'aria-valuemin': '0', 'aria-valuemax': String(q.total), 'aria-valuenow': String(q.done)
+        }, h('i', { style: 'width:' + pct + '%' }))),
+      h('button', { type: 'button', class: 'btn primary big', onclick: openModal }, mainLabel())));
+    document.body.style.paddingBottom = (bar.offsetHeight + 28) + 'px';
+  }
+
+  /* ---------- 交咗畀 AI 之後：進度同成果（由 Founder Desk 本機伺服器讀） ---------- */
+  var pollTimer = null;
+  function hm(iso) { var m = /T(\d{2}:\d{2})/.exec(String(iso || '')); return m ? m[1] : ''; }
+  function probeServer() {
+    if (!/^https?:$/.test(location.protocol)) { S.server = null; renderTrack(); return; }
+    fetch('/api/status', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { S.server = j && j.ok ? j : null; if (S.server) S.instance = S.server.instance; render(); if (S.server) poll(); })
+      .catch(function () { S.server = null; renderTrack(); });
+  }
+  // 我啱啱送出嗰份仲排緊隊（伺服器收咗、外殼未開始）
+  function queued() { return !!(S.sent && S.server && (S.server.pending || []).indexOf(S.sent.name) >= 0); }
+  function myRun() {
+    var runs = (S.server && S.server.runs) || [];
+    if (S.sent) {
+      for (var i = 0; i < runs.length; i++) if ((runs[i].replyFiles || []).indexOf(S.sent.name) >= 0) return runs[i];
+      if (queued()) return null;
+    }
+    // 重開頁時唔顯示「版本變咗、套用唔到」嗰類過時失敗；AI 步失敗就照顯示，方便重試
+    var last = runs.filter(function (x) { return x.kind === 'proofread'; })[0];
+    if (last && last.state === 'failed' && failedStep(last) === 'applied') return null;
+    return last || null;
+  }
+  function failedStep(r) { var s = (r.steps || []).filter(function (x) { return x.state === 'failed'; })[0]; return s ? s.key : ''; }
+  function aiBusy() {
+    if (!S || !S.server) return false;
+    var r = myRun();
+    return queued() || !!(r && r.state === 'running');
+  }
+  function trackKey() { var r = myRun(); return JSON.stringify([r, S.server && S.server.pending, S.lost, S.stale]); }
+  function poll() {
+    clearTimeout(pollTimer);
+    fetch('/api/status', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var before = trackKey(); S.server = j; S.lost = false;
+        // 伺服器重新開過（例如升級後再打開 Founder Desk）：呢頁可能過時
+        if (j.instance && S.instance && j.instance !== S.instance) S.stale = true;
+        if (trackKey() !== before) { renderTrack(); renderBar(); }
+      })
+      .catch(function () { if (!S.lost) { S.lost = true; renderTrack(); } })
+      .then(function () { pollTimer = setTimeout(poll, aiBusy() ? 2000 : 10000); });
+  }
+  function retryRun() {
+    fetch('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); })
+      .catch(function () { toast('Founder Desk 已停止：請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」'); });
+  }
+  function renderTrack() {
+    var root = $('#track');
+    if (!root) return;
+    root.replaceChildren();
+    if (S.stale) root.append(h('div', { class: 'track off' }, h('b', null, N.ui.staleTitle + '：'), '此頁可能已過時，請重新載入後再繼續。 ',
+      h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, N.ui.reload)));
+    if (!S.server) {
+      root.append(h('div', { class: 'track off' }, h('b', null, N.ui.offlineView + '：'),
+        '可以修改及確認，但無法交予 AI。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽；確認後才會自動交予 AI 跟進。'));
+      return;
+    }
+    var st = S.server, r = myRun(), ready = st.ai && st.ai.ready, aiName = (st.ai && st.ai.name) || 'AI';
+    if (!r && !queued()) {
+      // 已連上就唔重複講（頂部已經寫明）；搵唔到 AI 工具先出警告
+      if (!ready) root.append(h('div', { class: 'track bad' }, h('b', null, N.ui.aiNotSet + '：'),
+        '你仍可確認，但 AI 須設定完成後才會跟進；設定完成後將自動繼續。 ', h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
+      return;
+    }
+    function stepOf(k) { return r ? (r.steps || []).filter(function (s) { return s.key === k; })[0] : null; }
+    var rows = [], recv = stepOf('received'), ap = stepOf('applied'), ai = stepOf('ai');
+    rows.push({ label: N.ui.stepReceivedConfirm, state: 'done', sub: hm((S.sent && S.sent.at) || (recv && recv.at)) });
+    if (!r) {
+      rows.push({ label: N.ui.stepQueued, state: 'running' });
+      rows.push({ label: N.ui.aiNext, state: 'wait' });
+    } else {
+      rows.push({ label: ap ? N.fix(ap.label) : N.ui.stepApplyConfirm, state: ap ? ap.state : 'running', sub: ap && ap.detail });
+      rows.push({
+        // 改動唔影響下一步：外殼唔開 AI，完成時呢一行寫明原因
+        label: ai ? N.fix(ai.label) : r.state === 'done' ? N.ui.aiNextSkip : N.ui.aiNext, state: ai ? ai.state : r.state === 'done' ? 'done' : 'wait',
+        sub: ai ? ai.detail + (ai.state === 'running' ? ' · ' + hm(ai.at) + ' 開始' : '') : ''
+      });
+    }
+    var state = r ? r.state : 'running';
+    var card = h('div', { class: 'track' + (state === 'failed' ? ' bad' : state === 'waiting' ? ' off' : '') },
+      h('span', { class: 'eyebrow' }, N.ui.track),
+      h('h3', null, state === 'done' ? N.ui.trackDone : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
+      h('ol', { class: 'tr-steps' }, rows.map(function (x) {
+        var ic = x.state === 'done' ? '✓' : x.state === 'failed' ? '✕' : x.state === 'running' ? '…' : '○';
+        return h('li', null, h('span', { class: 'tr-ic ' + x.state }, ic),
+          h('span', null, x.label, x.sub ? h('span', { class: 'tr-sub' }, x.sub) : null));
+      })));
+    if (state === 'waiting') card.append(h('p', null, (ai && ai.detail) || 'AI 尚未設定，設定完成後將自動繼續。'), h('div', { class: 'p-foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
+    if (S.lost) card.append(h('p', { class: 'tr-sub' }, 'Founder Desk 已停止。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，即可繼續；已收到的確認不會遺失。'));
+    if (state === 'failed') {
+      add(card, [(ai && ai.detail === r.error) ? null : h('p', null, '原因：' + (r.error || '未知')),
+        failedStep(r) === 'applied'
+          ? h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, '重新載入頁面，再確認一次')
+          : [ready ? null : h('p', { class: 'tr-sub' }, '請先安裝並登入 AI 工具（' + aiName + '），再按「' + N.ui.retry + '」。'),
+            h('button', { type: 'button', class: 'btn primary', onclick: retryRun }, N.ui.retry)]]);
+    }
+    if (state === 'done' && r.result) {
+      var res = r.result, box = h('div', { class: 'tr-result' });
+      box.append(h('p', null, N.fix(res.summary)));
+      if (res.styleWarnings && res.styleWarnings.length) box.append(h('p', { class: 'tr-sub' }, N.ui.styleNote + '：有 ' + res.styleWarnings.length + ' 處用字未能自動修正（' +
+        res.styleWarnings.slice(0, 4).map(function (w) { return w.where + '：' + w.term; }).join('；') + (res.styleWarnings.length > 4 ? '……' : '') + '）'));
+      if (res.artifacts.length) box.append(h('h4', null, N.ui.aiOutputs));
+      res.artifacts.forEach(function (a, i) {
+        var d = h('details', null, h('summary', null, a.title), window.SOS_MD ? SOS_MD(a.text) : h('pre', null, a.text));
+        if (i === 0) d.open = true;
+        box.append(d);
+      });
+      if (res.founderNext && res.founderNext.length) box.append(h('h4', null, N.ui.yourNext), h('ul', null, res.founderNext.map(function (x) { return h('li', null, x); })));
+      if (res.needsYourDecision && res.needsYourDecision.length) box.append(h('h4', null, N.ui.pending), h('ul', null, res.needsYourDecision.map(function (x) { return h('li', null, x); })));
+      box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，AI 未有對外發送任何內容。'));
+      if (res.asks && res.asks.length) {
+        box.append(h('div', { class: 'asks-next' },
+          h('b', null, T('aiFollowAskN', { n: res.asks.reduce(function (n, a) { return n + a.count; }, 0) }) + '：'),
+          res.asks.map(function (a) { return h('a', { class: 'btn primary', href: '/#/ask/' + encodeURIComponent(a.id) }, N.fix(a.title) + ' → ' + N.ui.goAnswer); })));
+      }
+      card.append(box);
+    }
+    root.append(card);
+  }
+
+  /* ---------- 回覆檔 ---------- */
+  function buildReply(now) {
+    var ms = byId(), fm = flagged(), oc = orderChanged(), pr = proposed();
+    var edits = Object.keys(S.edits).filter(function (id) { return REG[id]; }).map(function (id) {
+      var e = REG[id];
+      return { id: id, plan: e.plan || null, label: e.label, ai: showVal(e, String(e.value == null ? '' : e.value)), founder: showVal(e, S.edits[id]), value: S.edits[id] };
+    });
+    var kept = all().filter(function (e) { return !isEdited(e.id); });
+    var tentKept = kept.filter(function (e) { return e.tentative; });
+    var missing = missingList();
+    var effects = ((D.detail && D.detail.rules) || []).filter(function (r) { return r.effect; });
+    var L = [];
+    L.push('# 確認回覆：' + D.company.name + ' ' + N.ui.company, '');
+    L.push('確認時間：' + human(now));
+    L.push('結果：' + (edits.length || oc ? '已確認（你修改了 ' + edits.length + ' 項' + (oc ? '，並調整了次序' : '') + '）' : '已確認，全部採用 AI 建議'), '');
+    L.push('## ' + N.ui.nowAfter);
+    L.push('- 開局答案：目標、目前進度、下一個對外動作、負責人');
+    L.push('- ' + N.ui.route + '次序' + (oc ? '（' + N.ui.changed + '）' : '（' + N.ui.adopted + '）') + '：');
+    S.order.forEach(function (mid, i) {
+      var pi = pr.indexOf(mid);
+      L.push('  ' + (i + 1) + '. ' + ms[mid].short + (pi !== i ? '（AI 原本排第 ' + (pi + 1) + '）' : '') + (fm && fm.id === mid ? '　⚑ 下一個對外動作' : ''));
+    });
+    effects.forEach(function (r) { L.push('- ' + r.label + '：' + cur(r.id) + (isEdited(r.id) ? '（你已修改）' : '')); });
+    L.push('', '## 每站是' + N.ui.kindReal + '還是' + N.ui.kindTask);
+    S.order.forEach(function (mid, i) { var k = kindOf(ms[mid]); L.push('- ' + (i + 1) + '. ' + ms[mid].short + '：' + kindName(k) + (kindChanged().indexOf(mid) >= 0 ? '（你已修改）' : '（' + N.ui.adopted + '）')); });
+    L.push('', '## 你修改的項目（' + edits.length + ' 項）');
+    if (!edits.length) L.push('- 沒有');
+    edits.forEach(function (x) { L.push('- ' + x.label, '  - AI：' + (x.ai || N.ui.fillShort), '  - 你：' + x.founder); });
+    L.push('', '## 其餘採用 AI 建議');
+    L.push('- 當中 ' + tentKept.length + ' 項為「' + N.ui.tentative + '」' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
+    if (missing.length) L.push('- ' + missing.length + ' 項尚未有答案：' + missing.map(function (e) { return e.label; }).join('；') + '。AI 會開設一項工作尋找答案，找到後再詢問你。');
+    L.push('');
+    if (S.note.trim()) L.push('## 你的備註', S.note.trim(), '');
+    var machine = {
+      format: 'startup-os.proofread-reply/0.1',
+      page: D.page.id, company: D.company.name, confirmedAt: localIso(now),
+      confirm: ['intake', 'order'].concat(effects.map(function (r) { return r.plan || r.id; })),
+      order: S.order, orderProposed: pr, orderChanged: oc,
+      nextActionMilestone: fm ? fm.id : null,
+      // 「要你決定」嗰幾條你有冇答（而家去到邊展開做每一項），寫入紀錄用
+      decided: QIDS.reduce(function (list, id) {
+        if (id === '@status') statusItems().forEach(function (it) { list.push({ id: it.id, answered: answered('@status') }); });
+        else list.push({ id: id, answered: answered(id) });
+        return list;
+      }, []),
+      edits: edits,
+      keptAsAI: kept.map(function (e) { return e.id; }),
+      tentativeKept: tentKept.map(function (e) { return { id: e.id, until: e.tentative.until }; }),
+      stillMissing: missing.map(function (e) { return e.id; }),
+      kinds: (function () { var o = {}; S.order.forEach(function (mid) { o[mid] = kindOf(byId()[mid]); }); return o; })(), kindsChanged: kindChanged(),
+      note: S.note.trim()
+    };
+    L.push('## 機器讀取部分（供 AI 系統使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
+    var head = ['kind: proofread', 'ref: ' + D.page.id, 'option: ' + (edits.length || oc || kindChanged().length ? 'confirm-with-edits' : 'confirm'),
+      'rev: ' + (D.page.revision || 0), 'hash: ' + HASH, 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
+    return {
+      text: head.join('\n') + '\n\n' + L.join('\n') + '\n',
+      name: stamp(now) + '-proofread-' + safeName(D.page.id) + '.md',
+      edits: edits, kept: kept, tentKept: tentKept, missing: missing, oc: oc, effects: effects, fm: fm
+    };
+  }
+
+  var lastFocus = null;
+  function closeModal() {
+    var root = $('#modal-root');
+    if (!root.firstChild) return;
+    root.replaceChildren();
+    document.removeEventListener('keydown', modalKeys, true);
+    if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  }
+  function modalKeys(ev) {
+    var dlg = $('#modal-root .modal');
+    if (!dlg) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); closeModal(); return; }
+    if (ev.key === 'Tab') {
+      var f = dlg.querySelectorAll('button,input,textarea,summary,[tabindex]');
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+      return;
+    }
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      var t = ev.target;
+      if (t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON' || t.tagName === 'SUMMARY') return;
+      ev.preventDefault(); $('#do-confirm').click();
+    }
+  }
+  function openModal() {
+    if (!D) return;
+    lastFocus = document.activeElement;
+    S.open = null;
+    var now = new Date(), R = buildReply(now), ms = byId(), pr = proposed();
+    var pre = h('pre', { class: 'file' }, R.text);
+    var note = h('input', { class: 'note-in', type: 'text', placeholder: '需要補充一句？（可留空）', 'aria-label': '備註', value: S.note });
+    note.addEventListener('input', function () { S.note = note.value; save(); R = buildReply(now); pre.textContent = R.text; });
+    var copyHolder = h('div', { class: 'copybox' });
+    var body = h('div', { class: 'm-body' });
+    var online = !!S.server;
+    if (!online) {
+      body.append(h('div', { class: 'warn' },
+        h('span', null, '未連接 AI：此次確認只會下載為檔案，AI 不會收到。請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」，再於該處打開公司概覽並確認，AI 才會自動跟進。')));
+    }
+    // 預覽只講四件事：下一步、目標、路線、AI 權限；其餘收埋
+    var g5 = FLAGFIELD, g1id = byPlan('G1') || (D.glance.rows[0] && D.glance.rows[0].id), g1 = g1id && REG[g1id];
+    var g1row = D.glance.rows.filter(function (r) { return r.id === g1id; })[0];
+    var sum = h('ul', { class: 'm-sum' },
+      g5 ? h('li', null, h('b', null, N.ui.nextStep + '：'), cur(g5.id), h('span', { class: 'tr-sub' }, 'AI 將隨即準備草稿，不會對外發送')) : null,
+      g1 && (!g5 || g1id !== g5.id) ? h('li', null, h('b', null, g1.label + '：'), cur(g1id),
+        g1row && g1row.due ? '（期限 ' + showVal(REG[g1row.due.id], cur(g1row.due.id)) + '）' : '') : null,
+      h('li', null, h('b', null, N.ui.routeName + '：'), S.order.map(function (mid, i) { return (i + 1) + ' ' + ms[mid].short; }).join(' → '), R.oc ? '（' + N.ui.changed + '）' : ''),
+      R.effects.map(function (r) {
+        return h('li', null, h('b', null, r.label + '：'), cur(r.id),
+          r.boxes && r.boxes.askFirst ? h('span', { class: 'tr-sub' }, '必須先詢問你：' + r.boxes.askFirst.slice(0, 3).join('、') + ' 等') : null);
+      }));
+    body.append(h('div', { class: 'm-sec effect' }, h('h4', null, N.ui.nowAfter), sum));
+    var qs = qStats();
+    body.append(h('p', { class: 'p-judge m-rest' },
+      (R.edits.length ? '你修改了 ' + R.edits.length + ' 項；' : '') + (kindChanged().length ? '你改了 ' + kindChanged().length + ' 站的' + N.ui.kindReal + '／' + N.ui.kindTask + '判斷；' : '') +
+      (qs.left ? '未作答的 ' + qs.left + ' 條按 AI 建議；' : '') +
+      '其餘採用 AI 建議' + (R.tentKept.length && D.page.nextAskOn ? '，「' + N.ui.tentative + '」項目由 ' + md(D.page.nextAskOn) + ' 起分批再詢問你' : '') + '。'));
+    var changes = R.edits.length ? h('ul', { class: 'chg' }, R.edits.map(function (x) {
+      return h('li', null, x.label + '：', h('span', { class: 'was' }, clip(x.ai || N.ui.fillShort, 40)), ' → ', h('span', { class: 'now' }, x.founder));
+    })) : h('p', { class: 'p-judge' }, '未作修改，全部採用 AI 建議。');
+    body.append(h('details', { class: 'm-sec' }, h('summary', null, N.ui.reviewMore),
+      h('h4', null, N.ui.changedItems), changes, h('div', { class: 'm-sec' }, note), pre));
+    body.append(copyHolder);
+    function doCopy() {
+      var text = R.text;
+      var fallback = function () {
+        var ta = h('textarea', { readonly: true, 'aria-label': '回覆文字' }); ta.value = text;
+        copyHolder.replaceChildren(h('p', { class: 'p-judge' }, '瀏覽器不允許自動複製：文字已全部選取，請按 Ctrl + C（手機請長按）複製。'), ta);
+        ta.focus(); ta.select();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { toast('已複製回覆文字'); }, fallback);
+      } else fallback();
+    }
+    function doConfirm() {
+      var ok = true;
+      try {
+        var blob = new Blob([R.text], { type: 'text/markdown;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = h('a', { href: url, download: R.name });
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      } catch (e) { ok = false; }
+      if (!ok) { doCopy(); return; }
+      S.confirmed = { at: human(now), name: R.name };
+      S.restored = false; S.changedAfter = false; save();
+      closeModal(); render(); window.scrollTo(0, 0);
+      toast('已確認，回覆檔已下載至瀏覽器的下載資料夾。');
+    }
+    var btnMain = h('button', { type: 'button', class: 'btn primary', id: 'do-confirm', onclick: online ? doSend : doConfirm },
+      online ? '★ ' + N.ui.submit : N.ui.downloadOffline);
+    function doSend() {
+      btnMain.disabled = true; btnMain.textContent = N.ui.sending;
+      fetch('/api/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'proofread', ref: D.page.id, text: R.text })
+      })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || String(r.status)); return j; }); })
+        .then(function (j) {
+          S.sent = { name: j.file, at: j.receivedAt };
+          S.server.pending = (S.server.pending || []).concat([j.file]);
+          S.confirmed = { at: human(now), name: j.file, sent: true };
+          S.restored = false; S.changedAfter = false; save();
+          closeModal(); render(); window.scrollTo(0, 0); poll();
+          toast(N.ui.sent);
+        })
+        .catch(function (e) {
+          btnMain.disabled = false; btnMain.textContent = N.ui.resend;
+          copyHolder.replaceChildren(h('p', { class: 'p-judge' }, '未能送出（' + e.message + '）。Founder Desk 可能已停止：請在 Claude 輸入 /startup-os:desk，或對 AI 說「打開 Founder Desk」重新開啟，然後再按送出。'));
+        });
+    }
+    var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
+      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, online ? N.ui.submit : N.ui.confirmOnly),
+        h('p', null, online
+          ? '按確認後即交予 AI，AI 將自動跟進。'
+          : '')),
+      body,
+      h('div', { class: 'm-foot' },
+        h('button', { type: 'button', class: 'btn', onclick: closeModal }, N.ui.back),
+        online ? null : h('button', { type: 'button', class: 'btn', onclick: doCopy }, '複製文字'),
+        btnMain));
+    var back = h('div', { class: 'backdrop', onclick: function (ev) { if (ev.target === back) closeModal(); } }, dlg);
+    $('#modal-root').replaceChildren(back);
+    document.addEventListener('keydown', modalKeys, true);
+    $('#do-confirm').focus();
+  }
+
+  loadData();
+})();
+</script>
+</body>
+</html>

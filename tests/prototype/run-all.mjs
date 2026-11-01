@@ -24,7 +24,7 @@ if (OUT.startsWith(path.resolve(PROTO))) { console.log('輸出資料夾唔可以
 // 不可用嘅埠（其他服務、真實實例、模擬實例）；每項測試佔 10 個埠
 // 另加 Fetch 標準封鎖嘅埠（Node fetch 同 Chrome 都拒絕連，例如 6000 會報 bad port，伺服器起咗都連唔到）
 // 5040：Windows 系統服務長期佔用（綁唔到，伺服器會自動跳去下一個埠，測試就連錯埠）
-const RESERVED = [4318, 4380, 4381, 4398, 4402, 4470, 4471, 4650, 5040,
+const RESERVED = [4318, 4380, 4381, 4398, 4402, 4470, 4471, 4650, 5040, 5354, 5530,
   1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080];
 function findChrome() {
   const c = opt('chrome', 'SOS_TEST_CHROME');
@@ -43,10 +43,14 @@ const fileUrl = p => 'file:///' + p.replace(/\\/g, '/');
 // [名稱, 檔案, 參數, 要瀏覽器]；{out} 每項自己一個資料夾，{port} 每項自己一段埠
 const TESTS = [
   ['後端', 'core/backend-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['裝置通行證', 'core/pass-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['安裝', 'core/install-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['插件打包', 'core/plugin-bundle-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['更新', 'core/update-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['AI 工具啟動殼', 'core/host-shim-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['宿主認證與隔離', 'core/certify-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['手機配對', 'core/phone-pair-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['伺服器安全反例', 'core/round3-server-safety-test.mjs', ['{proto}', '{out}', '{port}']],
   ['旅程（主線）', 'core/journey.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}', 'main'], true],
   ['旅程（出錯）', 'core/journey.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}', 'errors'], true],
   ['答題', 'core/cdp-ask.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', path.join(FX, 'demo-14.json')], true],
@@ -96,7 +100,8 @@ function verdict(text, code) {
 }
 function run(file, args) {
   return new Promise(resolve => {
-    const env = { ...process.env, SOS_TEST_OUT: args.out };
+    // SOS_NO_OPEN：伺服器唔會開系統瀏覽器（裝置通行證嘅一次性連結由測試自己兌換）
+    const env = { ...process.env, SOS_TEST_OUT: args.out, SOS_NO_OPEN: '1', SOS_CODEX_AUTH: path.join(args.out, 'no-real-codex-auth.json') };
     for (const k of ['SOS_DATA', 'SOS_SIM', 'SOS_ADAPTER', 'SOS_FAKE_PAGE']) delete env[k];
     const child = spawn(process.execPath, [path.join(HERE, file), ...args.list], { cwd: path.dirname(path.join(HERE, file)), env, stdio: ['ignore', 'pipe', 'pipe'] });
     let text = ''; child.stdout.on('data', d => { text += d; }); child.stderr.on('data', d => { text += d; });

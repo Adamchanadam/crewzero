@@ -16,7 +16,7 @@ function start() {
 }
 async function servers() {
   const out = [];
-  for (let p = Number(PORT); p < Number(PORT) + 10; p++) { try { const j = await (await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(600) })).json(); out.push({ port: p, pid: j.pid }); } catch { } }
+  for (let p = Number(PORT); p < Number(PORT) + 10; p++) { try { const j = await (await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(600) })).json(); out.push({ port: p, pid: j.pid }); } catch { } }
   return out;
 }
 // 1. 三個同時開

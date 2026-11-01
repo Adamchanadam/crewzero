@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
@@ -17,6 +18,7 @@ const get = async p => (await fetch(BASE + p)).json();
 const post = async (p, body) => { const r = await fetch(BASE + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; };
 async function waitFor(fn, ms = 40000) { const t = Date.now(); while (Date.now() - t < ms) { const v = await fn(); if (v) return v; await sleep(400); } return null; }
 try {
+  await usePass(BASE);
   await waitFor(async () => { try { return (await get('/api/status')).ok; } catch { return false; } }, 15000);
   await post('/api/setup', { action: 'certify', host: 'test' });
   await waitFor(async () => { const s = await get('/api/setup'); return s.certify && s.certify.state !== 'running'; });

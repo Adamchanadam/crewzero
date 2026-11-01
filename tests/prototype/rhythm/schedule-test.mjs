@@ -8,6 +8,8 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { usePass, installPass } from '../lib/testkit.mjs';
+let unpair = () => { };
 const [CHROME, OUT, PROTO, FAKE, PORT] = process.argv.slice(2);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -15,6 +17,7 @@ const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, i
 fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), U = N.ui;
 const { openChrome } = await import(pathToFileURL(path.join(HERE, '..', 'lib', 'cdp-lib.mjs')).href);
+const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const LOG = path.join(OUT, 'sched-calls.jsonl');
 const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^SOS_/.test(k))), SOS_SCHED_CMD: path.join(HERE, '..', 'lib', 'fake-schtasks.mjs'), SOS_SCHED_LOG: LOG, SOS_ADAPTER: FAKE, SOS_NO_OPEN: '1' };
 const calls = () => { try { return fs.readFileSync(LOG, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
@@ -38,8 +41,11 @@ try {
   /* 伺服器（新安裝自己嘅 data/）：未登記 */
   srv = spawn(process.execPath, [path.join(T, 'server.mjs'), '--port', String(PORT)], { cwd: T, env, stdio: 'ignore' });
   const B = `http://127.0.0.1:${PORT}`;
+  // 正實例（安裝好嘅副本用自己嘅 data/）冇測試鉤：測試自己扮已配對瀏覽器（寫雜湊入用戶設定資料夾，完畢即刪）
+  unpair = await installPass(lib.rootId(path.join(T, 'data')), B, path.join(T, 'data'));
   for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
   c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
+  await usePass(B, c);
   const sys = async () => { await c.go(B + '/dashboard/system', 1440, 2600); return c.ev(`(()=>{const d=document.querySelector('#sys-sched');return d?{state:d.dataset.state,text:d.innerText,next:(document.querySelector('#sys-next')||{}).innerText||'',last:(document.querySelector('#sys-last')||{}).innerText||''}:null})()`); };
   const s0 = await sys();
   ok('系統頁（公司概覽未確認都顯示排程）：未登記，下一步「在對話輸入『安裝排程』」', s0 && s0.state === 'none' && s0.text === U.schedOff && /安裝排程/.test(s0.text), s0);
@@ -99,6 +105,7 @@ try {
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {
+  unpair();
   try { c && c.close(); } catch { } try { srv && srv.kill(); } catch { }
   const pass = results.filter(r => r.pass).length;
   for (const r of results) console.log((r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : '\n      ' + String(JSON.stringify(r.info)).slice(0, 900)));

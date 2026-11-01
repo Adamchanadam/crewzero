@@ -12,6 +12,8 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { oldInstall } from '../fixtures/old-install.mjs';
+import { installPass } from '../lib/testkit.mjs';
+const unpairs = [];
 const [PROTO, OUT, PORT, FAKE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -103,7 +105,8 @@ try {
   /* 舊版伺服器開緊（冇工作進行中）→ 更新 → 舊伺服器被關閉 */
   const s0 = run(path.join(T, 'ask.mjs'), ['--desk']);
   const url0 = (s0.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];
-  const st0 = url0 ? await (await fetch(url0 + 'api/status')).json() : {};
+  const st0 = url0 ? await (await fetch(url0 + 'api/health')).json() : {};
+  if (url0) unpairs.push(await installPass(lib.rootId(DATA), url0, DATA));
   const oldPid = Number(st0.pid) || 0; if (oldPid) pids.push(oldPid);
   ok('舊版 Founder Desk 開到（更新前）', !!url0 && oldPid > 0 && st0.root === lib.rootId(DATA), { out: s0.stdout, err: s0.stderr, st0 });
   // 伺服器開機會建空資料夾（asks/、founder/ 等），係伺服器做嘅；data/ 快照喺伺服器開咗之後先影，更新前後比較
@@ -134,7 +137,8 @@ try {
   /* 新版伺服器開到、讀到舊格式嘅公司資料 */
   const s1 = run(path.join(T, 'ask.mjs'), ['--desk']);
   const url1 = (s1.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];
-  const st1 = url1 ? await (await fetch(url1 + 'api/status')).json() : {};
+  const st1 = url1 ? await (await fetch(url1 + 'api/health')).json() : {};
+  if (url1) unpairs.push(await installPass(lib.rootId(DATA), url1, DATA));
   const newPid = Number(st1.pid) || 0; if (newPid) pids.push(newPid);
   ok('更新後打開 Founder Desk：新版伺服器、同一個 data/', !!url1 && st1.version === lib.SERVER_VERSION && st1.root === lib.rootId(DATA), { out: s1.stdout, err: s1.stderr, st1 });
   const pageJs = url1 ? await (await fetch(url1 + 'company-page.js')).text() : '';
@@ -159,6 +163,7 @@ try {
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {
+  for (const u of unpairs) u();
   for (const p of pids) { try { process.kill(p); } catch { } }
   await sleep(300);
   const pass = results.filter(r => r.pass).length;

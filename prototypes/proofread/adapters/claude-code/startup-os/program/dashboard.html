@@ -7,6 +7,7 @@
 <title>營運監察台</title>
 <script src="/names.js"></script>
 <script src="/md.js"></script>
+<script src="/pair.js"></script>
 <script src="/desk.js"></script>
 <script src="/orbit.js"></script>
 <style>
@@ -1849,6 +1850,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         h('p', null, x.work.meta.workingSessions ? fill(D.workingNow, { n: x.work.meta.workingSessions, m: x.work.meta.activeSubagents }) : x.ai.running ? '工作中：' + x.ai.running.label + '（' + when(x.ai.running.startedAt) + ' 開始）' : '閒置'),
         h('h4', null, D.observeFolders),
         observePanel(x.work.observe),
+        h('h4', null, U.devices),
+        DESK.devices(x.devices || [], { onRevoke: function (id, btn) { fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke', id: id }) }).then(function (r) { if (!r.ok) throw new Error(r.status); toast(U.deviceRevoked); load(); }).catch(function () { btn.disabled = false; toast(U.deviceGone); }); } }),
         h('h4', null, D.sysRhythm),
         // 經營節奏：未確認公司概覽前未有（用預設）；排程一行三態（MVP 規格第 2 節第 3 項）：未登記／已登記／節奏已改須重新登記——公司概覽未確認都照顯示
         h('dl', { class: 'kv' }, x.rhythm ? [h('dt', null, '開工'), h('dd', null, (CAD[x.rhythm.runCadence] || '每日') + ' ' + x.rhythm.runTime + '，每次最多 ' + (x.rhythm.runCapMinutes || 30) + ' 分鐘'), h('dt', null, '訪問日'), h('dd', null, '星期' + WD[(x.rhythm.interviewWeekday || 1) % 7] + (x.interviews && x.interviews.nextOn ? '（下次 ' + md(x.interviews.nextOn) + '）' : ''))]
@@ -2533,7 +2536,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       if (V.instance && j.instance !== V.instance) V.stale = true;
       V.instance = V.instance || j.instance;
       // 規劃書 4.9：內容（帳本、問題包、run 狀態）變咗先整頁重畫；observed／work 變咗只重畫作業網、事件流、分類索引同系統頁清單
-      var TIME = { now: 1, readAt: 1, lastActiveAt: 1, reportedAt: 1, clock: 1 };
+      var TIME = { now: 1, readAt: 1, lastActiveAt: 1, reportedAt: 1, clock: 1, lastUsedAt: 1 };
       var key = JSON.stringify(j, function (k, v) { return TIME[k] || k === 'work' || k === 'observed' || k === 'activity' ? undefined : v; });
       var wkey = JSON.stringify({ w: j.work, o: j.observed, a: j.activity, t: (j.teammates || []).map(function (t) { return t.activity; }) }, function (k, v) { return TIME[k] ? undefined : v; });
       var wasLive = V.conn === 'live', changed = key !== V.hash || !wasLive, workChanged = wkey !== V.whash;
@@ -2545,7 +2548,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     }).catch(function () {
       V.conn = 'offline'; DESK.setConn('offline');
       if (V.data) { if (tab === 'overview') refreshOverview(true); }
-      else $('#shell').replaceChildren(h('section', { class: 'panel block-card' }, h('span', { class: 'eyebrow' }, D.offline), h('p', null, '營運監察台尚未開啟：請在 Claude 輸入 /startup-os:dashboard，或要求 AI「打開營運監察台」，即可重新開啟。')));
+      else $('#shell').replaceChildren(h('section', { class: 'panel block-card' }, h('span', { class: 'eyebrow' }, D.offline), h('p', null, '營運監察台尚未開啟：' + N.ui.reopenDashboard + '，即可重新開啟。')));
     });
   }
   function poll() { setTimeout(function () { (document.hidden ? Promise.resolve() : load()).then(poll, poll); }, 5000); }

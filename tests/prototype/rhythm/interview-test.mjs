@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
+import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER, CHROME, START_ARG] = process.argv.slice(2);
 // 模擬時鐘由固定起始日開始（同經營節奏測試一樣）：訪問日由「今日」推算，唔固定就會隨真實星期幾同時間變
 const START = START_ARG || '2026-10-29T12:00:00';
@@ -74,6 +75,7 @@ try {
   srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_SIM: '1', SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' }, stdio: 'ignore' });
   // 機器忙時伺服器可能遲啲先起好：最多等 60 秒，起唔到就清楚報錯
   let up = false;
+  await usePass(BASE);
   for (let i = 0; i < 200 && !up; i++) { try { up = !!(await get('/api/status')).ok; } catch { } if (!up) await sleep(300); }
   if (!up) throw new Error('伺服器 60 秒內未起好');
   await post('/api/setup', { action: 'certify', host: 'test' });
@@ -158,6 +160,7 @@ try {
   ok('三：之後同步帳本，撤回照留', st().milestones.find(m => m.id === 'm2').pathStatus === 'retired');
   // 經頁面：「全部沒有變化」
   c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 3000);
+  await usePass(BASE, c);
   await c.go(BASE + '/?r=1#/ask/' + iv.id, 1440, 2600);
   const btn = await c.ev(`(document.querySelector('#all-same')||{}).innerText||''`);
   ok('頁面：訪問包有「全部沒有變化」', btn === U.interviewAllSame || btn === U.interviewAllSameRest, btn);
