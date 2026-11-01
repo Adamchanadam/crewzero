@@ -63,7 +63,7 @@ async function lanProbe() {
 // 認證只接受可核對的工具層拒絕事件；缺事件、自述或「檔案沒有變」都不能當拒絕證明。
 function proofFromDenials(denials, test) { return Array.isArray(denials) && denials.some(test); }
 function reportLine(report, step) { return report && typeof report === 'object' ? String(report[String(step)] ?? report['t' + step] ?? '') : ''; }
-function directProbeBlocked(probe, target, before) { return !!probe && !probe.timedOut && Number.isInteger(probe.code) && probe.code !== 0 && /(?:access (?:to the path .* )?is denied|unauthorizedaccess|permission denied|operation not permitted|not permitted|access denied|拒絕存取|存取被拒)/i.test(String(probe.output || '')) && digest(target) === before; }
+function directProbeBlocked(probe, target, before) { return !!probe && !probe.timedOut && Number.isInteger(probe.code) && probe.code !== 0 && /(?:access (?:to the path .* )?is denied|unauthorizedaccess|permission denied|operation not permitted|read-only file system|not permitted|access denied|拒絕存取|存取被拒)/i.test(String(probe.output || '')) && digest(target) === before; }
 
 async function main() {
   save();

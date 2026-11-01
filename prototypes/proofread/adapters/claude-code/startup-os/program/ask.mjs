@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dataDirs, preparePacks, placePacks, listPacks, rootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
+import { dataDirs, preparePacks, placePacks, listPacks, rootId, legacyRootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
 import { seedDemo, DEMO_DIR } from './demo-seed.mjs';
 import { folderHash } from './folder-hash.mjs';
 
@@ -44,7 +44,7 @@ async function findServer() {
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && j.root === rootId(DIR.data) && Number(j.pid) > 0) legacyServer = { port: p, busy: !!j.busy };
+      if (j && (j.root === rootId(DIR.data) || j.root === legacyRootId(DIR.data)) && Number(j.pid) > 0) legacyServer = { port: p, busy: !!j.busy };
     } catch { }
   }
   return null;
@@ -148,5 +148,5 @@ for (const p of placed) console.log(`已放上 Founder Desk：${p.title}（共 $
 if (!url) { console.log(legacyServer?.busy ? '問題包已放好；沒有通行證功能的舊版正在處理工作，為保護資料瀏覽器未有打開，完成後再試。' : '無法啟動 Founder Desk 的本機伺服器；問題包已放好，下次打開 Founder Desk 即可查看。'); process.exit(legacyServer?.busy ? 1 : 0); }
 const link = `${url}#/ask/${placed[0].id}`;
 const opened = await openPage(url, 'ask/' + placed[0].id);
-if (!opened.ok) { console.log('問題包已放好，但瀏覽器未有打開：' + opened.message); process.exit(1); }
+if (!opened.ok) { console.log('問題包已放好，但瀏覽器未有打開：' + opened.message + '請勿再放一次；創辦人打開 Founder Desk 即可看到。'); console.log('Founder Desk：' + link); process.exit(0); }
 console.log('Founder Desk：' + link);

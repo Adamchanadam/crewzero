@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { programFiles, pluginVersion, INSTALL_SKIP, GENERATED, compareVersions, writeGenerated, manifestOf, parseManifest, sha256 } from './bundle-rules.mjs';
-import { rootId, BASE_PORT } from './ask-lib.mjs';
+import { rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, BASE_PORT } from './ask-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const say = s => console.log('[startup-os] ' + s);
@@ -67,29 +67,19 @@ async function runningServers() {
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && j.root === want) { found.push({ port: p, pid: Number(j.pid) || 0, busy: !!j.busy, version: String(j.version || ''), legacy: false }); continue; }
+      if (j && (j.root === want || j.root === legacyRootId(DATA) && serverOwnership(p, Number(j.pid), target) !== 'other')) { found.push({ port: p, pid: Number(j.pid) || 0, busy: !!j.busy, version: String(j.version || ''), legacy: false }); continue; }
     } catch { }
     // 舊版只公開 /api/status；必須同樣列入忙碌判斷及關閉名單，不能遺留無通行證入口。
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && j.root === want && Number(j.pid) > 0) found.push({ port: p, pid: Number(j.pid), busy: !!j.busy, version: String(j.version || 'legacy-no-pass'), legacy: true });
+      if (j && Number(j.pid) > 0 && (j.root === want || j.root === legacyRootId(DATA) && serverOwnership(p, Number(j.pid), target) !== 'other')) found.push({ port: p, pid: Number(j.pid), busy: !!j.busy, version: String(j.version || 'legacy-no-pass'), legacy: true });
     } catch { }
   }
   return found;
 }
-function ownsServerPort(port, reportedPid) {
-  if (process.platform !== 'win32' || !Number.isInteger(Number(reportedPid)) || Number(reportedPid) <= 0) return false;
-  // 由作業系統讀該埠嘅監聽 socket 擁有者（本機位址係該埠嘅任何一行都屬伺服器程序；唔睇狀態欄同遠端：部分 Windows 版本監聽行會顯示成其他狀態甚至唔列出），再核對命令列；任何一步讀唔到都當未能確認
-  let netstat = '';
-  try { netstat = String(spawnSync('netstat.exe', ['-ano', '-p', 'tcp'], { encoding: 'utf8', windowsHide: true, timeout: 5000 }).stdout || ''); } catch { return false; }
-  const owner = netstat.split(/\r?\n/).map(s => s.trim().split(/\s+/)).some(c => c[0] === 'TCP' && c[1] === `127.0.0.1:${Number(port)}` &&Number(c[c.length - 1]) === Number(reportedPid));
-  if (!owner) return false;
-  let command = '';
-  try { command = String(spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = ${Number(reportedPid)}").CommandLine`], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).stdout || ''); } catch { return false; }
-  const norm = s => String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US');
-  return norm(command).includes(norm(path.join(target, 'server.mjs')));
-}
+// 由作業系統核對該埠擁有者同命令列（共用 ask-lib.mjs；Windows、macOS、Linux 都支援）
+const ownsServerPort = (port, pid) => ownsPort(port, pid, target);
 const RUN_LOCK = path.join(DATA, 'ledger', '.lock');
 // 同 run.mjs 同一個鎖、同一個 20 分鐘過期規則
 const runLockHeld = () => { try { return Date.now() - fs.statSync(RUN_LOCK).mtimeMs <= 20 * 60 * 1000; } catch { return false; } };

@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, INTAKE_QUESTIONS, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
+import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
 import { dashboardState, touchLastSeen, pendingTodo, guideCard } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
@@ -565,8 +565,10 @@ function readBody(req, max, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     let size = 0, done = false; const chunks = [];
     const finish = (error, value) => { if (done) return; done = true; clearTimeout(timer); error ? reject(error) : resolve(value); };
-    const timer = setTimeout(() => { try { req.destroy(); } catch { } finish(new Error('body timeout')); }, timeoutMs);
-    req.on('data', c => { size += c.length; if (size > max) { try { req.destroy(); } catch { } finish(new Error('too large')); } else chunks.push(c); });
+    let timer;
+    const idle = () => { clearTimeout(timer); timer = setTimeout(() => { try { req.destroy(); } catch { } finish(new Error('body timeout')); }, timeoutMs); };
+    idle();
+    req.on('data', c => { idle(); size += c.length; if (size > max) { try { req.destroy(); } catch { } finish(new Error('too large')); } else chunks.push(c); });
     req.on('end', () => finish(null, Buffer.concat(chunks).toString('utf8')));
     req.on('aborted', () => finish(new Error('request aborted')));
     req.on('error', e => finish(e));
@@ -1007,31 +1009,19 @@ async function sameFolderServers() {
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && j.root === ROOT_ID) { found.push({ port: p, j, legacy: false }); continue; }
+      if (j && (j.root === ROOT_ID || j.root === legacyRootId(DIR.data) && serverOwnership(p, Number(j.pid), ROOT) !== 'other')) { found.push({ port: p, j, legacy: false }); continue; }
     } catch { }
     // 0.32 只有公開 /api/status；絕不可因為它沒有 health 而略過，否則會留下未受通行證保護的舊入口。
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && j.root === ROOT_ID && Number(j.pid) > 0) found.push({ port: p, j, legacy: true });
+      if (j && Number(j.pid) > 0 && (j.root === ROOT_ID || j.root === legacyRootId(DIR.data) && serverOwnership(p, Number(j.pid), ROOT) !== 'other')) found.push({ port: p, j, legacy: true });
     } catch { }
   }
   return found;
 }
-// 舊協定的 HTTP 回覆不可證明 PID 身份。Windows 上先由作業系統讀取該埠的實際擁有者，
-// 再核對程序命令列確實指向同一資料夾的 server.mjs；任何一步不能確認都不終止。
-function ownsServerPort(port, reportedPid) {
-  if (process.platform !== 'win32' || !Number.isInteger(Number(reportedPid)) || Number(reportedPid) <= 0) return false;
-  // 由作業系統讀該埠嘅監聽 socket 擁有者（本機位址係該埠嘅任何一行都屬伺服器程序；唔睇狀態欄同遠端：部分 Windows 版本監聽行會顯示成其他狀態甚至唔列出），再核對命令列；任何一步讀唔到都當未能確認
-  let netstat = '';
-  try { netstat = String(spawnSync('netstat.exe', ['-ano', '-p', 'tcp'], { encoding: 'utf8', windowsHide: true, timeout: 5000 }).stdout || ''); } catch { return false; }
-  const owner = netstat.split(/\r?\n/).map(s => s.trim().split(/\s+/)).some(c => c[0] === 'TCP' && c[1] === `127.0.0.1:${Number(port)}` &&Number(c[c.length - 1]) === Number(reportedPid));
-  if (!owner) return false;
-  let command = '';
-  try { command = String(spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = ${Number(reportedPid)}").CommandLine`], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).stdout || ''); } catch { return false; }
-  const norm = s => String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US');
-  return norm(command).includes(norm(path.join(ROOT, 'server.mjs')));
-}
+// 舊協定的 HTTP 回覆不可證明 PID 身份：由作業系統核對該埠擁有者同命令列（共用 ask-lib.mjs）
+const ownsServerPort = (port, pid) => ownsPort(port, pid, ROOT);
 // 開機排隊：兩個同時開（例如 AI 同創辦人一齊開）會互相睇唔到，所以一次只准一個做開機檢查；
 // 後嚟嗰個等前面嗰個開好，再檢查就會見到佢而沿用。排隊嗰個程序死咗就當冇人排緊。
 async function startupLock() {

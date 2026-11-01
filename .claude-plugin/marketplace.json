@@ -1,9 +1,9 @@
 {
   "name": "startup-os",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "startup-os：在你電腦上運行的 AI 團隊（陶土 AI 團隊），給已在用 Claude Code 的創辦人",
   "owner": { "name": "Adam Chan" },
   "plugins": [
-    { "name": "startup-os", "version": "0.6.0", "source": "./prototypes/proofread/adapters/claude-code/startup-os" }
+    { "name": "startup-os", "version": "0.6.1", "source": "./prototypes/proofread/adapters/claude-code/startup-os" }
   ]
 }

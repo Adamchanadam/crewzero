@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 export const pad = n => String(n).padStart(2, '0');
 // 模擬實例（設計稿第 8 節）：SOS_SIM=1 而且有獨立資料夾（SOS_DATA）先生效；時間 = 真時間 + founder/desk/sim-clock.json 嘅偏移。
@@ -58,8 +60,37 @@ export function fnv(str) {
 }
 
 // 伺服器用嚟認返自己（同一個資料夾）；ask.mjs 用嚟搵返開緊嘅伺服器
-export const rootId = root => Buffer.from(String(root).toLowerCase()).toString('base64url').slice(-24);
-export const SERVER_VERSION = 'proofread-chain-0.33';
+// 資料夾識別碼：完整路徑嘅雜湊（舊算法只取路徑尾段，唔同項目資料夾名尾幾個字相同就會撞）
+export const rootId = root => crypto.createHash('sha256').update(String(root).toLowerCase()).digest('hex').slice(0, 24);
+// 0.33 或更舊版本嘅算法：只用嚟認出仲開緊嘅舊伺服器（要同時核對到程序屬同一資料夾先算）
+export const legacyRootId = root => Buffer.from(String(root).toLowerCase()).toString('base64url').slice(-24);
+// 由作業系統核對開緊嘅伺服器屬唔屬 <programRoot>：回傳 'same'（同一程式資料夾）、'other'（確定係其他程序或程式資料夾）、'unknown'（核對唔到，例如冇 lsof）
+// Windows：netstat 本機位址＝127.0.0.1:<埠> 嘅任何一行（部分版本監聽行狀態欄唔可靠或唔列出）＋Win32_Process；macOS／Linux：lsof＋ps
+export function serverOwnership(port, reportedPid, programRoot) {
+  const pid = Number(reportedPid);
+  if (!Number.isInteger(pid) || pid <= 0) return 'unknown';
+  const run = (cmd, args, timeout) => { const r = spawnSync(cmd, args, { encoding: 'utf8', windowsHide: true, timeout }); return r.error || r.status === null ? null : String(r.stdout || ''); };
+  let owners, command;
+  if (process.platform === 'win32') {
+    const netstat = run('netstat.exe', ['-ano', '-p', 'tcp'], 5000);
+    if (netstat === null) return 'unknown';
+    owners = new Set(netstat.split(/\r?\n/).map(s => s.trim().split(/\s+/)).filter(c => c[0] === 'TCP' && c[1] === `127.0.0.1:${Number(port)}`).map(c => Number(c[c.length - 1])));
+    if (!owners.size) return 'unknown';
+    if (!owners.has(pid)) return 'other';
+    command = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = ${pid}").CommandLine`], 10000);
+  } else {
+    const lsof = run('lsof', ['-nP', `-iTCP@127.0.0.1:${Number(port)}`, '-sTCP:LISTEN', '-Fp'], 5000);
+    if (lsof === null) return 'unknown';
+    owners = new Set(lsof.split(/\r?\n/).filter(l => /^p\d+$/.test(l)).map(l => Number(l.slice(1))));
+    if (!owners.size) return 'unknown';
+    if (!owners.has(pid)) return 'other';
+    command = run('ps', ['-o', 'command=', '-p', String(pid)], 5000);
+  }
+  if (!command || !command.trim()) return 'unknown';
+  const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
+  return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
+}
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.33.1';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

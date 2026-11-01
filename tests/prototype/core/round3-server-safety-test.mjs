@@ -35,7 +35,7 @@ try {
   const last = (status.runs || []).at(-1) || {};
   ok('下游 run.mjs 遇重複 via 會拒絕，未寫入可採用的決定紀錄', runExited && last.state === 'failed' && /來源重複/.test(last.error || ''), last);
   const updateSource = fs.readFileSync(path.join(PROTO, 'update.mjs'), 'utf8');
-  ok('更新程式同樣先核對埠擁有者，未核對即停止換版', /function ownsServerPort/.test(updateSource) && /無法獨立核對開着的 Founder Desk 程序身份/.test(updateSource), true);
+  ok('更新程式同樣先核對埠擁有者，未核對即停止換版', /ownsServerPort/.test(updateSource) && /ownsServerPort as ownsPort/.test(updateSource) && /無法獨立核對開着的 Founder Desk 程序身份/.test(updateSource), true);
 } catch (e) {
   ok('測試程式出錯', false, String(e?.stack || e));
 } finally {
