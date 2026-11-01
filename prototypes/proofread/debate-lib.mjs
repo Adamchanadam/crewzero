@@ -1,4 +1,4 @@
-// startup-os 紅藍對打（辯論）同轉強：場次、記分、關鍵時刻、格式核對、轉強卡核對、問題包（唯一計算處）。
+// CrewZero 紅藍對打（辯論）同轉強：場次、記分、關鍵時刻、格式核對、轉強卡核對、問題包（唯一計算處）。
 // 監察台（經 brain-lib）、Founder Desk（經伺服器）、外殼（run.mjs）都用呢度；伺服器只讀。
 // 設計：docs/plan/DESIGN-debate-and-strengthen-2026-10-27.md；檔案格式：試驗資料夾 wargame/FORMAT.md，原型多出嘅可選欄見 debate-format.md。
 // 規則：辯論、反駁、裁判、轉強全部係「AI 建議 · 未確認」，唔算證據；記分只供畫面，唔入進度、唔觸發特效。

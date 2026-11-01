@@ -1,4 +1,4 @@
-// startup-os Founder Desk：本機伺服器。由 AI 對話打開 Founder Desk（Claude Code /startup-os:desk、Codex $startup-os:desk、Antigravity /desk，即 ask.mjs --desk）或者 AI 出題時自動喺背景起，創辦人唔使理；「開始.cmd」只係技術後備。
+// CrewZero Founder Desk：本機伺服器。由 AI 對話打開 Founder Desk（Claude Code /crewzero:desk、Codex $crewzero:desk、Antigravity /desk，即 ask.mjs --desk）或者 AI 出題時自動喺背景起，創辦人唔使理；「開始.cmd」只係技術後備。
 // 只聽 127.0.0.1；只接受本頁送出嘅回覆（公司概覽、問題包），寫入 data/founder/replies/；收到即排隊叫外殼（run.mjs）。
 // 伺服器唔直接開 AI；AI 一律由外殼（run.mjs、certify.mjs）按已認證嘅 AI 工具設定開。AI 寫唔到 founder 資料夾，所以叫唔醒自己。
 // 裝置通行證（設計 2026-10-31 第 3 節）：所有讀公司資料同寫入嘅路由都要「通行證」cookie（HttpOnly、SameSite=Strict）；
@@ -46,7 +46,7 @@ function samePhysicalPath(a, b) {
 const suppliedData = process.env.SOS_DATA ? path.resolve(process.env.SOS_DATA) : '';
 const suppliedVsDefault = () => samePhysicalPath(suppliedData, DEFAULT_DATA);
 const suppliedIsDefault = suppliedData ? suppliedVsDefault() : null;
-if (process.env.SOS_SIM === '1' && (!suppliedData || suppliedIsDefault !== false)) { console.log('[startup-os] 模擬實例一定要用可確認、獨立嘅資料夾，已停止'); process.exit(1); }
+if (process.env.SOS_SIM === '1' && (!suppliedData || suppliedIsDefault !== false)) { console.log('[CrewZero] 模擬實例一定要用可確認、獨立嘅資料夾，已停止'); process.exit(1); }
 const DIR = dataDirs(ROOT);
 // 預設由 4380 開始；撞埠就自動試下一個（最多十個），創辦人唔使理
 const argPort = process.argv.indexOf('--port');
@@ -67,7 +67,7 @@ const INSTANCE = `${process.pid}-${Date.now()}`;
 const TEST_INSTANCE = SIM || (!!suppliedData && suppliedIsDefault === false);
 
 /* ---------- 裝置通行證：只存雜湊 ----------
-   正實例存喺用戶設定資料夾（Windows %LOCALAPPDATA%\startup-os\<rootId>\passes.json；macOS／Linux ~/.config/startup-os/<rootId>/passes.json），
+   正實例存喺用戶設定資料夾（Windows %LOCALAPPDATA%\startup-os\<rootId>\passes.json；macOS／Linux ~/.config/startup-os/<rootId>/passes.json；改名後位置不變，唔使重新配對），
    唔喺 data/ 入面；模擬／示範／測試實例存喺自己嘅 founder/desk/passes.json（唔污染用戶設定資料夾）。整個檔只有 SHA-256 雜湊、名稱同日期，
    讀得到硬碟嘅 AI 讀到都偽造唔到；通行證本身只喺創辦人瀏覽器嘅 HttpOnly cookie。30 日到期；系統設定頁可以撤銷。 */
 // cookie 名帶資料夾識別碼：瀏覽器嘅 cookie 唔分埠，正實例、示範、模擬同時開都唔會互相蓋過對方嘅通行證
@@ -240,7 +240,7 @@ const KINDS = ['proofread', 'ask-answer'];
 
 const pad = n => String(n).padStart(2, '0');
 const fileStamp = (d = clockNow()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-const say = msg => console.log(`[startup-os ${new Date().toTimeString().slice(0, 8)}] ${msg}`);
+const say = msg => console.log(`[CrewZero ${new Date().toTimeString().slice(0, 8)}] ${msg}`);
 
 /* ---------- AI 工具有冇裝 ---------- */
 function onPath(cmd) {
@@ -853,7 +853,7 @@ const handler = async (req, res) => {
       if (dashTab === 'overview' && req.method === 'GET' && passOf(req)) lastSeenPrev = touchLastSeen(DIR, SERVER_VERSION);
       return send(res, 200, fs.readFileSync(path.join(ROOT, 'dashboard.html')), TYPES['.html']);
     }
-    // 陶土 AI 團隊圖（品牌角色規格）：只送 assets/ 入面 clay-*.webp，冇就 404
+    // 品牌角色 AI 團隊圖（品牌角色規格）：只送 assets/ 入面 clay-*.webp，冇就 404
     const am = /^\/assets\/(clay-[a-z0-9-]+\.webp)$/.exec(p);
     if ((req.method === 'GET' || req.method === 'HEAD') && am) {
       const f = path.join(ROOT, 'assets', am[1]);

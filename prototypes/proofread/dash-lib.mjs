@@ -1,4 +1,4 @@
-// startup-os 營運監察台：畫面資料（唯一計算處）。伺服器 GET /api/dashboard 回傳呢個函數嘅結果，頁面只負責畫。
+// CrewZero 營運監察台：畫面資料（唯一計算處）。伺服器 GET /api/dashboard 回傳呢個函數嘅結果，頁面只負責畫。
 // 兩個來源合併，頁面唔分「示範」定「真實」：
 //   (a) ledger/state.json（帳本；有就用，欄位逐項合併，冇嘅欄位當空）
 //   (b) 原型現有檔：company/page.json（公司概覽）、ledger/confirmed.json（成頁確認）、asks/（問題包）、ledger/status.json（AI 工作）、adapter-cert.json（AI 設定）

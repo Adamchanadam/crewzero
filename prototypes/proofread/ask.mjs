@@ -1,4 +1,4 @@
-// startup-os 問題包入口（唔綁定 AI）：將一個問題包放上 Founder Desk，開頁面畀創辦人答。
+// CrewZero 問題包入口（唔綁定 AI）：將一個問題包放上 Founder Desk，開頁面畀創辦人答。
 // 用法：node ask.mjs --desk              打開 Founder Desk（冇開就喺背景開，唔使任何視窗）
 //       node ask.mjs --dashboard         打開營運監察台（同一個伺服器）；加 --demo 開虛構示範（加 --reset-demo 重建）
 //       node ask.mjs --dashboard --brain <資料夾>   生意大腦讀取一個試驗資料夾（只讀）；--brain off 取消

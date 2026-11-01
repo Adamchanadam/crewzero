@@ -1,4 +1,4 @@
-// startup-os Founder Desk：所有畫面名稱嘅唯一定義。改名只改呢度；頁面、外殼（run.mjs）同測試都由呢度讀。
+// CrewZero Founder Desk：所有畫面名稱嘅唯一定義。改名只改呢度；頁面、外殼（run.mjs）同測試都由呢度讀。
 // 規則：名稱（頁名、分頁、標題、按鈕、標記、欄名、步驟名）一律書面語，唔可以有口語字（COLLOQUIAL）；
 // 說明句可以白話。公司概覽嘅欄名由格式（資料嘅 plan 欄）決定，唔用 AI 寫入資料嘅 label。
 (function (g) {
@@ -248,12 +248,12 @@
     currentAI: '目前使用',
     hostNotLoggedIn: '已安裝但尚未登入：請先在此工具登入，再進行認證。',
     // 重新打開頁面嘅指示（工具中性：三種 AI 工具各自嘅叫法；三頁共用，唔喺頁面寫死）
-    reopenDesk: '請在 AI 對話輸入 /startup-os:desk（Claude Code）、$startup-os:desk（Codex）或 /desk（Antigravity），或對 AI 說「打開 Founder Desk」',
-    reopenDashboard: '請在 AI 對話輸入 /startup-os:dashboard（Claude Code）、$startup-os:dashboard（Codex）或 /dashboard（Antigravity），或要求 AI「打開營運監察台」',
+    reopenDesk: '請在 AI 對話輸入 /crewzero:desk（Claude Code）、$crewzero:desk（Codex）或 /desk（Antigravity），或對 AI 說「打開 Founder Desk」',
+    reopenDashboard: '請在 AI 對話輸入 /crewzero:dashboard（Claude Code）、$crewzero:dashboard（Codex）或 /dashboard（Antigravity），或要求 AI「打開營運監察台」',
     // 裝置通行證（設計 2026-10-31 第 3 節）：未配對嘅瀏覽器讀回收到 403 就全頁顯示；系統設定頁列出已配對裝置
     noPassTitle: '此瀏覽器未與 Founder Desk 配對',
-    noPassDesk: '請在 AI 對話輸入 /startup-os:desk（Claude Code）、$startup-os:desk（Codex）或 /desk（Antigravity），系統會重新打開已配對的頁面。',
-    noPassDashboard: '請在 AI 對話輸入 /startup-os:dashboard（Claude Code）、$startup-os:dashboard（Codex）或 /dashboard（Antigravity），系統會重新打開已配對的頁面。',
+    noPassDesk: '請在 AI 對話輸入 /crewzero:desk（Claude Code）、$crewzero:desk（Codex）或 /desk（Antigravity），系統會重新打開已配對的頁面。',
+    noPassDashboard: '請在 AI 對話輸入 /crewzero:dashboard（Claude Code）、$crewzero:dashboard（Codex）或 /dashboard（Antigravity），系統會重新打開已配對的頁面。',
     noPassWhy: '只有你自己配對過的瀏覽器才可以查看公司資料及作出決定；AI 工具不會取得通行證。配對不需輸入任何密碼，30 日後會自動再配對一次。',
     devices: '已配對的瀏覽器與手機',
     devicesNone: '尚未有已配對的裝置。',
@@ -428,7 +428,7 @@
     // 九個分頁其中七個（另外兩個係 ui.pending、ui.company）
     overview: '公司現況', path: '業務路徑', inputs: '輸入', team: '團隊', log: '紀錄', system: '系統',
     // 一個殼、三組導航（決定二十五）；工具列
-    shell: 'startup-os', navDo: '你要做', navRun: '公司運作', navRef: '參考', metricsL: '業務指標',
+    shell: 'CrewZero', navDo: '你要做', navRun: '公司運作', navRef: '參考', metricsL: '業務指標',
     noQuarter: '未有里程碑', noPendingShort: '沒有待決事項', repliesWaiting: '你的回覆 {k} · 等 AI 套用',
     refreshNow: '立即讀回', fxOn: '特效 開', fxOff: '特效 關', readNow: '已讀回', readAgo: '讀回 {n} 秒前', reducedNote: '系統已設定減少動態；頁面保留靜態閱讀',
     logDecisions: '決定', logAll: '全部事件', logWork: '全部工作', setupInSystem: 'AI 工具設定', setupInSystemHint: '選擇 AI 工具並完成認證；未設定時 AI 團隊不會開始工作。',
@@ -493,7 +493,7 @@
     // 生意大腦（分頁同六項）
     brain: '生意大腦',
     brain_checkup: '生意體檢', brain_wargame: '紅藍對打', brain_scenario: '情景演練', brain_opportunities: '商機掃描', brain_routes: '路線推演', brain_pipeline: '客戶推進追蹤',
-    // 運作環陶土 AI 團隊提示（滑鼠停留時顯示）
+    // 運作環品牌角色 AI 團隊提示（滑鼠停留時顯示）
     clayDoor: '通往公司以外的門：對外行動由你決定，AI 不會自行發送。', clayDoorPending: '門前有待你決定的事項。',
     clayLead_working: 'AI 統籌正在工作枱上處理。', clayLead_salute: 'AI 已準備好，等你指示。', clayLead_sitting: 'AI 已暫停，在工作枱邊等候你的輸入。', clayLead_standing: 'AI 在工作枱邊待命，沒有工作進行中。',
     clayMember: 'AI 團隊成員：一項正在進行的工作。', clayMemberOf: 'AI 團隊成員：正在做{item}。',

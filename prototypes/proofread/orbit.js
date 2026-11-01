@@ -48,7 +48,7 @@
   // 閒置時統籌成員有生命嘅小訊號：每 8–12 秒偶然縮一縮身（真工作時唔做，由工作動作取代）
   function scheduleLife() { clearTimeout(S.lifeT); S.lifeT = setTimeout(function () { if (!S) return; var le = S.core && S.core.querySelector('.o-lead'); if (le && le.dataset.pose !== 'working' && !le.classList.contains('swap')) flash(le, 'settle', 420); scheduleLife(); }, 8000 + Math.random() * 4000); }
 
-  // 陶土 AI 團隊圖（品牌角色規格）：讀唔到（例如離線快照）就收埋
+  // 品牌角色 AI 團隊圖（品牌角色規格）：讀唔到（例如離線快照）就收埋
   function clay(name, cls) { var i = el('img', cls); i.src = '/assets/clay-orbit-' + name + '.webp'; i.alt = ''; i.setAttribute('aria-hidden', 'true'); i.addEventListener('error', function () { i.remove(); }); return i; }
   // 統籌成員姿勢（運作環同手機清單共用）：有真實工作＝工作；冇工作有待決＝敬禮；自動停＝坐低；其餘＝企定
   function poseOf(d) { var work = ((d.meta && d.meta.workLevel) || 0) > 0; return work ? 'working' : d.counts && d.counts.pending > 0 && d.connected !== false ? 'salute' : d.autoStopped ? 'sitting' : 'standing'; }

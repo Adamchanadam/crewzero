@@ -1,4 +1,4 @@
-# startup-os 原型回歸測試
+# CrewZero 原型回歸測試
 
 一條命令跑全套。所有測試都用隔離資料夾同假 AI（零費用），唔會讀寫原型嘅 `data/`，亦唔會對外發送任何嘢。
 
@@ -19,7 +19,7 @@ node tests/prototype/run-all.mjs
 | 參數 | 環境變數 | 預設 | 用途 |
 | --- | --- | --- | --- |
 | `--proto <資料夾>` | `SOS_TEST_PROTO` | `prototypes/proofread` | 要測試嘅原型（例如換入前嘅程式副本） |
-| `--out <資料夾>` | `SOS_TEST_OUT` | 系統暫存資料夾入面 `startup-os-tests/<時間>` | 隔離資料夾、逐項紀錄、`summary.json`；唔可以喺原型資料夾入面 |
+| `--out <資料夾>` | `SOS_TEST_OUT` | 系統暫存資料夾入面 `crewzero-tests/<時間>` | 隔離資料夾、逐項紀錄、`summary.json`；唔可以喺原型資料夾入面 |
 | `--chrome <路徑>` | `SOS_TEST_CHROME` | 自動搵本機 Chrome | 要瀏覽器嘅測試用（無頭模式） |
 | `--port <起始埠>` | `SOS_TEST_PORT` | `4700` | 每項測試佔 10 個埠，自動避開 4318、4380、4381、4398、4402、4470、4471、4650，同埋 Fetch 標準封鎖嘅埠（例如 6000） |
 | `--only <名稱>` | `SOS_TEST_ONLY` | 全部 | 只跑某幾項，逗號分隔，用名稱或者檔名（例如 `--only 每週訪問,rhythm-test`） |

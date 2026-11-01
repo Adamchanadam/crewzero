@@ -1,4 +1,4 @@
-// startup-os 問題包共用工具：外殼（run.mjs）、伺服器（server.mjs）、命令（ask.mjs）都用呢度，規則只寫一次。
+// CrewZero 問題包共用工具：外殼（run.mjs）、伺服器（server.mjs）、命令（ask.mjs）都用呢度，規則只寫一次。
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -90,7 +90,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.33.1';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.34';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

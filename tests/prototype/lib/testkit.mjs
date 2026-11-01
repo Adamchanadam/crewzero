@@ -58,7 +58,7 @@ export async function pair(BASE) {
   const r = await fetch(origin + '/api/pass/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'desk', noOpen: true }) });
   const j = await r.json();
   if (!r.ok || !j.link) throw new Error('測試實例未回傳一次性連結：' + r.status + ' ' + JSON.stringify(j));
-  const x = await fetch(origin + j.link, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36 startup-os-test' } });
+  const x = await fetch(origin + j.link, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36 crewzero-test' } });
   const m = /^(sos_pass_[a-f0-9]{32})=([a-f0-9]{64})/.exec(x.headers.get('set-cookie') || '');
   if (x.status !== 302 || !m) throw new Error('兌換失敗：' + x.status);
   return { name: m[1], value: m[2] };

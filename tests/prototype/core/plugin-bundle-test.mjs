@@ -25,30 +25,30 @@ const AWAY = fs.mkdtempSync(path.join(os.tmpdir(), 'sos-plugin-'));
 let pid = 0;
 try {
   /* (1) program/ 同原型一致 */
-  const PROG = path.join(PLUGIN_SRC, 'startup-os', 'program');
+  const PROG = path.join(PLUGIN_SRC, 'crewzero', 'program');
   const want = rules.programFiles(PROTO);
   const have = fs.existsSync(PROG) ? files(PROG).filter(f => f !== 'MANIFEST.sha256') : [];
   const diff = { missing: want.filter(f => !have.includes(f)), extra: have.filter(f => !want.includes(f)), changed: want.filter(f => have.includes(f) && sha(path.join(PROG, f)) !== sha(path.join(PROTO, f))) };
   ok('插件入面嘅程式（program/）同原型逐檔一致（同一排除清單）；唔一致請重跑 build-plugin.mjs', want.length > 0 && !diff.missing.length && !diff.extra.length && !diff.changed.length, diff);
   const man = fs.existsSync(path.join(PROG, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(PROG, 'MANIFEST.sha256'), 'utf8').trim().split(/\r?\n/).map(l => l.split('  ')) : [];
   ok('MANIFEST.sha256 列齊每個程式檔同正確雜湊', man.length === want.length && man.every(([h, f]) => want.includes(f) && sha(path.join(PROG, f)) === h), man.length + ' vs ' + want.length);
-  const pj = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, 'startup-os', '.claude-plugin', 'plugin.json'), 'utf8')), mk = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, '.claude-plugin', 'marketplace.json'), 'utf8'));
+  const pj = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, 'crewzero', '.claude-plugin', 'plugin.json'), 'utf8')), mk = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, '.claude-plugin', 'marketplace.json'), 'utf8'));
   ok('插件資訊檔同市集檔版本一致', pj.version === mk.version && mk.plugins.every(p => p.version === pj.version), { plugin: pj.version, market: mk.version });
-  const skills = ['install', 'desk', 'dashboard', 'update'].map(s => path.join(PLUGIN_SRC, 'startup-os', 'skills', s, 'SKILL.md'));
+  const skills = ['install', 'desk', 'dashboard', 'update'].map(s => path.join(PLUGIN_SRC, 'crewzero', 'skills', s, 'SKILL.md'));
   ok('四個指令齊（install、desk、dashboard、update）', skills.every(f => fs.existsSync(f)), skills.filter(f => !fs.existsSync(f)));
   const sk = Object.fromEntries(['install', 'desk', 'dashboard', 'update'].map((s, i) => [s, fs.existsSync(skills[i]) ? fs.readFileSync(skills[i], 'utf8') : '']));
   ok('install 技能：安裝前講明會登記觀察資料夾，最後一步用 --desk --observe 登記項目根（唔使創辦人貼路徑）', /觀察資料夾/.test(sk.install) && /--desk --observe "<項目根>"/.test(sk.install));
-  ok('update 技能：寫入前先檢查再停等創辦人答「好」、用 --apply 執行、有「還原上一個版本」、唔手改 data/', /--apply/.test(sk.update) && /還原上一個版本/.test(sk.update) && /--rollback/.test(sk.update) && /好嗎/.test(sk.update) && sk.update.includes('startup-os/data/') && fs.existsSync(path.join(PLUGIN_SRC, 'startup-os', 'program', 'update.mjs')));
+  ok('update 技能：寫入前先檢查再停等創辦人答「好」、用 --apply 執行、有「還原上一個版本」、唔手改 data/', /--apply/.test(sk.update) && /還原上一個版本/.test(sk.update) && /--rollback/.test(sk.update) && /好嗎/.test(sk.update) && sk.update.includes('<安裝>/data/') && fs.existsSync(path.join(PLUGIN_SRC, 'crewzero', 'program', 'update.mjs')));
   ok('desk 技能：問題包草稿寫去系統暫存資料夾、唔寫入項目資料夾，放上之後刪走', /系統暫存資料夾/.test(sk.desk) && /唔好存喺項目資料夾/.test(sk.desk) && /刪走/.test(sk.desk) && !/存喺你而家嘅工作資料夾/.test(sk.desk));
 
   /* (2) 喺原型以外嘅位置用插件附帶嘅程式安裝 */
   const COPY = path.join(AWAY, 'claude-code');
   fs.cpSync(PLUGIN_SRC, COPY, { recursive: true });
   const outside = !path.resolve(COPY).toLowerCase().startsWith(path.resolve(path.join(PROTO, '..', '..')).toLowerCase() + path.sep);
-  ok('插件複製去原型所屬項目以外嘅暫存位置', outside && fs.existsSync(path.join(COPY, 'startup-os', 'program', 'install.mjs')), COPY);
+  ok('插件複製去原型所屬項目以外嘅暫存位置', outside && fs.existsSync(path.join(COPY, 'crewzero', 'program', 'install.mjs')), COPY);
   const PROJ = path.join(AWAY, 'proj'); fs.mkdirSync(PROJ);
-  const r1 = spawnSync(process.execPath, [path.join(COPY, 'startup-os', 'program', 'install.mjs'), PROJ], { encoding: 'utf8', env, cwd: AWAY });
-  const T = path.join(PROJ, 'startup-os');
+  const r1 = spawnSync(process.execPath, [path.join(COPY, 'crewzero', 'program', 'install.mjs'), PROJ], { encoding: 'utf8', env, cwd: AWAY });
+  const T = path.join(PROJ, 'crewzero');
   ok('喺嗰度執行 program/install.mjs <空資料夾>：安裝成功，VERSION 取自插件資訊檔', r1.status === 0 && fs.existsSync(path.join(T, 'ask.mjs')) && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === pj.version && fs.readdirSync(path.join(T, 'data')).length === 0, { status: r1.status, out: r1.stdout, err: r1.stderr });
   const r2 = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env, timeout: 30000, cwd: PROJ });
   const url = (r2.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];

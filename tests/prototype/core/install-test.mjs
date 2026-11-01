@@ -24,12 +24,12 @@ try {
   const before = sha(path.join(PROJ, 'README.md'));
   const protoData = fs.existsSync(path.join(PROTO, 'data')) ? Object.keys(tree(path.join(PROTO, 'data'))).length : -1;
   const r1 = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), PROJ], { encoding: 'utf8', env });
-  const T = path.join(PROJ, 'startup-os');
-  ok('全新空資料夾安裝：結束碼 0，印出已安裝', r1.status === 0 && /已安裝 startup-os/.test(r1.stdout), { status: r1.status, out: r1.stdout, err: r1.stderr });
+  const T = path.join(PROJ, 'crewzero');
+  ok('全新空資料夾安裝：結束碼 0，印出已安裝', r1.status === 0 && /已安裝 CrewZero/.test(r1.stdout), { status: r1.status, out: r1.stdout, err: r1.stderr });
   const must = ['ask.mjs', 'server.mjs', 'run.mjs', 'install.mjs', 'adapters/scheduler/install-schedule.mjs', 'adapters/hosts/claude.json', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd', 'fixtures/example-company-page-full.json'];
   ok('結構：入口、外殼、轉接層、第一星期指引、VERSION、START-HERE.md、排程啟動檔、外殼要讀嘅虛構範本都齊', must.every(f => fs.existsSync(path.join(T, f))), must.filter(f => !fs.existsSync(path.join(T, f))));
   ok('data/ 係空資料夾', fs.statSync(path.join(T, 'data')).isDirectory() && fs.readdirSync(path.join(T, 'data')).length === 0, fs.existsSync(path.join(T, 'data')) && fs.readdirSync(path.join(T, 'data')));
-  const absent = ['demo-data', 'mockups', 'screenshots', 'PROTOTYPE-HANDOFF.md', 'adapters/claude-code/startup-os', 'adapters/claude-code/.claude-plugin', '開始.cmd', 'start-here-template.md'];
+  const absent = ['demo-data', 'mockups', 'screenshots', 'PROTOTYPE-HANDOFF.md', 'adapters/claude-code/crewzero', 'adapters/claude-code/.claude-plugin', '開始.cmd', 'start-here-template.md'];
   ok('排除清單：示範、設計稿、截圖、交接筆記、插件資料夾同市集資訊、開發用啟動檔都冇帶', absent.every(f => !fs.existsSync(path.join(T, f))), absent.filter(f => fs.existsSync(path.join(T, f))));
   const want = rules.programFiles(PROTO, rules.INSTALL_SKIP);
   const got = Object.keys(tree(T)).filter(k => !k.endsWith('/') && !['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh'].includes(k));
@@ -37,10 +37,10 @@ try {
   const ver = rules.pluginVersion(PROTO);
   ok('VERSION 取自插件資訊檔', /^\d+\.\d+\.\d+$/.test(ver) && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === ver, { ver, file: fs.readFileSync(path.join(T, 'VERSION'), 'utf8') });
   const sh = fs.readFileSync(path.join(T, 'START-HERE.md'), 'utf8');
-  ok('START-HERE.md：三個入口指令、data/ 不可手改、沒有本機通知要自己打開、出錯看系統頁、程式更新做法、版本', ['/startup-os:desk', '/startup-os:dashboard', '/startup-os:install', '請勿手改', '沒有本機通知', '系統', '程式更新', ver].every(k => sh.includes(k)) && !/\{version\}|\{date\}/.test(sh), sh.slice(0, 300));
+  ok('START-HERE.md：三個入口指令、data/ 不可手改、沒有本機通知要自己打開、出錯看系統頁、程式更新做法、版本', ['/crewzero:desk', '/crewzero:dashboard', '/crewzero:install', '$crewzero:desk', 'crewzero/data/', '請勿手改', '沒有本機通知', '系統', '程式更新', ver].every(k => sh.includes(k)) && !/\{version\}|\{date\}/.test(sh), sh.slice(0, 300));
   const cmd = fs.readFileSync(path.join(T, 'run-schedule.cmd'), 'utf8');
   ok('排程啟動檔：絕對路徑叫執行環境同同一資料夾嘅 run.mjs，以排程觸發，唔靠環境變數', cmd.includes('"' + process.execPath + '"') && cmd.includes('"' + path.join(T, 'run.mjs') + '"') && cmd.includes('--type auto --trigger schedule') && cmd.includes('cd /d "' + T + '"') && !/SOS_|%[A-Z_]+%/.test(cmd), cmd);
-  ok('項目其他檔冇改', sha(path.join(PROJ, 'README.md')) === before && fs.readdirSync(PROJ).sort().join(',') === 'README.md,startup-os', fs.readdirSync(PROJ));
+  ok('項目其他檔冇改', sha(path.join(PROJ, 'README.md')) === before && fs.readdirSync(PROJ).sort().join(',') === 'README.md,crewzero', fs.readdirSync(PROJ));
 
   /* 再裝一次：拒絕，一個檔都唔改 */
   const snap = tree(T);
@@ -49,11 +49,16 @@ try {
   ok('再裝一次：全部檔案雜湊不變、冇多冇少', JSON.stringify(tree(T)) === JSON.stringify(snap));
   const r3 = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), path.join(OUT, 'no-such-folder')], { encoding: 'utf8', env });
   ok('項目資料夾唔存在：拒絕，唔建任何檔', r3.status === 1 && !fs.existsSync(path.join(OUT, 'no-such-folder')), r3.stdout);
+  /* 改名前裝嘅舊版項目（有 startup-os/）：唔另建 crewzero/，指去更新指令，一個檔都唔改 */
+  const LP = path.join(OUT, 'legacy-proj'), LT = path.join(LP, 'startup-os'); fs.mkdirSync(LT, { recursive: true });
+  fs.writeFileSync(path.join(LT, 'ask.mjs'), '// 舊版\n'); fs.writeFileSync(path.join(LT, 'VERSION'), '0.6.1\n');
+  const lsnap = tree(LP), r5 = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), LP], { encoding: 'utf8', env });
+  ok('舊版 startup-os/ 項目執行安裝：拒絕（結束碼 2）、講沿用舊資料夾並指去更新指令、冇建 crewzero/、一個檔都唔改', r5.status === 2 && /舊版安裝/.test(r5.stdout) && /\/crewzero:update/.test(r5.stdout) && !fs.existsSync(path.join(LP, 'crewzero')) && JSON.stringify(tree(LP)) === JSON.stringify(lsnap), { status: r5.status, out: r5.stdout });
 
   /* 以安裝咗嘅入口開頁：資料寫入新安裝嘅 data/ */
   const r4 = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env, timeout: 30000 });
   const url = (r4.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];
-  ok('node startup-os/ask.mjs --desk：開到 Founder Desk', r4.status === 0 && !!url, { out: r4.stdout, err: r4.stderr });
+  ok('node crewzero/ask.mjs --desk：開到 Founder Desk', r4.status === 0 && !!url, { out: r4.stdout, err: r4.stderr });
   const st = url ? await (await fetch(url + 'api/health')).json() : {};
   pid = Number(st.pid) || 0;
   // 正實例冇測試鉤：測試自己扮已配對嘅瀏覽器（寫雜湊入用戶設定資料夾，完畢即刪）

@@ -17,7 +17,7 @@ const steps = []; let cur = '';
 const step = s => { cur = s; console.log('== ' + s); };
 const ok = (n, p, i) => { steps.push({ step: cur, name: n, pass: !!p, ...(p ? {} : { info: i }) }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + String(JSON.stringify(i)).slice(0, 400))); };
 fs.mkdirSync(OUT, { recursive: true });
-const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'startup-os'), SHOTS = path.join(OUT, 'shots');
+const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), SHOTS = path.join(OUT, 'shots');
 fs.rmSync(PROJ, { recursive: true, force: true }); fs.mkdirSync(PROJ, { recursive: true }); fs.mkdirSync(SHOTS, { recursive: true });
 const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|BEARER|OAUTH/i.test(k) && !/^CLAUDE/i.test(k) && !/^CODEX_THREAD_ID$/i.test(k) && !/^SOS_/.test(k)));
 const SCHED = { SOS_SCHED_CMD: path.join(HERE, '..', 'lib', 'fake-schtasks.mjs'), SOS_SCHED_LOG: path.join(OUT, 'sched-calls.jsonl') };
@@ -45,7 +45,7 @@ try {
   step('1 安裝（插件附帶嘅程式）');
   const r1 = spawnSync(process.execPath, [path.join(PROG, 'install.mjs'), PROJ], { encoding: 'utf8', env: clean });
   ok('安裝成功', r1.status === 0, r1.stdout + r1.stderr);
-  ok('startup-os/ 結構、VERSION、START-HERE.md、run-schedule.cmd 齊；data/ 為空', ['ask.mjs', 'server.mjs', 'run.mjs', 'adapters', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd'].every(f => fs.existsSync(path.join(T, f))) && fs.readdirSync(path.join(T, 'data')).length === 0);
+  ok('crewzero/ 結構、VERSION、START-HERE.md、run-schedule.cmd 齊；data/ 為空', ['ask.mjs', 'server.mjs', 'run.mjs', 'adapters', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd'].every(f => fs.existsSync(path.join(T, f))) && fs.readdirSync(path.join(T, 'data')).length === 0);
   const snap = tree(T), r2 = spawnSync(process.execPath, [path.join(PROG, 'install.mjs'), PROJ], { encoding: 'utf8', env: clean });
   ok('再裝一次被拒，雜湊不變', r2.status === 2 && JSON.stringify(tree(T)) === JSON.stringify(snap), r2.stdout);
 

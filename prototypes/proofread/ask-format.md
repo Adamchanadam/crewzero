@@ -1,6 +1,6 @@
 # 問題包格式（startup-os.ask/0.1）
 
-用途：AI 需要創辦人決定或者提供資料時，唔好喺對話逐題問，而係寫一個「問題包」。創辦人喺 Founder Desk（startup-os 嘅決定頁面）每次只答最重要嘅 3 條，其餘照 AI 建議先咁計住，之後再問。適用於任何階段：業務、產品、推廣、研究、關鍵決定。
+用途：AI 需要創辦人決定或者提供資料時，唔好喺對話逐題問，而係寫一個「問題包」。創辦人喺 Founder Desk（CrewZero 嘅決定頁面）每次只答最重要嘅 3 條，其餘照 AI 建議先咁計住，之後再問。適用於任何階段：業務、產品、推廣、研究、關鍵決定。
 
 公司概覽（AI 按 `company-page-format.md` 擬，外殼核對後放喺資料夾嘅 `company/page.json`）係同一套題目格式嘅特例：多咗「路線」同「細節」兩部分，「要你決定」三條就係佢嘅 `decide.items`。
 
@@ -77,5 +77,5 @@
 
 - **AI 做緊嘢時**：將問題包寫入 `out/ask.json`，外殼核對後會放上 Founder Desk「等你決定」。
 - **任何時候（命令）**：`node ask.mjs <問題包.json>`，會開頁面畀創辦人答。
-- **AI 工具**：插件提供 Founder Desk 入口；Claude Code 可輸入 `/startup-os:desk`、Codex 可輸入 `$startup-os:desk`、Antigravity 可輸入 `/desk`，或者直接說「打開 Founder Desk」。AI 要創辦人決定時亦會用同一個程式出題。
+- **AI 工具**：插件提供 Founder Desk 入口；Claude Code 可輸入 `/crewzero:desk`、Codex 可輸入 `$crewzero:desk`、Antigravity 可輸入 `/desk`，或者直接說「打開 Founder Desk」。AI 要創辦人決定時亦會用同一個程式出題。
 - **打開 Founder Desk（唔出題）**：`node ask.mjs --desk`；冇開就喺背景開，唔使任何視窗。

@@ -1,4 +1,4 @@
-// startup-os 排程（規劃書 3.6、5.2 第 1 點；MVP 規格 2026-10-29 第 2 節第 3 項）：按公司紀錄嘅經營節奏，叫作業系統每日按時執行排程啟動檔。
+// CrewZero 排程（規劃書 3.6、5.2 第 1 點；MVP 規格 2026-10-29 第 2 節第 3 項）：按公司紀錄嘅經營節奏，叫作業系統每日按時執行排程啟動檔。
 // 用法：node install-schedule.mjs                印出排程定義全文（唔登記，等創辦人睇過先批准）
 //       node install-schedule.mjs --register     登記（要創辦人批准）：帶「錯過排定時間後盡快補跑」同執行時限；登記後唯讀讀回下次執行時間，寫 data/ledger/schedule.json
 //       node install-schedule.mjs --status       唯讀讀回：第一行係 JSON（是否已登記、下次、上次執行時間同結果碼），第二行係白話
@@ -23,9 +23,11 @@ const readJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } c
 const state = readJSON(path.join(data, 'ledger', 'state.json')) || {};
 const r = rhythmOf(state);
 const [hh, mm] = r.runTime.split(':');
-// 登記名帶安裝資料夾識別：兩個安裝唔會撞名
-export const taskName = root => 'startup-os-' + crypto.createHash('sha256').update(path.resolve(root).toLowerCase()).digest('hex').slice(0, 8);
-const NAME = taskName(PROTO);
+// 登記名帶安裝資料夾識別：兩個安裝唔會撞名。新登記用 crewzero-<識別>；改名前登記嘅舊名係 startup-os-<識別>：
+// 安裝資料夾仲叫 startup-os/（舊版原位更新），或者登記標記寫住舊名，就沿用舊名，令「排程狀態」「移除排程」「重新登記」都對準同一個排程，唔會變成兩個。
+export const taskName = (root, legacy = false) => (legacy ? 'startup-os-' : 'crewzero-') + crypto.createHash('sha256').update(path.resolve(root).toLowerCase()).digest('hex').slice(0, 8);
+const markNow = readJSON(MARK);
+const NAME = taskName(PROTO, path.basename(PROTO).toLowerCase() === 'startup-os' || !!(markNow && markNow.name === taskName(PROTO, true)));
 const launcher = path.join(PROTO, process.platform === 'win32' || os === 'windows' ? 'run-schedule.cmd' : 'run-schedule.sh');
 const LIMIT = (Number(r.runCapMinutes) || 30) + 15;
 const CADENCE = { daily: '每日', weekdays: '平日（星期一至五）', weekly: '每星期一次' };
@@ -45,7 +47,7 @@ function winScript(op) {
     `$a = New-ScheduledTaskAction -Execute '${q(launcher)}' -WorkingDirectory '${q(PROTO)}'`,
     `$t = ${trig}`,
     `$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes ${LIMIT}) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`,
-    `Register-ScheduledTask -TaskName '${q(NAME)}' -Description 'startup-os daily work' -Action $a -Trigger $t -Settings $s -Force | Out-Null`,
+    `Register-ScheduledTask -TaskName '${q(NAME)}' -Description 'CrewZero daily work' -Action $a -Trigger $t -Settings $s -Force | Out-Null`,
     status].join('; ');
 }
 function runWin(op) {
@@ -83,7 +85,7 @@ if (has('remove')) {
   say(x.ok ? `已移除每日排程（${NAME}）；AI 只會在你提交答案或要求時開始工作。` : `移除時出錯：${x.err || '未知原因'}；標記已刪走。可以自行在「工作排程器」刪除「${NAME}」。`);
   process.exit(x.ok ? 0 : 1);
 }
-if (!fs.existsSync(launcher)) { say(`未有排程啟動檔：${launcher}。請先以安裝命令安裝 startup-os。`); process.exit(1); }
+if (!fs.existsSync(launcher)) { say(`未有排程啟動檔：${launcher}。請先以安裝命令安裝 CrewZero。`); process.exit(1); }
 if (has('register')) {
   const x = runWin('register');
   if (!x.ok || !x.json || !x.json.registered) {

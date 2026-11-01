@@ -2,9 +2,9 @@
 // 核對：已是最新冇改動；未安裝指去安裝；AI 工作進行中拒絕；檢查唔寫；更新後 data/ 逐檔雜湊不變、程式檔同清單一致、VERSION 新、
 // 有備份、排程啟動檔路徑有效、舊版開緊嘅伺服器被關閉、新版伺服器開到並讀到公司資料；中途失敗由備份完整還原；還原上一個版本；
 // 創辦人自己放入嘅檔（data/ 以外）更新同還原都唔會刪；新版已冇嘅舊程式檔（舊清單列明）會刪。假 AI、零費用。
-// 舊版來源：環境變數 SOS_TEST_OLD 指向舊版插件資料夾（入面有 .claude-plugin/ 同 program/，例如 0.30 備份嘅 adapters/claude-code/startup-os）；
+// 舊版來源：環境變數 SOS_TEST_OLD 指向舊版插件資料夾（入面有 .claude-plugin/ 同 program/，例如 0.30 備份嘅 adapters/claude-code/startup-os；改名後係 adapters/claude-code/crewzero）；
 // 冇就由原型自己合成一個「舊版」（版本號改細、一個程式檔改咗）。兩種都只讀來源，唔寫入。
-// 更新命令由插件附帶嘅 program/update.mjs 執行（將原型嘅 adapters/claude-code/startup-os 複製去輸出資料夾，同真實安裝一樣由 program/ 行；旁邊有 MANIFEST.sha256）；program/ 要同原型同步（插件打包測試另外核對）。
+// 更新命令由插件附帶嘅 program/update.mjs 執行（將原型嘅 adapters/claude-code/crewzero 複製去輸出資料夾，同真實安裝一樣由 program/ 行；旁邊有 MANIFEST.sha256）；program/ 要同原型同步（插件打包測試另外核對）。
 // 用法：node update-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +28,7 @@ const run = (script, args, extra = {}) => spawnSync(process.execPath, [script, .
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
 // 插件附帶嘅程式：複製去輸出資料夾，由嗰度嘅 program/update.mjs 行（同真實安裝一樣）；program/ 唔同步就用原型嘅 update.mjs 並記一項失敗
 const PLUG = path.join(OUT, 'plugin-copy');
-fs.cpSync(path.join(PROTO, 'adapters', 'claude-code', 'startup-os'), PLUG, { recursive: true });
+fs.cpSync(path.join(PROTO, 'adapters', 'claude-code', 'crewzero'), PLUG, { recursive: true });
 const PROG = path.join(PLUG, 'program');
 let UPDATE = path.join(PROG, 'update.mjs');
 const pids = [];
@@ -50,6 +50,8 @@ try {
   fs.writeFileSync(path.join(OLDP, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'startup-os', version: '0.3.0' }));
   const PROJ = path.join(OUT, 'proj'); fs.mkdirSync(PROJ);
   const r0 = run(path.join(OLDP, 'program', 'install.mjs'), [PROJ]);
+  // 舊版項目嘅安裝資料夾係改名前嘅 startup-os/：由原型合成嘅舊版會裝成 crewzero/，就改名做 startup-os/ 扮改名前嘅項目；之後所有更新、還原都要喺 startup-os/ 原位做
+  if (!fs.existsSync(path.join(PROJ, 'startup-os')) && fs.existsSync(path.join(PROJ, 'crewzero'))) fs.renameSync(path.join(PROJ, 'crewzero'), path.join(PROJ, 'startup-os'));
   const T = path.join(PROJ, 'startup-os'), DATA = path.join(T, 'data');
   ok(`舊版安裝（${oldSource}）：VERSION 0.3.0、有 MANIFEST.sha256`, r0.status === 0 && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === '0.3.0' && fs.existsSync(path.join(T, 'MANIFEST.sha256')), { status: r0.status, out: r0.stdout, err: r0.stderr });
   const fx = oldInstall(DATA, PROTO);
@@ -71,7 +73,8 @@ try {
   /* 已是最新：由原型全新安裝再更新，一個檔都唔改 */
   const PROJ2 = path.join(OUT, 'proj-new'); fs.mkdirSync(PROJ2);
   run(path.join(PROTO, 'install.mjs'), [PROJ2]);
-  const T2 = path.join(PROJ2, 'startup-os'), snap2 = tree(T2);
+  const T2 = path.join(PROJ2, 'crewzero'), snap2 = tree(T2);
+  ok('新項目安裝成 crewzero/（冇 startup-os/）', fs.existsSync(path.join(T2, 'ask.mjs')) && !fs.existsSync(path.join(PROJ2, 'startup-os')), fs.readdirSync(PROJ2));
   const u1 = run(UPDATE, [PROJ2]), u2 = run(UPDATE, [PROJ2, '--apply']);
   ok('已是最新：檢查同 --apply 都結束碼 0、講已是最新、一個檔都唔改', u1.status === 0 && u2.status === 0 && /已是最新/.test(u1.stdout) && /已是最新/.test(u2.stdout) && same(tree(T2), snap2), { u1: u1.stdout, u2: u2.stdout, err: u1.stderr });
   fs.writeFileSync(path.join(T2, 'VERSION'), '9.9.9\n');
@@ -79,9 +82,9 @@ try {
   ok('已安裝版本比插件新：拒絕（結束碼 1），唔改成舊版', u3.status === 1 && /比插件的版本/.test(u3.stdout) && fs.readFileSync(path.join(T2, 'VERSION'), 'utf8').trim() === '9.9.9' && same(Object.fromEntries(Object.entries(tree(T2)).filter(([k]) => k !== 'VERSION')), Object.fromEntries(Object.entries(snap2).filter(([k]) => k !== 'VERSION'))), u3.stdout);
   const EMPTY = path.join(OUT, 'empty'); fs.mkdirSync(EMPTY);
   const u4 = run(UPDATE, [EMPTY, '--apply']);
-  ok('未安裝：結束碼 2，指去 /startup-os:install，唔建任何檔', u4.status === 2 && /startup-os:install/.test(u4.stdout) && !fs.readdirSync(EMPTY).length, u4.stdout);
+  ok('未安裝：結束碼 2，指去 /crewzero:install，唔建任何檔', u4.status === 2 && /crewzero:install/.test(u4.stdout) && !fs.readdirSync(EMPTY).length, u4.stdout);
   const i2 = run(path.join(PROTO, 'install.mjs'), [PROJ]);
-  ok('舊版上再執行安裝命令：拒絕（結束碼 2）並指去 /startup-os:update，一個檔都唔改', i2.status === 2 && /已安裝/.test(i2.stdout) && /startup-os:update/.test(i2.stdout) && same(tree(T), before), i2.stdout);
+  ok('舊版 startup-os/ 上再執行安裝命令：拒絕（結束碼 2）並指去 /crewzero:update，冇另建 crewzero/，一個檔都唔改', i2.status === 2 && /已有舊版安裝/.test(i2.stdout) && /crewzero:update/.test(i2.stdout) && !fs.existsSync(path.join(PROJ, 'crewzero')) && same(tree(T), before), i2.stdout);
 
   /* AI 工作進行中：run.mjs 嘅鎖存在就拒絕 */
   const LOCK = path.join(DATA, 'ledger', '.lock');
@@ -116,7 +119,7 @@ try {
   const c2 = run(UPDATE, [PROJ]);
   ok('檢查時講明 Founder Desk 開着、更新後會關閉', c2.status === 3 && /Founder Desk 目前開着/.test(c2.stdout), c2.stdout);
   const a1 = run(UPDATE, [PROJ, '--apply']);
-  ok(`更新：結束碼 0、講版本 0.3.0 → ${newVersion}、備份位置、data/ 沒有改動、已關閉舊版 Founder Desk`, a1.status === 0 && new RegExp(`已更新 startup-os：版本 0\\.3\\.0 → ${newVersion.replace(/\./g, '\\.')}`).test(a1.stdout) && /\.backup-0\.3\.0/.test(a1.stdout) && /沒有改動/.test(a1.stdout) && /已關閉開着的 Founder Desk/.test(a1.stdout), { status: a1.status, out: a1.stdout, err: a1.stderr });
+  ok(`更新：結束碼 0、講版本 0.3.0 → ${newVersion}、備份位置、data/ 沒有改動、已關閉舊版 Founder Desk`, a1.status === 0 && new RegExp(`已更新 CrewZero：版本 0\\.3\\.0 → ${newVersion.replace(/\./g, '\\.')}`).test(a1.stdout) && /\.backup-0\.3\.0/.test(a1.stdout) && /沒有改動/.test(a1.stdout) && /已關閉開着的 Founder Desk/.test(a1.stdout), { status: a1.status, out: a1.stdout, err: a1.stderr });
   await sleep(500);
   ok('舊版伺服器已經唔再運行', !alive(oldPid), oldPid);
   ok('更新後 data/ 逐檔雜湊不變（連資料夾都冇多冇少）、冇留低鎖', same(tree(DATA), dataPre) && !fs.existsSync(LOCK), { changed: Object.keys(dataPre).filter(k => tree(DATA)[k] !== dataPre[k]), extra: Object.keys(tree(DATA)).filter(k => !(k in dataPre)) });
@@ -131,7 +134,7 @@ try {
   const cmd = fs.readFileSync(path.join(T, 'run-schedule.cmd'), 'utf8');
   ok('排程啟動檔重新生成：絕對路徑指住存在嘅執行環境同同一資料夾嘅 run.mjs', cmd.includes('"' + process.execPath + '"') && cmd.includes('"' + path.join(T, 'run.mjs') + '"') && fs.existsSync(process.execPath) && fs.existsSync(path.join(T, 'run.mjs')) && cmd.includes('cd /d "' + T + '"'), cmd);
   const sh = fs.readFileSync(path.join(T, 'START-HERE.md'), 'utf8');
-  ok('START-HERE.md 重新生成：新版本號、有更新指令同還原方法', sh.includes(newVersion) && sh.includes('/startup-os:update') && sh.includes('還原上一個版本') && !/\{version\}|\{date\}/.test(sh), sh.slice(0, 200));
+  ok('START-HERE.md 重新生成：新版本號、有更新指令同還原方法、資料夾名係原位嘅 startup-os/', sh.includes(newVersion) && sh.includes('/crewzero:update') && sh.includes('`startup-os/data/`') && !sh.includes('{dir}') && sh.includes('還原上一個版本') && !/\{version\}|\{date\}/.test(sh), sh.slice(0, 200));
   ok('項目根冇暫存資料夾', fs.readdirSync(PROJ).join(',') === 'startup-os', fs.readdirSync(PROJ));
 
   /* 新版伺服器開到、讀到舊格式嘅公司資料 */
@@ -151,7 +154,7 @@ try {
   ok('還原檢查：結束碼 3、一句「將把 … 還原到版本 0.3.0 … 不會改動 data」、冇寫任何嘢', rb1.status === 3 && /將把 .* 還原到版本 0\.3\.0.*不會改動 .*data/.test(rb1.stdout) && same(tree(T, ['.backup-']), afterUpdate), rb1.stdout);
   const rb2 = run(UPDATE, [PROJ, '--rollback', '--apply']);
   await sleep(500);
-  ok('還原：結束碼 0、講已還原到 0.3.0、data/ 沒有改動、關閉咗開着嘅新版伺服器', rb2.status === 0 && /已還原 startup-os 到版本 0\.3\.0/.test(rb2.stdout) && /沒有改動/.test(rb2.stdout) && !alive(newPid), { status: rb2.status, out: rb2.stdout, err: rb2.stderr });
+  ok('還原：結束碼 0、講已還原到 0.3.0、data/ 沒有改動、關閉咗開着嘅新版伺服器', rb2.status === 0 && /已還原 CrewZero 到版本 0\.3\.0/.test(rb2.stdout) && /沒有改動/.test(rb2.stdout) && !alive(newPid), { status: rb2.status, out: rb2.stdout, err: rb2.stderr });
   const restored = tree(T, ['.backup-', 'data']);
   const beforeNoData = Object.fromEntries(Object.entries(before).filter(([k]) => !k.startsWith('data/') && k !== 'data/'));
   ok('還原後 data/ 以外逐檔同更新前一模一樣（VERSION 0.3.0、舊程式檔返返嚟、創辦人嘅檔仍在、新版新增嘅檔已刪）', same(restored, beforeNoData), { extra: Object.keys(restored).filter(k => !(k in beforeNoData)).slice(0, 5), missing: Object.keys(beforeNoData).filter(k => !(k in restored)).slice(0, 5), changed: Object.keys(beforeNoData).filter(k => k in restored && restored[k] !== beforeNoData[k]).slice(0, 5) });

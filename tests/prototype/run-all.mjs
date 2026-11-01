@@ -1,4 +1,4 @@
-// startup-os 原型回歸測試：一條命令跑全套（隔離資料夾、假 AI、零費用；唔掂原型嘅 data/）。
+// CrewZero 原型回歸測試：一條命令跑全套（隔離資料夾、假 AI、零費用；唔掂原型嘅 data/）。
 // 用法：node tests/prototype/run-all.mjs [--proto <原型資料夾>] [--out <輸出資料夾>] [--chrome <Chrome 路徑>] [--port <起始埠>] [--only <名稱或檔名，逗號分隔>] [--no-browser]
 // 亦可用環境變數：SOS_TEST_PROTO、SOS_TEST_OUT、SOS_TEST_CHROME、SOS_TEST_PORT。詳情見同一資料夾嘅 README.md。
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ const opt = (k, env) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv
 const pad = n => String(n).padStart(2, '0');
 const now = new Date(), stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 const PROTO = path.resolve(opt('proto', 'SOS_TEST_PROTO') || path.join(HERE, '..', '..', 'prototypes', 'proofread'));
-const OUT = path.resolve(opt('out', 'SOS_TEST_OUT') || path.join(os.tmpdir(), 'startup-os-tests', stamp));
+const OUT = path.resolve(opt('out', 'SOS_TEST_OUT') || path.join(os.tmpdir(), 'crewzero-tests', stamp));
 const PORT = Number(opt('port', 'SOS_TEST_PORT') || 4700);
 const ONLY = (opt('only', 'SOS_TEST_ONLY') || '').split(',').map(s => s.trim()).filter(Boolean);
 const NO_BROWSER = argv.includes('--no-browser');

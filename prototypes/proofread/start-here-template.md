@@ -1,6 +1,6 @@
-# startup-os：由這裏開始
+# CrewZero：由這裏開始
 
-這個資料夾是 startup-os（版本 {version}，{date} 安裝）：AI 團隊與創辦人一起經營這間初創的工具。程式與資料都在這裏，不會改動項目的其他檔案。
+這個資料夾是 CrewZero（版本 {version}，{date} 安裝）：AI 團隊與創辦人一起經營這間初創的工具。程式與資料都在這裏，不會改動項目的其他檔案。
 
 ## 四個入口（在這個項目的 AI 對話輸入）
 
@@ -8,15 +8,15 @@
 
 | 入口 | Claude Code | Codex | Antigravity | 作用 |
 |---|---|---|---|---|
-| Founder Desk | `/startup-os:desk` | `$startup-os:desk` | `/desk` | 待決事項、交資料、公司概覽、決定紀錄。**每日從這裏開始。** |
-| 營運監察台 | `/startup-os:dashboard` | `$startup-os:dashboard` | `/dashboard` | 公司現況、生意大腦、業務路徑、團隊、紀錄、系統。 |
-| 安裝 | `/startup-os:install` | `$startup-os:install` | `/install` | 安裝、重新登記排程或移除排程（在對話輸入「安裝排程」「重新登記排程」「移除排程」亦可）。 |
-| 更新 | `/startup-os:update` | `$startup-os:update` | `/update` | 把程式更新到插件的新版本（更新前會先問你；`data/` 不會改動）。出了問題，在對話輸入「還原上一個版本」。 |
+| Founder Desk | `/crewzero:desk` | `$crewzero:desk` | `/desk` | 待決事項、交資料、公司概覽、決定紀錄。**每日從這裏開始。** |
+| 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` | 公司現況、生意大腦、業務路徑、團隊、紀錄、系統。 |
+| 安裝 | `/crewzero:install` | `$crewzero:install` | `/install` | 安裝、重新登記排程或移除排程（在對話輸入「安裝排程」「重新登記排程」「移除排程」亦可）。 |
+| 更新 | `/crewzero:update` | `$crewzero:update` | `/update` | 把程式更新到插件的新版本（更新前會先問你；`data/` 不會改動）。出了問題，在對話輸入「還原上一個版本」。 |
 
 ## 要知道的事
 
 - **`data/` 由系統寫入，請勿手改**：公司概覽、決定紀錄、問題包、AI 工作紀錄都在這裏。要改內容，請在 Founder Desk 作答或交要求。其他 AI 對話亦不應直接改動 `data/`。
-- **版本控制**：建議把 `startup-os/data/` 排除在版本控制之外（安裝不會改動你的設定檔）。
+- **版本控制**：建議把 `{dir}/data/` 排除在版本控制之外（安裝不會改動你的設定檔）。
 - **沒有本機通知**：AI 按排程工作後不會彈出提示。請每日自己打開 Founder Desk（上表第一行的指令），頁頂的「上次離開之後」會寫明 AI 做了甚麼、有幾多條等你回答。
 - **排程**：安裝時你批准後，電腦每日按時叫 AI 開工（預設每日 21:00）。電腦當時關機或睡眠，會在下次可用時盡快補做。排程狀態在營運監察台「系統」頁。
 - **出錯時**：先看營運監察台「系統」頁——AI 工具設定、排程、最近十次工作的結果與原因都在那裏；AI 工作失敗的，在 Founder Desk 按「重試」。

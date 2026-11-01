@@ -217,11 +217,11 @@ try {
     c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
     await c.go(BASE + '/', 1440, 2500);
     const np = await c.ev(`(()=>{const e=document.getElementById('no-pass');return e?{title:e.querySelector('h2').textContent,text:e.innerText}:null})()`);
-    ok('Founder Desk 冇通行證：全頁顯示「此瀏覽器未與 Founder Desk 配對」同三種工具嘅叫法', np && np.title === N.ui.noPassTitle && /\/startup-os:desk（Claude Code）/.test(np.text) && /\$startup-os:desk（Codex）/.test(np.text) && /\/desk（Antigravity）/.test(np.text) && !/\/pass\//.test(np.text), np);
+    ok('Founder Desk 冇通行證：全頁顯示「此瀏覽器未與 Founder Desk 配對」同三種工具嘅叫法', np && np.title === N.ui.noPassTitle && /\/crewzero:desk（Claude Code）/.test(np.text) && /\$crewzero:desk（Codex）/.test(np.text) && /\/desk（Antigravity）/.test(np.text) && !/\/pass\//.test(np.text), np);
     await shotBoth(c, '403-desk', BASE + '/');
     await c.go(BASE + '/dashboard', 1440, 2500);
     const npd = await c.ev(`(()=>{const e=document.getElementById('no-pass');return e?e.innerText:null})()`);
-    ok('營運監察台冇通行證：指引講 /startup-os:dashboard', npd && /\/startup-os:dashboard（Claude Code）/.test(npd), npd);
+    ok('營運監察台冇通行證：指引講 /crewzero:dashboard', npd && /\/crewzero:dashboard（Claude Code）/.test(npd), npd);
     await c.go(BASE + '/proofread.html', 1440, 2500);
     const npc = await c.ev(`(()=>{return {np:!!document.getElementById('no-pass'),noco:!!document.getElementById('no-company')}})()`);
     ok('公司概覽冇通行證：顯示指引、唔會誤顯示「未有公司概覽」', npc.np && !npc.noco, npc);

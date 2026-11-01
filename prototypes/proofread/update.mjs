@@ -1,6 +1,7 @@
-// startup-os 更新命令：將項目入面已安裝嘅 startup-os/ 程式檔換成插件附帶嘅新版；data/ 一個檔都唔郁。
+// CrewZero 更新命令：將項目入面已安裝嘅程式檔換成插件附帶嘅新版；data/ 一個檔都唔郁。
+// 安裝資料夾：新安裝係 crewzero/；改名前裝嘅舊版係 startup-os/，就喺 startup-os/ 原位更新（唔搬、唔改名，data/ 唔郁）。兩個都有就用 crewzero/。
 // 用法：node update.mjs <項目根>                  檢查（唔寫任何嘢）：已是最新 → 結束碼 0；有新版 → 印一句固定說明，結束碼 3；未安裝 → 2；AI 工作進行中 → 4
-//       node update.mjs <項目根> --apply          更新：新版先放入暫存資料夾核對，舊版備份到 startup-os/.backup-<舊版本>/，再逐檔換入；中途失敗就由備份還原，唔留半套
+//       node update.mjs <項目根> --apply          更新：新版先放入暫存資料夾核對，舊版備份到 <安裝資料夾>/.backup-<舊版本>/，再逐檔換入；中途失敗就由備份還原，唔留半套
 //       node update.mjs <項目根> --rollback       檢查還原（唔寫）：有備份 → 印一句固定說明，結束碼 3；冇 → 1
 //       node update.mjs <項目根> --rollback --apply   還原到最近一次備份嘅版本；data/ 一樣唔郁
 // 版本規則：比較安裝資料夾嘅 VERSION 同插件資訊檔（.claude-plugin/plugin.json）嘅版本號；發佈新版一定要提高插件版本號，否則更新命令會當已是最新。
@@ -11,21 +12,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { programFiles, pluginVersion, INSTALL_SKIP, GENERATED, compareVersions, writeGenerated, manifestOf, parseManifest, sha256 } from './bundle-rules.mjs';
+import { programFiles, pluginVersion, INSTALL_SKIP, GENERATED, compareVersions, writeGenerated, manifestOf, parseManifest, sha256, INSTALL_DIR, findInstall } from './bundle-rules.mjs';
 import { rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, BASE_PORT } from './ask-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const say = s => console.log('[startup-os] ' + s);
+const say = s => console.log('[CrewZero] ' + s);
 // 指令叫法按宿主唔同（同一份插件）：命令本身唔知創辦人用邊種工具，所以三種都印
-const CMD = n => `Claude Code：/startup-os:${n}；Codex：$startup-os:${n}；Antigravity：/${n}`;
+const CMD = n => `Claude Code：/crewzero:${n}；Codex：$crewzero:${n}；Antigravity：/${n}`;
 const argv = process.argv.slice(2), has = k => argv.includes('--' + k);
 const arg = argv.find(a => !a.startsWith('--'));
 if (!arg) { say('用法：node update.mjs <項目根> [--apply] [--rollback]'); process.exit(1); }
 const proj = path.resolve(arg);
 let isDir = false; try { isDir = fs.statSync(proj).isDirectory(); } catch { }
 if (!isDir) { say('找不到項目資料夾：' + proj); process.exit(1); }
-const target = path.join(proj, 'startup-os'), DATA = path.join(target, 'data');
-if (!fs.existsSync(path.join(target, 'ask.mjs'))) { say(`這個項目未安裝 startup-os（${target}）。要安裝請在對話輸入安裝指令（${CMD('install')}）。`); process.exit(2); }
+const target = findInstall(proj), DATA = path.join(target || proj, 'data');
+if (!target) { say(`這個項目未安裝 CrewZero（${path.join(proj, INSTALL_DIR)}）。要安裝請在對話輸入安裝指令（${CMD('install')}）。`); process.exit(2); }
 if (path.resolve(ROOT).toLowerCase().startsWith(path.resolve(target).toLowerCase() + path.sep) || path.resolve(ROOT).toLowerCase() === path.resolve(target).toLowerCase()) { say(`不可以用安裝資料夾自己更新自己；請經插件的更新指令執行（${CMD('update')}）。`); process.exit(1); }
 const APPLY = has('apply'), ROLLBACK = has('rollback');
 const FAIL_AFTER = Number(process.env.SOS_UPDATE_FAIL_AFTER) || 0;
@@ -129,7 +130,7 @@ if (ROLLBACK) {
   finally { release(); }
   if (bad.length) { say(`還原未完成，有 ${bad.length} 個檔與備份不符：${bad.slice(0, 5).join('、')}。備份仍在 ${backup}，請再試一次；${DATA} 沒有改動。`); process.exit(1); }
   closeServers();
-  say(`已還原 startup-os 到版本 ${bVersion}（${bFiles.length} 個檔已逐一核對）。備份資料夾保留在 ${backup}；沒有改動 ${DATA}。`);
+  say(`已還原 CrewZero 到版本 ${bVersion}（${bFiles.length} 個檔已逐一核對）。備份資料夾保留在 ${backup}；沒有改動 ${DATA}。`);
   say(`下一步：打開 Founder Desk（${CMD('desk')}）。`);
   process.exit(0);
 }
@@ -166,6 +167,7 @@ if (!APPLY) {
 
 const release = takeRunLock();
 if (!release) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
+// 暫存資料夾名沿用舊前綴
 const stage = path.join(proj, `.startup-os-updating-${process.pid}`);
 let touched = false, stageFiles = [];
 try {
@@ -205,5 +207,5 @@ try {
 try { fs.rmSync(stage, { recursive: true, force: true }); } catch { }
 release();
 closeServers();
-say(`已更新 startup-os：版本 ${oldLabel} → ${newVersion}（${files.length} 個程式檔已逐一核對${stale.length ? '，刪除了 ' + stale.length + ' 個新版已沒有的舊程式檔' : ''}）。舊版備份在 ${backup}；沒有改動 ${DATA}。`);
+say(`已更新 CrewZero：版本 ${oldLabel} → ${newVersion}（${files.length} 個程式檔已逐一核對${stale.length ? '，刪除了 ' + stale.length + ' 個新版已沒有的舊程式檔' : ''}）。舊版備份在 ${backup}；沒有改動 ${DATA}。`);
 say(`下一步：打開 Founder Desk（${CMD('desk')}）；原有資料照用。若新版有問題，在對話輸入「還原上一個版本」。`);

@@ -25,18 +25,27 @@ const readJ = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catc
 const install = dir => { fs.mkdirSync(dir, { recursive: true }); return spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), dir], { encoding: 'utf8', env }); };
 let srv = null, c = null;
 try {
-  const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'startup-os'), S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
+  const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
   ok('先安裝（全新空資料夾）', install(PROJ).status === 0);
   const sched = (...a) => spawnSync(process.execPath, [S, ...a], { encoding: 'utf8', env, cwd: T });
   const MARK = path.join(T, 'data', 'ledger', 'schedule.json'), CMD = path.join(T, 'run-schedule.cmd');
 
   /* 印定義：唔登記 */
   const p0 = sched();
-  const name = (p0.stdout.match(/startup-os-[0-9a-f]{8}/) || [])[0];
+  const name = (p0.stdout.match(/crewzero-[0-9a-f]{8}/) || [])[0];
   ok('印定義：寫明未登記、每日 21:00、登記名、啟動檔、補跑同命令全文；冇叫排程器、冇標記', p0.status === 0 && /未登記/.test(p0.stdout) && /每日 21:00/.test(p0.stdout) && !!name && p0.stdout.includes(CMD) && /-StartWhenAvailable/.test(p0.stdout) && !calls().length && !fs.existsSync(MARK), p0.stdout.slice(0, 400));
   const P2 = path.join(OUT, 'proj2'); install(P2);
-  const n2 = (spawnSync(process.execPath, [path.join(P2, 'startup-os', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stdout.match(/startup-os-[0-9a-f]{8}/) || [])[0];
+  const n2 = (spawnSync(process.execPath, [path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stdout.match(/crewzero-[0-9a-f]{8}/) || [])[0];
   ok('登記名含安裝資料夾識別：兩個安裝唔撞名', name && n2 && name !== n2, { name, n2 });
+  // 改名前登記嘅排程叫 startup-os-<識別>：安裝資料夾仲叫 startup-os/（舊版原位更新），或者登記標記寫住舊名，就沿用舊名（排程狀態、移除、重新登記都對準同一個）
+  const P3 = path.join(OUT, 'proj3'); install(P3); fs.renameSync(path.join(P3, 'crewzero'), path.join(P3, 'startup-os'));
+  const n3 = spawnSync(process.execPath, [path.join(P3, 'startup-os', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stdout;
+  ok('舊版 startup-os/ 安裝：登記名沿用 startup-os-<識別>', /startup-os-[0-9a-f]{8}/.test(n3) && !/crewzero-[0-9a-f]{8}/.test(n3), n3.slice(0, 300));
+  const P4 = path.join(OUT, 'proj4'); install(P4); const S4 = path.join(P4, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs');
+  const n4 = (spawnSync(process.execPath, [S4], { encoding: 'utf8', env }).stdout.match(/crewzero-([0-9a-f]{8})/) || [])[1];
+  fs.mkdirSync(path.join(P4, 'crewzero', 'data', 'ledger'), { recursive: true }); fs.writeFileSync(path.join(P4, 'crewzero', 'data', 'ledger', 'schedule.json'), JSON.stringify({ name: 'startup-os-' + n4 }));
+  const st4 = spawnSync(process.execPath, [S4, '--status'], { encoding: 'utf8', env: { ...env, SOS_SCHED_LOG: path.join(OUT, 'sched-calls-p4.jsonl') } }).stdout, jt4 = (() => { try { return JSON.parse(st4.split(/\r?\n/)[0]); } catch { return {}; } })();
+  ok('登記標記寫住舊名：排程狀態用返舊名 startup-os-<識別>', !!n4 && jt4.name === 'startup-os-' + n4, st4.slice(0, 300));
 
   /* 伺服器（新安裝自己嘅 data/）：未登記 */
   srv = spawn(process.execPath, [path.join(T, 'server.mjs'), '--port', String(PORT)], { cwd: T, env, stdio: 'ignore' });

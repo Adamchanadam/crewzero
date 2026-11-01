@@ -259,7 +259,7 @@ details.legend-d .blegend{margin-top:6px}
 /* 子頁頁頭 */
 .bhead{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .bhead .bicon{width:40px;height:40px;border-radius:11px}
-/* 陶土 AI 團隊：分頁頁頭成員、冇資料時嘅排列圖 */
+/* 品牌角色 AI 團隊：分頁頁頭成員、冇資料時嘅排列圖 */
 .bhead .bmember{width:64px;height:64px;flex:none;border-radius:14px;object-fit:cover;border:1px solid color-mix(in srgb,var(--ac,#55606f) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac,#55606f) 12%,transparent)}
 .bband{display:block;width:100%;max-width:760px;height:auto;margin:8px 0 6px;border-radius:12px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
 @media (max-width:600px){.bhead .bmember{width:52px;height:52px}}
@@ -652,7 +652,7 @@ body.has-work .st-stage.active:before{content:"";position:absolute;left:-32%;bot
 .o-chip:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
 .o-core{text-align:center;transform:translate(-50%,-50%);z-index:40;width:230px;pointer-events:none}
 .o-engine{position:relative;width:100px;height:92px;margin:0 auto 2px;perspective:500px;animation:ov-float 6s ease-in-out infinite reverse;filter:drop-shadow(0 10px 22px rgba(232,141,79,.13))}
-/* 陶土 AI 團隊（運作環原型）：門口、工作枱、統籌成員、細成員；圖靜止，只跟真實數據換 */
+/* 品牌角色 AI 團隊（運作環原型）：門口、工作枱、統籌成員、細成員；圖靜止，只跟真實數據換 */
 .o-hnode .o-door{position:relative;width:56px;height:56px;border-radius:50%;object-fit:cover;-webkit-mask-image:radial-gradient(circle,#000 58%,transparent 72%);mask-image:radial-gradient(circle,#000 58%,transparent 72%)}
 .o-hnode:has(.o-door) .diamond{display:none}
 .o-engine .o-bench{position:absolute;left:50%;top:48px;width:190px;margin-left:-95px;height:auto;z-index:-1;-webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 32%,#000 60%,transparent 100%);mask-image:radial-gradient(ellipse 60% 55% at 50% 32%,#000 60%,transparent 100%);pointer-events:none}
@@ -664,7 +664,7 @@ body.has-work .st-stage.active:before{content:"";position:absolute;left:-32%;bot
 .o-hnode.lit .o-door{filter:brightness(1.7) saturate(1.2)}
 .o-hnode.lit{box-shadow:0 0 34px rgba(255,193,142,.45),inset 0 0 20px rgba(232,141,79,.1)}
 .o-ghost{position:absolute;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;object-fit:cover;pointer-events:none;z-index:30;transition:transform .36s steps(3),opacity .36s steps(3)}
-/* 陶土公仔動作：真 AI 工作時先郁（定格式一格格跳，跟工作強度變快）；閒置只有統籌成員偶然縮一縮身；暫停動效同減少動態全部唔郁 */
+/* 品牌公仔動作：真 AI 工作時先郁（定格式一格格跳，跟工作強度變快）；閒置只有統籌成員偶然縮一縮身；暫停動效同減少動態全部唔郁 */
 .orbit{--bob:1.2s}
 .orbit[data-level="2"]{--bob:.95s}
 .orbit[data-level="3"]{--bob:.75s}
@@ -773,7 +773,7 @@ canvas.burst{position:fixed;left:0;top:0;z-index:70;pointer-events:none}
 .o-list li span{flex:1;min-width:0}.o-list li small{display:block;color:#9ba6b5;font-size:var(--fs-min)}
 .o-list li em{font-style:normal;font:var(--fs-min) var(--mono);color:#ffc18e;white-space:nowrap}
 .o-list li a{text-decoration:none}
-/* 陶土 AI 團隊（手機清單）：門口、統籌成員姿勢、細成員；唔郁 */
+/* 品牌角色 AI 團隊（手機清單）：門口、統籌成員姿勢、細成員；唔郁 */
 .o-list li.hub.clay{display:grid;grid-template-columns:34px 1fr;align-items:center;column-gap:10px}
 .o-list li.hub.clay > div{display:flex;flex-direction:column;gap:2px;min-width:0}
 .o-list .o-head{width:34px;height:34px;border-radius:9px;object-fit:cover}
@@ -1404,7 +1404,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       h('dt', null, D.ownerL), h('dd', null, t.teammate || D.hostShell),
       t.next ? [h('dt', null, D.nextL), h('dd', null, t.next)] : null));
   }
-  // 手機清單嘅陶土小頭像：同運作環一樣按真實狀態揀圖，公仔唔郁；讀唔到就收埋
+  // 手機清單嘅品牌小頭像：同運作環一樣按真實狀態揀圖，公仔唔郁；讀唔到就收埋
   function clayImg(name, cls) { return h('img', { class: cls || 'o-head', src: '/assets/clay-orbit-' + name + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { if (cls) this.remove(); else this.style.visibility = 'hidden'; } }); }
   function orbitList(od) {
     var w = od.meta, pose = window.ORBIT && ORBIT.poseOf ? ORBIT.poseOf(od) : '';

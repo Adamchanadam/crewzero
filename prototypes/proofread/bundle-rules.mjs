@@ -5,7 +5,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-export const EXCLUDE_PATHS = ['adapters/claude-code/startup-os', 'adapters/claude-code/.claude-plugin'];
+export const EXCLUDE_PATHS = ['adapters/claude-code/crewzero', 'adapters/claude-code/.claude-plugin'];
+
+// 項目入面嘅安裝資料夾：新安裝叫 crewzero/；改名前（startup-os 年代）裝嘅叫 startup-os/，原位沿用，兩個名都要認得。
+export const INSTALL_DIR = 'crewzero', LEGACY_INSTALL_DIR = 'startup-os';
+// 已安裝嘅資料夾（先 crewzero/，再舊版 startup-os/）；mark 係用嚟認安裝嘅檔（預設 ask.mjs；傳 '' 就只要資料夾存在）。冇就回 ''
+export function findInstall(proj, mark = 'ask.mjs') {
+  for (const n of [INSTALL_DIR, LEGACY_INSTALL_DIR]) { const d = path.join(proj, n); if (fs.existsSync(mark ? path.join(d, mark) : d)) return d; }
+  return '';
+}
 export const EXCLUDE_TOP = ['data', 'demo-data', 'mockups', 'screenshots', 'PROTOTYPE-HANDOFF.md', 'node_modules', '.git'];
 // 安裝時另外唔帶嘅開發用檔（安裝後由安裝命令自己生成或者用唔着）
 export const INSTALL_SKIP = ['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', '開始.cmd', 'start-here-template.md'];
@@ -25,9 +33,9 @@ export function programFiles(root, extraSkip = []) {
   return out.sort();
 }
 
-// 版本號：插件資訊檔（喺插件入面行：program/../.claude-plugin；喺原型行：adapters/claude-code/startup-os/.claude-plugin）
+// 版本號：插件資訊檔（喺插件入面行：program/../.claude-plugin；喺原型行：adapters/claude-code/crewzero/.claude-plugin）
 export function pluginVersion(root) {
-  for (const f of [path.join(root, '..', '.claude-plugin', 'plugin.json'), path.join(root, 'adapters', 'claude-code', 'startup-os', '.claude-plugin', 'plugin.json'), path.join(root, 'VERSION')]) {
+  for (const f of [path.join(root, '..', '.claude-plugin', 'plugin.json'), path.join(root, 'adapters', 'claude-code', 'crewzero', '.claude-plugin', 'plugin.json'), path.join(root, 'VERSION')]) {
     try {
       const t = fs.readFileSync(f, 'utf8');
       const v = f.endsWith('.json') ? JSON.parse(t).version : t.trim();
@@ -48,11 +56,11 @@ export function compareVersions(a, b) {
 // 安裝／更新時由命令自己生成嘅檔（唔計入程式檔清單；更新時重新生成，保持同一套絕對路徑）
 export const GENERATED = ['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', 'MANIFEST.sha256'];
 
-// 寫生成檔去 dir（安裝時係臨時資料夾，更新時係暫存資料夾）；target 係最終嘅 startup-os/ 絕對路徑（排程啟動檔要寫入去）
+// 寫生成檔去 dir（安裝時係臨時資料夾，更新時係暫存資料夾）；target 係最終嘅安裝資料夾（crewzero/，或者舊版嘅 startup-os/）絕對路徑（排程啟動檔要寫入去；START-HERE.md 嘅 {dir} 填資料夾名）
 export function writeGenerated(dir, target, root, version) {
   fs.writeFileSync(path.join(dir, 'VERSION'), (version || '0.0.0') + '\n');
   const d = new Date(), date = `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`;
-  fs.writeFileSync(path.join(dir, 'START-HERE.md'), fs.readFileSync(path.join(root, 'start-here-template.md'), 'utf8').replace('{version}', version || '未知').replace('{date}', date));
+  fs.writeFileSync(path.join(dir, 'START-HERE.md'), fs.readFileSync(path.join(root, 'start-here-template.md'), 'utf8').replace('{version}', version || '未知').replace('{date}', date).replaceAll('{dir}', path.basename(target)));
   // 排程啟動檔：絕對路徑叫執行環境同同一資料夾嘅 run.mjs，唔靠環境變數，避開排程器命令長度上限
   const node = process.execPath, run = path.join(target, 'run.mjs');
   fs.writeFileSync(path.join(dir, 'run-schedule.cmd'), ['@echo off', 'chcp 65001 >nul', `cd /d "${target}"`, `"${node}" "${run}" --type auto --trigger schedule`, ''].join('\r\n'));

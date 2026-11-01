@@ -8,11 +8,11 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROTO = path.resolve(HERE, '..', '..');
-const OUT = path.join(HERE, 'startup-os', 'program');
+const OUT = path.join(HERE, 'crewzero', 'program');
 const { programFiles, pluginVersion } = await import(new URL('../../bundle-rules.mjs', import.meta.url).href);
 
 // 生成物：先清走舊嘅 program/（只限呢個資料夾）
-if (path.basename(OUT) !== 'program' || !OUT.startsWith(path.join(HERE, 'startup-os'))) throw new Error('輸出位置不正確');
+if (path.basename(OUT) !== 'program' || !OUT.startsWith(path.join(HERE, 'crewzero'))) throw new Error('輸出位置不正確');
 fs.rmSync(OUT, { recursive: true, force: true });
 const files = programFiles(PROTO);
 const lines = [];
