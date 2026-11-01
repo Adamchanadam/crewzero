@@ -6,7 +6,14 @@
 
 startup-os 由「陶土 AI 團隊」代表：一位統籌成員，按工作分出六位生意大腦成員（生意體檢、紅藍對打、情景演練、商機掃描、路線推演、客戶推進追蹤）。角色、世界觀與用法的唯一定義處是 [`docs/plan/brand-characters-spec.md`](docs/plan/brand-characters-spec.md)。
 
-## 現時版本：0.32（插件 0.5.0，2026-10-30）
+## 現時版本：0.33（插件 0.6.0，2026-11-01）
+
+- **三種 AI 工具共用同一份插件**：Claude Code、Codex、Antigravity 都可以安裝和使用，頁面與資料相同。交 AI 做背景工作前，系統會逐項檢查你電腦上那種工具的安全限制（包括「未配對不能讀寫 Founder Desk」），全部通過才會開工。
+- **用手機開**：在 Founder Desk 按「用手機開」，電腦顯示二維碼，手機掃碼後由電腦接受，就可以在手機答題。手機要與電腦連同一個 Wi-Fi；已配對的手機可以隨時撤銷，關閉手機模式即全部作廢。決定紀錄會顯示每次回覆由電腦還是手機送出。
+- **只有你的瀏覽器讀得到公司資料**：第一次打開 Founder Desk 時，系統經一次性連結替你的瀏覽器配對，不用輸入任何東西；未配對的瀏覽器或程式讀不到、寫不到公司資料。
+- **由 0.32 更新**：先換入新版插件，再輸入更新指令；開着的舊版伺服器會先核對身份才換成新版。
+
+## 0.32（插件 0.5.0，2026-10-30）
 
 新增更新指令 `/startup-os:update`：已安裝的項目可以換成新版程式，而 `startup-os/data/` 入面你的公司資料一個檔都不會改動。
 
@@ -51,7 +58,14 @@ startup-os 由「陶土 AI 團隊」代表：一位統籌成員，按工作分�
    | Antigravity | 在命令列輸入 `git clone https://github.com/Adamchanadam/startup-os`，再 `agy plugin install startup-os/prototypes/proofread/adapters/claude-code/startup-os`（已在用 Claude Code 的話，`agy plugin import claude` 亦可） |
 
 2. 到你項目的 AI 對話輸入安裝指令，答「好」，並批准每日排程。
-3. 之後用 Founder Desk 指令打開 Founder Desk；有新版時先在你的工具換入新版插件，再輸入更新指令。
+3. 之後用 Founder Desk 指令打開 Founder Desk。
+4. 有新版時，先在你的工具換入新版插件，再在項目的 AI 對話輸入更新指令：
+
+   | 工具 | 換入新版插件 |
+   |---|---|
+   | Claude Code | 在命令列輸入 `claude plugin update startup-os`，然後重開 Claude Code |
+   | Codex | 在命令列輸入 `codex plugin marketplace upgrade`，再 `codex plugin add startup-os@startup-os` |
+   | Antigravity | 在之前下載的 startup-os 資料夾執行 `git pull`，再 `agy plugin uninstall startup-os`，然後重新 `agy plugin install startup-os/prototypes/proofread/adapters/claude-code/startup-os` |
 
 | 指令 | Claude Code | Codex | Antigravity |
 |---|---|---|---|
@@ -60,7 +74,7 @@ startup-os 由「陶土 AI 團隊」代表：一位統籌成員，按工作分�
 | 營運監察台 | `/startup-os:dashboard` | `$startup-os:dashboard` | `/dashboard` |
 | 更新 | `/startup-os:update` | `$startup-os:update` | `/update` |
 
-Codex 與 Antigravity 版本目前 AI 工作不上網做研究：生意體檢與商機掃描只用你交的資料，情景演練與紅藍對打暫不提供；Claude Code 版本齊備。
+使用 Codex 或 Antigravity 時，AI 工作不會上網做研究，生意體檢與商機掃描只用你交的資料；情景演練與紅藍對打在 Claude Code 提供。
 
 ## 不在本倉庫的東西
 
