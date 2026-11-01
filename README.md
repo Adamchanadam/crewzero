@@ -48,7 +48,7 @@ startup-os 由「陶土 AI 團隊」代表：一位統籌成員，按工作分�
    |---|---|
    | Claude Code | 在對話輸入 `/plugin marketplace add Adamchanadam/startup-os`，再 `/plugin install startup-os@startup-os` |
    | Codex | 在命令列輸入 `codex plugin marketplace add Adamchanadam/startup-os`，再 `codex plugin add startup-os@startup-os` |
-   | Antigravity | 在命令列輸入 `agy plugin install https://github.com/Adamchanadam/startup-os`（已在用 Claude Code 的話，`agy plugin import claude` 亦可） |
+   | Antigravity | 在命令列輸入 `git clone https://github.com/Adamchanadam/startup-os`，再 `agy plugin install startup-os/prototypes/proofread/adapters/claude-code/startup-os`（已在用 Claude Code 的話，`agy plugin import claude` 亦可） |
 
 2. 到你項目的 AI 對話輸入安裝指令，答「好」，並批准每日排程。
 3. 之後用 Founder Desk 指令打開 Founder Desk；有新版時先在你的工具換入新版插件，再輸入更新指令。

@@ -21,7 +21,7 @@ startup-os 插件入面嘅更新指令（只係轉接層，核心係程式資料
 | 營運監察台 | `/startup-os:dashboard` | `$startup-os:dashboard` | `/dashboard` |
 | 更新 | `/startup-os:update` | `$startup-os:update` | `/update` |
 
-新版插件要先由創辦人喺自己嘅 AI 工具換入（Claude Code 喺命令列 `claude plugin update startup-os`；Codex `codex plugin marketplace upgrade` 再 `codex plugin add startup-os@startup-os`；Antigravity `agy plugin uninstall startup-os` 再重新 `agy plugin install`），之後先輸入更新指令換項目入面嘅程式。換入插件呢步由創辦人做，你唔好代佢執行。
+新版插件要先由創辦人喺自己嘅 AI 工具換入（Claude Code 喺命令列 `claude plugin update startup-os`；Codex `codex plugin marketplace upgrade` 再 `codex plugin add startup-os@startup-os`；Antigravity 喺之前下載嘅 startup-os 資料夾執行 `git pull`，再 `agy plugin uninstall startup-os`，然後重新 `agy plugin install startup-os/prototypes/proofread/adapters/claude-code/startup-os`），之後先輸入更新指令換項目入面嘅程式。換入插件呢步由創辦人做，你唔好代佢執行。
 
 ## 先搵兩個位置
 
