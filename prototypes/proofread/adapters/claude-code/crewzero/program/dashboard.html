@@ -1405,7 +1405,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       t.next ? [h('dt', null, D.nextL), h('dd', null, t.next)] : null));
   }
   // 手機清單嘅品牌小頭像：同運作環一樣按真實狀態揀圖，公仔唔郁；讀唔到就收埋
-  function clayImg(name, cls) { return h('img', { class: cls || 'o-head', src: '/assets/clay-orbit-' + name + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { if (cls) this.remove(); else this.style.visibility = 'hidden'; } }); }
+  function clayImg(name, cls) { return h('img', { class: cls || 'o-head', src: '/assets/crew-orbit-' + name + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { if (cls) this.remove(); else this.style.visibility = 'hidden'; } }); }
   function orbitList(od) {
     var w = od.meta, pose = window.ORBIT && ORBIT.poseOf ? ORBIT.poseOf(od) : '';
     return [h('li', { class: 'hub clay' }, clayImg(od.counts.pending > 0 && od.connected !== false ? 'door' : 'door-empty'), h('div', null, h('b', null, D.humanCore), h('span', null, d('pendingGlobal', { n: od.counts.pending })))),
@@ -2009,7 +2009,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   }
   function pageBrain() {
     var b = V.data.brain;
-    if (!b || !b.source) return [h('section', { class: 'panel block-card' }, h('span', { class: 'eyebrow' }, D.brain), h('img', { class: 'bband', src: '/assets/clay-brain-members.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.remove(); } }), h('div', { class: 't' }, D.brainEmpty),
+    if (!b || !b.source) return [h('section', { class: 'panel block-card' }, h('span', { class: 'eyebrow' }, D.brain), h('img', { class: 'bband', src: '/assets/crew-brain-members.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.remove(); } }), h('div', { class: 't' }, D.brainEmpty),
       h('p', { class: 'small muted' }, b && b.source === null ? '提交資料後，AI 會由生意體檢開始；如欲先查看範例，可要求「打開營運監察台示範」。' : '找不到指定的試驗資料夾，請重新設定。'))];
     if (sub) return ({ checkup: pageCheckup, wargame: pageWargame, scenario: pageScenario, opportunities: pageOpp, routes: pageRoutes, pipeline: pagePipe })[sub](brainItem(sub));
     // 等你處理：先列待決事項入面屬生意大腦嘅問題包（同 Founder Desk 同一份清單），再列冇問題包嘅（例如等你練習）
@@ -2040,7 +2040,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function itemPage(x, body) {
     return [h('section', { class: 'panel item-page bsec', style: acStyle(x.id), id: 'b-' + x.id },
       bnav(),
-      h('div', { class: 'bhead' }, h('img', { class: 'bmember', src: '/assets/clay-orbit-member-' + x.id + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.replaceWith(h('span', { class: 'bicon' }, bicon(x.id))); } }),
+      h('div', { class: 'bhead' }, h('img', { class: 'bmember', src: '/assets/crew-orbit-member-' + x.id + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.replaceWith(h('span', { class: 'bicon' }, bicon(x.id))); } }),
         h('div', null, h('h2', null, h('span', { class: 'no' }, String(x.no)), x.name, bStatus(x.status)), h('div', { class: 'sub' }, (x.updatedAt ? '更新：' + when(x.updatedAt) + ' · ' : '') + (x.summary || ''))),
         h('div', { class: 'r' }, folderBadge(), h('a', { class: 'btn small', href: brainHref() }, D.backBrain))),
       body)];

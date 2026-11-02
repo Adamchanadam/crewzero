@@ -853,8 +853,8 @@ const handler = async (req, res) => {
       if (dashTab === 'overview' && req.method === 'GET' && passOf(req)) lastSeenPrev = touchLastSeen(DIR, SERVER_VERSION);
       return send(res, 200, fs.readFileSync(path.join(ROOT, 'dashboard.html')), TYPES['.html']);
     }
-    // 品牌角色 AI 團隊圖（品牌角色規格）：只送 assets/ 入面 clay-*.webp，冇就 404
-    const am = /^\/assets\/(clay-[a-z0-9-]+\.webp)$/.exec(p);
+    // 品牌角色 AI 團隊圖（品牌角色規格）：只送 assets/ 入面 crew-*.webp，冇就 404
+    const am = /^\/assets\/(crew-[a-z0-9-]+\.webp)$/.exec(p);
     if ((req.method === 'GET' || req.method === 'HEAD') && am) {
       const f = path.join(ROOT, 'assets', am[1]);
       return fs.existsSync(f) ? send(res, 200, fs.readFileSync(f), TYPES['.webp']) : send(res, 404, { error: 'not found' });

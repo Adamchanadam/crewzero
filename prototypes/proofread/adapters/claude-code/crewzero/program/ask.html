@@ -13,7 +13,7 @@
 .layer.accent.ok{border-left-color:var(--mint)}
 /* 品牌角色 AI 團隊場景圖：文字在左、圖在右；靜止、無邊框；手機闊度不顯示（品牌角色規格第 7 節） */
 .with-scene{isolation:isolate;overflow:hidden;min-height:240px;display:flex;flex-direction:column;justify-content:center}
-.scene-bg{position:absolute;top:0;bottom:0;right:0;width:43.5%;z-index:-1;border-radius:0 var(--r-card) var(--r-card) 0;background-repeat:no-repeat;background-size:cover;background-position:center 30%;opacity:.6;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%)}
+.scene-bg{position:absolute;top:0;bottom:0;right:0;width:43.5%;z-index:-1;border-radius:0 var(--r-card) var(--r-card) 0;background-repeat:no-repeat;background-size:cover;background-position:center top;opacity:.6;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%)}
 .layer > .eyebrow + .row{margin-top:4px}
 .hero-meta{font-size:var(--fs-sub);color:var(--muted);margin:0 0 14px}
 .pack-t{font-size:var(--fs-page);font-weight:650;margin:18px 0 0;line-height:1.35}
@@ -276,7 +276,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   // 品牌場景圖：每個指引狀態一張（未交資料會直接轉去交資料頁、日常已收入「第一星期指引」，兩者都唔放圖）；載入失敗（例如離線快照）就靜靜收埋
   var SCENE = { noAI: 'ready', proofread: 'goal', accept: 'handover', firstInterview: 'evidence', empty: 'rhythm', autoStop: 'sitting' };
   function scene(key) {
-    return SCENE[key] ? h('div', { class: 'scene-bg', 'aria-hidden': 'true', style: "background-image:url('/assets/clay-scene-" + SCENE[key] + ".webp')" }) : null;
+    return SCENE[key] ? h('div', { class: 'scene-bg', 'aria-hidden': 'true', style: "background-image:url('/assets/crew-scene-" + SCENE[key] + ".webp')" }) : null;
   }
   function todayCard(home) {
     var c = home && home.card; if (!c) return null;

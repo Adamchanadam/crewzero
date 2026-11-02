@@ -1,10 +1,10 @@
 {
   "name": "crewzero-local",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "CrewZero 原型（本機）",
   "owner": { "name": "Adam Chan" },
   "renames": { "startup-os": "crewzero" },
   "plugins": [
-    { "name": "crewzero", "version": "0.7.0", "source": "./crewzero" }
+    { "name": "crewzero", "version": "0.7.1", "source": "./crewzero" }
   ]
 }
