@@ -281,6 +281,34 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var ai = r && (r.steps || []).filter(function (s) { return s.key === 'ai'; })[0];
     return [h('p', null, (ai && ai.detail) || 'AI 尚未設定，設定完成後將自動繼續。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup))];
   }
+  function runTitle(r, fallback) {
+    var ai = r && (r.steps || []).filter(function (s) { return s.key === 'ai'; })[0];
+    return (ai && ai.label) || (r && r.label) || fallback || N.ui.aiWork;
+  }
+  function failureHelp(r, fallback) {
+    if (!r || !r.repeatFailed) return null;
+    var note = h('span', { class: 'small muted', 'aria-live': 'polite' }), title = runTitle(r, fallback), reason = r.error || N.ui.failNoReason;
+    var button = h('button', { type: 'button', class: 'btn', onclick: function () {
+      if (button.disabled) return;
+      button.disabled = true; note.textContent = N.ui.sending;
+      post('/api/intake', { kind: 'note', type: 'help', text: T('helpCauseText', { t: title, r: reason }), context: { page: 'pending' } })
+        .then(function () { button.textContent = N.ui.helpSent; note.textContent = ''; })
+        .catch(function (e) { button.disabled = false; note.textContent = why(e); });
+    } }, N.ui.helpFindCause);
+    return h('div', { class: 'foot help-cause' }, button, note, h('p', { class: 'small muted' }, N.ui.helpChatFallback));
+  }
+  function staleHelp(t, p, pendingHelp) {
+    if (!t || t.staleDays < 3 || (pendingHelp && pendingHelp[t.id])) return null;
+    var note = h('span', { class: 'small muted', 'aria-live': 'polite' }), title = (p && p.title) || t.text || '';
+    var button = h('button', { type: 'button', class: 'btn link', onclick: function () {
+      if (button.disabled) return;
+      button.disabled = true; note.textContent = N.ui.sending;
+      post('/api/intake', { kind: 'note', type: 'help', text: T('helpStaleText', { t: title }), context: { packId: t.id, packTitle: title } })
+        .then(function () { button.textContent = N.ui.helpAsked; note.textContent = ''; })
+        .catch(function (e) { button.disabled = false; note.textContent = why(e); });
+    } }, N.ui.helpStale);
+    return h('div', { class: 'foot q-help-line' }, button, note);
+  }
 
   /* ---------- 待決事項（Founder Desk 首頁） ---------- */
   function trRow(state, label, sub) {
@@ -310,13 +338,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (sc.runs) parts.push(N.dash.sinceRuns.replace('{n}', sc.runs).replace('{m}', sc.withOutput));
     if (sc.waiting) parts.push(N.dash.sinceWaiting.replace('{k}', sc.waiting));
     if (sc.latest) parts.push(N.dash.sinceLatest.replace('{t}', sc.latest));
-    return h('p', { class: 'since small', id: 'since' }, h('b', null, N.dash.since + '（' + dayOf(sc.at) + ' ' + hm(sc.at) + '）：'), parts.length ? parts.join(' · ') : N.dash.sinceNone);
+    var back = sc.back ? h('div', { class: 'since small', id: 'back-after' }, T('backAfterDays', { n: sc.awayDays, t: sc.back.text }), sc.back.href ? h('a', { class: 'btn small', href: sc.back.href }, sc.back.button || N.ui.goAnswer) : null) : null;
+    return h('div', null, back, h('p', { class: 'since small', id: 'since' }, h('b', null, N.dash.since + '（' + dayOf(sc.at) + ' ' + hm(sc.at) + '）：'), parts.length ? parts.join(' · ') : N.dash.sinceNone));
   }
   function showHub() {
     // 只有頁面第一次載入待決事項先算「打開」（記低時間）；輪詢同返回唔算
     var seen = !V.homeSeen; V.homeSeen = true;
     Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; })]).then(function (r) {
-      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open; }), todo = asks.todo || [], rank = {};
+      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open; }), todo = asks.todo || [], rank = {}, pendingHelp = {};
+      asks.packs.forEach(function (p) { if (p.open && p.helpForPackId) pendingHelp[p.helpForPackId] = true; });
       V.home = home;
       todo.forEach(function (t, i) { rank[t.id] = i; });
       open.sort(function (a, b) { return (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
@@ -330,7 +360,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           h('h2', { class: 'hero-t' }, N.fix(first.title)),
           h('p', { class: 'hero-p' }, '尚有 ' + first.open + '／' + first.total + ' 題未答；每次只需回答最重要的 3 題，其餘暫按 AI 建議處理。'),
           // 首頁冇底部列，主掣要喺手機都見到（hero-act 入面嘅主掣喺手機會收埋）
-          h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/ask/' + first.id }, T('answerN', { n: Math.min(3, first.open) }))))
+          h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/ask/' + first.id }, T('answerN', { n: Math.min(3, first.open) })), staleHelp(firstTodo, first, pendingHelp)))
         // 一屏只放一組角色：「今日要做的事」卡有圖時，空狀態唔放圖
         : (function (art) {
           var body = [h('span', { class: 'eyebrow' }, N.ui.pending), h('h2', { class: 'layer-title' }, N.ui.noPending), h('p', { class: 'guide' }, 'AI 工作中遇到需要你決定的事項，會在此列出。')];
@@ -344,7 +374,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           var p = byId[t.id], when = t.overdueDays ? null : t.due ? N.dash.todoDue.replace('{d}', dayOf(t.due)) : t.waited ? N.dash.waitedDays.replace('{n}', t.waited) : '';
           return h('div', { class: 'row' + (t.overdueDays ? ' overdue' : ''), 'data-todo': t.id, 'data-type': t.type }, h('div', null, h('div', { class: 't' }, h('span', { class: 'ic', 'aria-hidden': 'true' }, N.TODO_ICON[t.type] || '◆'), ' ', N.fix(p ? p.title : t.text)),
             h('div', { class: 'small muted' }, [N.dash['ty_' + t.type] || '', t.milestone, p ? p.open + '／' + p.total + ' ' + N.ui.unanswered : '', when].filter(Boolean).join(' · '), t.overdueDays ? ' ' : null, t.overdueDays ? tag(N.dash.overdueDays.replace('{n}', t.overdueDays), 'eff') : null)),
-            t.kind === 'overview' ? h('a', { class: 'btn primary', href: '/proofread.html' }, N.ui.goConfirm) : t.kind === 'schedule' ? h('a', { class: 'btn primary', href: t.href }, N.ui.schedGoSystem) : h('a', { class: 'btn primary', href: '#/ask/' + t.id }, T('answerN', { n: Math.min(3, p ? p.open : 1) })));
+            h('div', null,
+              t.kind === 'overview' ? h('a', { class: 'btn primary', href: '/proofread.html' }, N.ui.goConfirm) : t.kind === 'schedule' ? h('a', { class: 'btn primary', href: t.href }, N.ui.schedGoSystem) : h('a', { class: 'btn primary', href: '#/ask/' + t.id }, T('answerN', { n: Math.min(3, p ? p.open : 1) })),
+              staleHelp(t, p, pendingHelp)));
         })) : null;
       var companyCard = h('section', { class: 'layer accent' + (c.confirmed ? ' ok' : '') },
         h('span', { class: 'eyebrow' }, N.ui.company),
@@ -454,7 +486,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
-      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }, retryCatch); } }, N.ui.retry)));
+      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }, retryCatch); } }, N.ui.retry)), failureHelp(r, mine.type === 'order' ? N.ui.reqOrder : mine.type === 'event' ? N.ui.reqEvent : N.ui.reqAdhoc));
     if (state === 'done' && r.result && r.result.summary && mine.type === 'event') card.append(h('p', { id: 'req-summary' }, N.fix(r.result.summary)));
     if (state === 'done') card.append(asks.length ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'req-answer', href: '#/ask/' + asks[0].id }, '★ ' + T('answerN', { n: Math.min(3, asks[0].count) })))
       : h('p', null, '已記錄。'));
@@ -825,7 +857,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 
   /* ---------- 答題：每次最多 3 條 ---------- */
   var P = null, A = null, S = null;
-  function cur(q) { return Object.prototype.hasOwnProperty.call(S.edits, q.id) ? S.edits[q.id] : q.value; }
+  function manualQuestion(q) { return !!(P && (P.actionConfirm || (P.acceptance && q.id === 'accept'))); }
+  function requiresFounderAnswer(q) { return !!(q && (q.effect === 'now' || q.conflict || manualQuestion(q))); }
+  function cur(q) {
+    if (manualQuestion(q) && !Object.prototype.hasOwnProperty.call(S.edits, q.id) && !S.ok[q.id]) return '';
+    return Object.prototype.hasOwnProperty.call(S.edits, q.id) ? S.edits[q.id] : q.value;
+  }
   function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
   function touched(q) { return Object.prototype.hasOwnProperty.call(S.edits, q.id) || !!S.ok[q.id]; }
   function setAns(q, v) {
@@ -843,9 +880,11 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   function shown() { return S.extra ? S.batch.concat(S.rest) : S.batch; }
   function stats() { var done = S.batch.filter(touched).length; return { total: S.batch.length, done: done, left: S.batch.length - done }; }
+  function unansweredRequired() { return P.questions.filter(function (q) { return !A[q.id] && requiresFounderAnswer(q) && !touched(q); }); }
   function mainLabel() {
     var st = stats();
     if (!st.total) return N.ui.backPending;
+    if (unansweredRequired().length) return N.ui.oneByOne;
     return st.done === 0 ? N.ui.adoptGo : st.left ? N.ui.adoptRestGo : N.ui.confirmGo;
   }
   // 每週訪問「全部沒有變化」：一次記低所有未答、預填現值或者預設「沒有」嘅題，標明係你確認（唔係 AI 代答）；要你答實事嘅題（日期已過、目標日已過）照留
@@ -872,21 +911,27 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     return out;
   }
   function card(q, i) {
-    var v = cur(q), done = touched(q), kind = q.kind || 'choice';
+    var v = cur(q), done = touched(q), kind = q.kind || 'choice', manual = manualQuestion(q);
     var c = h('div', { class: 'dq' + (done ? ' done' : ''), id: 'q-' + q.id, tabindex: '-1' },
       h('div', { class: 'dq-head' }, h('span', { class: 'dq-n' }, String(i + 1)), h('span', { class: 'dq-q' }, N.fix(q.ask)),
         q.effect === 'now' ? tag(N.ui.nowAfter, 'eff') : null, done ? tag(N.ui.answered, 'qdone') : tag(N.ui.unanswered, 'qn')));
     var body = h('div', { class: 'dq-body' });
     if (q.judge) body.append(h('div', { class: 'why' }, N.fix(q.judge)));
-    body.append(h('div', { class: 'why' }, h('b', null, (q.preset ? N.ui.presetWhy : N.ui.why) + '：'), N.fix(q.why || '')));
-    var opts = (q.options || []).map(function (o) { return { text: o.text, val: o.text, rec: !!o.rec, note: o.note }; });
+    if (!manual && q.why) body.append(h('div', { class: 'why' }, h('b', null, (q.preset ? N.ui.presetWhy : N.ui.why) + '：'), N.fix(q.why)));
+    if (q.risk) body.append(h('div', { class: 'why risk' }, h('b', null, N.ui.riskLabel + '：'), N.fix(q.risk)));
+    if (q.conflict) body.append(h('div', { class: 'why conflict' }, h('b', null, N.ui.conflictLabel + '：'), N.fix(q.conflict)));
+    if (P.acceptance && q.id === 'accept') {
+      var artifact = P.acceptance.artifact;
+      body.append(artifact && typeof artifact.text === 'string' ? h('details', { class: 'art', open: true }, h('summary', null, artifact.title || N.ui.aiOutputs), window.SOS_MD ? SOS_MD(artifact.text) : h('pre', null, artifact.text)) : h('p', { class: 'small muted' }, N.ui.acceptanceMissing));
+    }
+    var opts = P.actionConfirm ? [N.ui.actionDone, N.ui.actionNotDone, N.ui.actionReschedule].map(function (text) { return { text: text, val: text, rec: false }; }) : (q.options || []).map(function (o) { return { text: o.text, val: o.text, rec: !manual && !!o.rec, note: o.note }; });
     function optBtn(o, isCur, onclick) {
       return h('button', { type: 'button', class: 'opt' + (isCur ? ' cur' : ''), 'aria-pressed': isCur ? 'true' : 'false', onclick: onclick },
         h('span', { class: 'dot' }), h('span', null, o.text, o.rec ? h('span', { class: 'badge-ai' }, q.preset ? N.ui.presetTag : N.ui.aiRec) : null, o.note ? h('span', { class: 'o-note' }, o.note) : null));
     }
     if (kind === 'multi') {
       var arr = Array.isArray(v) ? v : [];
-      body.append(h('div', { class: 'why' }, N.ui.aiRec + '：' + showAns(q, q.value) + '（可選擇多項）'));
+      if (!manual) body.append(h('div', { class: 'why' }, N.ui.aiRec + '：' + showAns(q, q.value) + '（可選擇多項）'));
       body.append(h('div', { class: 'chips' }, opts.map(function (o) {
         var on = arr.indexOf(o.text) >= 0;
         return h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () {
@@ -895,7 +940,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           setAns(q, next);
         } }, on ? '' : '+ ', o.text);
       })));
-      if (!done) body.append(h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () { setAns(q, q.value); } }, N.ui.adoptOne)));
+      if (!done && !manual) body.append(h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () { setAns(q, q.value); } }, N.ui.adoptOne)));
     } else if (kind === 'date') {
       dateOpts(q).forEach(function (o) { body.append(optBtn(o, o.val === v, function () { setAns(q, o.val); })); });
       var di = h('input', { type: 'date', 'aria-label': N.ui.pickDate, value: parseDay(v) ? v : null });
@@ -904,16 +949,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     } else {
       if (!opts.length) opts = [{ text: String(q.value), val: String(q.value), rec: true }];
       opts.forEach(function (o) { body.append(optBtn(o, o.val === v, function () { setAns(q, o.val); })); });
-      if (v && !opts.some(function (o) { return o.val === v; })) body.append(h('div', { class: 'custom' }, h('b', null, N.ui.customIs + '：'), v));
+      if (!manual && v && !opts.some(function (o) { return o.val === v; })) body.append(h('div', { class: 'custom' }, h('b', null, N.ui.customIs + '：'), v));
       var key = 'w~' + q.id;
-      if (S.open === key) {
+      if (!P.actionConfirm && S.open === key) {
         var ta = h('textarea', { rows: '2', placeholder: q.hint ? N.fix(q.hint) : '自行填寫……（可使用系統語音輸入）', 'aria-label': N.ui.customIs + '：' + q.ask });
         ta.value = S.drafts[key] || '';
         ta.addEventListener('input', function () { S.drafts[key] = ta.value; });
         body.append(ta, h('div', { class: 'foot' },
           h('button', { type: 'button', class: 'btn primary', onclick: function () { var t = ta.value.trim(); if (t) setAns(q, t); else ta.focus(); } }, N.ui.useCustom),
           h('button', { type: 'button', class: 'btn', onclick: function () { S.open = null; renderAsk(); } }, N.ui.collapse)));
-      } else {
+      } else if (!P.actionConfirm) {
         body.append(h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () { S.open = key; renderAsk({ sel: '#q-' + q.id + ' textarea' }); } }, N.ui.custom)));
       }
     }
@@ -1016,6 +1061,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function modalKeys(ev) { if (ev.key === 'Escape') { ev.preventDefault(); closeModal(); } }
   function openModal() {
     if (!stats().total) { location.hash = '#/'; return; }
+    var required = unansweredRequired();
+    if (required.length) {
+      S.extra = true;
+      renderAsk({ sel: '#q-' + required[0].id });
+      announce('請先逐題作答需要你確認的事項。');
+      return;
+    }
     lastFocus = document.activeElement;
     var now = new Date(), R = buildReply(now);
     var nowItems = R.answers.filter(function (a) { return R.qs[a.id].effect === 'now'; });
@@ -1099,7 +1151,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var appliedFailed = (r.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; });
       card.append(h('p', null, failReason(r.error)), appliedFailed
         ? h('a', { class: 'btn primary', href: '/#/' }, N.ui.backPending)
-        : h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); }, retryCatch); } }, N.ui.retry));
+        : h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); }, retryCatch); } }, N.ui.retry), failureHelp(r, P && P.title));
     }
     if (state === 'done' && r.result) card.append(resultBox(r.result));
     if (state === 'done') {
@@ -1200,7 +1252,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var st = r[0]; IN.meta = r[1]; V.status = st; checkInstance(st);
       var it = st.intake, final = it && (it.state === 'done' || it.state === 'failed');
       var parts = [head('intake', st), aiBlock(st)], form = false;
-      if (it && (!final || IN.sent || IN.watching)) {
+      // 失敗要一直見到（重新打開頁面都係），否則創辦人只見到空白表格，唔知上次失敗咗、亦冇求助入口
+      if (it && (!final || it.state === 'failed' || IN.sent || IN.watching)) {
         parts.push(intakeTrack(st));
         form = it.state === 'failed' && IN.open;
       } else if (st.company && st.company.ready) {
@@ -1230,7 +1283,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
       h('button', { type: 'button', class: 'btn primary', id: 'intake-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); IN.watching = true; setTimeout(showIntake, 800); }, retryCatch); } }, N.ui.retry),
-      h('button', { type: 'button', class: 'btn', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)));
+      h('button', { type: 'button', class: 'btn', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)), failureHelp(r, N.ui.company));
     if (state === 'done') {
       if (r && r.result) card.append(resultBox(r.result));
       card.append(h('div', { class: 'foot' }, h('a', { class: 'btn primary', id: 'go-company', href: '/proofread.html' }, N.ui.goCompany)));

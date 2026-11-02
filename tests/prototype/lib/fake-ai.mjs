@@ -215,7 +215,7 @@ if (type === 'certify') {
     ask = { format: 'startup-os.ask/0.1', title: '新增一站：廚師試食會', context: '測試 AI 按你的要求擬好新次序。', questions: [
       { id: 'route', priority: 1, ask: '照你意思改路線嗎？（' + said + '）', kind: 'choice', effect: 'now', options: [
         { text: '採用新次序', rec: true, apply: { order, add: { short: '廚師試食會', event: '五位主廚出席試食會', evidence: '出席名單', targetDate: '2026-11-20' } } },
-        { text: '維持現有次序', apply: { keep: true } }], value: '採用新次序', why: '測試理由' }] };
+        { text: '維持現有次序', apply: { keep: true } }], value: '採用新次序', why: '測試理由', risk: '最壞情況是新次序未能配合現有合作安排。' }] };
   } else {
     ask = { format: 'startup-os.ask/0.1', title: '臨時工作：測試單張', taskTitle: '測試推廣單張', afterConfirm: '確認後 AI 會擬好單張文字。', next: { task: '按答案擬好推廣單張文字' }, questions: [
       { id: 'deliver', priority: 1, ask: '「' + said + '」要交甚麼？', options: [{ text: '一頁文字稿', rec: true }, { text: '只要中文' }], value: '一頁文字稿', why: '測試理由' },
@@ -277,7 +277,7 @@ if (type === 'certify') {
     questions: [
       { id: 'meet-date', priority: 2, ask: '測試：何時見面？', kind: 'date', value: '2026-11-05', why: '測試理由' },
       { id: 'who', priority: 1, ask: '測試：誰一同前往？', options: [{ text: '我自己', rec: true }, { text: '我與顧問' }], value: '我自己', why: '測試理由' },
-      { id: 'offer', priority: 3, ask: '測試：可否答應試用一個月？', effect: 'now', options: [{ text: '可以', rec: true }, { text: '不可以' }], value: '可以', why: '測試理由' },
+      { id: 'offer', priority: 3, ask: '測試：可否答應試用一個月？', effect: 'now', options: [{ text: '可以', rec: true }, { text: '不可以' }], value: '可以', why: '測試理由', risk: '最壞情況是試用安排超出現時可承擔的服務範圍。' },
       { id: 'topics', priority: 4, ask: '測試：見面討論哪幾項？', kind: 'multi', options: [{ text: '價錢' }, { text: '分工' }, { text: '時間表' }], value: ['分工', '時間表'], why: '測試理由' }
     ]
   }));

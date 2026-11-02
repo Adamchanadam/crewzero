@@ -325,7 +325,7 @@ function markRequest(run, raw, packs) {
     p.todoType = run.noteType === 'order' ? 'order' : 'question';
     if (run.noteType === 'adhoc') p.taskId = 'a-' + run.ref;
     if (run.noteType === 'help') {
-      p.help = { noteId: run.ref };
+      p.help = { noteId: run.ref, ...(run.helpForPackId ? { packId: run.helpForPackId } : {}) };
       if (run.helpRetries) p.helpRetries = run.helpRetries;
     }
     for (const q of p.questions) for (const o of q.options || []) {
@@ -388,9 +388,9 @@ function taskDone(run) {
   const pack = {
     format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-acc', title: clip('驗收：' + t.title, 60),
     context: 'AI 已完成你交的臨時工作' + (art ? '：「' + art.title + '」' : '') + '。', afterConfirm: '接受即完成；退回 AI 會按你的原因再改。',
-    next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'acceptance', acceptance: { taskId: t.id },
+    next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'acceptance', acceptance: { taskId: t.id, artifact: art ? { title: art.title, text: art.text } : null },
     questions: [
-      { id: 'accept', priority: 1, ask: '這份產出可以用嗎？', kind: 'choice', effect: 'now', options: [{ text: '接受', rec: true }, { text: '退回修改' }], value: '接受', why: '已按你確認的交付內容完成；可在「最近 AI 工作」打開查看。' },
+      { id: 'accept', priority: 1, ask: '這份產出可以用嗎？', kind: 'choice', effect: 'now', options: [{ text: '接受' }, { text: '退回修改' }] },
       { id: 'reason', priority: 2, ask: '如果退回，要改甚麼？', kind: 'text', effect: 'tentative', value: '不用改', why: '接受就毋須填寫。' }
     ]
   };
@@ -564,6 +564,7 @@ async function handleNote(run, file) {
   const parsed = parseReply(raw), machine = parsed.machine || {};
   const retry = /^help\s+[\w-]+\s+([12])$/.exec(String(parsed.head.from || ''));
   run.helpRetries = retry ? Number(retry[1]) : 0;
+  run.helpForPackId = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).packId || '')) ? String(machine.context.packId) : '';
   step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc }[run.noteType]);
   const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
@@ -619,8 +620,8 @@ function handleBrainDecide(run, m) {
   if (!ds.length) { const why = '紅藍對打未整合好，未有要你決定的事'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
   const raw = { format: 'startup-os.ask/0.1', title: '紅藍對打：需要你決定的事', context: '裁判整合紅藍對打之後，有以下事情要你拍板；紅隊結果不算證據。', afterConfirm: '答案會記入決定紀錄。',
     questions: ds.slice(0, 3).map((d, i) => { const opts = (d.options || []).slice(0, 3).map(o => String(o)); const rec = opts.find(o => o === d.recommend || o.startsWith(String(d.recommend || '') + ' ')) || opts[0];
-      return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || '裁判建議') }; }) };
-  const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: null, strictTitle: false });
+      return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || '裁判建議'), ...(String(d.risk || '').trim() ? { risk: clip(String(d.risk), 120) } : {}) }; }) };
+  const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: null, strictTitle: false, system: true });
   if (!prep.ok || !prep.packs.length) { const why = prep.ok ? '這幾條先前已經回答' : '裁判提供的選項格式不正確，未能放上 Founder Desk'; step(run, 'applied', U.stepReqRegistered, prep.ok ? 'done' : 'failed', why); if (prep.ok) { run.result = { summary: why, artifacts: [], founderNext: [] }; return finish(run, 'done'); } return finish(run, 'failed', why); }
   for (const p of prep.packs) { p.todoType = 'decision'; p.brainItem = 'wargame'; }
   const placed = placePacks(DIR, prep.packs);
@@ -703,10 +704,11 @@ function helpNoteTask(sb, text, context = {}) {
   writeConfirmedPage(sb);
   if (!fs.existsSync(path.join(sb, 'confirmed-page.md')) && fs.existsSync(path.join(DIR.company, 'page.json'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
   let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
-  const card = guideCard(firstWeek, dashboardState(DIR, { cert: certified(ROOT, DIR.ledger) })) || {};
+  const checked = certified(ROOT, DIR.ledger);
+  const card = guideCard(firstWeek, dashboardState(DIR, { cert: checked && checked.host ? checked : null })) || {};
   const runs = readJSON(STATUS, { runs: [] }).runs || [];
   const failed = runs.find(r => r.state === 'failed');
-  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', certified(ROOT, DIR.ledger).host ? '已設定。' : '未設定。'].join('\n') + '\n');
+  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', checked && checked.host ? '已設定。' : '未設定。'].join('\n') + '\n');
   fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-note.md'), 'utf8') + '\n## 今次嘅要求類型\n\n類型三：求助\n');
   writeJSON(path.join(sb, 'job.json'), { type: 'note', noteType: 'help' });
 }
@@ -1349,18 +1351,19 @@ async function handleAsk(run, file) {
 function handleActionConfirm(run, pack, store) {
   const t = getTask(pack.actionConfirm.taskId);
   const a = Object.values(store.answers)[0];
-  const done = !a || a.value === '已完成';
+  const done = !!a && a.value === U.actionDone;
   if (t) {
     if (done) { upsertTask({ id: t.id, status: 'done', confirmedBy: 'founder', waitingFor: '' }); addEvent({ actor: 'founder', type: 'input', title: '你已完成：' + t.title, relatedIds: [t.id], moduleIds: ['now', 'evidence'] }); }
-    else upsertTask({ id: t.id, status: 'planned', confirmedBy: null, packId: '', next: '你話未完成，要改期' });
+    else upsertTask({ id: t.id, status: 'waiting', confirmedBy: null, packId: a ? '' : t.packId || '', waitingFor: !a ? '等待你確認是否完成' : a.value === U.actionReschedule ? '等待你改期' : '等待你完成', next: a ? '你表示未完成，需要改期' : t.next || '' });
   }
-  run.result = { summary: t ? (done ? '已記錄：你已完成「' + t.title + '」。' : '已記錄：「' + t.title + '」未完成，需要改期。') : '已記錄你的答案。', artifacts: [], founderNext: [] };
+  run.result = { summary: t ? (done ? '已記錄：你已完成「' + t.title + '」。' : a ? '已記錄：「' + t.title + '」未完成，需要改期。' : '尚待你確認「' + t.title + '」是否完成。') : '已記錄你的答案。', artifacts: [], founderNext: [] };
   return finish(run, 'done');
 }
 async function handleAcceptance(run, pack, store) {
   const t = getTask(pack.acceptance.taskId);
-  const a = store.answers.accept, ok = !a || a.value === '接受';
+  const a = store.answers.accept, ok = !!a && a.value === '接受';
   if (!t) { run.result = { summary: '已記錄驗收結果。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
+  if (!a) { run.result = { summary: '尚待你確認「' + t.title + '」的驗收結果。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
   if (ok) {
     upsertTask({ id: t.id, status: 'done', acceptedBy: 'founder', waitingFor: '' });
     addEvent({ actor: 'founder', type: 'decision', title: '接受：' + t.title, relatedIds: [t.id], moduleIds: ['decisions', 'ai-week'] });
@@ -1469,7 +1472,7 @@ function handleDebateAction(run, a) {
 function placeDebatePacks(raws) {
   const out = [];
   for (const raw of raws) {
-    const prep = preparePacks(raw, { dirs: null, askedBy: 'AI', fromRun: null, strictTitle: false });
+    const prep = preparePacks(raw, { dirs: null, askedBy: 'AI', fromRun: null, strictTitle: false, system: true });
     if (!prep.ok) { log('辯論問題包格式不正確：' + prep.errors.join('；')); continue; }
     for (const p of prep.packs) { p.debate = raw.debate; p.todoType = 'decision'; }
     out.push(...placePacks(DIR, prep.packs));
@@ -1938,7 +1941,8 @@ function recordRun(r) {
   saveState(s);
 }
 const openRhythm = kind => listPacks(DIR).filter(p => p.open).map(p => loadPack(DIR, p.id)).find(p => p && p.rhythm && (Array.isArray(kind) ? kind.includes(p.rhythm.kind) : p.rhythm.kind === kind)) || null;
-const rhythmPack = (suffix, o) => ({ format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-' + suffix, next: null, askedBy: 'AI', askedAt: localIso(), fromRun: null, ...o });
+const rhythmPack = (suffix, o) => ({ format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-' + suffix, next: null, askedBy: 'AI', askedAt: localIso(), fromRun: null, ...o,
+  questions: o.questions || [] });
 // 你嘅輸入（回覆、交資料、要求、記錄真實事件）：解除自動停、重設計數（3.8）；「暫停」嘅持續暫停唔會因此解除
 function noteFounderInput() {
   const s = loadState(), h = healthOf(s), was = h.autoStopped;
@@ -2532,10 +2536,21 @@ async function main() {
         run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.helpRetries = prev.helpRetries || 0;
         step(run, 'received', U.stepReqReceived, 'done', '重試上一次');
         step(run, 'applied', U.stepReqRegistered, 'done', '沿用上一次');
-        const old = path.join(DIR.sandbox, prev.id, 'note.md');
-        if (!fs.existsSync(old)) { finish(run, 'failed', '找不到上次提交的要求，請重新提交'); return; }
         const sb = newSandbox(run);
-        noteTask(sb, run.noteType, fs.readFileSync(old, 'utf8').split(/\r?\n\r?\n/).slice(1).join('\n\n').trim());
+        const oldDir = path.join(DIR.sandbox, prev.id);
+        if (run.noteType === 'help' && fs.existsSync(oldDir)) {
+          fs.cpSync(oldDir, sb, { recursive: true, filter: source => source === oldDir || (path.basename(source) !== 'out' && !source.endsWith('.txt')) });
+        } else if (run.noteType === 'help') {
+          const archive = fs.readdirSync(DIR.archive, { withFileTypes: true }).filter(x => x.isDirectory()).map(x => path.join(DIR.archive, x.name));
+          const old = archive.map(d => path.join(d, prev.ref + '-note-help.md')).find(f => fs.existsSync(f));
+          if (!old) { finish(run, 'failed', '找不到上次提交的求助，請重新提交'); return; }
+          const raw = fs.readFileSync(old, 'utf8'), parsed = parseReply(raw);
+          helpNoteTask(sb, raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').replace(/```json[\s\S]*$/, '').trim(), (parsed.machine || {}).context || {});
+        } else {
+          const old = path.join(oldDir, 'note.md');
+          if (!fs.existsSync(old)) { finish(run, 'failed', '找不到上次提交的要求，請重新提交'); return; }
+          noteTask(sb, run.noteType, fs.readFileSync(old, 'utf8').split(/\r?\n\r?\n/).slice(1).join('\n\n').trim());
+        }
         await runAIStep(run, sb, U.stepReqAI, true);
         return;
       }

@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dataDirs, preparePacks, placePacks, listPacks, rootId, legacyRootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
+import { dataDirs, preparePacks, placePacks, listPacks, readJSON, rootId, legacyRootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
 import { seedDemo, DEMO_DIR } from './demo-seed.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { dashboardState, guideCard } from './dash-lib.mjs';
@@ -37,7 +37,10 @@ if (STATUS_ONLY) {
     process.exit(1);
   }
   let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
-  let card = null; try { card = guideCard(firstWeek, dashboardState(DIR)); } catch {}
+  let card = null; try {
+    const c = readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null);
+    card = guideCard(firstWeek, dashboardState(DIR, { cert: c && c.host ? { host: c.host, label: c.label, certifiedAt: c.certifiedAt } : null }));
+  } catch {}
   if (!card || !card.today || !card.button) {
     console.log('未能讀取目前安排：目前沒有可顯示的下一步。');
     process.exit(1);

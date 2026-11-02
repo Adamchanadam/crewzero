@@ -233,10 +233,12 @@ try {
   await c.go(B + '/', 1440, 4000);
   const cd1 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`); await sleep(1600); const cd2 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`);
   ok('AI 近期工作：下次 AI 開工倒數每秒走、今日 AI 啟動／用時一行（真數據）', /^\d{2}:\d{2}:\d{2}$/.test(cd2 || '') && cd1 !== cd2 && await c.ev(`/今日 AI 啟動 \\d+／\\d+/.test(document.querySelector('[data-tele]').textContent)`), { cd1, cd2 });
-  // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI；點擊 ≤ 7、零跨產品
+  // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI；基準 7 次，加上必須逐題作答的點擊，零跨產品
   let clicks = 0; const tap = async sel => { await c.click(sel); clicks++; await sleep(900); };
   await c.go(B + '/', 1440, 3500);
   await tap('.hero a.btn.primary');
+  const requiredIds = await c.ev(`(()=>[...document.querySelectorAll('.dq')].filter(card=>card.querySelector('.eff,.conflict')).map(card=>card.id.replace(/^q-/,'')))()`);
+  for (const id of requiredIds) await tap('#q-' + id + ' .opt');
   await tap('#go-main');
   await tap('#do-confirm');
   await sleep(1500);
@@ -247,7 +249,8 @@ try {
   await c.type('#req-text', '農場丙今日來電，答應下星期一簽供應協議。');
   await tap('#req-send');
   const sent = await waitFor(async () => c.ev(`/已收到|已記錄|處理中|完成/.test((document.querySelector('#req-track')||{}).textContent||'')`), 15000);
-  ok('典型一日：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI，點擊 ≤ 7、全程同一列導航（零跨產品）', clicks <= 7 && onDash && !!sent, { clicks, onDash, sent });
+  const clickLimit = 7 + requiredIds.length;
+  ok(`典型一日：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI，點擊 ≤ ${clickLimit}（基準 7 + 必須作答 ${requiredIds.length} 題）、全程同一列導航（零跨產品）`, clicks <= clickLimit && onDash && !!sent, { clicks, clickLimit, required: requiredIds.length, onDash, sent });
   ok('全程冇程式錯誤', !c.errors.length, c.errors);
 } catch (e) {
   ok('測試出錯', false, String(e && e.stack || e));

@@ -28,9 +28,9 @@ function api(BASE) {
 async function waitFor(fn, ms = 30000) { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(400); } return null; }
 const fnv = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return ('0000000' + x.toString(16)).slice(-8); };
 // 照 Founder Desk 嘅回覆格式答一個問題包
-async function answer(A, packId, values) {
+async function answer(A, packId, values, includeDefaults = true) {
   const { pack } = await A.get('/api/ask?id=' + packId);
-  const answers = pack.questions.map(q => ({ id: q.id, value: q.id in values ? values[q.id] : q.value, ai: q.value, changed: q.id in values && values[q.id] !== q.value }));
+  const answers = pack.questions.filter(q => includeDefaults || q.id in values).map(q => ({ id: q.id, value: q.id in values ? values[q.id] : q.value, ai: q.value, changed: q.id in values && values[q.id] !== q.value }));
   const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: new Date().toISOString(), batch: answers.map(a => a.id), answers };
   const text = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: ' + new Date().toISOString()].join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n';
   return A.post('/api/submit', { kind: 'ask-answer', ref: pack.id, text });
@@ -81,10 +81,18 @@ try {
   ok('你嘅行動有日子就入兩星期日程', d0.schedule.filter(s => s.kind === 'action').map(s => s.text).join().includes('見農場丙簽供應協議') && d0.schedule.some(s => s.kind === 'action' && s.text.includes('致電發牌機關')));
   ok('AI 唔可以標完成：未經你確認嘅完成當待你確認', T0.f3.column === 'review' && T0.f3.packId === 'ask-demo-confirm-f3');
   ok('兩站並行：農場簽約＋牌照保險，第二站經你確認', d0.parallel.count === 2 && d0.parallel.confirmed && d0.parallel.ids.join() === 'm1,m4' && !d0.parallel.over, d0.parallel);
-  // 你確認行動完成 → 先算完成
-  await answer(A, 'ask-demo-confirm-f3', {});
-  await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === 'ask-demo-confirm-f3'); return r && r.state === 'done'; });
+  // 沒有作答時，本人行動不得視為完成
+  const noAction = JSON.parse(fs.readFileSync(path.join(DEMO, 'asks', 'ask-demo-confirm-f3.json'), 'utf8'));
+  noAction.id = 'ask-no-answer-action'; noAction.askedAt = new Date().toISOString();
+  fs.writeFileSync(path.join(DEMO, 'asks', noAction.id + '.json'), JSON.stringify(noAction));
+  const noActionReply = await answer(A, noAction.id, {}, false);
+  await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === noAction.id); return r && r.state === 'done' ? r : null; });
   let dv = await A.get('/api/dashboard');
+  ok('沒有作答：本人行動不轉已完成', noActionReply.code === 200 && dv.tasks.find(t => t.id === 'f3').column !== 'done', { reply: noActionReply, task: dv.tasks.find(t => t.id === 'f3') });
+  // 你明確確認行動完成 → 才算完成
+  await answer(A, 'ask-demo-confirm-f3', { done: '已完成' });
+  await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === 'ask-demo-confirm-f3'); return r && r.state === 'done'; });
+  dv = await A.get('/api/dashboard');
   ok('你確認咗先轉已完成', dv.tasks.find(t => t.id === 'f3').column === 'done' && dv.events.some(e => e.title === '你已完成：點收農場甲第二週貨'));
   // 你答咗決定 → 等緊嗰張卡轉可進行
   await answer(A, 'ask-demo-licence', {});
@@ -136,7 +144,14 @@ try {
   ok('退回原因交到 AI', redoTask && redoTask.includes('要加英文版'), redoTask && redoTask.slice(-200));
   d2 = await A.get('/api/dashboard'); t = d2.tasks.find(x => x.id === tid);
   ok('再交貨又轉待你驗收（新驗收包）', t && t.column === 'review' && t.packId !== accPack, t);
-  await answer(A, t.packId, {});
+  const noAcceptance = JSON.parse(fs.readFileSync(path.join(DEMO, 'asks', t.packId + '.json'), 'utf8'));
+  noAcceptance.id = 'ask-no-answer-acceptance'; noAcceptance.askedAt = new Date().toISOString();
+  fs.writeFileSync(path.join(DEMO, 'asks', noAcceptance.id + '.json'), JSON.stringify(noAcceptance));
+  const noAcceptanceReply = await answer(A, noAcceptance.id, {}, false);
+  await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === noAcceptance.id); return r && r.state === 'done' ? r : null; });
+  d2 = await A.get('/api/dashboard'); t = d2.tasks.find(x => x.id === tid);
+  ok('沒有作答：驗收工作不轉已完成', noAcceptanceReply.code === 200 && t && t.column !== 'done', { reply: noAcceptanceReply, task: t });
+  await answer(A, t.packId, { accept: '接受' });
   await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === t.packId); return r && r.state === 'done'; });
   d2 = await A.get('/api/dashboard'); const t2 = d2.tasks.find(x => x.id === tid);
   ok('接受後轉已完成', t2 && t2.column === 'done', t2);

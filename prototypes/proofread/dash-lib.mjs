@@ -335,7 +335,7 @@ export function dashboardState(DIR, extra = {}) {
     const after = runs.filter(r => new Date(r.startedAt).getTime() > t && r.aiStarted !== false && r.state !== 'skipped');
     const msIds = new Set((state.milestones || []).map(m => m.id));
     pathTouched = [...new Set(events.filter(e => (e.type === 'path' || e.type === 'milestone') && new Date(e.at).getTime() > t).flatMap(e => (e.relatedIds || []).filter(id => msIds.has(id))))];
-    since = { at: last.at, runs: after.length, withOutput: after.filter(r => r.artifacts > 0 || (r.ending === 'artifact')).length, waiting: todo.length, latest: (businessEvents.find(e => new Date(e.at).getTime() > t) || {}).title || '' };
+    since = { at: last.at, awayDays: Number.isFinite(t) ? Math.max(0, daysBetween(new Date(last.at), now)) : 0, runs: after.length, withOutput: after.filter(r => r.artifacts > 0 || (r.ending === 'artifact')).length, waiting: todo.length, latest: (businessEvents.find(e => new Date(e.at).getTime() > t) || {}).title || '' };
   }
 
   /* 甲板 */
@@ -406,7 +406,7 @@ export function buildTodo(DIR, { state, milestones, company, page, now }) {
     const q0 = (full.questions || [])[0] || {};
     const rec = full.rec || (q0.options || []).find(o => o.rec)?.text || (q0.value != null && !Array.isArray(q0.value) ? String(q0.value) : '');
     const brain = full.brainItem || (full.debate ? 'wargame' : '');
-    todo.push({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(brain ? { brain } : {}),
+    todo.push({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(askedAt ? { staleDays: Math.max(0, waited) } : {}), ...(brain ? { brain } : {}),
       state: overdueDays > 0 ? 'overdue' : 'open', count: p.open, href: '/#/ask/' + p.id, kind: 'ask' });
   }
   // 排程節奏改咗（交資料第 9 題或者系統頁）：放一張「重新登記排程」提示卡，按下去系統頁（或者喺對話輸入「重新登記排程」）

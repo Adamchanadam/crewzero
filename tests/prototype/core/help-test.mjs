@@ -170,8 +170,8 @@ try {
   ok('未有公司概覽：求助仍被收件，沒有被一般要求入口擋住', sent.code === 202 && sent.j && sent.j.id, sent);
   const inboxFile = sent.j && path.join(DATA, 'founder', 'inbox', sent.j.id + '-note-help.md');
   ok('正常求助先寫入收件匣，檔名及類型正確', inboxFile && fs.existsSync(inboxFile) && fs.readFileSync(inboxFile, 'utf8').includes('type: help'), inboxFile);
-  const archived = await waitFor(() => archivedHelp(sent.j.id), 15000);
-  ok('收件資料只保留允許的脈絡欄位', archived && /type: help/.test(archived) && /"page":"pending"/.test(archived) && /"packId":"p-1"/.test(archived) && !archived.includes('ignored'), archived && archived.slice(-500));
+  const received = inboxFile && fs.readFileSync(inboxFile, 'utf8');
+  ok('收件資料只保留允許的脈絡欄位', received && /type: help/.test(received) && /"page":"pending"/.test(received) && /"packId":"p-1"/.test(received) && !received.includes('ignored'), received && received.slice(-500));
 
   const waiting = await waitFor(async () => {
     const s = (await get('/api/status')).j;
@@ -182,7 +182,7 @@ try {
   const cert = await certify(BASE);
   ok('設定測試 AI 後認證完成', cert && cert.certify && cert.certify.state === 'passed', cert && cert.certify);
   const first = await waitFor(() => allPacks().find(p => p.help && p.help.noteId === sent.j.id), 45000);
-  ok('補做：沒有公司概覽的求助仍產生問題包，保留 help 標記且不建立工作', first && JSON.stringify(first.help) === JSON.stringify({ noteId: sent.j.id }) && !(state().tasks || []).length, first && { help: first.help, request: first.request, tasks: state().tasks });
+  ok('設定 AI 後重試求助：沿用原工作資料產生問題包，不建立工作', first && JSON.stringify(first.help) === JSON.stringify({ noteId: sent.j.id, packId: 'p-1' }) && !(state().tasks || []).length, first && { help: first.help, request: first.request, tasks: state().tasks });
 
   const firstReady = first && makeHelpPack(first, 0);
   await cdp.go(BASE + '/#/ask/' + encodeURIComponent(firstReady.id), 1280, 1800);
@@ -227,13 +227,14 @@ try {
     const s = (await get('/api/status')).j;
     return s && !s.busy && !(s.pending || []).length;
   }, 15000);
+  fs.copyFileSync(path.join(PROTO, 'fixtures', 'example-company-page.json'), path.join(DATA, 'company', 'page.json'));
   const beforeStatus = tree(DATA);
   const status = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), '--status'], {
     cwd: PROTO, env: { ...process.env, SOS_DATA: DATA }, encoding: 'utf8', windowsHide: true
   });
   const afterStatus = tree(DATA);
   const lines = String(status.stdout || '').trim().split(/\r?\n/);
-  ok('--status：只印目前、下一步、重新打開三行，且不改資料、不啟動頁面', status.status === 0 && lines.length === 3 && /^目前：/.test(lines[0] || '') && /^下一步：/.test(lines[1] || '') && /^重新打開：/.test(lines[2] || '') && JSON.stringify(beforeStatus) === JSON.stringify(afterStatus), { code: status.status, lines, stderr: status.stderr });
+  ok('--status：有認證及公司概覽時不會要求設定 AI，只印三行且不改資料、不啟動頁面', status.status === 0 && lines.length === 3 && /^目前：/.test(lines[0] || '') && /^下一步：/.test(lines[1] || '') && /^重新打開：/.test(lines[2] || '') && !lines.join('\n').includes(N.ui.goSetup) && JSON.stringify(beforeStatus) === JSON.stringify(afterStatus), { code: status.status, lines, stderr: status.stderr });
   ok('頁面沒有程式錯誤', !cdp.errors.length, cdp.errors);
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
