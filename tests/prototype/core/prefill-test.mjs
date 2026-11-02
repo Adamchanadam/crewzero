@@ -65,13 +65,13 @@ try {
 
   // 送出交資料：未確認就算數係唔得
   const base = { q1: A.q1.text, q2: A.q2.text, q3: '我們已和兩間洗衣店會面。', q4: '社區洗衣店店主。', q5: A.q5.text };
-  const un = await post('/api/intake', { fields: fields(base), files: [], prefillId: id, provenance: { q2: 'confirmed', q5: 'confirmed' } });
+  const un = await post('/api/intake', { bizType: 'other', fields: fields(base), files: [], prefillId: id, provenance: { q2: 'confirmed', q5: 'confirmed' } });
   ok('有預填未確認就送出：伺服器拒收（創辦人確認之後先算數）', un.code === 400 && un.j.message === N.ui.prefillUnconfirmed, un);
-  const sneak = await post('/api/intake', { fields: fields(base), files: [] });
+  const sneak = await post('/api/intake', { bizType: 'other', fields: fields(base), files: [] });
   ok('唔講預填編號、照抄預填：伺服器照樣認得，拒收', sneak.code === 400 && sneak.j.message === N.ui.prefillUnconfirmed, sneak);
   ok('拒收之後收件匣冇交資料檔', !fs.readdirSync(path.join(DATA, 'founder', 'inbox')).some(f => f.endsWith('-intake.md')));
   // 確認 q1、q2、q5；q3 係自己改寫；第 4 題抄咗第 2 題嘅預填（搬題）
-  const good = await post('/api/intake', { fields: fields({ ...base, q4: A.q2.text }), files: DOCS.slice(0, 2), prefillId: id, provenance: { q1: 'confirmed', q2: 'confirmed', q5: 'confirmed' } });
+  const good = await post('/api/intake', { bizType: 'other', fields: fields({ ...base, q4: A.q2.text }), files: DOCS.slice(0, 2), prefillId: id, provenance: { q1: 'confirmed', q2: 'confirmed', q5: 'confirmed' } });
   ok('逐條確認後送出：收到', good.code === 202 && good.j.ok, good);
   const it = await waitFor(async () => { const s = (await get('/api/status')).j; return s.intake && (s.intake.state === 'done' || s.intake.state === 'failed') ? s.intake : null; });
   ok('交資料照常交 AI 擬公司概覽', it && it.state === 'done', it);
@@ -95,7 +95,7 @@ try {
   // 確認採用未能核對嘅預填：記「你確認的 AI 預填 · 未能核對是否原句」，唔記原句、唔記你寫的
   const u1 = st2.prefill.answers.q1.text;
   const seenIntake = (await get('/api/status')).j.intake.id;
-  const good2 = await post('/api/intake', { fields: fields({ q1: u1, q2: '每月收費。', q3: '未有。', q4: '洗衣店店主。', q5: '只有我。' }), files: [DOCS[2]], prefillId: r2.j.id, provenance: { q1: 'confirmed' } });
+  const good2 = await post('/api/intake', { bizType: 'other', fields: fields({ q1: u1, q2: '每月收費。', q3: '未有。', q4: '洗衣店店主。', q5: '只有我。' }), files: [DOCS[2]], prefillId: r2.j.id, provenance: { q1: 'confirmed' } });
   ok('採用未能核對嘅預填後送出：收到', good2.code === 202, good2);
   await waitFor(async () => { const s = (await get('/api/status')).j; return s.intake && s.intake.id !== seenIntake && (s.intake.state === 'done' || s.intake.state === 'failed'); });
   const md2f = fs.readdirSync(path.join(DATA, 'archive'), { recursive: true }).map(String).find(f => f.endsWith(good2.j.id + '-intake.md'));

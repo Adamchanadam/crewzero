@@ -42,7 +42,7 @@ function proofread() {
 // 答一份問題包：pick(q) 回答案（undefined＝唔答）
 async function answer(id, pick) {
   const P = pack(id), done = answers(id);
-  const list = P.questions.filter(q => !done[q.id]).map(q => { const v = pick ? pick(q) : q.value; return v === undefined ? null : { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; }).filter(Boolean);
+  const list = P.questions.filter(q => !done[q.id]).map(q => { let v = pick ? pick(q) : q.value; if (v === undefined && q.bind === 'results') v = '沒有'; return v === undefined ? null : { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; }).filter(Boolean);
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: list.map(a => a.id), answers: list };
   const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
   await post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
@@ -80,7 +80,7 @@ try {
   if (!up) throw new Error('伺服器 60 秒內未起好');
   await post('/api/setup', { action: 'certify', host: 'test' });
   for (let i = 0; i < 80; i++) { const s = await get('/api/setup'); if (s.certify && s.certify.state !== 'running') break; await sleep(400); }
-  await post('/api/intake', { fields: { q1: '把本地小農的當季蔬菜直送餐廳（測試）', q2: '餐廳每週付款', q3: '兩個農場有興趣（口頭表示）', q4: '約第三個農場主見面', q5: '表哥送貨（已確定）' }, files: [] });
+  await post('/api/intake', { bizType: 'other', fields: { q1: '把本地小農的當季蔬菜直送餐廳（測試）', q2: '餐廳每週付款', q3: '兩個農場有興趣（口頭表示）', q4: '約第三個農場主見面', q5: '表哥送貨（已確定）' }, files: [] });
   await idle(60000); await proofread(); await idle(60000);
   const m1 = st().milestones.find(m => m.id === 'm1');
   ok('起點：第一站進行中', m1.state === 'active', m1.state);

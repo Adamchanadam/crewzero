@@ -56,7 +56,7 @@ try {
   /* ---------- 一：新格式（AI 照齊就緒清單） ---------- */
   ok('一：假 AI 認證', await start('one', Number(PORT0)) === 'passed');
   let b = await seen();
-  await post('/api/intake', { fields, files: [] });
+  await post('/api/intake', { bizType: 'other', fields, files: [] });
   let r = await newRun(b, x => x.kind === 'intake', 60000);
   ok('一：交資料 → AI 擬公司概覽', r && r.state === 'done', r && r.error);
   let p = page(), reg = regOf(p);
@@ -104,7 +104,7 @@ try {
   ok('二：假 AI 認證', await start('two', Number(PORT0) + 1) === 'passed');
   mode('intake:intake-noready');
   b = await seen();
-  await post('/api/intake', { fields, files: [] });
+  await post('/api/intake', { bizType: 'other', fields, files: [] });
   r = await newRun(b, x => x.kind === 'intake', 60000);
   p = page(); reg = regOf(p);
   ok('二：AI 漏欄：外殼叫 AI 修正一次；仍缺就加空欄，唔阻校對', r && r.state === 'done' && /修正一次/.test(log()) && /修正後仍未齊/.test(log()) && p.page.schema === 2, r && r.error);

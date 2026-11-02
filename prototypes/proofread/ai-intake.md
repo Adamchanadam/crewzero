@@ -1,6 +1,7 @@
 # 擬公司概覽
 
 1. 讀取 `intake.md` 和 `files/`，依照 `company-page-format.md` 寫 `out/company-page.json`。只寫入 `out/`。
+1a. 如有 `biz.md`，先按其中的類別及用字寫作；沒有就用「對方」「你的工作」等中性字。不可因類別而假設有產品、收入或季度安排。類別只供用字，絕不可寫入 `out/company-page.json`。
 2. 寫 `out/receipt.json`，包括 `summary`、`artifacts: []`、`founderNext: []`、`needsFounder: []`。
 3. 唔好假設文件冇寫嘅事實。文件寫明嘅標 `origin: "doc"` 並附 `src`；冇寫嘅標 `ai`，只可以係「未發生」「未有」或者建議值；擬議伙伴只寫「擬」。
 3a. `intake.md` 每題答案下面有一句來源：「你寫的」「你確認的文件原句」可以當創辦人提供的資料；「你認同的 AI 建議…不是原句」同「未能核對是否原句」只可以當 AI 推斷，用 `origin: "ai"`，唔可以標成文件寫明。

@@ -45,6 +45,9 @@ input[type=date]{font:var(--fs-sub) var(--ui);color:var(--text);background:rgba(
 .iq{margin-top:14px}
 .iq-q{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:600;font-size:var(--fs-body);margin-bottom:2px}
 .iq-hint{font-size:var(--fs-sub);color:var(--muted);margin:0 0 6px}
+#biz-type{border:0;padding:0;min-inline-size:0}
+#biz-type input[type=radio]{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+#biz-type .opt:focus-within{outline:2px solid var(--mint);outline-offset:2px}
 .iq-sec{font-size:var(--fs-sub);color:var(--muted);margin:20px 0 0;font-weight:600}
 details.iq-opt{margin-top:18px}
 details.iq-opt summary{cursor:pointer;font-weight:600}
@@ -858,7 +861,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   /* ---------- 答題：每次最多 3 條 ---------- */
   var P = null, A = null, S = null;
   function manualQuestion(q) { return !!(P && (P.actionConfirm || (P.acceptance && q.id === 'accept'))); }
-  function requiresFounderAnswer(q) { return !!(q && (q.effect === 'now' || q.conflict || manualQuestion(q))); }
+  function requiresFounderAnswer(q) { return !!(q && (q.effect === 'now' || q.conflict || q.bind === 'results' || manualQuestion(q))); }
   function cur(q) {
     if (manualQuestion(q) && !Object.prototype.hasOwnProperty.call(S.edits, q.id) && !S.ok[q.id]) return '';
     return Object.prototype.hasOwnProperty.call(S.edits, q.id) ? S.edits[q.id] : q.value;
@@ -880,7 +883,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   function shown() { return S.extra ? S.batch.concat(S.rest) : S.batch; }
   function stats() { var done = S.batch.filter(touched).length; return { total: S.batch.length, done: done, left: S.batch.length - done }; }
-  function unansweredRequired() { return P.questions.filter(function (q) { return !A[q.id] && requiresFounderAnswer(q) && !touched(q); }); }
+  function unansweredRequired() { return S.allSame ? [] : P.questions.filter(function (q) { return !A[q.id] && requiresFounderAnswer(q) && !touched(q); }); }
   function mainLabel() {
     var st = stats();
     if (!st.total) return N.ui.backPending;
@@ -893,6 +896,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     S.batch = same; S.rest = P.questions.filter(function (q) { return !A[q.id] && !q.noChange; }); S.extra = false; S.edits = {};
     same.forEach(function (q) { S.ok[q.id] = true; });
     S.allSame = true; renderAsk(); openModal();
+  }
+  function recordTextDrafts() {
+    P.questions.forEach(function (q) {
+      if (q.kind !== 'text' || q.value != null || touched(q)) return;
+      var text = String(S.drafts['w~' + q.id] || '').trim();
+      if (!text) return;
+      S.edits[q.id] = text; S.ok[q.id] = true; S.open = null; S.allSame = false;
+    });
   }
   function showAsk(id) {
     Promise.all([get('/api/ask?id=' + encodeURIComponent(id)), get('/api/status')]).then(function (r) {
@@ -946,6 +957,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var di = h('input', { type: 'date', 'aria-label': N.ui.pickDate, value: parseDay(v) ? v : null });
       body.append(h('div', { class: 'foot' }, h('span', { class: 'small muted' }, N.ui.orCalendar + '：'), di,
         h('button', { type: 'button', class: 'btn primary', onclick: function () { if (parseDay(di.value)) setAns(q, di.value); else di.focus(); } }, N.ui.useDate)));
+    } else if (kind === 'text' && q.value == null) {
+      var textKey = 'w~' + q.id;
+      var textArea = h('textarea', { rows: '2', placeholder: q.hint ? N.fix(q.hint) : N.ui.interviewResultPlaceholder, 'aria-label': q.ask });
+      textArea.value = S.drafts[textKey] || '';
+      textArea.addEventListener('input', function () { S.drafts[textKey] = textArea.value; });
+      body.append(textArea, h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { var t = textArea.value.trim(); if (t) setAns(q, t); else textArea.focus(); } }, N.ui.interviewRecordAnswer)));
     } else {
       if (!opts.length) opts = [{ text: String(q.value), val: String(q.value), rec: true }];
       opts.forEach(function (o) { body.append(optBtn(o, o.val === v, function () { setAns(q, o.val); })); });
@@ -1048,18 +1065,21 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var qs = {}; P.questions.forEach(function (q) { qs[q.id] = q; });
     var L = ['# 答案：' + P.title, ''];
     answers.forEach(function (a) { L.push('- ' + qs[a.id].ask, '  - ' + (a.changed ? '你：' : S.allSame ? N.ui.confirmedSame + '：' : qs[a.id].preset ? '採用預設：' : '採用 AI 建議：') + showAns(qs[a.id], a.value)); });
-    var left = S.rest.length - answers.filter(function (a) { return S.batch.every(function (b) { return b.id !== a.id; }); }).length;
-    if (left > 0) L.push('', '其餘 ' + left + ' 條暫按 AI 建議處理，之後再詢問。');
+    var leftQuestions = S.rest.filter(function (q) { return !answers.some(function (a) { return a.id === q.id; }); });
+    var left = leftQuestions.length, leftNeedsFounderAnswer = leftQuestions.some(requiresFounderAnswer);
+    var leftNote = '其餘 ' + left + ' 條' + (leftNeedsFounderAnswer ? '之後再詢問。' : '暫按 AI 建議處理，之後再詢問。');
+    if (left > 0) L.push('', leftNote);
     var machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: localIso(now), batch: S.batch.map(function (q) { return q.id; }), answers: answers };
     if (S.allSame) machine.allSame = true;
     L.push('', '## 機器讀取部分（供 AI 系統使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
     var head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
-    return { text: head.join('\n') + '\n\n' + L.join('\n') + '\n', answers: answers, qs: qs, left: Math.max(0, left) };
+    return { text: head.join('\n') + '\n\n' + L.join('\n') + '\n', answers: answers, qs: qs, left: Math.max(0, left), leftNote: leftNote };
   }
   var lastFocus = null;
   function closeModal() { var root = $('#modal-root'); if (!root || !root.firstChild) return; root.replaceChildren(); document.removeEventListener('keydown', modalKeys, true); if (lastFocus && document.contains(lastFocus)) lastFocus.focus(); }
   function modalKeys(ev) { if (ev.key === 'Escape') { ev.preventDefault(); closeModal(); } }
   function openModal() {
+    recordTextDrafts();
     if (!stats().total) { location.hash = '#/'; return; }
     var required = unansweredRequired();
     if (required.length) {
@@ -1105,7 +1125,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('div', { class: 'm-body' },
         nowItems.length ? h('div', { class: 'effect' }, h('h4', null, N.ui.nowItems), h('ul', { class: 'm-sum' }, nowItems.map(li))) : null,
         others.length ? h('div', { class: 'effect', style: 'border-left-color:var(--mint);border-color:rgba(153,215,188,.3);background:transparent' }, h('h4', null, N.ui.yourAnswers), h('ul', { class: 'm-sum' }, others.map(li))) : null,
-        R.left ? h('p', { class: 'small muted' }, '其餘 ' + R.left + ' 條暫按 AI 建議處理，之後再詢問你。') : null,
+        R.left ? h('p', { class: 'small muted' }, R.leftNote) : null,
         P.afterConfirm ? h('p', { class: 'small' }, N.ui.afterConfirm + '：' + P.afterConfirm) : null,
         h('details', null, h('summary', null, N.ui.fullReply), h('pre', { class: 'file' }, R.text)), msg),
       h('div', { class: 'm-foot' }, h('button', { type: 'button', class: 'btn', onclick: closeModal }, N.ui.back), btn));
@@ -1246,6 +1266,32 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function draftLoad() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function draftSave(d) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) { } }
   function draftClear() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) { } }
+  function intakeBizType() { var t = draftLoad()._bizType; return IN.meta && (IN.meta.bizTypes || []).some(function (x) { return x.id === t; }) ? t : ''; }
+  function intakeQuestionsNow() { var t = intakeBizType(), byType = IN.meta && IN.meta.questionsByBizType; return t && byType && byType[t] ? byType[t] : IN.meta.questions; }
+  function bizOtherControl(d) {
+    var other = h('input', { type: 'text', id: 'biz-other', maxlength: '60', placeholder: N.ui.intakeBizOther, 'aria-label': N.ui.intakeBizOther });
+    other.value = d._bizOther || '';
+    other.addEventListener('input', function () { var dd = draftLoad(); dd._bizOther = other.value; draftSave(dd); });
+    return h('div', { class: 'foot', id: 'biz-other-wrap' }, other);
+  }
+  function chooseBizType(type) {
+    var d = draftLoad(); d._bizType = type; if (type !== 'other') d._bizOther = ''; draftSave(d);
+    var form = $('#intake-form'); if (!form) { showIntake(); return; }
+    intakeQuestionsNow().forEach(function (q) {
+      var label = $('#q-label-' + q.n), hint = $('#q-hint-' + q.n), input = $('#q' + q.n);
+      if (label) label.textContent = q.n + '. ' + q.ask;
+      if (hint) { hint.textContent = q.hint || ''; hint.hidden = !q.hint; }
+      if (input) input.placeholder = q.example ? '例：' + q.example : '';
+    });
+    document.querySelectorAll('#biz-type .opt').forEach(function (option) {
+      var input = $('input[type="radio"]', option), selected = !!input && input.value === type;
+      option.classList.toggle('cur', selected); if (input) input.checked = selected;
+    });
+    var otherWrap = $('#biz-other-wrap');
+    if (type === 'other') { if (!otherWrap) $('#biz-type').append(bizOtherControl(d)); }
+    else if (otherWrap) otherWrap.remove();
+    intakeBar();
+  }
   function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(b / 1024)) + 'KB'; }
   function showIntake() {
     Promise.all([get('/api/status'), IN.meta ? Promise.resolve(IN.meta) : get('/api/intake')]).then(function (r) {
@@ -1298,13 +1344,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       IN.open ? null : h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', id: 'reintake', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)));
   }
   function intakeForm() {
-    var d = draftLoad(), qs = IN.meta.questions, lim = IN.meta.limits;
+    var d = draftLoad(), type = intakeBizType(), qs = intakeQuestionsNow(), lim = IN.meta.limits;
     function qBlock(q) {
       var ta = h('textarea', { rows: q.required ? '3' : '2', id: 'q' + q.n, placeholder: q.example ? '例：' + q.example : '' });
       ta.value = d['q' + q.n] || '';
       ta.addEventListener('input', function () { var dd = draftLoad(); dd['q' + q.n] = ta.value; pfEdited(dd, 'q' + q.n, ta.value); draftSave(dd); pfRow('q' + q.n); intakeBar(); });
-      return h('div', { class: 'iq' }, h('label', { class: 'iq-q', for: 'q' + q.n }, q.n + '. ' + q.ask, q.required ? tag(N.ui.required, 'qn') : null),
-        q.hint ? h('div', { class: 'iq-hint' }, q.hint) : null, ta, h('div', { class: 'pf-row', id: 'pf-q' + q.n }));
+      return h('div', { class: 'iq' }, h('label', { class: 'iq-q', for: 'q' + q.n }, h('span', { id: 'q-label-' + q.n }, q.n + '. ' + q.ask), q.required ? tag(N.ui.required, 'qn') : null),
+        h('div', { class: 'iq-hint', id: 'q-hint-' + q.n, hidden: q.hint ? null : true }, q.hint || ''), ta, h('div', { class: 'pf-row', id: 'pf-q' + q.n }));
     }
     var req = qs.filter(function (q) { return q.required; }), opt = qs.filter(function (q) { return !q.required; });
     var input = h('input', { type: 'file', multiple: true, id: 'intake-files', hidden: true, accept: lim.exts.map(function (e) { return '.' + e; }).join(',') });
@@ -1317,11 +1363,17 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
     drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
     drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer && e.dataTransfer.files); });
+    var typeOptions = h('fieldset', { class: 'iq', id: 'biz-type' }, h('legend', { class: 'iq-q' }, N.ui.intakeBizType, tag(N.ui.required, 'qn')),
+      (IN.meta.bizTypes || []).map(function (x) {
+        return h('label', { class: 'opt' + (type === x.id ? ' cur' : '') }, h('input', { type: 'radio', name: 'biz-type', value: x.id, checked: type === x.id, onchange: function () { chooseBizType(x.id); } }),
+          h('span', { class: 'dot' }), h('span', null, x.label + '：' + x.example));
+      }));
+    if (type === 'other') typeOptions.append(bizOtherControl(d));
     var form = h('section', { class: 'layer', id: 'intake-form' },
       h('span', { class: 'eyebrow' }, N.ui.intake),
       h('h2', { class: 'layer-title' }, N.ui.intakeTitle),
       h('p', { class: 'guide' }, '毋須全部填寫；如不清楚，請寫「不清楚」；現有文件可直接拖入，按「由文件預填」，AI 會按文件預填首五條，你逐條確認或改寫即可。每條一兩句即可，約需 10 分鐘。'),
-      h('h3', { class: 'iq-sec' }, N.ui.files), drop, h('div', { id: 'file-list' }), h('div', { id: 'intake-err', class: 'small', role: 'alert' }), h('div', { class: 'pf-box', id: 'pf-box' }),
+      typeOptions, h('h3', { class: 'iq-sec' }, N.ui.files), drop, h('div', { id: 'file-list' }), h('div', { id: 'intake-err', class: 'small', role: 'alert' }), h('div', { class: 'pf-box', id: 'pf-box' }),
       h('h3', { class: 'iq-sec' }, N.ui.required + '（' + req.length + ' 條）'), req.map(qBlock),
       h('details', { class: 'iq-opt' }, h('summary', null, T('optionalN', { n: opt.length })), opt.map(qBlock)));
     if (!PF.id && d._prefill && d._prefill.id) { PF.id = d._prefill.id; PF.state = 'running'; }
@@ -1429,7 +1481,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function pfStart() {
     var b = $('#pf-go'); if (b) b.disabled = true;
     readFiles(IN.files).then(function (files) {
-      return post('/api/intake', { kind: 'prefill', files: files });
+      var d = draftLoad();
+      return post('/api/intake', { kind: 'prefill', files: files, bizType: intakeBizType(), bizOther: d._bizOther || '' });
     }).then(function (j) {
       // 再預填：未確認嘅舊預填清走；已確認嘅保留，新建議另外顯示
       var d = draftLoad(), st = (d._prefill && d._prefill.st) || {};
@@ -1454,23 +1507,23 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function intakeBar() {
     var bar = $('#cbar');
     if (!$('#intake-form')) { bar.hidden = true; return; }
-    var req = IN.meta.questions.filter(function (q) { return q.required; });
+    var req = intakeQuestionsNow().filter(function (q) { return q.required; }), type = intakeBizType();
     var done = req.filter(function (q) { var x = $('#q' + q.n); return x && x.value.trim(); });
     var missing = req.filter(function (q) { return done.indexOf(q) < 0; }), waitPf = pfPending();
     bar.hidden = false;
     bar.replaceChildren(h('div', { class: 'cbar-in' },
       h('div', { class: 'prog' },
         h('div', { class: 'prog-top' }, h('b', { class: 'prog-n' }, T('requiredProgress', { n: done.length, t: req.length })),
-          missing.length ? h('span', { class: 'small muted' }, '尚欠第 ' + missing.map(function (q) { return q.n; }).join('、') + ' 題') : null,
+          !type ? h('span', { class: 'small muted' }, '請先選擇生意類別') : missing.length ? h('span', { class: 'small muted' }, '尚欠第 ' + missing.map(function (q) { return q.n; }).join('、') + ' 題') : null,
           waitPf.length ? h('span', { class: 'small', id: 'pf-wait', style: 'color:var(--amber)' }, T('prefillPending', { n: waitPf.length })) : null),
         h('div', { class: 'prog-bar' + (missing.length ? '' : ' full'), role: 'progressbar', 'aria-label': N.ui.required, 'aria-valuemin': '0', 'aria-valuemax': String(req.length), 'aria-valuenow': String(done.length) },
           h('i', { style: 'width:' + Math.round(done.length / req.length * 100) + '%' }))),
-      h('button', { type: 'button', class: 'btn primary big', id: 'intake-go', disabled: missing.length || waitPf.length ? true : null, onclick: intakeModal }, N.ui.submitIntake)));
+      h('button', { type: 'button', class: 'btn primary big', id: 'intake-go', disabled: !type || missing.length || waitPf.length ? true : null, onclick: intakeModal }, N.ui.submitIntake)));
     document.body.style.paddingBottom = (bar.offsetHeight + 28) + 'px';
   }
   function intakeModal() {
     lastFocus = document.activeElement;
-    var qs = IN.meta.questions, val = function (q) { var x = $('#q' + q.n); return x ? x.value : ''; };
+    var qs = intakeQuestionsNow(), bizType = intakeBizType(), val = function (q) { var x = $('#q' + q.n); return x ? x.value : ''; };
     var filled = qs.filter(function (q) { return val(q).trim(); });
     var btn = h('button', { type: 'button', class: 'btn primary', id: 'intake-confirm', onclick: send }, N.ui.submit);
     var msg = h('p', { class: 'small', role: 'alert', style: 'color:var(--red)' });
@@ -1481,7 +1534,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { var er = new Error('read'); er.said = T('fileUnread', { f: f.name }); rej(er); }; fr.readAsDataURL(f); });
       })).then(function (files) {
         var pf = pfClaims();
-        return post('/api/intake', pf ? { fields: fields, files: files, prefillId: pf.id, provenance: pf.claims } : { fields: fields, files: files });
+        var d = draftLoad(), base = { fields: fields, files: files, bizType: bizType, bizOther: d._bizOther || '' };
+        return post('/api/intake', pf ? { ...base, prefillId: pf.id, provenance: pf.claims } : base);
       }).then(function (j) {
         draftClear(); IN.files = []; IN.open = false; IN.sent = { id: j.id, at: j.receivedAt }; PF = { id: '', state: '', data: null, err: '' };
         closeModal(); toast(N.ui.sent); window.scrollTo(0, 0); showIntake();

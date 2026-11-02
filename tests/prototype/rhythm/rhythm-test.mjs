@@ -38,7 +38,7 @@ function proofread() {
 async function answer(P, pick) {
   P = JSON.parse(fs.readFileSync(path.join(DATA, 'asks', P.id + '.json'), 'utf8'));
   const done = answers(P.id);
-  const list = P.questions.filter(q => !done[q.id]).map(q => { const v = pick ? pick(q) : q.value; return v === undefined ? null : { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; }).filter(Boolean);
+  const list = P.questions.filter(q => !done[q.id]).map(q => { let v = pick ? pick(q) : q.value; if (v === undefined && q.bind === 'results') v = '沒有'; return v === undefined ? null : { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; }).filter(Boolean);
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: list.map(a => a.id), answers: list };
   const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
   const r = await post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
@@ -92,7 +92,7 @@ try {
   dayLog.push([a.day, a.run && (a.run.state + ':' + (a.run.skipReason || a.run.ending))]);
 
   /* ---------- 二：交資料、成頁確認（同日、你送出後） ---------- */
-  await post('/api/intake', { fields: { q1: '把本地小農的當季蔬菜直送餐廳（測試）', q2: '餐廳每週付款', q3: '兩個農場有興趣（口頭表示）', q4: '約第三個農場主見面', q5: '表哥送貨（已確定）' }, files: [] });
+  await post('/api/intake', { bizType: 'other', fields: { q1: '把本地小農的當季蔬菜直送餐廳（測試）', q2: '餐廳每週付款', q3: '兩個農場有興趣（口頭表示）', q4: '約第三個農場主見面', q5: '表哥送貨（已確定）' }, files: [] });
   await idle(60000);
   await proofread(); await idle(60000);
   let s = st();
@@ -158,7 +158,9 @@ try {
     // 持續暫停期間唔答訪問（文字答案要開 AI，會等你按繼續）；按繼續之後先答。測試開始時間唔同，暫停同訪問可能撞同一日
     if (iv && ivAnswered === 0 && !st().health.pausedByFounder) {
       const t = shownTexts(iv).join('｜');
-      ok('三：訪問包：下一個對外動作預填「仍然是」、文字題預設「沒有」、最多 12 條', iv.questions.length <= 12 && iv.questions[0].bind === 'next' && iv.questions[0].value === U.interviewSame && iv.questions.filter(q => q.bind === 'none').every(q => q.value === U.interviewNone), iv.questions.map(q => q.id + '=' + q.value));
+      const ivResults = iv.questions.find(q => q.bind === 'results'), ivNext = iv.questions.find(q => q.bind === 'next');
+      ok('三：訪問包首題是每週成果，沒有 AI 預設', iv.questions[0].bind === 'results' && ivResults && !Object.hasOwn(ivResults, 'value'), iv.questions.map(q => q.id + '=' + q.value));
+      ok('三：訪問包：下一個對外動作預填「仍然是」、文字題預設「沒有」、最多 12 條', iv.questions.length <= 12 && ivNext && ivNext.value === U.interviewSame && iv.questions.filter(q => q.bind === 'none').every(q => q.value === U.interviewNone), iv.questions.map(q => q.id + '=' + q.value));
       ok('三：訪問包文字冇內部術語', N.styleIssues ? !shownTexts(iv).some(x => N.styleIssues(String(x || '')).length) : true, shownTexts(iv).flatMap(x => N.styleIssues(String(x || ''))));
       const due = (await today()) >= lib.localIso(new Date(Date.parse(nextOn0) - 2 * 86400000)).slice(0, 10);
       ok('三：訪問日前兩天內出題', due, [await today(), nextOn0]);

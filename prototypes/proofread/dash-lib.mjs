@@ -5,7 +5,7 @@
 // 示範帳本（state.demo = true）嘅時間寫成相對值（例如 "@-3d"、"@+5d 21:00"、"@wed"），讀嘅時候按今日推算，示範資料唔會過期。
 import fs from 'node:fs';
 import path from 'node:path';
-import { NAMES, readJSON, listPacks, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
+import { NAMES, BIZ_TYPES, readJSON, listPacks, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
 import { rhythmOf, nextRunAt } from './rhythm-lib.mjs';
 
@@ -122,7 +122,9 @@ export function dashboardState(DIR, extra = {}) {
 
   /* 公司 */
   const co = { ...(page && page.company || {}), ...(state.company || {}) };
-  const company = { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
+  const biz = readJSON(path.join(DIR.company, 'biz.json'), null);
+  const company = { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')),
+    ...(biz && BIZ_TYPES[biz.type] ? { bizType: biz.type } : {}) };
   const values = page ? registryValues(page, confirmed) : {};
   const goalRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G1');
   const nextRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G5');

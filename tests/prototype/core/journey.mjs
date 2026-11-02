@@ -50,6 +50,10 @@ async function typeInto(sel, value) {
 }
 async function fillIntake() {
   // 虛構公司「從田間到餐桌」（規劃書附錄 C）
+  if (!await ev(`document.querySelector('input[name="biz-type"][value="other"]').checked`)) {
+    await ev(`document.querySelector('input[name="biz-type"][value="other"]').click()`);
+    await waitFor(() => ev(`document.querySelector('input[name="biz-type"][value="other"]').checked`), 4000);
+  }
   const vals = ['「從田間到餐桌」把本地小農的當季蔬菜直送餐廳；客戶是注重食材來源的中小型餐廳。',
     '向農場按批採購，向餐廳按週收費，餐廳每週下一次或兩次單。',
     '已認識兩位農場主（甲、乙），口頭有興趣（有人講過），未簽。餐廳未接觸。牌照保險未查。',

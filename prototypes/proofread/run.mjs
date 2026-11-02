@@ -13,7 +13,7 @@ import { folderHash } from './folder-hash.mjs';
 import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeRewriteJSON, mergeRewriteMd, deCodeInfo, deCodeJSONInfo, folderAssumptions, displayDir, displayPath, displayIndex } from './plain-lib.mjs';
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
 import { fileURLToPath } from 'node:url';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, NAMES, parseFounderReply } from './ask-lib.mjs';
+import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard } from './dash-lib.mjs';
@@ -83,7 +83,26 @@ function upsertTask(t) {
   saveState(s);
 }
 function getTask(id) { return (loadState().tasks || []).find(t => t.id === id) || null; }
-function addEvent(e) { const s = loadState(); s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), relatedIds: [], ...e }); saveState(s); }
+function addEvent(e, state = null) { const s = state || loadState(); s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), relatedIds: [], ...e }); if (!state) saveState(s); }
+
+function bizInfo(biz) { return biz && BIZ_TYPES[biz.type] ? { type: biz.type, other: typeof biz.other === 'string' ? biz.other : '', label: BIZ_TYPES[biz.type].label } : null; }
+function businessType() { return bizInfo(readJSON(path.join(DIR.company, 'biz.json'), null)); }
+function bizWords(biz) {
+  const rows = {
+    service: [['服務', '服務'], ['客戶', '服務對象'], ['收入', '收費或收到的款項']],
+    goods: [['產品', '貨品'], ['客戶', '購買者'], ['銷量', '賣出件數']],
+    online: [['產品', '內容或網上服務'], ['客戶', '使用者或觀眾'], ['收入', '訂閱、單次收費或廣告收入']],
+    nonprofit: [['產品', '計劃'], ['客戶', '服務對象'], ['收入', '資金來源'], ['收入金額', '資助或捐款']],
+    other: [['客戶', '對方'], ['產品', '你的工作'], ['收入', '款項或資金來源']]
+  };
+  return (rows[biz.type] || rows.other).map(x => `| ${x[0]} | ${x[1]} |`).join('\n');
+}
+function writeBizContext(sb, selected = null) {
+  const biz = selected || businessType();
+  if (!biz) return;
+  const other = biz.type === 'other' && biz.other ? `\n- 補充：${biz.other}` : '';
+  fs.writeFileSync(path.join(sb, 'biz.md'), `# 生意類別\n\n- 類別：${biz.label}${other}\n\n## 用字對照\n\n| 如要表達 | 請寫 |\n| --- | --- |\n${bizWords(biz)}\n\n按以上用字寫作；不要把未有的貨品、客戶、收入或季度安排當作事實。\n`);
+}
 /* ---------- 帳本種子（規劃書 3.1 成頁確認、附錄 A）：里程碑同假設清單由已確認公司概覽寫入帳本，之後每次確認只更新文字同次序 ----------
    進度（state、doneAt、doneEvidence）同假設級別（grade、status、sourceId）只由你確認真實事件時寫入，同步永遠唔覆寫。
    舊安裝（已確認公司概覽但帳本未有里程碑）喺下一次工作開始時自動補種子。換咗新公司概覽：同名嘅站同假設先保留進度。 */
@@ -996,14 +1015,16 @@ async function handlePrefill(run, file) {
   const id = file.replace(/-prefill\.md$/, '');
   run.ref = id; run.replyFiles = [file];
   step(run, 'received', U.stepPrefillReceived, 'done', '');
-  const sb = newSandbox(run), files = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(id + '-prefill-')).sort();
+  const prefill = parseFounderReply(fs.readFileSync(path.join(DIR.inbox, file), 'utf8')).machine || {};
+  const selectedBiz = bizInfo({ type: prefill.bizType, other: prefill.bizOther }) || businessType();
+  const sb = newSandbox(run, selectedBiz), files = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(id + '-prefill-')).sort();
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   for (const f of files) fs.copyFileSync(path.join(DIR.inbox, f), path.join(sb, 'files', f.slice((id + '-prefill-').length).replace(/^\d+-/, '')));
   // 收件匣唔可以越積越亂：登記完即搬去封存（掃描工具之後照呢份文件核對）
   const now = clockNow(), dest = path.join(DIR.archive, `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, 'prefill-' + id);
   fs.mkdirSync(dest, { recursive: true });
   for (const f of [file, ...files]) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
-  writeJSON(path.join(sb, 'questions.json'), INTAKE_QUESTIONS.filter(q => q.required).map(q => ({ id: 'q' + q.n, ask: q.ask, hint: q.hint })));
+  writeJSON(path.join(sb, 'questions.json'), intakeQuestions((selectedBiz || {}).type).filter(q => q.required).map(q => ({ id: 'q' + q.n, ask: q.ask, hint: q.hint })));
   datedTask(sb, 'ai-prefill.md');
   writeJSON(path.join(sb, 'job.json'), { type: 'prefill', today: todayIso() });
   step(run, 'applied', U.stepPrefillRegistered, 'done', files.length + ' 份文件');
@@ -1022,10 +1043,11 @@ function finishPrefill(run, sb, label) {
   step(run, 'ai', label, 'done', run.result.summary);
   return finish(run, 'done');
 }
-function newSandbox(run) {
+function newSandbox(run, selectedBiz = null) {
   const sb = path.join(DIR.sandbox, run.id);
   fs.mkdirSync(path.join(sb, 'out'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'ask-format.md'), path.join(sb, 'ask-format.md'));
+  writeBizContext(sb, selectedBiz);
   return sb;
 }
 
@@ -2005,7 +2027,12 @@ function placeInterviewIfDue() {
   const s = loadState(), iv = s.interviews;
   if (s.demo === true || !iv || !iv.nextOn || !(s.intake && s.intake.confirmedAt)) return null;
   if (todayIso() < addDays(iv.nextOn, -2) || iv.packFor === iv.nextOn || openRhythm('interview')) return null;
-  const today = todayIso(), qs = [], nea = (s.company || {}).nextExternalAction;
+  const today = todayIso(), biz = businessType(), resultAsk = {
+    service: '這星期完成了多少次服務？收到多少款項？',
+    goods: '這星期賣出多少件？收到多少款項？',
+    online: '這星期新增多少使用者或觀看？收到多少款項？',
+    nonprofit: '這星期服務了多少人？取得多少資助或捐款？'
+  }[(biz || {}).type] || '這星期有甚麼實際成果？（有數字請寫數字）', qs = [{ id: 'results', bind: 'results', ask: resultAsk, kind: 'text', effect: 'tentative' }], nea = (s.company || {}).nextExternalAction;
   const ad = nea && nea.text ? actionDay(nea.text, today) : null;
   if (ad && ad.day < today) {
     const hit = relatedInput(s, ad.day, nameWords(nea.text).concat(((s.milestones || []).find(m => m.id === nea.milestoneId) || {}).short || ''));
@@ -2072,6 +2099,14 @@ function handleInterviewAnswer(run, pack, store, fresh) {
     if (!a || done.has(q.id) || !fresh.has(q.id)) continue;
     done.add(q.id);
     const val = String(a.value ?? '').trim(), opt = (q.options || []).find(o => o.text === val), unknown = !val || val === U.unknownLater;
+    if (q.bind === 'results') {
+      if (!val) continue;
+      structuredSeen = true;
+      const title = '本週成果：' + clip(val, 80);
+      said.push(title);
+      addEvent({ actor: 'founder', type: 'input', title, relatedIds: [pack.id], moduleIds: ['now', 'inputs'] }, s);
+      continue;
+    }
     if (q.bind === 'none' || q.bind === 'held') { if (!unknown && val !== U.interviewNone) texts.push(q.id); continue; }
     structuredSeen = true;
     if (q.bind === 'next') {
@@ -2515,7 +2550,7 @@ async function main() {
           // 準備場景／會後紀錄重做：用返上次工作資料夾嘅資料
           run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.practiceTaskId = prev.practiceTaskId || '';
           const old = path.join(DIR.sandbox, prev.id), sb = newSandbox(run);
-          for (const f of fs.readdirSync(old).filter(f => f !== 'out' && !f.endsWith('.txt'))) fs.cpSync(path.join(old, f), path.join(sb, f), { recursive: true });
+          for (const f of fs.readdirSync(old).filter(f => f !== 'out' && f !== 'biz.md' && !f.endsWith('.txt'))) fs.cpSync(path.join(old, f), path.join(sb, f), { recursive: true });
           step(run, 'received', U.stepReqReceived, 'done', '重試上一次');
           await runAIStep(run, sb, prev.noteType === 'debrief' ? U.practiceDebriefAI : U.practicePrepAI, true);
           return;
@@ -2539,7 +2574,7 @@ async function main() {
         const sb = newSandbox(run);
         const oldDir = path.join(DIR.sandbox, prev.id);
         if (run.noteType === 'help' && fs.existsSync(oldDir)) {
-          fs.cpSync(oldDir, sb, { recursive: true, filter: source => source === oldDir || (path.basename(source) !== 'out' && !source.endsWith('.txt')) });
+          fs.cpSync(oldDir, sb, { recursive: true, filter: source => source === oldDir || (path.basename(source) !== 'out' && path.basename(source) !== 'biz.md' && !source.endsWith('.txt')) });
         } else if (run.noteType === 'help') {
           const archive = fs.readdirSync(DIR.archive, { withFileTypes: true }).filter(x => x.isDirectory()).map(x => path.join(DIR.archive, x.name));
           const old = archive.map(d => path.join(d, prev.ref + '-note-help.md')).find(f => fs.existsSync(f));

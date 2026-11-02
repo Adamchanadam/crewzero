@@ -64,6 +64,8 @@ try {
   await send('Page.navigate', { url: BASE + '#/intake' }); await sleep(1800);
   ok('交資料頁：文件區排喺題目之前，有「由文件預填」掣', await ev(`(()=>{const b=document.querySelector('#pf-go'),q=document.querySelector('#q1');return !!b&&!!q&&!!(b.compareDocumentPosition(q)&Node.DOCUMENT_POSITION_FOLLOWING)})()`));
   ok('未加文件：「由文件預填」停用', await ev(`document.querySelector('#pf-go').disabled`));
+  await ev(`document.querySelector('input[name="biz-type"][value="other"]').click()`); await sleep(500);
+  ok('交資料頁：可選擇生意類別，題目維持可填', await ev(`document.querySelector('input[name="biz-type"][value="other"]').checked&&!!document.querySelector('#q1')`));
   // 創辦人已經寫咗第 2 題：預填唔可以覆蓋
   const mine2 = '我們按月收費。';
   await typeEnd('#q2', mine2);
