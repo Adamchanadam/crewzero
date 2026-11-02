@@ -286,7 +286,7 @@ function runAI(sandbox, opts) {
 
 function checkReceipt(outDir, allowEmpty) {
   const r = readJSON(path.join(outDir, 'receipt.json'), null);
-  if (!r || typeof r.summary !== 'string' || !Array.isArray(r.artifacts) || (!r.artifacts.length && !allowEmpty)) return { ok: false, reason: 'AI 已完成，但未有交妥工作收據' };
+  if (!r || typeof r.summary !== 'string' || !Array.isArray(r.artifacts) || (!r.artifacts.length && !allowEmpty)) return { ok: false, reason: 'AI 已完成，但未有交出成果，系統未有採用。請按「重試」。' };
   const artifacts = [];
   for (const a of r.artifacts.slice(0, 5)) {
     const file = String(a && a.file || '');
@@ -299,7 +299,7 @@ function checkReceipt(outDir, allowEmpty) {
     if (NAMES.isColloquial(a.title)) log(`AI 產出標題有口語字：${a.title}`);
   }
   const list = x => Array.isArray(x) ? x.map(String).slice(0, 5) : [];
-  if (!artifacts.length && !allowEmpty) return { ok: false, reason: 'AI 已完成，但未有交妥工作收據' };
+  if (!artifacts.length && !allowEmpty) return { ok: false, reason: 'AI 已完成，但未有交出成果，系統未有採用。請按「重試」。' };
   return { ok: true, receipt: { summary: r.summary.slice(0, 600), artifacts, founderNext: list(r.founderNext) } };
 }
 // AI 出嘅新問題包：過外殼核對（格式、每包最多 12 條、即刻生效要有選項、答過唔再問）先放上 Founder Desk
@@ -370,7 +370,7 @@ async function runAIStep(run, sb, label, allowEmpty) {
     run.result.summary = '此要求與你先前回答過的問題相同，因此不再重複提問；如需再改，請寫清新做法後再提交。';
     step(run, 'ai', label, 'done', '先前已回答，不再重複提問'); return finish(run, 'done');
   }
-  if (isRequest(run) && !(run.result.asks || []).length) { if (run.noteType === 'adhoc') upsertTask({ id: 'a-' + run.ref, status: 'blocked', waitingFor: 'AI 未能擬定範圍，可在 Founder Desk 按「重試」' }); const why = 'AI 未能擬定問題，請按「重試」'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
+  if (isRequest(run) && !(run.result.asks || []).length) { if (run.noteType === 'adhoc') upsertTask({ id: 'a-' + run.ref, status: 'blocked', waitingFor: 'AI 未能擬定範圍，可在 Founder Desk 按「重試」' }); const why = 'AI 這次未能擬定問題，系統未有採用。請按「重試」，AI 會重新擬定。'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
   if (run.taskId) taskDone(run);
   const more = run.result.asks && run.result.asks.length ? `；另有 ${run.result.asks.reduce((n, a) => n + a.count, 0)} 條問題等你回答` : '';
   step(run, 'ai', label, 'done', isRequest(run) ? `已擬定 ${run.result.asks.reduce((n, a) => n + a.count, 0)} 條問題，等你確認` : `已完成 ${chk.receipt.artifacts.length} 份產出${more}`);
@@ -533,7 +533,7 @@ async function finishIntake(run, sb, label) {
   // 就緒清單或者四格修正後仍缺：唔阻你校對，加空欄（未知）同首批工作，校對頁列出「尚未問齊」
   if (!chk.ok) { const loose = checkDraft(out, run, false); if (loose.ok) { log(`${run.id} 修正後仍未齊：${chk.errors.join('；')}；已加空欄`); chk = loose; } }
   if (!chk.ok) {
-    const why = 'AI 擬定的公司概覽格式不完整，請按「重試」';
+    const why = 'AI 這次擬定的公司概覽內容不完整，系統未有採用。請按「重試」，AI 會重新擬定。';
     step(run, 'ai', label, 'failed', why);
     return finish(run, 'failed', why);
   }
@@ -645,7 +645,7 @@ function finishPracticePrep(run, sb, label) {
   const sc = readJSON(path.join(sb, 'out', 'scenario.json'), null);
   const txt = (x, n) => typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : '';
   const okSc = sc && sc.counterpart && txt(sc.counterpart.name, 60) && sc.persona && ['identity', 'stance', 'interests'].every(k => sc.persona[k] && txt(sc.persona[k].text, 400)) && sc.goal && txt(sc.goal.text, 200) && Array.isArray(sc.questions) && sc.questions.length && Array.isArray(sc.objections) && sc.objections.length;
-  if (!okSc) { const why = 'AI 準備的場景不完整，請按「重試」'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
+  if (!okSc) { const why = 'AI 這次準備的場景內容不完整，系統未有採用。請按「重試」，AI 會重新準備。'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
   const task = run.practiceTaskId ? getTask(run.practiceTaskId) : null;
   const id = 'S' + stamp();
   const clean = { id, title: txt(sc.title, 60) || '練習：' + txt(sc.counterpart.name, 30), forTaskId: task ? task.id : '', date: task && task.dueAt || '', counterpart: { name: txt(sc.counterpart.name, 60), role: txt(sc.counterpart.role, 120) },
@@ -1173,9 +1173,9 @@ async function handleProofread(run, files) {
   const { head, machine, duplicateVia } = parsed;
   const via = replyVia(head.via);
   let why = '';
-  if (!parsed.ok && duplicateVia) why = '回覆來源重複，無法套用';
-  else if (!parsed.ok) why = '回覆格式不正確，無法套用';
-  else if (head.kind !== 'proofread' || !machine) why = '回覆格式不正確，無法套用';
+  if (!parsed.ok && duplicateVia) why = '這次答案未能記錄：答案來源重複。請按「重新載入」，再確認一次。';
+  else if (!parsed.ok) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
+  else if (head.kind !== 'proofread' || !machine) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (head.ref !== page.page.id) why = '回覆與目前的公司概覽不相符';
   else if (head.hash !== hash) why = '你確認時所見的版本已經更改，請重新開啟頁面再確認';
   if (why) { archive(files); step(run, 'applied', U.stepApplyConfirm, 'failed', why); return finish(run, 'failed', why); }
@@ -1260,9 +1260,9 @@ async function handleAsk(run, file) {
   run.ref = head.ref;
   step(run, 'received', U.stepReceivedAns, 'done', pack ? pack.title : '');
   let why = '';
-  if (!parsed.ok && duplicateVia) why = '回覆來源重複，無法套用';
-  else if (!parsed.ok) why = '回覆格式不正確，無法套用';
-  else if (head.kind !== 'ask-answer' || !machine) why = '回覆格式不正確，無法套用';
+  if (!parsed.ok && duplicateVia) why = '這次答案未能記錄：答案來源重複。請按「重新載入」，再確認一次。';
+  else if (!parsed.ok) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
+  else if (head.kind !== 'ask-answer' || !machine) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (!pack) why = '找不到此問題包';
   else if (head.hash !== fnv(JSON.stringify(pack))) why = '問題包已經更改，請重新開啟頁面再作答';
   if (why) { archive([file]); step(run, 'applied', U.stepApplyAns, 'failed', why); return finish(run, 'failed', why); }
@@ -2486,7 +2486,7 @@ async function main() {
           await runAIStep(run, sb, U.stepEventAI, true);
           return;
         }
-        if (!['order', 'adhoc'].includes(prev.noteType)) { finish(run, 'failed', '請在營運監察台再按一次'); return; }
+        if (!['order', 'adhoc'].includes(prev.noteType)) { finish(run, 'failed', '這項工作不能直接重試，請回到原本的頁面重新提交一次。'); return; }
         run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType;
         step(run, 'received', U.stepReqReceived, 'done', '重試上一次');
         step(run, 'applied', U.stepReqRegistered, 'done', '沿用上一次');
@@ -2505,8 +2505,8 @@ async function main() {
   } catch (e) {
     log('外殼出錯：' + (e && e.stack || e));
     // 辯論回合出錯：標未完成，免得伺服器不停再叫
-    if (run && run.kind === 'debate' && run.ref) { const m = readMatch(run.ref); if (m && m.next && !m.failed) { m.failed = { pass: m.next, reason: '系統出錯', at: localIso() }; m.next = ''; saveMatch(m); } }
-    if (run && run.state === 'running') finish(run, 'failed', '系統出錯，工作未完成；請按「重試」再做一次');
+    if (run && run.kind === 'debate' && run.ref) { const m = readMatch(run.ref); if (m && m.next && !m.failed) { m.failed = { pass: m.next, reason: '工作中途中斷', at: localIso() }; m.next = ''; saveMatch(m); } }
+    if (run && run.state === 'running') finish(run, 'failed', '工作中途中斷，未有完成。請按「重試」；如再次中斷，請在 AI 對話說「打開 Founder Desk」重新開啟後再試。');
   } finally {
     if (run && run.state !== 'running') try { recordInboxRun(run, hadInput); } catch (e) { log('記錄 run 出錯：' + (e && e.message || e)); }
     dropLock();

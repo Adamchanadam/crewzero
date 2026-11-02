@@ -187,6 +187,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     // 用 add() 填：陣列會拆開、冇嘢唔會變成字
     var app = $('#app'); app.replaceChildren();
     for (var i = 0; i < arguments.length; i++) add(app, arguments[i]);
+    V.shown = location.hash;
   }
   function tag(t, k) { return h('span', { class: 'tag ' + (k || '') }, t); }
   function clip(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
@@ -210,11 +211,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   var toastTimer = null;
   function toast(t) { var el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 4000); }
   function announce(t) { var l = $('#live'); l.textContent = ''; setTimeout(function () { l.textContent = t; }, 30); }
-  function get(url) { return fetch(url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); }); }
+  // 讀取：連唔到 → 錯誤帶 net；伺服器回非 2xx → 錯誤帶 status（e.message 係狀態碼，只供程式比較）
+  function get(url) { return fetch(url, { cache: 'no-store' }).catch(function () { throw DESK.netError(); }).then(function (r) { if (!r.ok) { var e = new Error(String(r.status)); e.status = r.status; throw e; } return r.json(); }); }
+  // 送出：錯誤經 DESK.send 分類；畫面一律用 why(e) 取中文原因同做法，唔顯示 e.message
   function post(url, body) {
-    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || String(r.status)); return j; }); });
+    return DESK.send(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (j) { if (!j.ok) throw DESK.apiError({ status: 200 }, j); return j; });
   }
+  var why = DESK.why;
+  function retryCatch(e) { toast(N.ui.retryFailed + '：' + why(e)); }
+  function failReason(err) { return err ? N.ui.reason + '：' + N.fix(err) : N.ui.failNoReason; }
   function head(page, st) { return DESK.header({ page: page, company: st && st.company, pending: st ? st.openAsks : 0, sim: !!(st && st.sim) }); }
   function showAns(q, v) { return Array.isArray(v) ? v.join('、') : (q && q.kind === 'date' ? fmtDay(v) : String(v == null ? '' : v)); }
 
@@ -223,7 +229,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (!st || !st.instance) return;
     if (!V.instance) { V.instance = st.instance; return; }
     if (st.instance === V.instance || $('#stale')) return;
-    var bar = h('div', { class: 'track off', id: 'stale' }, h('b', null, N.ui.staleTitle + '：'), '此頁可能已過時，請重新載入後再繼續。 ',
+    var bar = h('div', { class: 'track off', id: 'stale' }, h('b', null, N.ui.staleTitle + '：'), N.ui.staleBody + ' ',
       h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, N.ui.reload));
     var app = $('#app'); app.insertBefore(bar, app.firstChild);
   }
@@ -246,9 +252,18 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (rq) return showRequest(rq[1]);
     return showHub();
   }
-  function fail(msg) {
-    setApp(DESK.nav('pending', 0), h('div', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.offline), h('p', null, msg),
-      h('p', { class: 'guide' }, 'Founder Desk 尚未開啟：' + N.ui.reopenDesk + '，即可重新開啟。')));
+  // 整頁讀取失敗：分清連唔到（CrewZero 停咗）、搵唔到（404，用 missing 句）、頁面本身出錯；每種都有掣
+  function fail(e, missing) {
+    var kind = e && e.net ? 'net' : e && e.status === 404 ? 'missing' : 'internal';
+    // 頁面已經顯示緊內容，輪詢先連唔到：保留內容（頁頂會講 CrewZero 已停止），每 5 秒再試；重新開返就自動回復
+    if (kind === 'net' && V.shown === location.hash) { DESK.setConn('offline'); clearTimeout(V.pollTimer); V.pollTimer = setTimeout(route, 5000); return; }
+    if (kind === 'internal' && window.console) console.error(e);
+    var reload = h('button', { type: 'button', class: 'btn' + (kind === 'missing' ? '' : ' primary'), id: 'fail-reload', onclick: function () { location.reload(); } }, N.ui.reload);
+    var back = h('button', { type: 'button', class: 'btn' + (kind === 'missing' ? ' primary' : ''), id: 'fail-back', onclick: function () { if (/^#?\/?$/.test(location.hash)) route(); else location.hash = '#/'; } }, N.ui.backPending);
+    setApp(DESK.nav('pending', 0), h('div', { class: 'layer', id: 'fail', 'data-kind': kind },
+      h('span', { class: 'eyebrow' }, kind === 'net' ? N.ui.failNetTitle : kind === 'missing' ? N.ui.failMissingTitle : N.ui.failInternalTitle),
+      h('p', null, kind === 'net' ? N.ui.failNet : kind === 'missing' ? (missing || N.ui.err_notFound) : N.ui.failInternal),
+      h('div', { class: 'foot' }, kind === 'missing' ? [back, reload] : [reload, back])));
   }
 
   /* ---------- AI 未設定：置頂阻塞卡（待決事項、交資料、答題都有） ---------- */
@@ -343,7 +358,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           var ai = (rn.steps || []).filter(function (s) { return s.key === 'ai'; })[0];
           var label = N.fix(ai ? ai.label : (rn.kind === 'ask' ? N.ui.stepApplyAns : N.ui.stepApplyConfirm));
           var sub = dayOf(rn.startedAt) + ' ' + hm(rn.startedAt) + ' · ' +
-            (rn.state === 'done' ? (rn.result ? clip(N.fix(rn.result.summary), 90) : N.ui.trackDone) : rn.state === 'failed' ? N.ui.trackFailed + '：' + (rn.error || '') : N.ui.trackRunning);
+            (rn.state === 'done' ? (rn.result ? clip(N.fix(rn.result.summary), 90) : N.ui.trackDone) : rn.state === 'failed' ? N.ui.trackFailed + '：' + (rn.error ? N.fix(rn.error) : N.ui.failNoReason) : N.ui.trackRunning);
           if (rn.state === 'waiting') return trRow('waiting', clip(label, 70), dayOf(rn.startedAt) + ' ' + hm(rn.startedAt) + ' · ' + N.ui.aiNotSet + '：設定完成後將自動繼續');
           return trRow(rn.state === 'done' ? 'done' : rn.state === 'failed' ? 'failed' : 'running', clip(label, 70), sub);
         })) : h('p', { class: 'guide' }, '暫無。'),
@@ -373,7 +388,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
       DESK.title('pending', open.length ? '（' + open.length + '）' : '');
       V.pollTimer = setTimeout(showHub, st.busy ? 3000 : 8000);
-    }).catch(function (e) { if (window.console) console.error(e); fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
 
   /* ---------- 交要求：經收件匣交 AI 擬成問題包（答咗先生效） ---------- */
@@ -413,7 +428,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           h('button', { type: 'button', class: 'btn primary big', id: 'req-send', onclick: function () { sendRequest(type, ta, evDate, evFiles); } }, N.ui.reqSend)));
       setApp(head('request', st), aiBlock(st), mine ? requestTrack(mine, run) : null, mine ? null : form, routeBox);
       if (mine && !(run && (run.state === 'done' || run.state === 'failed'))) RQ.timer = setTimeout(function () { if (location.hash === '#/request/' + type) showRequest(type); }, 2500);
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   function sendRequest(type, ta, evDate, evFiles) {
     var text = ta.value.trim();
@@ -426,7 +441,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     }).then(function (j) {
       try { localStorage.removeItem('startup-os-req-' + type); } catch (e) { }
       RQ.sent = { type: type, id: j.id }; toast(N.ui.reqSent); showRequest(type);
-    }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.reqSend; toast(String(e.message) === 'invalid' ? '未能提交：請檢查內容後再試。' : '未能提交：' + e.message); });
+    }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.reqSend; toast('未能提交：' + why(e)); });
   }
   function requestTrack(mine, r) {
     var rows = r ? (r.steps || []).map(function (s) { return { label: N.fix(s.label), state: s.state, sub: s.detail }; })
@@ -438,8 +453,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('h3', null, state === 'done' ? (asks.length ? 'AI 已擬定問題，待你確認' : N.ui.trackDone) : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
     if (state === 'waiting') add(card, waitingNote(r));
-    if (state === 'failed') card.append(h('p', null, N.ui.reason + '：' + (r.error || '未知')), h('div', { class: 'foot' },
-      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }); } }, N.ui.retry)));
+    if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
+      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }, retryCatch); } }, N.ui.retry)));
     if (state === 'done' && r.result && r.result.summary && mine.type === 'event') card.append(h('p', { id: 'req-summary' }, N.fix(r.result.summary)));
     if (state === 'done') card.append(asks.length ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'req-answer', href: '#/ask/' + asks[0].id }, '★ ' + T('answerN', { n: Math.min(3, asks[0].count) })))
       : h('p', null, '已記錄。'));
@@ -476,7 +491,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           return h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, (sc ? sc.counterpart.name : '練習') + ' · ' + LV[x.level]), h('div', { class: 'small muted' }, dayOf(x.startedAt) + ' ' + hm(x.startedAt) + ' · ' + x.turns + ' 句' + (x.review ? ' · 目標' + ({ yes: '達成', partly: '部分達成', no: '未達成' }[x.review.goalMet] || '') : x.endedAt ? '' : ' · 未完成'))),
             h('a', { class: 'btn', href: '#/practice/s/' + x.id }, x.endedAt ? N.ui.practiceReview : N.ui.practiceContinue));
         })) : null);
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   // 為一個你要做嘅行動準備場景：經收件匣交 AI（同交資料同一條只新增嘅路）
   var PP = { sent: null, timer: null };
@@ -493,7 +508,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         setApp(prHead(st), aiBlock(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'prep-track' }, h('span', { class: 'eyebrow' }, N.ui.practicePrepare),
           h('h3', null, done ? '場景已準備好' : run.state === 'failed' ? N.ui.trackFailed : 'AI 正在準備對方人物卡（約半分鐘）'),
           h('ol', { class: 'tr-steps' }, (run.steps || []).map(function (s) { return trRow(s.state, N.fix(s.label), s.detail); })),
-          run.state === 'failed' ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: run.id }).then(function () { setTimeout(function () { showPracticeNew(taskId); }, 800); }); } }, N.ui.retry)) : null,
+          run.state === 'failed' ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: run.id }).then(function () { setTimeout(function () { showPracticeNew(taskId); }, 800); }, retryCatch); } }, N.ui.retry)) : null,
           done ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'prep-go', href: '#/practice/' + run.result.scenarioId }, '★ ' + N.ui.practiceSeeCard)) : null));
         if (!done && run.state !== 'failed') PP.timer = setTimeout(function () { if (location.hash === '#/practice/new/' + taskId) showPracticeNew(taskId); }, 2500);
         return;
@@ -507,9 +522,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceBack), h('button', { type: 'button', class: 'btn primary big', id: 'prep-send', onclick: function (e) {
           if (!act && !who.value.trim() && !ta.value.trim()) { toast('請寫下對方是誰。'); return; }
           e.target.disabled = true;
-          post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: act ? act.id : '', who: who.value, text: ta.value }).then(function (j) { PP.sent = j.id; showPracticeNew(taskId); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + er.message); });
+          post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: act ? act.id : '', who: who.value, text: ta.value }).then(function (j) { PP.sent = j.id; showPracticeNew(taskId); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + why(er)); });
         } }, N.ui.practicePrepare))));
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   function showPracticePrep(id) {
     Promise.all([get('/api/status'), get('/api/practice/scenario?id=' + encodeURIComponent(id)), get('/api/practice')]).then(function (r) {
@@ -537,12 +552,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         })), h('p', { class: 'guide' }, { easy: '對方願意商討，有合理理由便會讓步。', normal: '對方態度審慎，須聽到具體理由才願意推進。', hard: '對方堅守自身利益，會提出質疑並施壓。' }[PR.level]),
           h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceBack), h('button', { type: 'button', class: 'btn primary big', id: 'pr-start', disabled: !st.cert ? true : null, onclick: function (e) {
             e.target.disabled = true; e.target.textContent = '正在準備對方……';
-            post('/api/practice', { action: 'start', scenarioId: sc.id, level: PR.level, edits: PR.edits }).then(function (j) { PR.edits = {}; location.hash = '#/practice/s/' + j.session.id; }).catch(function (er) { e.target.disabled = false; e.target.textContent = N.ui.practiceStart; toast(er.message === 'ai' ? 'AI 尚未設定，請先前往設定。' : '未能開始：' + er.message); });
+            post('/api/practice', { action: 'start', scenarioId: sc.id, level: PR.level, edits: PR.edits }).then(function (j) { PR.edits = {}; location.hash = '#/practice/s/' + j.session.id; }).catch(function (er) { e.target.disabled = false; e.target.textContent = N.ui.practiceStart; toast('未能開始：' + why(er)); });
           } }, N.ui.practiceStart))),
         past.length ? h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.practiceHistory), past.map(function (x) {
           return h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, dayOf(x.startedAt) + ' ' + hm(x.startedAt) + ' · ' + LV[x.level]), h('div', { class: 'small muted' }, x.turns + ' 句' + (x.review ? ' · 目標' + ({ yes: '達成', partly: '部分達成', no: '未達成' }[x.review.goalMet] || '') : ''))), h('a', { class: 'btn', href: '#/practice/s/' + x.id }, x.endedAt ? N.ui.practiceReview : N.ui.practiceContinue));
         })) : null);
-    }).catch(function () { fail('找不到此練習場景。'); });
+    }).catch(function (e) { fail(e, N.ui.failNoScenario); });
   }
   function moodChip(s) { return h('span', { class: 'mood', 'data-s': String(s.state.moodScore || 0), id: 'mood' }, h('i'), N.ui.practiceMood + '：' + (s.state.mood || '未知')); }
   function tracker(s, sc) {
@@ -558,7 +573,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       PR.session = r[1].session; PR.scenario = r[1].scenario;
       if (PR.session.endedAt) return renderReview();
       renderPlay();
-    }).catch(function () { fail('找不到此次練習。'); });
+    }).catch(function (e) { fail(e, N.ui.failNoSession); });
   }
   function sendLine(text) {
     var s = PR.session; text = String(text || '').trim();
@@ -567,15 +582,20 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     PR.busy = true; PR.hint = false; PR.draft = '';
     s.turns.push({ who: 'you', text: text }); renderPlay(true);
     post('/api/practice', { action: 'say', sessionId: s.id, text: text }).then(function (j) { PR.session = j.session; PR.busy = false; renderPlay(); if (j.session.pending) waitTags(j.session.id); })
-      .catch(function (e) { s.turns.pop(); PR.busy = false; PR.draft = text; renderPlay(); toast(e.message === 'reply' ? '對方暫時未能回應，請再發送一次。' : '未能發送：' + e.message); });
+      .catch(function (e) { s.turns.pop(); PR.busy = false; PR.draft = text; renderPlay(); toast(e.said || '未能發送：' + why(e)); });
   }
   // 對方講完先顯示；建議講法、提示同目標追蹤隨後補上
   function waitTags(id, n) {
     n = n || 0;
     setTimeout(function () {
       if (location.hash !== '#/practice/s/' + id) return;
-      get('/api/practice/session?id=' + encodeURIComponent(id)).then(function (j) { if (!j.session.pending || n > 20) { PR.session = j.session; renderPlay(); } else waitTags(id, n + 1); }).catch(function () { });
-    }, 600);
+      get('/api/practice/session?id=' + encodeURIComponent(id)).then(function (j) {
+        if (!j.session.pending) { PR.session = j.session; renderPlay(); return; }
+        // 約 12 秒後改為每 3 秒讀一次；約 5 分鐘仍未準備好，就講原因同做法（唔會一直停喺「準備中」而冇出口）
+        if (n > 120) { PR.session = j.session; renderPlay(); toast(N.ui.practiceTagsStuck); return; }
+        waitTags(id, n + 1);
+      }).catch(function (e) { toast(why(e)); });
+    }, n > 20 ? 3000 : 600);
   }
   function renderPlay(waiting) {
     var s = PR.session, sc = PR.scenario;
@@ -596,7 +616,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('div', { class: 'pact' },
         h('button', { type: 'button', class: 'btn small', id: 'pl-hint', onclick: function () { PR.hint = !PR.hint; renderPlay(waiting); } }, N.ui.practiceHint),
         h('button', { type: 'button', class: 'btn small', id: 'pl-undo', disabled: PR.busy || s.pending || !s.turns.some(function (t) { return t.who === 'you'; }) ? true : null, onclick: function () {
-          post('/api/practice', { action: 'undo', sessionId: s.id }).then(function (j) { var last = s.turns.filter(function (t) { return t.who === 'you'; }).pop(); PR.session = j.session; PR.draft = last ? last.text : ''; renderPlay(); toast('對方會當作未聽過，你可以重新表達。'); });
+          post('/api/practice', { action: 'undo', sessionId: s.id }).then(function (j) { var last = s.turns.filter(function (t) { return t.who === 'you'; }).pop(); PR.session = j.session; PR.draft = last ? last.text : ''; renderPlay(); toast('對方會當作未聽過，你可以重新表達。'); }, function (e) { toast(why(e)); });
         } }, N.ui.practiceRedo),
         h('button', { type: 'button', class: 'btn small', id: 'pl-end', disabled: PR.busy || s.pending ? true : null, onclick: function () { endPractice(); } }, N.ui.practiceEnd))));
     setApp(h('div', { class: 'pl-top', id: 'pl-top' },
@@ -607,7 +627,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function endPractice() {
     var s = PR.session; PR.busy = true;
     setApp(h('section', { class: 'track', id: 'review-wait' }, h('span', { class: 'eyebrow' }, N.ui.practiceReview), h('h3', null, '正在覆盤（約半分鐘）'), h('p', { class: 'small muted' }, '內容包括對方未公開的顧慮、你問中了哪些問題、反對意見的應對表現，以及一張會面卡。')));
-    post('/api/practice', { action: 'end', sessionId: s.id }).then(function (j) { PR.busy = false; PR.session = j.session; renderReview(); }).catch(function (e) { PR.busy = false; toast('未能覆盤：' + e.message); renderPlay(); });
+    post('/api/practice', { action: 'end', sessionId: s.id }).then(function (j) { PR.busy = false; PR.session = j.session; renderReview(); }).catch(function (e) { PR.busy = false; toast('未能覆盤：' + why(e)); renderPlay(); });
   }
   function renderReview() {
     var s = PR.session, sc = PR.scenario, rv = s.review;
@@ -645,7 +665,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'sec' }, h('b', null, N.ui.cardClosing), h('p', null, c.closing)),
         h('p', { class: 'small muted', style: 'margin-top:14px;font-size:var(--fs-sub)' }, N.ui.practiceLabel)),
         h('div', { class: 'foot', style: 'justify-content:center' }, h('a', { class: 'btn', href: '#/practice/s/' + id }, N.ui.practiceReview), h('a', { class: 'btn', href: '#/practice/debrief/' + id }, N.ui.practiceDebrief)));
-    }).catch(function () { fail('找不到此次練習。'); });
+    }).catch(function (e) { fail(e, N.ui.failNoSession); });
   }
   // 會後紀錄：真實會面之後填，交 AI 擬跟進問題（證據級只有真實行為先可以升）
   var DB = { sent: null, timer: null, commit: 'partly' };
@@ -674,9 +694,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice/s/' + id }, N.ui.practiceReview), h('button', { type: 'button', class: 'btn primary big', id: 'db-send', onclick: function (e) {
           if (!said.value.trim()) { toast('請寫下對方實際說了甚麼。'); return; }
           e.target.disabled = true;
-          post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: sc.id, sessionId: s.id, text: said.value, commitment: DB.commit, followUp: date.value }).then(function (j) { DB.sent = j.id; showDebrief(id); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + er.message); });
+          post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: sc.id, sessionId: s.id, text: said.value, commitment: DB.commit, followUp: date.value }).then(function (j) { DB.sent = j.id; showDebrief(id); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + why(er)); });
         } }, N.ui.reqSend))));
-    }).catch(function () { fail('找不到此次練習。'); });
+    }).catch(function (e) { fail(e, N.ui.failNoSession); });
   }
 
   /* ---------- 紅藍對打：開一場辯論（題目、紅方席位、力度）、場次頁（進度、回應、採用、再攻、重跑、再打一場）；舞台喺營運監察台 ---------- */
@@ -699,7 +719,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
             h('a', { class: 'btn' + (['done', 'adopt', 'failed'].indexOf(m.phase) >= 0 ? ' primary' : ''), href: '#/debate/' + m.id, 'data-match': m.id }, '查看'));
         }) : h('p', { class: 'empty' }, '未有辯論。'),
         h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/debate/new', id: 'debate-new' }, N.ui.debateNew))));
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   function showDebateNew(type, target) {
     clearTimeout(DT.timer);
@@ -751,9 +771,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/debate' }, N.ui.debateBack), h('button', { type: 'button', class: 'btn primary big', id: 'dt-start', onclick: function (e) {
           if (!title.value.trim()) { toast('請用一句話寫下題目。'); title.focus(); return; }
           e.target.disabled = true;
-          post('/api/intake', { kind: 'note', type: 'debate-start', topicType: DT.type, title: title.value.trim(), seats: DT.seats, level: DT.level, targetId: DT.target }).then(function (j) { DT.sent = j.id; showDebateNew(DT.type, DT.target); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + er.message); });
+          post('/api/intake', { kind: 'note', type: 'debate-start', topicType: DT.type, title: title.value.trim(), seats: DT.seats, level: DT.level, targetId: DT.target }).then(function (j) { DT.sent = j.id; showDebateNew(DT.type, DT.target); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + why(er)); });
         } }, '★ ' + N.ui.debateStart))));
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   var DM = { sent: {}, timer: null };
   function showDebateMatch(id) {
@@ -795,12 +815,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, act, h('a', { class: 'btn', href: stageHref(id), id: 'dm-stage' }, N.ui.debateStage + ' ↗'), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll))));
       // 做緊嘢就密啲更新；等你嘅時候都更新（例如喺另一頁答咗問題）
       DM.timer = setTimeout(function () { if (location.hash === '#/debate/' + id) showDebateMatch(id); }, running || sent ? 2500 : 5000);
-    }).catch(function () { fail('找不到此場辯論。'); });
+    }).catch(function (e) { fail(e, N.ui.failNoDebate); });
   }
   function debateAction(id, action) {
     DM.sent[id] = action;
     post('/api/intake', { kind: 'note', type: 'debate-action', matchId: id, action: action }).then(function () { toast({ respond: '正在準備回應問題', adopt: '正在準備採用問題', reattack2: '已安排紅方進行第二輪再攻', rerun: '已安排重跑' }[action]); setTimeout(function () { showDebateMatch(id); }, 1200); setTimeout(function () { if (DM.sent[id] === action) delete DM.sent[id]; }, 15000); })
-      .catch(function (er) { delete DM.sent[id]; toast('未能提交：' + er.message); });
+      .catch(function (er) { delete DM.sent[id]; toast('未能提交：' + why(er)); });
   }
 
   /* ---------- 答題：每次最多 3 條 ---------- */
@@ -843,7 +863,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       DESK.title('pending', N.fix(P.title));
       renderAsk();
       window.scrollTo(0, 0);
-    }).catch(function () { fail('目前的伺服器找不到此問題包（可能是舊分頁），或無法連接本機伺服器。請返回 Founder Desk 查看最新內容。'); });
+    }).catch(function (e) { fail(e, N.ui.failNoPack); });
   }
   function dateOpts(q) {
     var t = (V.status && V.status.today && parseDay(V.status.today)) || new Date(), seen = {}, out = [];
@@ -1014,8 +1034,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         toast(N.ui.sent);
       }).catch(function (e) {
         btn.disabled = false; btn.textContent = N.ui.resend;
-        if (e.message === 'pack-not-here') { msg.replaceChildren('目前的伺服器找不到此問題包，可能是舊分頁。', h('a', { class: 'btn', href: '/#/' }, N.ui.backPending)); return; }
-        msg.textContent = '未能送出（' + e.message + '）。Founder Desk 可能已停止：' + N.ui.reopenDesk + '重新開啟，然後再按送出。';
+        if (e.code === 'pack-not-here') { msg.replaceChildren(why(e) + ' ', h('a', { class: 'btn', href: '/#/' }, N.ui.backPending)); return; }
+        msg.textContent = '未能送出：' + why(e);
       });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
@@ -1067,9 +1087,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') {
       var appliedFailed = (r.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; });
-      card.append(h('p', null, N.ui.reason + '：' + (r.error || '未知')), appliedFailed
+      card.append(h('p', null, failReason(r.error)), appliedFailed
         ? h('a', { class: 'btn primary', href: '/#/' }, N.ui.backPending)
-        : h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); }); } }, N.ui.retry));
+        : h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); }, retryCatch); } }, N.ui.retry));
     }
     if (state === 'done' && r.result) card.append(resultBox(r.result));
     if (state === 'done') {
@@ -1144,16 +1164,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           c && c.state === 'failed' ? N.ui.certifyRetry : N.ui.certifyGo)));
       // 已配對的瀏覽器與手機（裝置通行證）：撤銷經 /api/setup；撤銷自己呢部之後下一次讀回會見到配對指引
       var devCard = h('section', { class: 'layer', id: 'devices-card' }, h('span', { class: 'eyebrow' }, N.ui.devices),
-        DESK.devices(s.devices || [], { onRevoke: function (id) { post('/api/setup', { action: 'revoke', id: id }).then(function () { toast(N.ui.deviceRevoked); showSetup(); }).catch(function () { toast(N.ui.deviceGone); showSetup(); }); } }));
+        DESK.devices(s.devices || [], { onRevoke: function (id) { post('/api/setup', { action: 'revoke', id: id }).then(function () { toast(N.ui.deviceRevoked); showSetup(); }).catch(function (e) { toast(why(e)); showSetup(); }); } }));
       setApp(head('setup', st), current, result, pickCard, devCard);
       DESK.title('setup');
       if (running) V.pollTimer = setTimeout(showSetup, 1500);
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   function startCertify() {
     var b = $('#certify-go'); if (b) b.disabled = true;
     post('/api/setup', { action: 'certify', host: SET.pick }).then(function () { setTimeout(showSetup, 300); })
-      .catch(function (e) { toast(e.message === 'busy' ? 'AI 工具正在認證，請稍候。' : '未能開始認證，請再試一次。'); showSetup(); });
+      .catch(function (e) { toast(e.code === 'busy' ? 'AI 工具正在認證，請稍候。' : '未能開始認證：' + why(e)); showSetup(); });
   }
 
   /* ---------- 交資料：公司背景資料 → AI 擬公司概覽 ---------- */
@@ -1186,7 +1206,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         IN.sent = null; IN.watching = false;
         V.pollTimer = setTimeout(function () { location.href = '/proofread.html'; }, 1500);
       }
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
   function intakeTrack(st) {
     var it = st.intake, r = it.runId ? st.runs.filter(function (x) { return x.id === it.runId; })[0] : null;
@@ -1198,8 +1218,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('h3', null, state === 'done' ? N.ui.companyReady : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
     if (state === 'waiting') add(card, waitingNote(r));
-    if (state === 'failed') card.append(h('p', null, N.ui.reason + '：' + (r.error || '未知')), h('div', { class: 'foot' },
-      h('button', { type: 'button', class: 'btn primary', id: 'intake-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); IN.watching = true; setTimeout(showIntake, 800); }); } }, N.ui.retry),
+    if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
+      h('button', { type: 'button', class: 'btn primary', id: 'intake-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); IN.watching = true; setTimeout(showIntake, 800); }, retryCatch); } }, N.ui.retry),
       h('button', { type: 'button', class: 'btn', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)));
     if (state === 'done') {
       if (r && r.result) card.append(resultBox(r.result));
@@ -1251,7 +1271,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var ext = (String(f.name).split('.').pop() || '').toLowerCase();
       var total = IN.files.reduce(function (n, x) { return n + x.size; }, 0) + f.size;
       if (lim.exts.indexOf(ext) < 0) msgs.push('「' + f.name + '」未被接納：只接受 ' + lim.exts.join('、') + '。');
-      else if (f.size > lim.fileMB * 1048576) msgs.push('「' + f.name + '」太大（' + fmtSize(f.size) + '）：每個檔案須在 ' + lim.fileMB + 'MB 以內。');
+      else if (f.size > lim.fileMB * 1048576) msgs.push('「' + f.name + '」太大（' + fmtSize(f.size) + '）：每個檔案須在 ' + lim.fileMB + 'MB 以內。請改選較小的檔案，或把文件分拆後再加入。');
       else if (IN.files.length >= lim.files) msgs.push('「' + f.name + '」未被接納：最多 ' + lim.files + ' 個文件。');
       else if (total > lim.totalMB * 1048576) msgs.push('「' + f.name + '」未被接納：總大小須在 ' + lim.totalMB + 'MB 以內。');
       else if (!IN.files.some(function (x) { return x.name === f.name && x.size === f.size; })) IN.files.push(f);
@@ -1340,28 +1360,27 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   function readFiles(list) {
     return Promise.all(list.map(function (f) {
-      return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { rej(new Error('無法讀取「' + f.name + '」')); }; fr.readAsDataURL(f); });
+      return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { var er = new Error('read'); er.said = T('fileUnread', { f: f.name }); rej(er); }; fr.readAsDataURL(f); });
     }));
   }
   function pfStart() {
     var b = $('#pf-go'); if (b) b.disabled = true;
     readFiles(IN.files).then(function (files) {
-      return fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'prefill', files: files }) })
-        .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.message || '伺服器拒絕接收'); return j; }); });
+      return post('/api/intake', { kind: 'prefill', files: files });
     }).then(function (j) {
       // 再預填：未確認嘅舊預填清走；已確認嘅保留，新建議另外顯示
       var d = draftLoad(), st = (d._prefill && d._prefill.st) || {};
       Object.keys(st).forEach(function (q) { var c = st[q]; if (c.s === 'pending') { if (pfNorm(d[q]) === pfNorm(c.a.text)) { d[q] = ''; var ta = $('#' + q); if (ta) ta.value = ''; } delete st[q]; } });
       d._prefill = { id: j.id, applied: '', st: st }; draftSave(d);
       PF = { id: j.id, data: null, err: '' }; pfBox(); pfAll(); intakeBar(); pfPoll();
-    }).catch(function (e) { PF.err = '未能交出文件：' + e.message; pfBox(); PF.err = ''; });
+    }).catch(function (e) { PF.err = '未能交出文件：' + why(e); pfBox(); PF.err = ''; });
   }
   function pfPoll() {
     clearTimeout(V.pollTimer);
     if (!PF.id || PF.data || !$('#intake-form')) return;
     get('/api/prefill?id=' + encodeURIComponent(PF.id)).then(function (j) {
       if (j.state === 'done') { PF.data = j.prefill; pfApply(); pfBox(); pfAll(); intakeBar(); return; }
-      if (j.state === 'failed') { PF.err = N.ui.prefillFailed + (j.error ? '：' + N.fix(j.error) : ''); pfBox(); return; }
+      if (j.state === 'failed') { PF.err = N.ui.prefillFailed + (j.error ? '：' + N.fix(j.error) : '。' + N.ui.prefillAgain); pfBox(); return; }
       PF.wait = j.state === 'waiting'; pfBox();
       V.pollTimer = setTimeout(pfPoll, PF.wait ? 4000 : 2000);
     }).catch(function (e) {
@@ -1396,15 +1415,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var fields = {}; qs.forEach(function (q) { fields['q' + q.n] = val(q); });
       btn.disabled = true; btn.textContent = N.ui.uploading;
       Promise.all(IN.files.map(function (f) {
-        return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { rej(new Error('無法讀取「' + f.name + '」')); }; fr.readAsDataURL(f); });
+        return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { var er = new Error('read'); er.said = T('fileUnread', { f: f.name }); rej(er); }; fr.readAsDataURL(f); });
       })).then(function (files) {
         var pf = pfClaims();
-        return fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pf ? { fields: fields, files: files, prefillId: pf.id, provenance: pf.claims } : { fields: fields, files: files }) })
-          .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.message || '伺服器拒絕接收'); return j; }); });
+        return post('/api/intake', pf ? { fields: fields, files: files, prefillId: pf.id, provenance: pf.claims } : { fields: fields, files: files });
       }).then(function (j) {
         draftClear(); IN.files = []; IN.open = false; IN.sent = { id: j.id, at: j.receivedAt }; PF = { id: '', state: '', data: null, err: '' };
         closeModal(); toast(N.ui.sent); window.scrollTo(0, 0); showIntake();
-      }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.submit; msg.textContent = '未能送出：' + e.message; });
+      }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.submit; msg.textContent = '未能送出：' + why(e); });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
       h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, N.ui.submitIntake), h('p', { class: 'small muted' }, '按確認後即交予 AI 擬定公司概覽；不會對外發送任何內容。')),
@@ -1449,7 +1467,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           })),
           g.runId ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () {
             get('/api/run?id=' + encodeURIComponent(g.runId)).then(function (rr) { runBox.replaceChildren(resultBox(rr.run)); })
-              .catch(function () { runBox.replaceChildren(h('p', { class: 'tr-sub' }, 'AI 尚未完成，或此次毋須 AI 跟進。')); });
+              .catch(function (e) { runBox.replaceChildren(h('p', { class: 'tr-sub' }, e.net ? why(e) : 'AI 尚未完成，或此次毋須 AI 跟進。')); });
           } }, N.ui.viewAfter)) : null, runBox));
       });
       setApp(head('log', st),
@@ -1460,7 +1478,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           h('button', { type: 'button', class: 'btn' + (LOGF === 'changed' ? ' on' : ''), onclick: function () { LOGF = 'changed'; showLog(); } }, N.ui.onlyChanged)),
         body.length ? body : h('p', { class: 'empty' }, N.ui.noLog));
       DESK.title('log');
-    }).catch(function () { fail('無法連接本機伺服器。'); });
+    }).catch(function (e) { fail(e); });
   }
 
   if (!/^https?:$/.test(location.protocol)) return; // 直接開檔：保留靜態提示

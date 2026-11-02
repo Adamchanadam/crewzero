@@ -146,6 +146,13 @@ try {
     const failed = await waitFor(async () => (await has('#intake-retry')), 30000);
     ok('AI 失敗：顯示原因同重試', failed && /原因/.test(await text('#track')), await text('#track'));
     await shot('e2-failed.png');
+    ok('AI 失敗：原因係中文、有下一步（重試、重新認證），冇「未知」', /AI 工具未能完成這項工作/.test(await text('#track')) && /重新認證/.test(await text('#track')) && !/未知/.test(await text('#track')), await text('#track'));
+    // 按「重試」時連唔到電腦上嘅 CrewZero：要喺畫面講原因，唔可以撳咗冇反應
+    await ev(`(()=>{window.__rf=window.fetch;window.fetch=function(u){return String(u).indexOf('/api/retry')>=0?Promise.reject(new TypeError('Failed to fetch')):window.__rf.apply(this,arguments)};return 1})()`);
+    await click('#intake-retry');
+    const retryToast = await ev(`(()=>{const e=document.getElementById('toast');return e&&!e.hidden?e.textContent:''})()`);
+    ok('重試失敗：畫面顯示中文原因同做法，冇英文', /未能重試/.test(retryToast) && /未能連上/.test(retryToast) && !/Failed to fetch/.test(retryToast), retryToast);
+    await ev('window.fetch=window.__rf;1');
     await click('#intake-retry');
     const re = await waitFor(async () => (await ev('location.pathname')) === '/proofread.html', 40000);
     ok('重試：完成並轉去公司概覽', !!re);

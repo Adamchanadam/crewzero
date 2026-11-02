@@ -317,6 +317,17 @@ export function buildArgs(h, sandbox, prompt, opts = {}) {
   if (model && mi >= 0 && mi + 1 < args.length) { args = args.slice(); args[mi + 1] = model; }
   return args;
 }
+// AI 工作失敗原因（創辦人會喺失敗卡「原因：」見到）：只按程式真係分辨到嘅訊號分類，唔估英文錯誤字句。
+// 訊號：計時器到時 → 超時；啟動檔解析失敗或者系統話搵唔到程式（ENOENT）→ 搵唔到工具；其他啟動失敗 → 未能啟動；
+// 工具執行完但失敗，而宿主檔有登入探測（loginProbe）且探測話未登入 → 登入失效；其餘 → 通用句（都有下一步）。
+export const AI_FAIL = {
+  timeout: 'AI 處理時間過長，這次未有完成。請按「重試」。',
+  notFound: '找不到 AI 工具：電腦上的 AI 工具可能已移除或搬走。請重新安裝並登入該工具，再到「系統設定」重新認證。',
+  cannotStart: '未能啟動 AI 工具。請再按一次「重試」；仍然失敗，請重新開機後再試。',
+  loggedOut: 'AI 工具的登入已失效。請在你的 AI 工具重新登入，再按「重試」。',
+  generic: 'AI 工具未能完成這項工作。請再按一次「重試」；仍然失敗，請到「系統設定」重新認證 AI 工具。'
+};
+function failedReason(h) { return h?.loginProbe && login(h) === false ? AI_FAIL.loggedOut : AI_FAIL.generic; }
 export function execute(h, sandbox, prompt, opts = {}) {
   const args = buildArgs(h, sandbox, prompt, opts);
   if (opts.role && h.roles && Number(h.roles.timeoutMinutes) > 0) h = { ...h, timeoutMinutes: Math.min(30, Number(h.roles.timeoutMinutes)) };
@@ -325,15 +336,15 @@ export function execute(h, sandbox, prompt, opts = {}) {
   return new Promise(resolve => {
     let out = '', err = '', done = false, child;
     const c = resolveCommand(h.command);
-    if (c.why) return resolve({ ok: false, reason: '無法啟動 AI 工具，請重試' });
+    if (c.why) return resolve({ ok: false, reason: AI_FAIL.notFound });
     const prepared = preparedAdapter(h, sandbox);
     if (!prepared.handoff.ok) { prepared.cleanup(); return resolve({ ok: false, reason: prepared.handoff.reason || '無法安全準備 AI 登入，請重新登入後再試。' }); }
     try { child = spawn(c.command, [...c.prefix, ...args], { cwd: sandbox, env: prepared.env, stdio: ['ignore','pipe','pipe'], windowsHide: true }); }
-    catch { prepared.cleanup(); return resolve({ ok: false, reason: '無法啟動 AI 工具' }); }
-    const timer = setTimeout(() => { child.kill(); finish({ ok: false, reason: 'AI 處理時間過長，請重試' }); }, (h.timeoutMinutes || 10) * 60000);
+    catch (e) { prepared.cleanup(); return resolve({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart }); }
+    const timer = setTimeout(() => { child.kill(); finish({ ok: false, reason: AI_FAIL.timeout }); }, (h.timeoutMinutes || 10) * 60000);
     function finish(result) { if (done) return; done = true; clearTimeout(timer); prepared.cleanup(); try { fs.writeFileSync(path.join(sandbox, 'ai-output.txt'), out + '\n' + err); } catch {} resolve(result); }
     child.stdout.on('data', x => { out += x; }); child.stderr.on('data', x => { err += x; });
-    child.on('error', () => finish({ ok: false, reason: '無法啟動 AI 工具，請重試' }));
+    child.on('error', e => finish({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart }));
     child.on('close', code => {
       let meta = null;
       if (h.outputFormat === 'jsonl') {
@@ -354,7 +365,9 @@ export function execute(h, sandbox, prompt, opts = {}) {
         meta = { ...last, events, permission_denials: denials, usage: last.usage || null };
       } else { try { meta = JSON.parse(out); } catch {} }
       const statusOk = !meta || !Object.hasOwn(meta, 'status') || meta.status === 'SUCCESS';
-      finish({ ok: code === 0 && !meta?.is_error && statusOk, meta, stderr: err, reason: 'AI 工具發生錯誤，請重試' });
+      const ok = code === 0 && !meta?.is_error && statusOk;
+      // 失敗先做登入探測（同認證用同一個探測；冇探測嘅宿主唔做）；探測期間計時器唔會觸發，finish 隨即清走
+      finish({ ok, meta, stderr: err, reason: ok ? '' : failedReason(h) });
     });
   });
 }

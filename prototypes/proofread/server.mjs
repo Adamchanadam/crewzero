@@ -358,14 +358,16 @@ const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
 const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 // 附件核對（交資料、真實事件證明共用）：回 { files } 或 { error }
 function takeFiles(list) {
-  if (list.length > 20) return { error: '附件最多 20 份。' };
+  if (list.length > 20) return { error: '附件最多 20 份，請移除部分文件後再送出。' };
   const files = []; let total = 0;
   for (const f of list) {
-    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !B64.test(f.data)) return { error: '附件內容無法讀取。' };
+    const who = f && typeof f.name === 'string' && f.name ? '「' + f.name.slice(0, 80) + '」' : '其中一份附件';
+    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !B64.test(f.data)) return { error: who + '無法讀取，可能已損壞，請重新選擇。' };
     const ext = path.extname(f.name).slice(1).toLowerCase();
-    if (!EXTS.includes(ext)) return { error: '附件格式不支援。' };
+    if (!EXTS.includes(ext)) return { error: who + '的檔案類型未能接收，請另存為 PDF 或 Word 文件後再加入。' };
     const bytes = Buffer.from(f.data, 'base64'); total += bytes.length;
-    if (bytes.length > 10 * 1024 * 1024 || total > 50 * 1024 * 1024) return { error: '附件太大，請縮小後再提交。' };
+    if (bytes.length > 10 * 1024 * 1024) return { error: who + '太大，每份須在 10MB 以內。請改選較小的檔案，或把文件分拆後再加入。' };
+    if (total > 50 * 1024 * 1024) return { error: '附件合共太大，須在 50MB 以內。請移除部分文件後再送出。' };
     files.push({ name: f.name.replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 80), bytes });
   }
   return { files };
@@ -380,7 +382,7 @@ function receiveIntake(body) {
     if (typeof value !== 'string' || value.length > 4000 || (q.required && !value.trim())) return fail('請填寫首五條問題，每欄最多 4000 字。');
     fields['q' + q.n] = value;
   }
-  if (Object.keys(body.fields).some(k => !/^q(?:[1-9]|1[0-2])$/.test(k)) || Buffer.byteLength(Object.values(fields).join(''), 'utf8') > 32 * 1024) return fail('文字資料過多或包含不支援的欄位。');
+  if (Object.keys(body.fields).some(k => !/^q(?:[1-9]|1[0-2])$/.test(k)) || Buffer.byteLength(Object.values(fields).join(''), 'utf8') > 32 * 1024) return fail('填寫的文字太長，請把較長的內容改為文件附上，再送出。');
   const got = takeFiles(body.files);
   if (got.error) return fail(got.error);
   const files = got.files;
@@ -569,7 +571,8 @@ function readBody(req, max, timeoutMs = 15000) {
     let timer;
     const idle = () => { clearTimeout(timer); timer = setTimeout(() => { try { req.destroy(); } catch { } finish(new Error('body timeout')); }, timeoutMs); };
     idle();
-    req.on('data', c => { idle(); size += c.length; if (size > max) { try { req.destroy(); } catch { } finish(new Error('too large')); } else chunks.push(c); });
+    // 超過上限：唔再收，但唔即刻斷線（斷咗頁面就收唔到「內容太多」嘅原因，只會以為連唔到）；餘下資料照讀照丟
+    req.on('data', c => { idle(); size += c.length; if (size > max) { chunks.length = 0; finish(new Error('too large')); if (size > max + 8 * 1024 * 1024) { try { req.destroy(); } catch { } } } else if (!done) chunks.push(c); });
     req.on('end', () => finish(null, Buffer.concat(chunks).toString('utf8')));
     req.on('aborted', () => finish(new Error('request aborted')));
     req.on('error', e => finish(e));
@@ -1004,7 +1007,16 @@ const handler = async (req, res) => {
     if (p.startsWith('/api/')) return send(res, 405, { error: 'method' });
     send(res, 404, { error: 'not found' });
   } catch (e) {
-    send(res, 400, { error: String(e.message || e) });
+    // 總攔截：畫面只收固定代號同中文原因；錯誤原文（可能有英文同路徑）只寫入伺服器自己嘅紀錄
+    const raw = String(e && e.message || e);
+    const [code, status, key] = raw === 'too large' ? ['too-large', 413, 'err_tooLarge']
+      : e instanceof SyntaxError ? ['bad-body', 400, 'err_badBody']
+      : raw === 'body timeout' || raw === 'request aborted' ? ['cut', 400, 'err_cut']
+      : ['server', 500, 'err_server'];
+    say(`請求出錯（${req.method} ${String(req.url || '').split('?')[0].slice(0, 80)}）：${raw.slice(0, 300)}`);
+    if (res.headersSent) { try { res.end(); } catch { } return; }
+    if (code === 'too-large') res.setHeader('Connection', 'close');
+    send(res, status, { error: code, message: NAMES.ui[key] });
   }
 };
 const server = http.createServer(handler);

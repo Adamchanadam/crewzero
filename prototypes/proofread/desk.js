@@ -366,12 +366,12 @@ body.paused .bg *{animation:none!important}
     function send(body, done) {
       busy(true);
       fetch('/api/logo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) { var er = new Error(j.message || U.logoFailed); er.srv = true; throw er; } return j; }); })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw apiError(r, j); return j; }); })
         .then(function (j) {
           var co = (ST.data || {}).company || ST.company; if (co) co.logo = j.logo || 0;
           syncMark({ name: c.name, initials: c.initials, logo: j.logo || 0 });
           close(); toast(done);
-        }, function (e) { busy(false); note.textContent = e && e.srv ? e.message : U.logoFailed; });
+        }, function (e) { busy(false); note.textContent = e && e.status ? why(e) : U.logoFailed; });
     }
     input.addEventListener('change', function () {
       var f = input.files && input.files[0]; input.value = '';
@@ -401,12 +401,36 @@ body.paused .bg *{animation:none!important}
     document.body.append(modal); pick.focus();
   }
   function toast(t) { var e = document.getElementById('toast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { e.hidden = true; }, 4000); }
-  function setupPost(body) { return fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || j.error || 'failed'); return j; }); }); }
+  /* ---------- 出錯提示（三頁共用）：畫面永遠唔顯示 e.message、英文代號或者錯誤原文 ----------
+     send(url, opts)：fetch 加 JSON；連唔到 → 錯誤帶 net；伺服器拒絕 → 錯誤帶 code（英文代號，只供程式分辨）、said（伺服器嘅中文原因）、status。
+     e.message 只放代號，方便頁面照舊比較（例如 'busy'、'pack-not-here'）；顯示一律用 why(e)。 */
+  var ERR_KEY = { invalid: 'err_invalid', busy: 'err_busy', local: 'err_local', 'not found': 'err_notFound', 'pack-not-here': 'err_notFound', ai: 'err_ai',
+    'too-large': 'err_tooLarge', large: 'err_tooLarge', 'bad-body': 'err_badBody', cut: 'err_cut', server: 'err_server', origin: 'err_origin', host: 'err_origin', method: 'err_server', type: 'err_badBody', open: 'err_open' };
+  function netError() { var e = new Error('net'); e.net = true; return e; }
+  function apiError(r, j) {
+    var code = j && typeof j.error === 'string' ? j.error : '';
+    var e = new Error(code || String(r.status)); e.code = code; e.status = r.status;
+    // 伺服器嘅中文原因：只收有中文、冇英文字母開頭嘅句（防止日後有人將錯誤原文放入 message）
+    if (j && typeof j.message === 'string' && /[一-鿿]/.test(j.message) && !/^[A-Za-z]/.test(j.message)) e.said = j.message;
+    return e;
+  }
+  function send(url, opts) {
+    return fetch(url, opts).catch(function () { throw netError(); })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { if (!r.ok || !j || j.ok === false) throw apiError(r, j); return j; }); });
+  }
+  function why(e) {
+    if (!e) return U.errGeneric;
+    if (e.said) return e.said;
+    if (e.net) return U.errNet;
+    var k = ERR_KEY[e.code] || (e.status === 404 ? 'err_notFound' : e.status === 413 ? 'err_tooLarge' : '');
+    return (k && U[k]) || U.errGeneric;
+  }
+  function setupPost(body) { return send('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
   function phoneDialog() {
     var modal = el('div', { cls: 'pair-modal', role: 'dialog', 'aria-modal': 'true' });
     var card = el('section', { cls: 'layer' }, el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phoneOpenTitle), el('p', null, U.phoneOpenHint));
     var close = function () { clearInterval(modal.timer); modal.remove(); };
-    var begin = el('button', { type: 'button', cls: 'btn primary big', onclick: function () { begin.disabled = true; setupPost({ action: 'phone-open' }).then(function (v) { showPhoneCode(v); }, function (e) { begin.disabled = false; toast(e.message || U.phoneOpenFailed); }); } }, U.phoneEnable);
+    var begin = el('button', { type: 'button', cls: 'btn primary big', onclick: function () { begin.disabled = true; setupPost({ action: 'phone-open' }).then(function (v) { showPhoneCode(v); }, function (e) { begin.disabled = false; toast(why(e)); }); } }, U.phoneEnable);
     card.append(el('div', { cls: 'pair-actions' }, begin, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))); modal.append(card); document.body.append(modal);
     function showPhoneCode(v) {
       card.replaceChildren(el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phonePairTitle));
@@ -414,7 +438,7 @@ body.paused .bg *{animation:none!important}
       try { qr.innerHTML = g.SOS_PAIR.qr(v.pairUrl); } catch (e) { qr.textContent = U.phoneOpenFailed; }
       var bare = String(v.pairUrl || '').split('#')[0], url = el('span', { cls: 'pair-url' }, U.phonePairUrl + '：' + bare), clock = el('p', { cls: 'small muted' });
       var state = el('div', { cls: 'phone-bar', hidden: true });
-      var closePhone = el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-close' }).then(close, function (e) { toast(e.message || U.phoneOpenFailed); }); } }, U.phoneClose);
+      var closePhone = el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-close' }).then(close, function (e) { toast(why(e)); }); } }, U.phoneClose);
       card.append(qr, url, clock, state, el('div', { cls: 'pair-actions' }, closePhone, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉')));
       var until = new Date(v.expiresAt || 0).getTime(), openedAt = Date.now(), decided = false;
       function showState() {
@@ -424,8 +448,8 @@ body.paused .bg *{animation:none!important}
         var left = Math.max(0, Math.ceil((until - Date.now()) / 1000)); clock.textContent = N.t('phonePairExpires', { n: left });
         fetch('/api/setup', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
           var phone = j.phone || {}, p = phone.pending && phone.pending[0], paired = phone.paired && phone.paired[0];
-          if (p) return showState(el('span', null, U.phonePending + ' · ' + U.phoneCode + '：'), el('strong', null, p.confirmationCode || ''), el('button', { type: 'button', cls: 'btn primary', onclick: function () { setupPost({ action: 'phone-accept', id: p.id }).then(function () { decided = true; poll(); }); } }, U.phoneAccept), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-reject', id: p.id }).then(function () { decided = true; poll(); }); } }, U.phoneReject));
-          if (paired) return showState(el('span', null, U.phoneConnected), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'revoke', id: paired.id }).then(poll); } }, U.deviceRevoke));
+          if (p) return showState(el('span', null, U.phonePending + ' · ' + U.phoneCode + '：'), el('strong', null, p.confirmationCode || ''), el('button', { type: 'button', cls: 'btn primary', onclick: function () { setupPost({ action: 'phone-accept', id: p.id }).then(function () { decided = true; poll(); }, function (e) { toast(why(e)); }); } }, U.phoneAccept), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-reject', id: p.id }).then(function () { decided = true; poll(); }, function (e) { toast(why(e)); }); } }, U.phoneReject));
+          if (paired) return showState(el('span', null, U.phoneConnected), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'revoke', id: paired.id }).then(poll, function (e) { toast(why(e)); }); } }, U.deviceRevoke));
           if (decided) return showState(el('span', null, U.phoneGone));
           if (Date.now() - openedAt >= 60000) return showState(el('span', null, U.phonePairHelp));
           state.hidden = true;
@@ -529,8 +553,21 @@ body.paused .bg *{animation:none!important}
     if (c) { if (c.textContent !== String(n)) c.textContent = String(n); }
     else a.append(el('span', { cls: 'cnt' + (t === 'pending' ? ' desk-count' : ''), 'data-cnt': t }, String(n)));
   }
+  // CrewZero 停咗而頁面仍然開住：連續兩次讀唔到（約 10 秒）先出頁頂提示，講明資料完好同點樣重新開；再連上就自動消失
+  var missed = 0;
+  function stoppedBar(show) {
+    var bar = document.getElementById('stopped');
+    if (!show) { if (bar) bar.remove(); return; }
+    // 整頁已經講緊連唔到（Founder Desk 讀取失敗頁、監察台首次讀取失敗）就唔重複
+    if (bar || !document.body || document.querySelector('#fail[data-kind="net"], #dash-fail')) return;
+    bar = el('div', { cls: 'track off', id: 'stopped', role: 'alert' }, /^\/dashboard/.test(location.pathname) ? U.stoppedDashboard : U.stoppedDesk);
+    var top = document.querySelector('.dtop');
+    if (top) top.after(bar); else document.body.insertBefore(bar, document.body.firstChild);
+  }
   function setConn(s) {
     ST.conn = s;
+    missed = s === 'live' ? 0 : missed + 1;
+    stoppedBar(missed >= 2);
     var b = document.getElementById('conn'); if (!b) return;
     var want = s === 'live' ? D.live : s === 'rejected' ? D.rejected : D.offline;
     b.classList.toggle('offline', s !== 'live');
@@ -615,8 +652,8 @@ body.paused .bg *{animation:none!important}
     return el('div', { id: 'devices' },
       list.length ? el('ul', { cls: 'dev-list' }, list.map(function (d) {
         if (d.state === 'pending') {
-          var accept = el('button', { type: 'button', cls: 'btn primary', onclick: function () { accept.disabled = true; (opts.onAccept || function (id) { return setupPost({ action: 'phone-accept', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { accept.disabled = false; toast(e.message || U.phoneGone); }); } }, U.phoneAccept);
-          var reject = el('button', { type: 'button', cls: 'btn', onclick: function () { reject.disabled = true; (opts.onReject || function (id) { return setupPost({ action: 'phone-reject', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { reject.disabled = false; toast(e.message || U.phoneGone); }); } }, U.phoneReject);
+          var accept = el('button', { type: 'button', cls: 'btn primary', onclick: function () { accept.disabled = true; (opts.onAccept || function (id) { return setupPost({ action: 'phone-accept', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { accept.disabled = false; toast(why(e)); }); } }, U.phoneAccept);
+          var reject = el('button', { type: 'button', cls: 'btn', onclick: function () { reject.disabled = true; (opts.onReject || function (id) { return setupPost({ action: 'phone-reject', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { reject.disabled = false; toast(why(e)); }); } }, U.phoneReject);
           return el('li', { 'data-device': d.id, 'data-current': 'false', cls: 'phone-pending' }, el('span', { cls: 'dev-name' }, d.name || U.devicePhone), el('span', { class: 'tag amber' }, U.phonePending), accept, reject, el('span', { cls: 'dev-meta' }, U.phoneCode + '：' + (d.confirmationCode || '—')));
         }
         var btn = el('button', { type: 'button', cls: 'btn small', 'data-revoke': d.id, onclick: function (e) {
@@ -634,6 +671,7 @@ body.paused .bg *{animation:none!important}
   g.SOS_DESK = {
     shell: shell, header: header, devices: devices, title: title, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast,
+    send: send, why: why, netError: netError, apiError: apiError,
     paused: function () { return !!ST.paused; }, fx: function () { return !!ST.fx; }, reduced: !!REDUCED,
     onPause: function (f) { ST.cbs.pause.push(f); }, onFx: function (f) { ST.cbs.fx.push(f); }, onRefresh: function (f) { ST.cbs.refresh.push(f); },
     readNow: function () { ST.readAt = Date.now(); }, tabs: GROUPS, href: HREF, tabName: tabName
