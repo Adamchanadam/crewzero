@@ -131,6 +131,8 @@
 
 ## 附件（原始報告，供查閱）
 
-- 三位審查員報告：`C:\Users\adam\AppData\Local\Temp\crz-ux-harvest\review-service.md`、`review-goods.md`、`review-nonprofit.md`
-- 出錯提示逐句清單（65 項、附改寫）：`C:\Users\adam\AppData\Local\Temp\crz-ux-harvest\error-audit.md`
-- 75 個畫面與文字：`C:\Users\adam\AppData\Local\Temp\crz-ux-harvest\screens\`
+以下原始材料放在本機暫存資料夾 `crz-ux-harvest`，沒有放入版本庫：
+
+- 三位審查員報告：`review-service.md`、`review-goods.md`、`review-nonprofit.md`
+- 出錯提示逐句清單（65 項、附改寫）：`error-audit.md`
+- 75 個畫面與文字：`screens/`

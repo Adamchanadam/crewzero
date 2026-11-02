@@ -4,13 +4,15 @@
 
 ## 一條命令跑全套
 
-喺專案根目錄（`AI-Native_Starup_Dashboard`）：
+喺專案根目錄（`CrewZero_OPS`）：
 
 ```
 node tests/prototype/run-all.mjs
 ```
 
 預設測試 `prototypes/proofread`。每項結果即時印出，最後印總數；全部通過先會以 0 結束。
+
+如用 `--out` 指定輸出資料夾，路徑要短（例如 `C:\Users\<名>\AppData\Local\Temp\crz-t`）。測試會將成個程式複製入去，路徑太長可能令「裝置通行證」嘅資料夾連結測試唔通過。
 
 測試對應最新版原型：新版仲喺程式副本、未換入時，用 `--proto <程式副本>` 測副本；換入後先用預設。用預設去測未換入嘅舊版，新功能嘅測試（例如經營節奏、每週訪問）會唔通過，唔係回歸。
 
