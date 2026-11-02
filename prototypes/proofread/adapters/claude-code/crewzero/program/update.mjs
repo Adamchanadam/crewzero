@@ -17,6 +17,14 @@ import { rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, BASE
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const say = s => console.log('[CrewZero] ' + s);
+// 出錯原因（創辦人會經 AI 聽到）：按系統錯誤代號講白話原因同做法；其他（包括程式自己嘅核對）用通用句。錯誤原文另外寫去 stderr
+function plainCause(e) {
+  const c = e && e.code, m = String(e && e.message || '');
+  if (c === 'EPERM' || c === 'EBUSY' || c === 'EACCES') return '部分檔案正被其他程式使用。請關閉 Founder Desk 及其他開着這個資料夾的程式，再更新一次。';
+  if (c === 'ENOSPC') return '電腦的儲存空間不足。請騰出空間後，再更新一次。';
+  if (/^更新後核對不符/.test(m)) return '更新後的檔案核對不一致。請再更新一次；仍然失敗，請重新開機後再試。';
+  return '電腦未能完成檔案更換。請重新開機後，再更新一次。';
+}
 // 指令叫法按宿主唔同（同一份插件）：命令本身唔知創辦人用邊種工具，所以三種都印
 const CMD = n => `Claude Code：/crewzero:${n}；Codex：$crewzero:${n}；Antigravity：/${n}`;
 const argv = process.argv.slice(2), has = k => argv.includes('--' + k);
@@ -93,7 +101,8 @@ function takeRunLock() {
 const servers = await runningServers();
 if (servers.some(s => s.busy) || runLockHeld()) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
 if (APPLY && servers.some(s => s.pid && !ownsServerPort(s.port, s.pid))) {
-  say('無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
+  say('今次未有更新：Founder Desk 正在開着，系統未能安全關閉它。請重新開機後再更新一次。項目沒有任何改動。');
+  console.error('（技術細節，只供 AI 排查）無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
   process.exit(4);
 }
 function closeServers() {
@@ -103,7 +112,7 @@ function closeServers() {
     try { process.kill(s.pid); closed++; } catch { }
   }
   if (closed) say('已關閉開着的 Founder Desk（舊版程式）；下次打開便是現在的版本。');
-  if (unverified) say('無法獨立核對開着的 Founder Desk 程序身份，沒有終止該程序；已停止換版。');
+  if (unverified) say('Founder Desk 正在開着，系統未能安全關閉它；請重新開機，下次打開便是現在的版本。');
   return unverified === 0;
 }
 
@@ -126,9 +135,9 @@ if (ROLLBACK) {
   try {
     const known = [...Object.keys(parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '')), ...GENERATED];
     bad = restoreFrom(backup, target, known);
-  } catch (e) { bad = ['（還原時出錯：' + (e && e.message || e) + '）']; }
+  } catch (e) { bad = ['還原時出錯']; console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (e && e.message || e)); }
   finally { release(); }
-  if (bad.length) { say(`還原未完成，有 ${bad.length} 個檔與備份不符：${bad.slice(0, 5).join('、')}。備份仍在 ${backup}，請再試一次；${DATA} 沒有改動。`); process.exit(1); }
+  if (bad.length) { say('還原未完成：電腦未能完成檔案更換。備份仍然保留，公司資料沒有改動；請重新開機後，再說一次「還原上一個版本」。'); console.error('（技術細節，只供 AI 排查）' + bad.slice(0, 5).join('、') + '；備份：' + backup); process.exit(1); }
   closeServers();
   say(`已還原 CrewZero 到版本 ${bVersion}（${bFiles.length} 個檔已逐一核對）。備份資料夾保留在 ${backup}；沒有改動 ${DATA}。`);
   say(`下一步：打開 Founder Desk（${CMD('desk')}）。`);
@@ -137,14 +146,14 @@ if (ROLLBACK) {
 
 /* ---------- 更新 ---------- */
 const oldVersion = readVersion(target), newVersion = pluginVersion(ROOT);
-if (!newVersion) { say('插件不完整（找不到版本號），請重新安裝插件。今次沒有改動任何檔案。'); process.exit(1); }
+if (!newVersion) { say('CrewZero 插件檔案不完整，今次沒有改動任何檔案。請重新安裝 CrewZero 插件，然後再更新一次。'); process.exit(1); }
 const files = programFiles(ROOT, [...INSTALL_SKIP, 'MANIFEST.sha256']);
 const lines = manifestOf(ROOT, files), want = parseManifest(lines.join('\n'));
 // 插件附帶嘅清單（build-plugin.mjs 生成）要同程式檔一致，否則插件已損壞；清單會列開發用檔（INSTALL_SKIP，例如 開始.cmd），嗰啲本來就唔安裝，唔算不符
 if (fs.existsSync(path.join(ROOT, 'MANIFEST.sha256'))) {
   const m = parseManifest(fs.readFileSync(path.join(ROOT, 'MANIFEST.sha256'), 'utf8'));
   const off = [...files.filter(f => m[f] !== want[f]), ...Object.keys(m).filter(f => !want[f] && !INSTALL_SKIP.includes(f))];
-  if (off.length) { say(`插件附帶的程式檔與清單不符（${off.length} 個，例如 ${off[0]}），請重新安裝插件。今次沒有改動任何檔案。`); process.exit(1); }
+  if (off.length) { say('CrewZero 插件檔案不完整，今次沒有改動任何檔案。請重新安裝 CrewZero 插件，然後再更新一次。'); console.error(`（技術細節，只供 AI 排查）插件附帶的程式檔與清單不符：${off.length} 個，例如 ${off[0]}`); process.exit(1); }
 }
 const oldManifest = parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '');
 // 新版已經冇嘅舊程式檔：只刪舊清單列明嘅（創辦人自己放入嘅檔唔喺清單，唔會刪）；舊安裝冇清單就一個都唔刪
@@ -190,15 +199,17 @@ try {
   const off = [...files.filter(f => shaOr(at(target, f)) !== want[f]), ...stageFiles.filter(f => !want[f] && shaOr(at(target, f)) !== sha(at(stage, f)))];
   if (off.length) throw new Error('更新後核對不符：' + off.slice(0, 3).join('、'));
 } catch (e) {
-  const why = e && e.message || String(e);
+  // 創辦人會經 AI 聽到呢度嘅句：只講原因同做法；錯誤原文（英文、路徑）只寫去 stderr 供 AI 排查
+  const why = plainCause(e);
+  console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (e && e.message || String(e)));
   if (touched) {
     let bad = [];
-    try { bad = restoreFrom(backup, target, stageFiles); } catch (e2) { bad = ['（還原時出錯：' + (e2 && e2.message || e2) + '）']; }
-    if (bad.length) say(`更新未完成，而且還原時有 ${bad.length} 個檔與備份不符：${bad.slice(0, 5).join('、')}。備份仍在 ${backup}，可在對話輸入「還原上一個版本」再試；${DATA} 沒有改動。原因：${why}`);
-    else { try { fs.rmSync(backup, { recursive: true, force: true }); } catch { } say(`更新未完成，已由備份還原到版本 ${oldLabel}（逐檔核對一致）；${DATA} 沒有改動。原因：${why}`); }
+    try { bad = restoreFrom(backup, target, stageFiles); } catch (e2) { bad = ['還原時出錯']; console.error('（技術細節）' + (e2 && e2.message || e2)); }
+    if (bad.length) { say(`更新未完成，而且未能完全還原；備份仍然保留，公司資料沒有改動。請說「還原上一個版本」再試。原因：${why}`); console.error('（技術細節）與備份不符：' + bad.slice(0, 5).join('、') + '；備份：' + backup); }
+    else { try { fs.rmSync(backup, { recursive: true, force: true }); } catch { } say(`更新未完成，已由備份還原到版本 ${oldLabel}（逐檔核對一致）；公司資料沒有改動。原因：${why}`); }
   } else {
     try { fs.rmSync(backup, { recursive: true, force: true }); } catch { }
-    say(`更新未完成，沒有改動 ${target} 內任何檔案。原因：${why}`);
+    say(`更新未完成，項目沒有任何改動。原因：${why}`);
   }
   try { fs.rmSync(stage, { recursive: true, force: true }); } catch { }
   release();

@@ -439,7 +439,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           window.STARTUP_OS_PAGE = obj;
           closeModal(); start(obj); window.scrollTo(0, 0);
           toast('已載入：' + obj.company.name);
-        } catch (e) { toast('無法讀取此檔案：' + e.message); }
+        } catch (e) { toast('無法讀取此檔案：內容不是公司概覽，請重新選擇。'); }
       };
       rd.readAsText(f, 'utf-8');
     });
@@ -1259,15 +1259,15 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       .then(function () { pollTimer = setTimeout(poll, aiBusy() ? 2000 : 10000); });
   }
   function retryRun() {
-    fetch('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    DESK.send('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); })
-      .catch(function () { toast('Founder Desk 已停止：' + N.ui.reopenDesk); });
+      .catch(function (e) { toast(N.ui.retryFailed + '：' + DESK.why(e)); });
   }
   function renderTrack() {
     var root = $('#track');
     if (!root) return;
     root.replaceChildren();
-    if (S.stale) root.append(h('div', { class: 'track off' }, h('b', null, N.ui.staleTitle + '：'), '此頁可能已過時，請重新載入後再繼續。 ',
+    if (S.stale) root.append(h('div', { class: 'track off' }, h('b', null, N.ui.staleTitle + '：'), N.ui.staleBody + ' ',
       h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, N.ui.reload)));
     if (!S.server) {
       root.append(h('div', { class: 'track off' }, h('b', null, N.ui.offlineView + '：'),
@@ -1305,9 +1305,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           h('span', null, x.label, x.sub ? h('span', { class: 'tr-sub' }, x.sub) : null));
       })));
     if (state === 'waiting') card.append(h('p', null, (ai && ai.detail) || 'AI 尚未設定，設定完成後將自動繼續。'), h('div', { class: 'p-foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
-    if (S.lost) card.append(h('p', { class: 'tr-sub' }, 'Founder Desk 已停止。' + N.ui.reopenDesk + '，即可繼續；已收到的確認不會遺失。'));
+    if (S.lost) card.append(h('p', { class: 'tr-sub' }, N.ui.stoppedDesk + '已收到的確認不會遺失。'));
     if (state === 'failed') {
-      add(card, [(ai && ai.detail === r.error) ? null : h('p', null, '原因：' + (r.error || '未知')),
+      add(card, [(ai && ai.detail === r.error) ? null : h('p', null, r.error ? N.ui.reason + '：' + N.fix(r.error) : N.ui.failNoReason),
         failedStep(r) === 'applied'
           ? h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, '重新載入頁面，再確認一次')
           : [ready ? null : h('p', { class: 'tr-sub' }, '請先安裝並登入 AI 工具（' + aiName + '），再按「' + N.ui.retry + '」。'),
@@ -1498,7 +1498,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: 'proofread', ref: D.page.id, text: R.text })
       })
-        .then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || String(r.status)); return j; }); })
+        .catch(function () { throw DESK.netError(); })
+        .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { if (!r.ok || !j || !j.ok) throw DESK.apiError(r, j); return j; }); })
         .then(function (j) {
           S.sent = { name: j.file, at: j.receivedAt };
           S.server.pending = (S.server.pending || []).concat([j.file]);
@@ -1509,7 +1510,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         })
         .catch(function (e) {
           btnMain.disabled = false; btnMain.textContent = N.ui.resend;
-          copyHolder.replaceChildren(h('p', { class: 'p-judge' }, '未能送出（' + e.message + '）。Founder Desk 可能已停止：' + N.ui.reopenDesk + '重新開啟，然後再按送出。'));
+          // 內容與最新紀錄不符（例如公司概覽已有新版本）：叫創辦人重新載入再確認；其他按原因講
+          var stale = e.code === 'invalid' && !e.said;
+          var errLine = h('p', { class: 'p-judge', id: 'send-err' }, '未能送出：' + (stale ? N.ui.overviewChanged : DESK.why(e)));
+          if (stale || e.code === 'not found') copyHolder.replaceChildren(errLine, h('button', { type: 'button', class: 'btn', onclick: function () { location.reload(); } }, N.ui.reload));
+          else copyHolder.replaceChildren(errLine);
         });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },

@@ -46,7 +46,12 @@ try {
   fs.renameSync(tmp, target);
 } catch (e) {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { }
-  say('安裝未完成，已清走半套檔案：' + (e && e.message || e));
+  // 創辦人會經 AI 聽到呢句：只講原因同做法；錯誤原文（英文、路徑）只寫去 stderr 供 AI 排查
+  const c = e && e.code;
+  const cause = c === 'EPERM' || c === 'EBUSY' || c === 'EACCES' ? '部分檔案正被其他程式使用，或這個資料夾不准寫入。請關閉正在開啟這個資料夾的程式，再安裝一次。'
+    : c === 'ENOSPC' ? '電腦的儲存空間不足。請騰出空間後，再安裝一次。' : '電腦未能完成寫入檔案。請重新開機後，再安裝一次。';
+  say('安裝未完成，項目沒有任何改動。原因：' + cause);
+  console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (e && e.message || e));
   process.exit(1);
 }
 say(`已安裝 CrewZero ${version || ''}：${target}（${files.length} 個程式檔；空的 data/；VERSION；START-HERE.md；排程啟動檔）。`);

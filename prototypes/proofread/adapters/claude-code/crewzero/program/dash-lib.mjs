@@ -9,6 +9,18 @@ import { NAMES, readJSON, listPacks, loadAnswers, localIso, pad, clockNow } from
 import { loadBrain } from './brain-lib.mjs';
 import { rhythmOf, nextRunAt } from './rhythm-lib.mjs';
 
+// 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
+// v 係修改時間，頁面用嚟分辨換咗新圖；冇就 null。
+export const LOGO_EXTS = ['png', 'jpg', 'webp'];
+export function companyLogo(DIR) {
+  let best = null;
+  for (const ext of LOGO_EXTS) {
+    const file = path.join(DIR.company, 'logo.' + ext);
+    try { const s = fs.statSync(file); if (s.isFile() && (!best || s.mtimeMs > best.v)) best = { file, ext, v: Math.round(s.mtimeMs) }; } catch { }
+  }
+  return best;
+}
+
 const DAY = 86400000;
 // 作業系統排程（MVP 規格第 2 節第 3 項）：登記標記 ledger/schedule.json；登記時嘅節奏同帳本而家嘅節奏唔同＝須重新登記
 export const scheduleMark = DIR => readJSON(path.join(DIR.ledger, 'schedule.json'), null);
@@ -110,7 +122,7 @@ export function dashboardState(DIR, extra = {}) {
 
   /* 公司 */
   const co = { ...(page && page.company || {}), ...(state.company || {}) };
-  const company = { name: co.name || '', initials: co.initials || '', oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
+  const company = { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
   const values = page ? registryValues(page, confirmed) : {};
   const goalRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G1');
   const nextRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G5');
@@ -323,7 +335,7 @@ export function dashboardState(DIR, extra = {}) {
     const after = runs.filter(r => new Date(r.startedAt).getTime() > t && r.aiStarted !== false && r.state !== 'skipped');
     const msIds = new Set((state.milestones || []).map(m => m.id));
     pathTouched = [...new Set(events.filter(e => (e.type === 'path' || e.type === 'milestone') && new Date(e.at).getTime() > t).flatMap(e => (e.relatedIds || []).filter(id => msIds.has(id))))];
-    since = { at: last.at, runs: after.length, withOutput: after.filter(r => r.artifacts > 0 || (r.ending === 'artifact')).length, waiting: todo.length, latest: (businessEvents.find(e => new Date(e.at).getTime() > t) || {}).title || '' };
+    since = { at: last.at, awayDays: Number.isFinite(t) ? Math.max(0, daysBetween(new Date(last.at), now)) : 0, runs: after.length, withOutput: after.filter(r => r.artifacts > 0 || (r.ending === 'artifact')).length, waiting: todo.length, latest: (businessEvents.find(e => new Date(e.at).getTime() > t) || {}).title || '' };
   }
 
   /* 甲板 */
@@ -394,7 +406,7 @@ export function buildTodo(DIR, { state, milestones, company, page, now }) {
     const q0 = (full.questions || [])[0] || {};
     const rec = full.rec || (q0.options || []).find(o => o.rec)?.text || (q0.value != null && !Array.isArray(q0.value) ? String(q0.value) : '');
     const brain = full.brainItem || (full.debate ? 'wargame' : '');
-    todo.push({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(brain ? { brain } : {}),
+    todo.push({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(askedAt ? { staleDays: Math.max(0, waited) } : {}), ...(brain ? { brain } : {}),
       state: overdueDays > 0 ? 'overdue' : 'open', count: p.open, href: '/#/ask/' + p.id, kind: 'ask' });
   }
   // 排程節奏改咗（交資料第 9 題或者系統頁）：放一張「重新登記排程」提示卡，按下去系統頁（或者喺對話輸入「重新登記排程」）

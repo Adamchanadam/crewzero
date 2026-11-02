@@ -110,7 +110,7 @@ export const INTAKE_QUESTIONS = [
 ];
 
 // 測試用 SOS_DATA 指定另一個資料夾，唔會郁到創辦人用緊嘅 data/
-export function dataDirs(root) {
+export function dataDirs(root, options = {}) {
   const data = process.env.SOS_DATA || path.join(root, 'data');
   const d = {
     data,
@@ -124,7 +124,7 @@ export function dataDirs(root) {
     sandbox: path.join(data, 'sandbox'),
     work: path.join(data, 'work')
   };
-  for (const [k, v] of Object.entries(d)) if (k !== 'data') fs.mkdirSync(v, { recursive: true });
+  if (options.create !== false) for (const [k, v] of Object.entries(d)) if (k !== 'data') fs.mkdirSync(v, { recursive: true });
   return d;
 }
 
@@ -182,7 +182,7 @@ export const MAX_PER_PACK = 12;
 // 所有畫面名稱（書面語）；問題包標題要過同一條口語字檢查
 export const NAMES = createRequire(import.meta.url)('./names.js');
 // strictTitle：命令入口（AI 可以即刻改）用 true，標題有口語字就退回；AI 流程入面用 false，只記警告照樣放上去，免得創辦人睇唔到問題
-export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strictTitle = true } = {}) {
+export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strictTitle = true, system = false } = {}) {
   const errors = [], warnings = [];
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['內容不是問題包'] };
   if (raw.format !== 'startup-os.ask/0.1') errors.push('問題包格式版本不正確');
@@ -190,7 +190,11 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
   if (!title) errors.push('缺少標題');
   else if (title.length > 60) errors.push('標題超過 60 字');
   else if (NAMES.isColloquial(title)) (strictTitle ? errors : warnings).push(`標題須使用書面語（含口語字：${[...new Set(NAMES.colloquial(title))].join('、')}）`);
-  const qs = Array.isArray(raw.questions) ? raw.questions : [];
+  const actionConfirm = raw.actionConfirm && /^[\w-]{1,80}$/.test(String(raw.actionConfirm.taskId || '')) ? { taskId: String(raw.actionConfirm.taskId) } : null;
+  if (raw.actionConfirm && !actionConfirm) errors.push('本人行動題的工作編號不正確');
+  const sourceQs = Array.isArray(raw.questions) ? raw.questions : [];
+  const qs = actionConfirm ? sourceQs.map(q => ({ id: q && q.id, priority: q && q.priority, about: q && q.about, ask: q && q.ask, judge: q && q.judge, kind: 'choice', effect: 'now',
+    options: [{ text: NAMES.ui.actionDone }, { text: NAMES.ui.actionNotDone }, { text: NAMES.ui.actionReschedule }], ...(q && q.conflict ? { conflict: q.conflict } : {}) })) : sourceQs;
   if (!qs.length) errors.push('缺少題目');
   const ids = new Set();
   qs.forEach((q, i) => {
@@ -207,19 +211,21 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
     if (kind === 'multi' && opts.length < 2) errors.push(at + '多選題須至少有兩個選項');
     if (kind === 'choice' && opts.length === 1) errors.push(at + '只有一個選項');
     const v = q.value;
-    if (v == null || (!Array.isArray(v) && !String(v).trim()) || (Array.isArray(v) && !v.length && kind !== 'multi')) errors.push(at + '缺少 AI 建議答案');
-    if (kind === 'multi' && !Array.isArray(v)) errors.push(at + '多選題的建議答案格式不正確');
-    if (kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) errors.push(at + '日期格式不正確（須包含年、月、日）');
-    if (!String(q.why || '').trim()) errors.push(at + '缺少建議理由');
+    if (!actionConfirm && (v == null || (!Array.isArray(v) && !String(v).trim()) || (Array.isArray(v) && !v.length && kind !== 'multi'))) errors.push(at + '缺少 AI 建議答案');
+    if (!actionConfirm && kind === 'multi' && !Array.isArray(v)) errors.push(at + '多選題的建議答案格式不正確');
+    if (!actionConfirm && kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) errors.push(at + '日期格式不正確（須包含年、月、日）');
+    if (!actionConfirm && !String(q.why || '').trim()) errors.push(at + '缺少建議理由');
     const eff = q.effect || 'tentative';
     if (!['tentative', 'now'].includes(eff)) errors.push(at + '效力設定不正確');
     if (eff === 'now' && kind !== 'date' && !opts.length) errors.push(at + '即時生效的題目必須提供選項');
+    for (const key of ['risk', 'conflict']) if (q[key] != null && (typeof q[key] !== 'string' || q[key].trim().length > 120)) errors.push(at + key + '須為 120 字以內的文字');
+    if (eff === 'now' && !system && !actionConfirm && !String(q.risk || '').trim()) errors.push(at + '不合規格：即時生效的題目必須說明風險');
   });
   // 即刻生效嘅題目要逐條問，一定入第一批，所以一個包最多 3 條
   if (qs.filter(q => q && q.effect === 'now').length > 3) errors.push('每個問題包最多只可有 3 條即時生效的題目');
   // 規劃書 4.10：畫面會顯示嘅字（說明、題目、判斷句、理由、選項、建議值）命中內部術語、AI 腔、自足檢查或口語字：
   // 命令入口交嘅包即退回（對話中嘅 AI 可以即時改）；AI 流程入面只記警告（外殼另有改寫一次同機械替換）。標「你原話」嘅行唔掃。
-  const shown = [['說明', raw.context]].concat(qs.flatMap((q, i) => !q || typeof q !== 'object' ? [] : [[`第 ${i + 1} 條`, q.ask], [`第 ${i + 1} 條`, q.judge], [`第 ${i + 1} 條理由`, q.why]]
+  const shown = [['說明', raw.context]].concat(qs.flatMap((q, i) => !q || typeof q !== 'object' ? [] : [[`第 ${i + 1} 條`, q.ask], [`第 ${i + 1} 條`, q.judge], [`第 ${i + 1} 條理由`, q.why], [`第 ${i + 1} 條風險`, q.risk], [`第 ${i + 1} 條差異`, q.conflict]]
     .concat((Array.isArray(q.options) ? q.options : []).map(o => [`第 ${i + 1} 條選項`, o && o.text]), q.kind === 'date' ? [] : [[`第 ${i + 1} 條建議`, Array.isArray(q.value) ? q.value.join('、') : q.value]])));
   const titleHits = NAMES.styleIssues(title).filter(h => h.kind !== 'colloquial');
   if (titleHits.length) shown.unshift(['標題', title]);
@@ -251,7 +257,8 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
     afterConfirm: raw.afterConfirm ? String(raw.afterConfirm) : '',
     next: raw.next && raw.next.task ? { task: String(raw.next.task) } : null,
     askedBy, askedAt: localIso(), fromRun,
-    questions: part
+    questions: part,
+    ...(actionConfirm ? { actionConfirm } : {})
   }));
   return { ok: true, packs, dropped, warnings };
 }
@@ -277,6 +284,6 @@ export function listPacks(dirs) {
     if (!p || !Array.isArray(p.questions)) return null;
     const a = loadAnswers(dirs, p.id).answers;
     const answered = p.questions.filter(q => a[q.id]).length;
-    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, fromRun: p.fromRun || null };
+    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '' };
   }).filter(Boolean).sort((x, y) => String(y.askedAt).localeCompare(String(x.askedAt)));
 }

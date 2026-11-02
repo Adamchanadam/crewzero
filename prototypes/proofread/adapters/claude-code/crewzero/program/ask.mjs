@@ -12,14 +12,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dataDirs, preparePacks, placePacks, listPacks, rootId, legacyRootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
+import { dataDirs, preparePacks, placePacks, listPacks, readJSON, rootId, legacyRootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
 import { seedDemo, DEMO_DIR } from './demo-seed.mjs';
 import { folderHash } from './folder-hash.mjs';
+import { dashboardState, guideCard } from './dash-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-// 示範（虛構公司「從田間到餐桌」）：用另一個資料夾，唔會郁真實資料；未有就建
-if (args.includes('--demo')) { process.env.SOS_DATA = DEMO_DIR; seedDemo(DEMO_DIR, { copyCert: true, reset: args.includes('--reset-demo') }); }
+const STATUS_ONLY = args.includes('--status');
 // 模擬實例（設計稿第 8 節）：獨立資料夾、模擬時鐘、預設 4650；唔係生意證據
 const si = args.indexOf('--sim');
 const PORT0 = si >= 0 ? 4650 : BASE_PORT;
@@ -28,7 +28,29 @@ if (si >= 0) {
   process.env.SOS_SIM = '1'; process.env.SOS_DATA = path.join(inst, 'data');
   if (fs.existsSync(fake)) process.env.SOS_ADAPTER = fake;
 }
-const DIR = dataDirs(ROOT);
+// 示範（虛構公司「從田間到餐桌」）：用另一個資料夾，唔會郁真實資料；未有就建
+if (args.includes('--demo')) process.env.SOS_DATA = DEMO_DIR;
+const DIR = dataDirs(ROOT, { create: !STATUS_ONLY });
+if (STATUS_ONLY) {
+  if (!fs.existsSync(DIR.data)) {
+    console.log('未能讀取目前安排：尚未找到 CrewZero 資料。');
+    process.exit(1);
+  }
+  let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
+  let card = null; try {
+    const c = readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null);
+    card = guideCard(firstWeek, dashboardState(DIR, { cert: c && c.host ? { host: c.host, label: c.label, certifiedAt: c.certifiedAt } : null }));
+  } catch {}
+  if (!card || !card.today || !card.button) {
+    console.log('未能讀取目前安排：目前沒有可顯示的下一步。');
+    process.exit(1);
+  }
+  console.log('目前：' + card.today);
+  console.log('下一步：' + card.button + '（在 Founder Desk 按此按鈕）');
+  console.log('重新打開：在 AI 對話說「打開 Founder Desk」');
+  process.exit(0);
+}
+if (args.includes('--demo')) seedDemo(DEMO_DIR, { copyCert: true, reset: args.includes('--reset-demo') });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let legacyServer = null;
 
@@ -64,8 +86,9 @@ async function openPage(url, page) {
     const response = await fetch(url + 'api/pass/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page }), signal: AbortSignal.timeout(5000) });
     let body = null; try { body = await response.json(); } catch { }
     if (response.ok && body && body.ok === true) return { ok: true };
-    return { ok: false, message: typeof body?.message === 'string' ? body.message : `伺服器拒絕開頁（HTTP ${response.status}）。` };
-  } catch { return { ok: false, message: '無法聯絡本機伺服器，瀏覽器未有打開。' }; }
+    // 呢度印出嘅句會由 AI 轉述畀創辦人：只用中文原因同做法，唔印狀態碼或者英文
+    return { ok: false, message: typeof body?.message === 'string' && /[一-鿿]/.test(body.message) ? body.message : 'CrewZero 未有接受這次開頁要求。請稍等十秒，再說一次。' };
+  } catch { return { ok: false, message: 'CrewZero 未有回應。請稍等十秒，再說一次。' }; }
 }
 
 // 生意大腦本機選項：指向一個試驗資料夾（只讀固定檔名）；--brain off 取消
@@ -110,12 +133,14 @@ if (oi >= 0) {
 }
 if (args.includes('--desk') || args.includes('--dashboard')) {
   const url = await ensureServer();
-  if (!url) { console.log(legacyServer?.busy ? '沒有通行證功能的舊版 Founder Desk 正在處理工作；為保護資料，瀏覽器未有打開，完成後再試。' : '無法啟動本機伺服器。'); process.exit(1); }
+  // 開唔到：印一句原因同做法（AI 照住用白話轉述，唔好自己試其他方法）
+  const want = args.includes('--dashboard') ? '打開營運監察台' : '打開 Founder Desk';
+  if (!url) { console.log(legacyServer?.busy ? `舊版 CrewZero 正在處理工作；為保護資料，今次未有打開頁面。請等幾分鐘，再說一次「${want}」。` : `未能打開：這部電腦暫時未能啟動 CrewZero，公司資料沒有改動。請稍等十秒，再說一次「${want}」；仍然不行，請關閉其他已開的 CrewZero 視窗或重新開機後再試。`); process.exit(1); }
   // 營運監察台同 Founder Desk 同一個伺服器，只係打開唔同頁
   const page = args.includes('--dashboard') ? url + 'dashboard' : url;
   const label = (args.includes('--dashboard') ? '營運監察台' : 'Founder Desk') + (args.includes('--demo') ? '（示範：虛構公司）' : si >= 0 ? '（模擬實例：不是生意證據）' : '');
   const opened = await openPage(url, args.includes('--dashboard') ? 'dashboard' : 'desk');
-  if (!opened.ok) { console.log(`${label} 已準備好，但瀏覽器未有打開：${opened.message}`); process.exit(1); }
+  if (!opened.ok) { console.log(`${label} 已準備好，但瀏覽器未有打開：${opened.message.replace(/再說一次。$/, `再說一次「${want}」。`)}`); process.exit(1); }
   console.log(label + '：' + page);
   process.exit(0);
 }
@@ -145,7 +170,7 @@ if (!prep.packs.length) { console.log('全部題目先前均已回答，沒有�
 const placed = placePacks(DIR, prep.packs);
 const url = await ensureServer();
 for (const p of placed) console.log(`已放上 Founder Desk：${p.title}（共 ${p.count} 條；每次先問最重要的 3 條）`);
-if (!url) { console.log(legacyServer?.busy ? '問題包已放好；沒有通行證功能的舊版正在處理工作，為保護資料瀏覽器未有打開，完成後再試。' : '無法啟動 Founder Desk 的本機伺服器；問題包已放好，下次打開 Founder Desk 即可查看。'); process.exit(legacyServer?.busy ? 1 : 0); }
+if (!url) { console.log(legacyServer?.busy ? '問題包已放好；沒有通行證功能的舊版正在處理工作，為保護資料瀏覽器未有打開，完成後再試。' : '問題已準備好，但 Founder Desk 暫時未能開啟；下次打開 Founder Desk 便會看到。'); process.exit(legacyServer?.busy ? 1 : 0); }
 const link = `${url}#/ask/${placed[0].id}`;
 const opened = await openPage(url, 'ask/' + placed[0].id);
 if (!opened.ok) { console.log('問題包已放好，但瀏覽器未有打開：' + opened.message + '請勿再放一次；創辦人打開 Founder Desk 即可看到。'); console.log('Founder Desk：' + link); process.exit(0); }

@@ -16,7 +16,7 @@ import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, r
 import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, guideCard } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, guideCard, companyLogo, LOGO_EXTS } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource } from './brain-lib.mjs';
@@ -235,7 +235,7 @@ const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'pr
 const DASH_TABS = ['path', 'brain', 'inputs', 'team', 'log', 'system'];
 const BRAIN_PAGES = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 let lastSeenPrev = null;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const KINDS = ['proofread', 'ask-answer'];
 
 const pad = n => String(n).padStart(2, '0');
@@ -352,19 +352,22 @@ function simSetAI(mode) {
   hostCache = null;
   return [200, { ok: true, ai: mode, ready: fs.existsSync(CERT_FILE) }];
 }
-const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f))].sort();
+const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f))].sort();
 const EXTS = ['md', 'txt', 'csv', 'pdf', 'docx', 'pptx', 'xlsx', 'png', 'jpg', 'jpeg'];
 const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
+const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 // 附件核對（交資料、真實事件證明共用）：回 { files } 或 { error }
 function takeFiles(list) {
-  if (list.length > 20) return { error: '附件最多 20 份。' };
+  if (list.length > 20) return { error: '附件最多 20 份，請移除部分文件後再送出。' };
   const files = []; let total = 0;
   for (const f of list) {
-    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(f.data)) return { error: '附件內容無法讀取。' };
+    const who = f && typeof f.name === 'string' && f.name ? '「' + f.name.slice(0, 80) + '」' : '其中一份附件';
+    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !B64.test(f.data)) return { error: who + '無法讀取，可能已損壞，請重新選擇。' };
     const ext = path.extname(f.name).slice(1).toLowerCase();
-    if (!EXTS.includes(ext)) return { error: '附件格式不支援。' };
+    if (!EXTS.includes(ext)) return { error: who + '的檔案類型未能接收，請另存為 PDF 或 Word 文件後再加入。' };
     const bytes = Buffer.from(f.data, 'base64'); total += bytes.length;
-    if (bytes.length > 10 * 1024 * 1024 || total > 50 * 1024 * 1024) return { error: '附件太大，請縮小後再提交。' };
+    if (bytes.length > 10 * 1024 * 1024) return { error: who + '太大，每份須在 10MB 以內。請改選較小的檔案，或把文件分拆後再加入。' };
+    if (total > 50 * 1024 * 1024) return { error: '附件合共太大，須在 50MB 以內。請移除部分文件後再送出。' };
     files.push({ name: f.name.replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 80), bytes });
   }
   return { files };
@@ -379,7 +382,7 @@ function receiveIntake(body) {
     if (typeof value !== 'string' || value.length > 4000 || (q.required && !value.trim())) return fail('請填寫首五條問題，每欄最多 4000 字。');
     fields['q' + q.n] = value;
   }
-  if (Object.keys(body.fields).some(k => !/^q(?:[1-9]|1[0-2])$/.test(k)) || Buffer.byteLength(Object.values(fields).join(''), 'utf8') > 32 * 1024) return fail('文字資料過多或包含不支援的欄位。');
+  if (Object.keys(body.fields).some(k => !/^q(?:[1-9]|1[0-2])$/.test(k)) || Buffer.byteLength(Object.values(fields).join(''), 'utf8') > 32 * 1024) return fail('填寫的文字太長，請把較長的內容改為文件附上，再送出。');
   const got = takeFiles(body.files);
   if (got.error) return fail(got.error);
   const files = got.files;
@@ -430,7 +433,7 @@ function prefillStatus(id) {
 
 /* ---------- 創辦人交要求（「我想改次序／加一站」「交一件臨時工作」）：寫入收件匣，交外殼叫 AI 擬成問題包 ---------- */
 // 同交資料一樣只新增檔案，AI 寫唔到 founder 資料夾，所以 AI 冒充唔到創辦人嘅要求；真正改路線或開工要等創辦人答咗問題包先生效。
-const NOTE_TYPES = ['order', 'adhoc', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc'];
+const NOTE_TYPES = ['order', 'adhoc', 'help', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc'];
 const BRAIN_ITEMS = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 const DEBATE_ACTIONS = ['respond', 'adopt', 'reattack2', 'rerun'];
 function receiveNote(body) {
@@ -493,6 +496,22 @@ function receiveNote(body) {
       got.files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
       fs.writeFileSync(path.join(DIR.inbox, `${id}-note-doc.md`), `kind: note\ntype: doc\nat: ${localIso()}\n\n${say || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records })}\n\`\`\`\n`, { flag: 'wx' });
     } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
+    return { ok: true, id, receivedAt: localIso() };
+  }
+  if (body.type === 'help') {
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text) return fail('請用一句話寫下你卡住的地方。');
+    if (text.length > 2000) return fail('內容最多 2000 字。');
+    const context = {};
+    const source = body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? body.context : {};
+    if (/^[\w-]{1,30}$/.test(String(source.page || ''))) context.page = String(source.page);
+    if (/^[\w-]{1,80}$/.test(String(source.packId || ''))) context.packId = String(source.packId);
+    if (typeof source.packTitle === 'string' && source.packTitle.trim().length <= 300) context.packTitle = source.packTitle.trim();
+    if (typeof source.ask === 'string' && source.ask.trim().length <= 300) context.ask = source.ask.trim();
+    const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
+    const file = id + '-note-help.md';
+    const content = ['kind: note', 'type: help', 'at: ' + localIso(), '', text, '', '```json', JSON.stringify({ context }), '```', ''].join('\n');
+    fs.writeFileSync(path.join(DIR.inbox, file), content, { flag: 'wx' });
     return { ok: true, id, receivedAt: localIso() };
   }
   const text = typeof body.text === 'string' ? body.text.trim() : '';
@@ -568,7 +587,8 @@ function readBody(req, max, timeoutMs = 15000) {
     let timer;
     const idle = () => { clearTimeout(timer); timer = setTimeout(() => { try { req.destroy(); } catch { } finish(new Error('body timeout')); }, timeoutMs); };
     idle();
-    req.on('data', c => { idle(); size += c.length; if (size > max) { try { req.destroy(); } catch { } finish(new Error('too large')); } else chunks.push(c); });
+    // 超過上限：唔再收，但唔即刻斷線（斷咗頁面就收唔到「內容太多」嘅原因，只會以為連唔到）；餘下資料照讀照丟
+    req.on('data', c => { idle(); size += c.length; if (size > max) { chunks.length = 0; finish(new Error('too large')); if (size > max + 8 * 1024 * 1024) { try { req.destroy(); } catch { } } } else if (!done) chunks.push(c); });
     req.on('end', () => finish(null, Buffer.concat(chunks).toString('utf8')));
     req.on('aborted', () => finish(new Error('request aborted')));
     req.on('error', e => finish(e));
@@ -620,15 +640,36 @@ function serverVia(text, via) {
 function statusPayload() {
   const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
   const packs = listPacks(DIR);
+  const failedByRef = (st.runs || []).filter(r => r && r.state === 'failed' && r.ref).reduce((all, r) => ({ ...all, [r.ref]: (all[r.ref] || 0) + 1 }), {});
+  const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs: st.runs.slice(0, 5), openAsks: packs.filter(p => p.open).length, company: companyStatus(), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, openAsks: packs.filter(p => p.open).length, company: companyStatus(), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
+}
+// 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
+// 存喺 data/company/logo.<格式>：先寫暫存檔再改名，之後刪走其他格式嘅舊標誌。移除就三個格式都刪。
+const LOGO_MAX = 1024 * 1024;
+const logoKind = b => b.length >= 12 && b[0] === 0x89 && b.toString('latin1', 1, 4) === 'PNG' ? 'png'
+  : b.length >= 12 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? 'jpg'
+  : b.length >= 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' ? 'webp' : null;
+function saveLogo(body) {
+  const drop = keep => { for (const e of LOGO_EXTS) if (e !== keep) fs.rmSync(path.join(DIR.company, 'logo.' + e), { force: true }); };
+  if (body.action === 'remove') { drop(null); say('公司標誌已移除'); return [200, { ok: true, logo: 0 }]; }
+  if (body.action !== 'set' || typeof body.data !== 'string' || !B64.test(body.data)) return [400, { error: 'invalid', message: NAMES.ui.logoBad }];
+  const bytes = Buffer.from(body.data, 'base64'), ext = logoKind(bytes);
+  if (bytes.length > LOGO_MAX) return [400, { error: 'large', message: NAMES.ui.logoLarge }];
+  if (!ext) return [400, { error: 'type', message: NAMES.ui.logoBad }];
+  fs.mkdirSync(DIR.company, { recursive: true });
+  const tmp = path.join(DIR.company, `.logo-${process.pid}.tmp`);
+  fs.writeFileSync(tmp, bytes); fs.renameSync(tmp, path.join(DIR.company, 'logo.' + ext));
+  drop(ext); say(`公司標誌已更換（${ext.toUpperCase()}，${Math.ceil(bytes.length / 1024)}KB）`);
+  return [200, { ok: true, logo: companyLogo(DIR).v }];
 }
 function companyStatus() {
   const c = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const page = readJSON(path.join(DIR.company, 'page.json'), null), co = page?.company || {};
-  return { name: co.name || '', initials: co.initials || '', oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null };
+  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null };
 }
 /* ---------- 觀測來源（規劃書 4.12、4.9；設計稿 2026-10-28 第 3 節）：轉接層嘅唯讀觀測程式 ----------
    觀察範圍只限帳本 observe.folders[]（只存雜湊同顯示名，唔存路徑；系統頁經 /api/setup 增刪，外殼下次第一步寫入）。
@@ -866,6 +907,7 @@ const handler = async (req, res) => {
     /* ---- 由此起全部只限創辦人：要有效通行證，否則 403 {error:'pass'}，乜都唔寫 ---- */
     const pass = passOf(req);
     if (!pass) return refuse(req, res, url, pendingOf(req) ? 'pending' : 'pass');
+    if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-logo') { const l = companyLogo(DIR); return l ? send(res, 200, fs.readFileSync(l.file), TYPES['.' + l.ext]) : send(res, 404, { error: 'not found' }); }
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-page.js') { const page = readJSON(path.join(DIR.company, 'page.json'), null); return page ? send(res, 200, 'window.STARTUP_OS_PAGE = ' + JSON.stringify(page).replace(/</g, '\\u003c') + ';', TYPES['.js']) : send(res, 404, { error: 'not found' }); }
     if (req.method === 'GET') {
       if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, limits });
@@ -877,7 +919,16 @@ const handler = async (req, res) => {
       // Founder Desk 待決事項頁：「今日要做的事」卡同「上次離開之後」；頁面第一次載入（seen=1）先記低今次時間，輪詢唔算
       // 一個殼嘅頁頭（決定二十五）：公司、三個業務指標、生意大腦等你處理數目；唔觀測、唔寫檔（Founder Desk 畫面每 5 秒讀一次）
       if (p === '/api/shell') { const ds = dashboardState(DIR, { cert: certInfo(), sim: simInfo() }); return send(res, 200, { ok: true, company: ds.company, metrics: ds.metrics, brain: { items: ((ds.brain || {}).items || []).map(x => ({ id: x.id, status: x.status })) }, tele: ds.tele, freshness: ds.deck && ds.deck.freshness, sample: ds.sample, version: SERVER_VERSION, instance: INSTANCE }); }
-      if (p === '/api/home') { if (url.searchParams.get('seen') === '1' && fs.existsSync(path.join(DIR.company, 'page.json'))) lastSeenPrev = touchLastSeen(DIR, SERVER_VERSION); const ds = dashboardState(DIR, { cert: certInfo(), lastSeen: lastSeenPrev }); let fw = ''; try { fw = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch { } return send(res, 200, { ok: true, guide: ds.guide, card: guideCard(fw, ds), firstWeekDone: ds.firstWeekDone, since: ds.since }); }
+      if (p === '/api/home') {
+        if (url.searchParams.get('seen') === '1' && fs.existsSync(path.join(DIR.company, 'page.json'))) lastSeenPrev = touchLastSeen(DIR, SERVER_VERSION);
+        const ds = dashboardState(DIR, { cert: certInfo(), lastSeen: lastSeenPrev });
+        let fw = ''; try { fw = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch { }
+        const card = guideCard(fw, ds);
+        const fallback = (ds.todo || [])[0] || null;
+        const fallbackHref = fallback ? (fallback.kind === 'overview' ? '/proofread.html' : fallback.kind === 'schedule' ? fallback.href : '#/ask/' + fallback.id) : '';
+        const back = ds.since && ds.since.awayDays >= 3 ? card && card.today ? { text: card.today, href: card.href, button: card.button } : fallback ? { text: fallback.text, href: fallbackHref, button: NAMES.ui.goAnswer } : null : null;
+        return send(res, 200, { ok: true, guide: ds.guide, card, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null });
+      }
       if (p === '/api/asks') return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR) });
       if (p === '/api/ask') {
         const pack = loadPack(DIR, url.searchParams.get('id'));
@@ -906,18 +957,19 @@ const handler = async (req, res) => {
       if (p === '/api/practice/session') { const s = loadSession(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, session: s, scenario: loadScenario(DIR, s.scenarioId) }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/run') { const r = runResult(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, run: r }) : send(res, 404, { error: 'not found' }); }
     }
-    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || (p === '/api/sim' && SIM))) {
+    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
       const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
       if (!loopback && !phone) return refuse(req, res, url, 'origin');
       if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
       const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
-      const body = JSON.parse(await readBody(req, (p === '/api/intake' ? 75 * 1024 * 1024 : 32 * 1024)) || '{}');
+      const body = JSON.parse(await readBody(req, (p === '/api/intake' ? 75 * 1024 * 1024 : p === '/api/logo' ? 1.5 * 1024 * 1024 : 32 * 1024)) || '{}');
       // 半截手機請求在讀 body 期間可被撤銷；讀完後、套用任何動作前必須以同一代手機模式重驗。
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
       if (p === '/api/practice') return send(res, ...await practiceAction(body));
+      if (p === '/api/logo') return send(res, ...saveLogo(body));
       if (p === '/api/sim') return send(res, ...(body.action === 'advance' ? simAdvance() : body.action === 'ai' ? simSetAI(body.mode) : [400, { error: 'invalid' }]));
       if (p === '/api/intake') { const result = body.kind === 'note' ? receiveNote(body) : body.kind === 'prefill' ? receivePrefill(body) : receiveIntake(body); if (!result.ok) return send(res, 400, result); schedule(); return send(res, 202, result); }
       if (p === '/api/setup') {
@@ -982,7 +1034,16 @@ const handler = async (req, res) => {
     if (p.startsWith('/api/')) return send(res, 405, { error: 'method' });
     send(res, 404, { error: 'not found' });
   } catch (e) {
-    send(res, 400, { error: String(e.message || e) });
+    // 總攔截：畫面只收固定代號同中文原因；錯誤原文（可能有英文同路徑）只寫入伺服器自己嘅紀錄
+    const raw = String(e && e.message || e);
+    const [code, status, key] = raw === 'too large' ? ['too-large', 413, 'err_tooLarge']
+      : e instanceof SyntaxError ? ['bad-body', 400, 'err_badBody']
+      : raw === 'body timeout' || raw === 'request aborted' ? ['cut', 400, 'err_cut']
+      : ['server', 500, 'err_server'];
+    say(`請求出錯（${req.method} ${String(req.url || '').split('?')[0].slice(0, 80)}）：${raw.slice(0, 300)}`);
+    if (res.headersSent) { try { res.end(); } catch { } return; }
+    if (code === 'too-large') res.setHeader('Connection', 'close');
+    send(res, status, { error: code, message: NAMES.ui[key] });
   }
 };
 const server = http.createServer(handler);

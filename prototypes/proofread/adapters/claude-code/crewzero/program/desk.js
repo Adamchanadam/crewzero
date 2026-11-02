@@ -42,6 +42,14 @@ h1{font-size:var(--fs-h1);font-weight:650;margin:2px 0;letter-spacing:-.01em;lin
 .ident{display:flex;gap:14px;align-items:center;min-width:0}
 .ident .one{font-size:var(--fs-sub);opacity:.86;margin:0}
 .mark{width:52px;height:52px;flex:none;border:1px solid rgba(232,141,79,.5);border-radius:14px;display:grid;place-items:center;font:600 var(--fs-title) var(--mono);color:var(--amber);background:linear-gradient(160deg,rgba(232,141,79,.16),rgba(232,141,79,.02));box-shadow:0 0 50px rgba(232,141,79,.08),inset 0 1px 0 rgba(255,255,255,.08)}
+button.mark{position:relative;padding:0;overflow:visible;cursor:pointer;appearance:none;-webkit-appearance:none}
+.mark.has-logo{background:#f4f1ec;padding:5px}
+.mark img{width:100%;height:100%;object-fit:contain;display:block;border-radius:8px}
+.mark .pen{position:absolute;right:-6px;bottom:-6px;width:18px;height:18px;border:2px solid var(--bg);border-radius:50%;display:grid;place-items:center;font:600 10px/1 system-ui,sans-serif;color:#1a0f07;background:var(--amber);opacity:.9}
+.mark .pen::before{content:'✎'}
+button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
+.logo-prev{width:96px;height:96px;margin:4px 0 12px;font-size:var(--fs-page);cursor:default}
+.logo-in{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .metrics{display:flex;gap:22px;margin-left:auto}
 .metric{position:relative;display:block;min-width:130px;text-decoration:none;padding:2px 0;color:inherit}
 .metric label{display:block;color:var(--muted);font-size:var(--fs-label);white-space:nowrap;cursor:inherit}
@@ -138,6 +146,7 @@ h1{font-size:var(--fs-h1);font-weight:650;margin:2px 0;letter-spacing:-.01em;lin
 .pair-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.pair-qr{display:block;width:220px;height:220px;background:#fff;padding:16px;margin:16px auto;border-radius:4px}
 .pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
 .phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
+.help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
 .layer:after,.panel:after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);pointer-events:none}
 body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
 @keyframes cardin{from{transform:translateY(10px) scale(.992)}to{transform:none}}
@@ -320,18 +329,147 @@ body.paused .bg *{animation:none!important}
   function toolbar(cur, counts) {
     return el('div', { cls: 'toolbar' }, nav(cur, counts),
       el('div', { cls: 'tool-right' }, liveBadge(),
+        el('button', { type: 'button', cls: 'btn small', id: 'open-help', onclick: function () { helpDialog(cur); } }, U.helpOpen),
         el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
         el('button', { type: 'button', cls: 'btn small', id: 'pause', 'aria-pressed': ST.paused ? 'true' : 'false', onclick: togglePause }, ST.paused ? D.resume : D.pause)));
   }
+  function helpDialog(page) {
+    var opener = document.getElementById('open-help');
+    var modal = el('div', { cls: 'pair-modal help-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title', id: 'help-modal' });
+    var close = function () { modal.remove(); if (opener) opener.focus(); };
+    var about = el('section', { cls: 'layer' }, el('h2', { id: 'help-title' }, U.helpTitle),
+      el('h3', { class: 'layer-title' }, U.helpAbout), el('p', null, U['help_' + page] || U.help_pending));
+    var next = el('section', { cls: 'layer', id: 'help-next' }, el('h3', { class: 'layer-title' }, U.helpNext));
+    var note = el('p', { cls: 'small help-note', id: 'help-note', 'aria-live': 'polite' });
+    var input = el('textarea', { id: 'help-text', rows: '4', maxlength: '2000', placeholder: U.helpText, 'aria-label': U.helpAskAI });
+    var submit = el('button', { type: 'button', cls: 'btn primary', id: 'help-send', onclick: submitHelp }, U.helpSend);
+    function showSent(status) {
+      input.value = '';
+      submit.disabled = false;
+      if (status && status.ai && status.ai.ready === false) {
+        note.replaceChildren(U.helpSentNoAI, ' ', el('a', { href: '/#/setup' }, U.helpSetup));
+      } else note.textContent = U.helpSent;
+    }
+    function submitHelp() {
+      var text = input.value.trim();
+      if (!text) { note.textContent = U.helpTextRequired; input.focus(); return; }
+      submit.disabled = true; note.textContent = U.sending;
+      send('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: text, context: { page: page } }) })
+        .then(function () { return send('/api/status', { cache: 'no-store' }).catch(function () { return null; }); })
+        .then(showSent, function (e) { submit.disabled = false; note.textContent = why(e); });
+    }
+    modal.append(el('section', { cls: 'layer' }, about, next, el('h3', { class: 'layer-title' }, U.helpAskAI), input, note,
+      el('div', { cls: 'pair-actions' }, submit, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    document.body.append(modal); input.focus();
+    send('/api/home', { cache: 'no-store' }).then(function (home) {
+      var card = home && home.card;
+      if (!card) { next.append(el('p', null, U.helpNoStep)); return; }
+      next.append(el('p', null, card.today || U.helpNoStep));
+      if (card.href) next.append(el('a', { cls: 'btn primary', href: card.href }, card.button || U.next));
+    }, function () { next.hidden = true; });
+  }
+  /* ---------- 公司標誌：頁頭標誌係一個掣，按咗可以上載或者移除（伺服器 /api/logo；冇標誌就顯示公司名首兩個字） ---------- */
+  function markText(c) { return c.initials || String(c.name || 'OS').slice(0, 2); }
+  function markInner(m, c) {
+    m.classList.toggle('has-logo', !!c.logo); m.setAttribute('data-logo', String(c.logo || 0));
+    var img = c.logo ? el('img', { src: '/company-logo?v=' + c.logo, alt: '' }) : null;
+    if (img) img.addEventListener('error', function () { m.classList.remove('has-logo'); img.replaceWith(markText(c)); });
+    m.replaceChildren(img || markText(c));
+    return m;
+  }
+  function markBtn(c) {
+    var m = el('button', { type: 'button', cls: 'mark', id: 'co-mark', title: U.logoChange, 'aria-label': U.logoChange, onclick: function () { logoDialog(); } });
+    markInner(m, c); m.append(el('span', { cls: 'pen', 'aria-hidden': 'true' }));
+    return m;
+  }
+  // 每次讀回：標誌換咗（例如喺手機換）就就地更新
+  function syncMark(c) {
+    var m = document.getElementById('co-mark'); if (!m || !c) return;
+    if (m.getAttribute('data-logo') === String(c.logo || 0) && (c.logo || m.firstChild.textContent === markText(c))) return;
+    var pen = m.querySelector('.pen'); markInner(m, c); if (pen) m.append(pen);
+  }
+  function logoDialog() {
+    var c = (ST.data || {}).company || ST.company || {};
+    var modal = el('div', { cls: 'pair-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'logo-title', id: 'logo-modal' });
+    var close = function () { modal.remove(); var m = document.getElementById('co-mark'); if (m) m.focus(); };
+    var prev = markInner(el('div', { cls: 'mark logo-prev', 'aria-hidden': 'true' }), c);
+    var note = el('p', { cls: 'small muted', id: 'logo-note' }, c.logo ? '' : U.logoNone);
+    var input = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', cls: 'logo-in', id: 'logo-file', tabindex: '-1', 'aria-hidden': 'true' });
+    var pick = el('button', { type: 'button', cls: 'btn primary', id: 'logo-pick', onclick: function () { input.click(); } }, U.logoPick);
+    var rm = c.logo ? el('button', { type: 'button', cls: 'btn', id: 'logo-remove', onclick: function () { send({ action: 'remove' }, U.logoRemoved); } }, U.logoRemove) : null;
+    function busy(on) { pick.disabled = on; if (rm) rm.disabled = on; if (on) note.textContent = U.logoSaving; }
+    function send(body, done) {
+      busy(true);
+      fetch('/api/logo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw apiError(r, j); return j; }); })
+        .then(function (j) {
+          var co = (ST.data || {}).company || ST.company; if (co) co.logo = j.logo || 0;
+          syncMark({ name: c.name, initials: c.initials, logo: j.logo || 0 });
+          close(); toast(done);
+        }, function (e) { busy(false); note.textContent = e && e.status ? why(e) : U.logoFailed; });
+    }
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0]; input.value = '';
+      if (!f) return;
+      if (['image/png', 'image/jpeg', 'image/webp'].indexOf(f.type) < 0) { note.textContent = U.logoBad; return; }
+      if (f.size > 30 * 1024 * 1024) { note.textContent = U.logoHuge; return; }
+      // 自動縮放：長邊最多 512 像素（細圖唔放大），保留比例同透明底；先出 PNG，太大就改 WebP（伺服器只收 1MB 以內）
+      busy(true);
+      var url = URL.createObjectURL(f), im = new Image();
+      im.onload = function () {
+        URL.revokeObjectURL(url);
+        var k = Math.min(1, 512 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+        var cx = cv.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(im, 0, 0, cv.width, cv.height);
+        var data = cv.toDataURL('image/png');
+        if (data.length * 0.75 > 900 * 1024) data = cv.toDataURL('image/webp', 0.9);
+        send({ action: 'set', data: data.split(',')[1] || '' }, U.logoDone);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); busy(false); note.textContent = U.logoUnread; };
+      im.src = url;
+    });
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    modal.append(el('section', { cls: 'layer' }, el('span', { cls: 'eyebrow' }, U.brand), el('h2', { id: 'logo-title' }, U.logoTitle),
+      prev, el('p', null, U.logoHint), note, input,
+      el('div', { cls: 'pair-actions' }, pick, rm, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
+    document.body.append(modal); pick.focus();
+  }
   function toast(t) { var e = document.getElementById('toast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { e.hidden = true; }, 4000); }
-  function setupPost(body) { return fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || j.error || 'failed'); return j; }); }); }
+  /* ---------- 出錯提示（三頁共用）：畫面永遠唔顯示 e.message、英文代號或者錯誤原文 ----------
+     send(url, opts)：fetch 加 JSON；連唔到 → 錯誤帶 net；伺服器拒絕 → 錯誤帶 code（英文代號，只供程式分辨）、said（伺服器嘅中文原因）、status。
+     e.message 只放代號，方便頁面照舊比較（例如 'busy'、'pack-not-here'）；顯示一律用 why(e)。 */
+  var ERR_KEY = { invalid: 'err_invalid', busy: 'err_busy', local: 'err_local', 'not found': 'err_notFound', 'pack-not-here': 'err_notFound', ai: 'err_ai',
+    'too-large': 'err_tooLarge', large: 'err_tooLarge', 'bad-body': 'err_badBody', cut: 'err_cut', server: 'err_server', origin: 'err_origin', host: 'err_origin', method: 'err_server', type: 'err_badBody', open: 'err_open' };
+  function netError() { var e = new Error('net'); e.net = true; return e; }
+  function apiError(r, j) {
+    var code = j && typeof j.error === 'string' ? j.error : '';
+    var e = new Error(code || String(r.status)); e.code = code; e.status = r.status;
+    // 伺服器嘅中文原因：只收有中文、冇英文字母開頭嘅句（防止日後有人將錯誤原文放入 message）
+    if (j && typeof j.message === 'string' && /[一-鿿]/.test(j.message) && !/^[A-Za-z]/.test(j.message)) e.said = j.message;
+    return e;
+  }
+  function send(url, opts) {
+    return fetch(url, opts).catch(function () { throw netError(); })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { if (!r.ok || !j || j.ok === false) throw apiError(r, j); return j; }); });
+  }
+  function why(e) {
+    if (!e) return U.errGeneric;
+    if (e.said) return e.said;
+    if (e.net) return U.errNet;
+    var k = ERR_KEY[e.code] || (e.status === 404 ? 'err_notFound' : e.status === 413 ? 'err_tooLarge' : '');
+    return (k && U[k]) || U.errGeneric;
+  }
+  function setupPost(body) { return send('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
   function phoneDialog() {
     var modal = el('div', { cls: 'pair-modal', role: 'dialog', 'aria-modal': 'true' });
     var card = el('section', { cls: 'layer' }, el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phoneOpenTitle), el('p', null, U.phoneOpenHint));
     var close = function () { clearInterval(modal.timer); modal.remove(); };
-    var begin = el('button', { type: 'button', cls: 'btn primary big', onclick: function () { begin.disabled = true; setupPost({ action: 'phone-open' }).then(function (v) { showPhoneCode(v); }, function (e) { begin.disabled = false; toast(e.message || U.phoneOpenFailed); }); } }, U.phoneEnable);
+    var begin = el('button', { type: 'button', cls: 'btn primary big', onclick: function () { begin.disabled = true; setupPost({ action: 'phone-open' }).then(function (v) { showPhoneCode(v); }, function (e) { begin.disabled = false; toast(why(e)); }); } }, U.phoneEnable);
     card.append(el('div', { cls: 'pair-actions' }, begin, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))); modal.append(card); document.body.append(modal);
     function showPhoneCode(v) {
       card.replaceChildren(el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phonePairTitle));
@@ -339,7 +477,7 @@ body.paused .bg *{animation:none!important}
       try { qr.innerHTML = g.SOS_PAIR.qr(v.pairUrl); } catch (e) { qr.textContent = U.phoneOpenFailed; }
       var bare = String(v.pairUrl || '').split('#')[0], url = el('span', { cls: 'pair-url' }, U.phonePairUrl + '：' + bare), clock = el('p', { cls: 'small muted' });
       var state = el('div', { cls: 'phone-bar', hidden: true });
-      var closePhone = el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-close' }).then(close, function (e) { toast(e.message || U.phoneOpenFailed); }); } }, U.phoneClose);
+      var closePhone = el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-close' }).then(close, function (e) { toast(why(e)); }); } }, U.phoneClose);
       card.append(qr, url, clock, state, el('div', { cls: 'pair-actions' }, closePhone, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉')));
       var until = new Date(v.expiresAt || 0).getTime(), openedAt = Date.now(), decided = false;
       function showState() {
@@ -349,8 +487,8 @@ body.paused .bg *{animation:none!important}
         var left = Math.max(0, Math.ceil((until - Date.now()) / 1000)); clock.textContent = N.t('phonePairExpires', { n: left });
         fetch('/api/setup', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
           var phone = j.phone || {}, p = phone.pending && phone.pending[0], paired = phone.paired && phone.paired[0];
-          if (p) return showState(el('span', null, U.phonePending + ' · ' + U.phoneCode + '：'), el('strong', null, p.confirmationCode || ''), el('button', { type: 'button', cls: 'btn primary', onclick: function () { setupPost({ action: 'phone-accept', id: p.id }).then(function () { decided = true; poll(); }); } }, U.phoneAccept), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-reject', id: p.id }).then(function () { decided = true; poll(); }); } }, U.phoneReject));
-          if (paired) return showState(el('span', null, U.phoneConnected), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'revoke', id: paired.id }).then(poll); } }, U.deviceRevoke));
+          if (p) return showState(el('span', null, U.phonePending + ' · ' + U.phoneCode + '：'), el('strong', null, p.confirmationCode || ''), el('button', { type: 'button', cls: 'btn primary', onclick: function () { setupPost({ action: 'phone-accept', id: p.id }).then(function () { decided = true; poll(); }, function (e) { toast(why(e)); }); } }, U.phoneAccept), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-reject', id: p.id }).then(function () { decided = true; poll(); }, function (e) { toast(why(e)); }); } }, U.phoneReject));
+          if (paired) return showState(el('span', null, U.phoneConnected), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'revoke', id: paired.id }).then(poll, function (e) { toast(why(e)); }); } }, U.deviceRevoke));
           if (decided) return showState(el('span', null, U.phoneGone));
           if (Date.now() - openedAt >= 60000) return showState(el('span', null, U.phonePairHelp));
           state.hidden = true;
@@ -386,6 +524,7 @@ body.paused .bg *{animation:none!important}
     o = o || {};
     var pg = o.tab ? [o.tab, o.sub] : (PAGE[o.page] || ['pending']), cur = pg[0], sub = o.sub || pg[1];
     var d = ST.data || {}, c = o.company || d.company || {}, mt = o.metrics || d.metrics;
+    ST.company = c;
     if (o.pending != null) ST.pending = o.pending;
     var counts = { pending: o.pending != null ? o.pending : (mt ? mt.pending : 0), brain: o.brainWaiting != null ? o.brainWaiting : brainWaiting(d) };
     var simText = o.sim && o.sim.clock ? U.simBadge + ' · ' + U.simClock + ' ' + o.sim.clock : U.simBadge;
@@ -393,7 +532,7 @@ body.paused .bg *{animation:none!important}
       el('a', { cls: 'skip', href: '#app' }, D.skipToContent),
       el('header', { cls: 'dtop' },
         el('div', { cls: 'ident' },
-          el('div', { cls: 'mark', 'aria-hidden': 'true' }, c.initials || String(c.name || 'OS').slice(0, 2)),
+          markBtn(c),
           el('div', null,
             el('span', { cls: 'eyebrow' }, D.shell + ' · ' + tabName(cur) + (sub ? ' · ' + sub : '')),
             el('h1', null, c.name || D.shell),
@@ -439,6 +578,7 @@ body.paused .bg *{animation:none!important}
     var ps = document.querySelector('[data-m="pendingText"]'); if (ps) ps.textContent = mt.pending ? U.pending : D.noPendingShort;
     var is = document.querySelector('[data-m="inputsText"]'); if (is) is.textContent = inSmall(mt);
     setCount('brain', brainWaiting(d));
+    syncMark(d.company);
     if (d.sample && !document.getElementById('sample')) { var top = document.querySelector('.dtop'); if (top) top.after(el('div', { cls: 'banner', id: 'sample' }, D.sample)); }
     if (ST.pending == null) setCount('pending', mt.pending || 0);
     [].forEach.call(document.querySelectorAll('[data-tele]'), function (e) { var c = e.querySelector('[data-cd]'), p = e.querySelector('[data-tele-parts]'), t = d.tele || {}; if (c) c.setAttribute('data-cd', t.nextRunAt || ''); if (p) { var s = teleParts(t); if (p.textContent !== s) p.textContent = s; } });
@@ -452,8 +592,21 @@ body.paused .bg *{animation:none!important}
     if (c) { if (c.textContent !== String(n)) c.textContent = String(n); }
     else a.append(el('span', { cls: 'cnt' + (t === 'pending' ? ' desk-count' : ''), 'data-cnt': t }, String(n)));
   }
+  // CrewZero 停咗而頁面仍然開住：連續兩次讀唔到（約 10 秒）先出頁頂提示，講明資料完好同點樣重新開；再連上就自動消失
+  var missed = 0;
+  function stoppedBar(show) {
+    var bar = document.getElementById('stopped');
+    if (!show) { if (bar) bar.remove(); return; }
+    // 整頁已經講緊連唔到（Founder Desk 讀取失敗頁、監察台首次讀取失敗）就唔重複
+    if (bar || !document.body || document.querySelector('#fail[data-kind="net"], #dash-fail')) return;
+    bar = el('div', { cls: 'track off', id: 'stopped', role: 'alert' }, /^\/dashboard/.test(location.pathname) ? U.stoppedDashboard : U.stoppedDesk);
+    var top = document.querySelector('.dtop');
+    if (top) top.after(bar); else document.body.insertBefore(bar, document.body.firstChild);
+  }
   function setConn(s) {
     ST.conn = s;
+    missed = s === 'live' ? 0 : missed + 1;
+    stoppedBar(missed >= 2);
     var b = document.getElementById('conn'); if (!b) return;
     var want = s === 'live' ? D.live : s === 'rejected' ? D.rejected : D.offline;
     b.classList.toggle('offline', s !== 'live');
@@ -538,8 +691,8 @@ body.paused .bg *{animation:none!important}
     return el('div', { id: 'devices' },
       list.length ? el('ul', { cls: 'dev-list' }, list.map(function (d) {
         if (d.state === 'pending') {
-          var accept = el('button', { type: 'button', cls: 'btn primary', onclick: function () { accept.disabled = true; (opts.onAccept || function (id) { return setupPost({ action: 'phone-accept', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { accept.disabled = false; toast(e.message || U.phoneGone); }); } }, U.phoneAccept);
-          var reject = el('button', { type: 'button', cls: 'btn', onclick: function () { reject.disabled = true; (opts.onReject || function (id) { return setupPost({ action: 'phone-reject', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { reject.disabled = false; toast(e.message || U.phoneGone); }); } }, U.phoneReject);
+          var accept = el('button', { type: 'button', cls: 'btn primary', onclick: function () { accept.disabled = true; (opts.onAccept || function (id) { return setupPost({ action: 'phone-accept', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { accept.disabled = false; toast(why(e)); }); } }, U.phoneAccept);
+          var reject = el('button', { type: 'button', cls: 'btn', onclick: function () { reject.disabled = true; (opts.onReject || function (id) { return setupPost({ action: 'phone-reject', id: id }); })(d.id).then(function () { if (opts.refresh) opts.refresh(); }, function (e) { reject.disabled = false; toast(why(e)); }); } }, U.phoneReject);
           return el('li', { 'data-device': d.id, 'data-current': 'false', cls: 'phone-pending' }, el('span', { cls: 'dev-name' }, d.name || U.devicePhone), el('span', { class: 'tag amber' }, U.phonePending), accept, reject, el('span', { cls: 'dev-meta' }, U.phoneCode + '：' + (d.confirmationCode || '—')));
         }
         var btn = el('button', { type: 'button', cls: 'btn small', 'data-revoke': d.id, onclick: function (e) {
@@ -557,6 +710,7 @@ body.paused .bg *{animation:none!important}
   g.SOS_DESK = {
     shell: shell, header: header, devices: devices, title: title, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast,
+    send: send, why: why, netError: netError, apiError: apiError,
     paused: function () { return !!ST.paused; }, fx: function () { return !!ST.fx; }, reduced: !!REDUCED,
     onPause: function (f) { ST.cbs.pause.push(f); }, onFx: function (f) { ST.cbs.fx.push(f); }, onRefresh: function (f) { ST.cbs.refresh.push(f); },
     readNow: function () { ST.readAt = Date.now(); }, tabs: GROUPS, href: HREF, tabName: tabName

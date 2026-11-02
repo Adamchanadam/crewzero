@@ -911,7 +911,10 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function when(iso) { if (!iso) return ''; var t = parseDay(iso); var n = t ? diffDays(t, today()) : 0; return (n === 0 ? D.today : n === 1 ? '昨日' : md(iso)) + (hm(iso) ? ' ' + hm(iso) : ''); }
   var toastTimer = null;
   function toast(t) { var el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 4000); }
-  function get(url) { return fetch(url, { cache: 'no-store', signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); }); }
+  // 連唔到（或者 4 秒冇回應）→ 錯誤帶 net；伺服器回非 2xx → 帶 status。畫面一律用 why(e)，唔顯示 e.message
+  function get(url) { return fetch(url, { cache: 'no-store', signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined }).catch(function () { throw DESK.netError(); }).then(function (r) { if (!r.ok) { var e = new Error(String(r.status)); e.status = r.status; throw e; } return r.json(); }); }
+  var why = DESK.why;
+  function postJSON(url, body) { return DESK.send(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
 
   /* ---------- 狀態 ---------- */
   // 一個殼、九個分頁三組（決定二十五）：導航由共用殼 desk.js 畫；呢個檔負責監察台嗰七個分頁嘅內容
@@ -1261,7 +1264,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function showRun(id, title) {
     get('/api/run?id=' + encodeURIComponent(id)).then(function (j) {
       modal(title || j.run.label, [h('p', { class: 'muted' }, j.run.summary), j.run.artifacts.map(function (a) { return [h('h4', null, a.title), window.SOS_MD ? window.SOS_MD(a.text) : h('pre', { class: 'file' }, a.text)]; })], true);
-    }).catch(function () { toast('此份產出暫時無法打開'); });
+    }).catch(function (e) { toast('未能打開這份產出：' + (e.status === 404 ? D.runGone : why(e))); });
   }
 
   /* ---------- 分頁：公司現況 ---------- */
@@ -1661,7 +1664,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   /* ---------- 分頁：現實輸入（規劃書 4.6：訪問、真實事件、收件匣三欄；收件匣有文件區同兩個本機固定動作） ---------- */
   var IP = { files: [], sending: false };
   function docRead(list) {
-    return Promise.all(list.map(function (f) { return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { rej(new Error(f.name)); }; fr.readAsDataURL(f); }); }));
+    return Promise.all(list.map(function (f) { return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { var er = new Error('read'); er.said = N.t('fileUnread', { f: f.name }); rej(er); }; fr.readAsDataURL(f); }); }));
   }
   function docList() {
     var box = $('#doc-list'); if (!box) return;
@@ -1672,13 +1675,11 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function docSend() {
     IP.sending = true; docList();
     docRead(IP.files).then(function (files) {
-      return fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'doc', files: files }) }).then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.message || String(r.status)); return j; }); });
+      return postJSON('/api/intake', { kind: 'note', type: 'doc', files: files });
     }).then(function () { IP.files = []; IP.sending = false; toast(N.ui.docSent); load(); })
-      .catch(function (e) { IP.sending = false; docList(); toast('未能交出：' + e.message); });
+      .catch(function (e) { IP.sending = false; docList(); toast('未能交出文件：' + why(e)); });
   }
-  function localAct(action) {
-    return fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action }) }).then(function (r) { return r.json().then(function (j) { return { code: r.status, j: j }; }); });
-  }
+  function localAct(action) { return postJSON('/api/setup', { action: action }); }
   function pageInputs() {
     var x = V.data, iv = x.interviews, inp = x.inputs, U = N.ui, ivTodo = x.todo.filter(function (t) { return t.type === 'interview'; })[0];
     var hl = x.health || {}, stopped = hl.pausedByFounder ? U.skip_pausedByFounder : hl.autoStopped ? U.skip_autoStopped : '';
@@ -1706,8 +1707,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       inp.unprocessed.length ? h('ul', null, inp.unprocessed.map(function (u) { return h('li', null, u.title + (u.at ? '（' + when(u.at) + '）' : '')); })) : h('p', { class: 'empty' }, '沒有。'),
       h('h4', null, U.reqDoc), x.company && x.company.confirmed ? drop : h('p', { class: 'small muted', id: 'doc-wait' }, U.docNeedOverview),
       h('div', { class: 'tags', id: 'local-actions', style: 'margin-top:10px' },
-        h('button', { type: 'button', class: 'btn', id: 'open-folder', onclick: function () { localAct('openFolder').then(function (r) { toast(r.j.opened ? U.openFolderDone : U.openFolderNoWin); }).catch(function () { toast('未能開啟'); }); } }, U.openFolder),
-        h('button', { type: 'button', class: 'btn primary', id: 'run-now', disabled: x.ai.busy || stopped || !x.ai.ready ? true : null, onclick: function (e) { e.target.disabled = true; localAct('runNow').then(function (r) { toast(r.code === 202 ? U.runNowSent : (r.j.message || '未能開始')); setTimeout(load, 800); }).catch(function () { e.target.disabled = false; toast('未能開始'); }); } }, U.runNow)),
+        h('button', { type: 'button', class: 'btn', id: 'open-folder', onclick: function () { localAct('openFolder').then(function (j) { toast(j.opened ? U.openFolderDone : U.openFolderNoWin); }).catch(function (e) { toast(e.code === 'open' ? why(e) : '未能開啟資料夾：' + why(e)); }); } }, U.openFolder),
+        h('button', { type: 'button', class: 'btn primary', id: 'run-now', disabled: x.ai.busy || stopped || !x.ai.ready ? true : null, onclick: function (e) { e.target.disabled = true; localAct('runNow').then(function () { toast(U.runNowSent); setTimeout(load, 800); }).catch(function (er) { e.target.disabled = false; toast(er.said || '未能開始 AI 工作：' + why(er)); setTimeout(load, 800); }); } }, U.runNow)),
       h('p', { class: 'small muted', id: 'run-now-note' }, stopped || (x.ai.busy ? U.runNowBusy : !x.ai.ready ? D.blockNoAI : U.runNowNote)),
       h('p', { class: 'small muted' }, U.openFolderNote),
       h('h4', null, D.recentInputs),
@@ -1801,10 +1802,9 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   // 觀察資料夾（4.12）：只顯示顯示名；增刪同開關經 /api/setup（只限本機），路徑只喺今次請求入面用嚟計識別碼
   function observeSetup(body, btn) {
     if (btn) btn.disabled = true;
-    fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action: 'observe' }, body)) })
-      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || r.status); return j; }); })
+    postJSON('/api/setup', Object.assign({ action: 'observe' }, body))
       .then(function () { if (body.op === 'add') { V.obsPath = ''; V.obsName = ''; } toast(D.observeSaved); setTimeout(load, 1500); })
-      .catch(function (e) { if (btn) btn.disabled = false; toast('未能更改：' + e.message); });
+      .catch(function (e) { if (btn) btn.disabled = false; toast('未能更改：' + why(e)); });
   }
   function observePanel(ob) {
     var list = ob.folders.length ? h('ul', { class: 'obs-list' }, ob.folders.map(function (f) {
@@ -1831,9 +1831,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         r.state === 'ended' && r.ending && U['runEnd_' + r.ending] ? tag(U['runEnd_' + r.ending], r.ending === 'advanced' ? 'mine' : '') : null];
     }
     function simAct(body) {
-      fetch('/api/sim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || r.status); return j; }); })
-        .then(function () { load(); }, function (e) { toast(e.message || '未能完成'); });
+      postJSON('/api/sim', body).then(function () { load(); }, function (e) { toast(why(e)); });
     }
     var sim = x.sim ? h('section', { class: 'panel', id: 'sim-panel', style: 'margin-bottom:14px' }, h('div', { class: 'ph' }, h('h2', null, U.simClock), tag(U.simBadge, 'ai')),
       h('p', null, h('b', null, md(x.sim.clock) + ' ' + hm(x.sim.clock)), '（已推前 ' + x.sim.offsetDays + ' 日）　', h('button', { type: 'button', class: 'btn primary', id: 'sim-advance', onclick: function () { simAct({ action: 'advance' }); } }, U.simAdvance),
@@ -1851,7 +1849,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         h('h4', null, D.observeFolders),
         observePanel(x.work.observe),
         h('h4', null, U.devices),
-        DESK.devices(x.devices || [], { onRevoke: function (id, btn) { fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'revoke', id: id }) }).then(function (r) { if (!r.ok) throw new Error(r.status); toast(U.deviceRevoked); load(); }).catch(function () { btn.disabled = false; toast(U.deviceGone); }); } }),
+        DESK.devices(x.devices || [], { onRevoke: function (id, btn) { postJSON('/api/setup', { action: 'revoke', id: id }).then(function () { toast(U.deviceRevoked); load(); }).catch(function (e) { btn.disabled = false; toast(why(e)); }); } }),
         h('h4', null, D.sysRhythm),
         // 經營節奏：未確認公司概覽前未有（用預設）；排程一行三態（MVP 規格第 2 節第 3 項）：未登記／已登記／節奏已改須重新登記——公司概覽未確認都照顯示
         h('dl', { class: 'kv' }, x.rhythm ? [h('dt', null, '開工'), h('dd', null, (CAD[x.rhythm.runCadence] || '每日') + ' ' + x.rhythm.runTime + '，每次最多 ' + (x.rhythm.runCapMinutes || 30) + ' 分鐘'), h('dt', null, '訪問日'), h('dd', null, '星期' + WD[(x.rhythm.interviewWeekday || 1) % 7] + (x.interviews && x.interviews.nextOn ? '（下次 ' + md(x.interviews.nextOn) + '）' : ''))]
@@ -1922,15 +1920,14 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         var text = ($('#fb-text') || {}).value || '', verdict = V.fbVerdict;
         if (verdict === 'revise' && !text.trim()) { toast('如要修改，請寫一句說明修改內容'); return; }
         var btn = $('#fb-send'); btn.disabled = true;
-        fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'feedback', item: item, cardId: cardId, verdict: verdict, text: text }) })
-          .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || r.status); return j; }); })
+        postJSON('/api/intake', { kind: 'note', type: 'feedback', item: item, cardId: cardId, verdict: verdict, text: text })
           .then(function (j) {
             V.fbLocal = V.fbLocal || {};
             V.fbLocal[cardId] = { item: item, verdict: verdict, text: text.trim(), at: j.receivedAt || new Date().toISOString(), pending: true, itemName: brainItem(item).name || '', title: '' };
             V.fbOpen = null; render(true);
             toast(verdict === 'revise' ? D.fbToAI : D.fbRecorded + '：' + FBV[verdict]); load();
           })
-          .catch(function (e) { btn.disabled = false; toast('未能提交：' + e.message); });
+          .catch(function (e) { btn.disabled = false; toast(D.fbFailed + '：' + why(e)); });
       } }, V.fbVerdict === 'revise' ? D.fbSendRevise : D.fbSend), h('button', { type: 'button', class: 'btn small', onclick: function () { V.fbOpen = null; render(true); } }, D.close));
     }
     return box;
@@ -2110,7 +2107,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function pickMatch(id, latest) {
     V.wgMatch = id === latest ? null : id; V.wgSeat = null;
     if (!V.wgMatch || (V.wgViews || {})[id]) { render(true); return; }
-    get('/api/debate/match?id=' + encodeURIComponent(id)).then(function (j) { V.wgViews = V.wgViews || {}; V.wgViews[id] = j.match; render(true); }).catch(function () { toast('讀不到這一場'); });
+    get('/api/debate/match?id=' + encodeURIComponent(id)).then(function (j) { V.wgViews = V.wgViews || {}; V.wgViews[id] = j.match; render(true); }).catch(function (e) { toast('未能打開這場辯論：' + why(e)); });
   }
   function actStrip(d) {
     var order = ['preparing', 'blue', 'red', 'rebuttal', 'judge', 'done', 'strengthening', 'reattack', 'adopt', 'adopted'];
@@ -2235,7 +2232,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       s.founderDecisions.length ? h('div', { class: 'decide', id: 'wg-decide', 'data-act': 'judge' }, h('h4', null, D.founderDecide + '（' + s.founderDecisions.length + '）'),
         h('ul', { class: 'm-sum' }, s.founderDecisions.map(function (q) { return h('li', null, q.question, h('small', { class: 'muted', style: 'display:block' }, '★ 裁判建議：' + q.recommend + ' · ' + q.why)); })),
         h('p', { style: 'margin:8px 0 0' }, dec ? h('a', { class: 'btn primary', href: '/#/ask/' + dec.packId, id: 'wg-decide-go' }, dec.open ? '★ ' + D.toDeskAsk : '已答 · ' + D.view)
-          : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide' }) }).then(function (r) { if (!r.ok) throw new Error(r.status); toast('正在放上 Founder Desk……'); setTimeout(load, 1500); }).catch(function () { e.target.disabled = false; toast('未能放上，請再試'); }); } }, '★ ' + D.putOnDesk))) : null,
+          : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; postJSON('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide' }).then(function () { toast('正在放上 Founder Desk……'); setTimeout(load, 1500); }).catch(function (er) { e.target.disabled = false; toast('未能放上 Founder Desk：' + why(er)); }); } }, '★ ' + D.putOnDesk))) : null,
       s.assumptionChanges.length ? h('p', { class: 'small', style: 'margin:10px 0 0', 'data-act': 'judge' }, h('b', null, D.assumptionChanges + '：'), s.assumptionChanges.map(function (a) { return [a.change, ' ', tag(a.label || 'AI 建議 · 未確認', 'src-ai'), '；']; })) : null);
   }
   function halfDebate(x, d) {
@@ -2545,10 +2542,10 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       DESK.update(j);
       if (changed) { if (V.replaying) V.dirty = true; else render(!!prev); celebrate(prev, j, wasLive); pulses(prev, j, wasLive); }
       else if (workChanged) { if (V.replaying) V.dirty = true; else renderWork(); pulses(prev, j, wasLive); }
-    }).catch(function () {
+    }).catch(function (e) {
       V.conn = 'offline'; DESK.setConn('offline');
       if (V.data) { if (tab === 'overview') refreshOverview(true); }
-      else $('#shell').replaceChildren(h('section', { class: 'panel block-card' }, h('span', { class: 'eyebrow' }, D.offline), h('p', null, '營運監察台尚未開啟：' + N.ui.reopenDashboard + '，即可重新開啟。')));
+      else $('#shell').replaceChildren(h('section', { class: 'panel block-card', id: 'dash-fail' }, h('span', { class: 'eyebrow' }, D.offline), h('p', null, e && e.net ? N.ui.stoppedDashboard : N.ui.errGeneric)));
     });
   }
   function poll() { setTimeout(function () { (document.hidden ? Promise.resolve() : load()).then(poll, poll); }, 5000); }
