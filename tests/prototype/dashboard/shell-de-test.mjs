@@ -232,7 +232,7 @@ try {
   ok('近 24 小時事件走勢：事件流卡底有走勢線', await c.ev(`!!document.querySelector('#ev-spark svg polyline')`));
   await c.go(B + '/', 1440, 4000);
   const cd1 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`); await sleep(1600); const cd2 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`);
-  ok('AI 近期工作：下次 AI 開工倒數每秒走、今日 AI 啟動／用時一行（真數據）', /^\d{2}:\d{2}:\d{2}$/.test(cd2 || '') && cd1 !== cd2 && await c.ev(`/今日 AI 啟動 \\d+／\\d+/.test(document.querySelector('[data-tele]').textContent)`), { cd1, cd2 });
+  ok('AI 近期工作：下次 AI 開工倒數每秒走、AI 今日工作／用時一行（真數據）', /^\d{2}:\d{2}:\d{2}$/.test(cd2 || '') && cd1 !== cd2 && await c.ev(`(()=>{const t=document.querySelector('[data-tele]').textContent;return t.includes('AI 今日工作')&&t.includes('次')})()`), { cd1, cd2 });
   // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI；基準 7 次，加上必須逐題作答的點擊，零跨產品
   let clicks = 0; const tap = async sel => { await c.click(sel); clicks++; await sleep(900); };
   await c.go(B + '/', 1440, 3500);

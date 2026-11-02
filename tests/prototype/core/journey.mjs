@@ -84,7 +84,9 @@ const bad = path.join(OUT, '程式.exe'); fs.writeFileSync(bad, 'x');
 try {
   await send('Page.navigate', { url: BASE }); await sleep(1800);
   ok('第一次打開：直接去交資料頁', (await ev('location.hash')) === '#/intake', await ev('location.hash'));
-  ok('第一次打開：置頂「AI 未設定」', /AI 未設定/.test(await text('#ai-block')));
+  ok('第一次打開：未設定 AI 時只見設定卡，交資料表格未顯示', await has('#intake-setup-first') && /AI 未設定/.test(await text('#intake-setup-first')) && !(await has('#intake-form')));
+  await click('#intake-anyway');
+  ok('第一次打開：按次要入口後才顯示交資料表格', await has('#intake-form'));
   ok('交資料頁：有共用頁頭同導航', (await has('.desk-nav')) && /交資料/.test(await text('.eyebrow')));
   ok('交資料頁：5 條必填、選填收埋', (await ev(`document.querySelectorAll('#intake-form .iq-sec + .iq, #intake-form > .iq').length`)) >= 5 && (await has('details.iq-opt')));
   ok('必填未齊：主掣停用', await ev(`document.querySelector('#intake-go').disabled`));

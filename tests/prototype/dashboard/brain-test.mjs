@@ -39,7 +39,7 @@ try {
   const B = await startServer(DEMO, Number(PORT)), A = api(B);
   ok('生意大腦分頁路由', (await fetch(B + '/dashboard/brain')).status === 200);
   let d = await A.get('/api/dashboard');
-  ok('示範：六項都有', d.brain.source.kind === 'demo' && d.brain.items.length === 6 && d.brain.items.map(x => x.name).join() === '生意體檢,紅藍對打,情景演練,商機掃描,路線推演,客戶推進追蹤');
+  ok('示範：六項都有', d.brain.source.kind === 'demo' && d.brain.items.length === 6 && d.brain.items.map(x => x.name).join() === '生意體檢,紅藍對打,情景演練,商機掃描,路線推演,對象推進追蹤');
   ok('四種狀態都出現：已完成、AI 進行中、等你處理、未開始', ['done', 'running', 'waiting', 'not_started'].every(s => d.brain.items.some(x => x.status === s)), d.brain.items.map(x => x.id + ':' + x.status));
   ok('紅藍對打：開頭只有藍隊（推進 6／19）', item(d, 'wargame').detail.stage === 1 && item(d, 'wargame').progress.done === 6 && item(d, 'wargame').progress.total === 19, item(d, 'wargame').progress);
   ok('情景演練等你：深連 Founder Desk 練習，兩個對象', item(d, 'scenario').waitHref === '/#/practice/farm-c' && item(d, 'scenario').practice.length === 2);

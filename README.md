@@ -7,7 +7,7 @@
 
 ## 你需要
 
-Windows 電腦、Node.js，以及已安裝並登入的 Claude Code、OpenAI Codex CLI 或 Google Antigravity CLI（`agy`）其中一個。同一份插件三種工具都用得，只是指令的叫法不同。
+Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安裝並登入的 AI 工具。請先登入 Claude Code、Codex 或 Antigravity 其中一個。
 
 ## 安裝（每部電腦一次）
 
@@ -19,8 +19,10 @@ Windows 電腦、Node.js，以及已安裝並登入的 Claude Code、OpenAI Code
 
 ## 開始
 
-1. 到你項目的 AI 對話輸入安裝指令，答「好」，並批准每日排程。
-2. 之後用 Founder Desk 指令打開 Founder Desk。第一次打開時，系統會替你的瀏覽器配對，不用輸入任何東西。
+1. 在 AI 對話說「安裝 CrewZero」。如尚未有工作位置，請先為你的生意開一個專用資料夾；AI 會在開始前問你是否同意。
+2. 完成後，在 AI 對話說「打開 Founder Desk」。第一次打開時，系統會替你的瀏覽器配對，不用輸入任何東西。
+
+以後在 AI 對話說「打開 Founder Desk」，便可再次打開。
 
 | 指令 | Claude Code | Codex | Antigravity |
 |---|---|---|---|
@@ -33,13 +35,7 @@ Windows 電腦、Node.js，以及已安裝並登入的 Claude Code、OpenAI Code
 
 ## 取得新版
 
-先在你的工具換入新版插件，再到項目的 AI 對話輸入更新指令。更新只換程式，你的公司資料不會改動。
-
-| 工具 | 換入新版插件 |
-|---|---|
-| Claude Code | 在命令列輸入 `claude plugin update crewzero`，然後重開 Claude Code |
-| Codex | 在命令列輸入 `codex plugin marketplace upgrade`，再 `codex plugin add crewzero@crewzero` |
-| Antigravity | 在之前下載的 crewzero 資料夾執行 `git pull`，再 `agy plugin uninstall crewzero`，然後重新 `agy plugin install crewzero/prototypes/proofread/adapters/claude-code/crewzero` |
+到 AI 對話說「更新 CrewZero」，AI 會先問過你才進行。更新只換程式，你的公司資料不會改動。
 
 ## 由 startup-os 轉用 CrewZero
 
@@ -57,4 +53,4 @@ CrewZero 是 startup-os 的新名字。已在用 startup-os 的話，按你的�
 
 ## 你的資料
 
-公司資料只存在你電腦上項目的 `crewzero/data/` 資料夾（由 startup-os 轉用的項目是 `startup-os/data/`）。只有已配對的瀏覽器或手機讀得到、寫得到；手機配對可以隨時撤銷。
+公司資料只存放在這部電腦。只有已配對的瀏覽器或手機可以讀取及寫入；手機配對可以隨時撤銷。手機只可在與這部電腦相同的家中或辦公室 Wi-Fi 使用；其他人要使用，請在這部電腦的瀏覽器開啟。

@@ -25,7 +25,7 @@ try {
   const protoData = fs.existsSync(path.join(PROTO, 'data')) ? Object.keys(tree(path.join(PROTO, 'data'))).length : -1;
   const r1 = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), PROJ], { encoding: 'utf8', env });
   const T = path.join(PROJ, 'crewzero');
-  ok('全新空資料夾安裝：結束碼 0，印出已安裝', r1.status === 0 && /已安裝 CrewZero/.test(r1.stdout), { status: r1.status, out: r1.stdout, err: r1.stderr });
+  ok('全新空資料夾安裝：結束碼 0，創辦人文字只確認安裝完成，不含路徑或程式檔', r1.status === 0 && /CrewZero 已安裝完成/.test(r1.stdout) && !r1.stdout.includes(PROJ) && !r1.stdout.includes('程式檔'), { status: r1.status, out: r1.stdout, err: r1.stderr });
   const must = ['ask.mjs', 'server.mjs', 'run.mjs', 'install.mjs', 'adapters/scheduler/install-schedule.mjs', 'adapters/hosts/claude.json', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd', 'fixtures/example-company-page-full.json'];
   ok('結構：入口、外殼、轉接層、第一星期指引、VERSION、START-HERE.md、排程啟動檔、外殼要讀嘅虛構範本都齊', must.every(f => fs.existsSync(path.join(T, f))), must.filter(f => !fs.existsSync(path.join(T, f))));
   ok('data/ 係空資料夾', fs.statSync(path.join(T, 'data')).isDirectory() && fs.readdirSync(path.join(T, 'data')).length === 0, fs.existsSync(path.join(T, 'data')) && fs.readdirSync(path.join(T, 'data')));

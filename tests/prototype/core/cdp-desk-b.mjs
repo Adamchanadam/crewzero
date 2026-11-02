@@ -83,7 +83,7 @@ try {
   ok('「上次離開之後」：冇新事就寫「沒有新事項」或者列數目', /沒有新事項|AI 完成了|條等你回答|最近發生/.test(await text('#since')), await text('#since'));
   await shot('b1-hub-proofread.png');
 
-  /* B：已確認 → 次序、圖示、逾期；今日要做的事＝待首次訪問 */
+  /* B：已確認 → 次序、圖示、逾期；未有首次訪問日期先等待 */
   pack(DB, 'ask-old', { todoType: 'decision' }, ago(10));
   pack(DB, 'ask-trial', { todoType: 'trial', due: day(-2) }, ago(1));
   pack(DB, 'ask-q', { todoType: 'question' }, ago(2));
@@ -101,11 +101,15 @@ try {
   ok('每項有類型圖示同類型名稱', rows.every(r => r.ic === N.TODO_ICON[r.type] && r.t.includes(N.dash['ty_' + r.type])), rows);
   ok('試行到期：標「已逾期 2 日」', /已逾期 2 日/.test((rows.find(r => r.id === 'ask-trial') || {}).t || ''), rows.find(r => r.id === 'ask-trial'));
   const card = await ev(`(document.querySelector('#today-card')||{}).dataset.key`);
-  ok('今日要做的事卡：已確認、未有首次訪問 → 待首次訪問', card === 'firstInterview', { card, text: await text('#today-card') });
-  // 試走揭出：卡上訪問日期曾經空白（「回答首次每週訪問（）」）
+  ok('今日要做的事卡：已確認、未有首次訪問日期 → 等候首次訪問', card === 'waitInterview', { card, text: await text('#today-card') });
+  // 未有日期時要直接顯示「稍後」，不可留下空白。
   const sfB = path.join(DB, 'ledger', 'state.json');
   const home = (await api(PB, '/api/home')).j, stIv = ((fs.existsSync(sfB) ? JSON.parse(fs.readFileSync(sfB, 'utf8')) : {}).interviews || {}).nextOn || '';
-  ok('今日要做的事卡：寫出下次訪問日期，冇日期就唔留空括號', home.card.date === stIv && !/（）|\{date\}/.test(await text('#today-do')), { date: home.card.date, stIv, text: await text('#today-do') });
+  ok('今日要做的事卡：未有下次訪問日期時以「稍後」代替日期', home.card.date === stIv && !/（）|\{date\}/.test(await text('#today-do')) && (stIv || (await text('#today-do')).includes('稍後')), { date: home.card.date, stIv, text: await text('#today-do') });
+  fs.mkdirSync(path.dirname(sfB), { recursive: true }); const stateB = fs.existsSync(sfB) ? JSON.parse(fs.readFileSync(sfB, 'utf8')) : {}; stateB.interviews = { ...(stateB.interviews || {}), nextOn: '2099-01-05' }; fs.writeFileSync(sfB, JSON.stringify(stateB, null, 2));
+  pack(DB, 'ask-first-interview', { todoType: 'interview', due: '2099-01-05' }, ago(1));
+  await send('Page.reload'); await sleep(1800);
+  ok('有首次訪問問題包和日期時，今日要做的事卡改為待首次訪問', (await ev(`(document.querySelector('#today-card')||{}).dataset.key`)) === 'firstInterview' && (await text('#today-do')).includes('1 月 5 日'), await text('#today-card'));
   ok('畫面文字（卡、上次離開之後、其他待決事項）：用字檢查零命中', !(await scanText(['#today-card', '#since', '#other-pending', '.hero'])).length, await scanText(['#today-card', '#since', '#other-pending', '.hero']));
   await shot('b2-hub-sorted.png');
 

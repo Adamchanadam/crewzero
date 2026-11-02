@@ -298,7 +298,7 @@ export function dashboardState(DIR, extra = {}) {
   const options = (Array.isArray(state.pathOptions) ? state.pathOptions : []).filter(o => o.status === 'open');
   const teammates = Array.isArray(state.teammates) ? state.teammates : [];
   const health = { ...(state.health || {}), warnings: [...((state.health || {}).warnings || [])] };
-  if (parallel.over) health.warnings.push('有 ' + parallel.count + ' 站同時進行，超過兩站上限');
+  if (parallel.over) health.warnings.push('有 ' + parallel.count + ' 站同時進行，超過兩站上限。請到 Founder Desk 決定先暫停哪一站。');
   else if (!parallel.confirmed) health.warnings.push('第二站「' + second.short + '」未經你確認已經開始');
   // 模組狀態：等待、受阻由帳本事實推導（靜態色）；工作中只由作業網入面工作中嘅會話推導
   const pick = (...c) => ['unknown', 'blocked', 'waiting', 'working'].find(s => c.includes(s)) || 'idle';
@@ -350,7 +350,8 @@ export function dashboardState(DIR, extra = {}) {
 
   /* 指引：而家最要緊嗰一步（阻塞卡） */
   const ivDone = !!(interviews && interviews.lastOn), firstAccept = todo.find(t => t.type === 'acceptance') && !(state.tasks || []).some(t => t.acceptedBy === 'founder');
-  const guide = !cert ? 'noAI' : !company.ready ? 'noCompany' : !company.confirmed ? 'proofread' : firstAccept ? 'accept' : !ivDone ? 'firstInterview' : 'daily';
+  const hasInterview = !!(interviews && interviews.nextOn) && todo.some(t => t.type === 'interview');
+  const guide = !cert ? 'noAI' : !company.ready ? 'noCompany' : !company.confirmed ? 'proofread' : firstAccept ? 'accept' : !ivDone ? (hasInterview ? 'firstInterview' : 'waitInterview') : 'daily';
 
   return {
     ok: true, sample, now: localIso(now), today: ymd(today), guide, firstWeekDone: ivDone,
@@ -429,7 +430,7 @@ export function pendingTodo(DIR, now = clockNow()) {
 }
 
 /* ---------- 「今日要做的事」卡（規劃書 4.1）：文字全部由 FIRST-WEEK.md 供應，伺服器只揀段同入口 ---------- */
-const GUIDE_HEAD = { 'AI 未設定': 'noAI', '未交資料': 'noCompany', '待校對公司概覽': 'proofread', '待驗收首份產出': 'accept', '待首次訪問': 'firstInterview', '日常': 'daily' };
+const GUIDE_HEAD = { 'AI 未設定': 'noAI', '未交資料': 'noCompany', '待校對公司概覽': 'proofread', '待驗收首份產出': 'accept', '首次訪問未到': 'waitInterview', '待首次訪問': 'firstInterview', '日常': 'daily' };
 export function guideCard(text, ds) {
   const sec = {};
   let cur = null;
@@ -442,7 +443,7 @@ export function guideCard(text, ds) {
   const s = sec[ds.guide];
   if (!s || !s.today) return null;
   const first = type => (ds.todo || []).find(t => t.type === type);
-  const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: (ds.todo || [])[0] ? (ds.todo[0].kind === 'overview' ? '/proofread.html' : '#/ask/' + ds.todo[0].id) : '' }[ds.guide];
+  const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', waitInterview: '#/request/event', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: (ds.todo || [])[0] ? (ds.todo[0].kind === 'overview' ? '/proofread.html' : '#/ask/' + ds.todo[0].id) : '' }[ds.guide];
   return { key: ds.guide, today: s.today, button: s.button || '', notAuto: s.notAuto || '', href, date: (ds.interviews && ds.interviews.nextOn) || '' };
 }
 
@@ -476,7 +477,7 @@ function workOf({ shellRuns, ledgerRuns, sample, busy, observed, observeFolders,
     .sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 34);
   const D = NAMES.dash;
   const text = off ? D.observeOffText : ob.state === 'unavailable' ? ((ob.folders || []).length ? D.observeNoneText : D.observeNoFolders)
-    : ob.state === 'restricted' ? D.observeRestrictedText + (ob.problems || []).join('；')
+    : ob.state === 'restricted' ? D.observeRestrictedText
       : D.observeOkText.replace('{n}', (ob.folders || []).length);
   return {
     observe: { state: ob.state, off, text: text + (ob.timedOut ? '（' + D.observeTimedOut + '）' : ''), timedOut: !!ob.timedOut, sources: (ob.folders || []).length, folders: ob.folders || [], pending: ob.pending || 0, readAt: ob.readAt || '' },

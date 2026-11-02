@@ -217,7 +217,7 @@ try {
   fs.writeFileSync(path.join(REAL, 'ledger', 'confirmed.json'), JSON.stringify({ company: page.company.name, pageId: page.page.id, confirmedAt: new Date().toISOString(), order: ids, values: {}, edits: [] }));
   const e2 = await A2.get('/api/dashboard');
   // 規劃書 4.1 六個狀態鍵：確認後未有首次訪問（或者有首份產出等驗收）先唔係「日常」
-  ok('確認後 → 待驗收首份產出或待首次訪問、第一站進行中', e2.guide === (e2.todo.some(t => t.type === 'acceptance') ? 'accept' : 'firstInterview') && e2.milestones[0].state === 'active' && e2.orderUnconfirmed.length === 0, { guide: e2.guide, states: e2.milestones.map(m => m.state) });
+  ok('確認後 → 待驗收首份產出、待首次訪問或等候首次訪問；第一站進行中', e2.guide === (e2.todo.some(t => t.type === 'acceptance') ? 'accept' : e2.todo.some(t => t.type === 'interview') && e2.interviews?.nextOn ? 'firstInterview' : 'waitInterview') && e2.milestones[0].state === 'active' && e2.orderUnconfirmed.length === 0, { guide: e2.guide, states: e2.milestones.map(m => m.state) });
   const s7 = await A2.post('/api/intake', { kind: 'note', type: 'order', text: '加一站。' });
   const r10 = await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'note' && x.ref === s7.j.id); return r && r.state === 'done' ? r : null; });
   await answer(A2, r10.result.asks[0].id, {});

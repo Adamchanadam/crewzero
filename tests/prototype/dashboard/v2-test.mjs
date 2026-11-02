@@ -52,7 +52,7 @@ try {
 
   /* ---------- A. work 資料契約、觀察資料夾（只存雜湊同顯示名） ---------- */
   let d = await get('/api/dashboard');
-  ok('未登記資料夾：觀測「未登記觀察資料夾」，只有 AI 團隊自己嘅工作', d.work.observe.state === 'unavailable' && d.work.observe.text === '本機 AI 會話：未登記觀察資料夾' && d.work.sessions.every(s => s.host === 'shell'), d.work.observe);
+  ok('未登記資料夾：觀測「本機 AI 對話：未登記資料夾」，只有 AI 團隊自己嘅工作', d.work.observe.state === 'unavailable' && d.work.observe.text === '本機 AI 對話：未登記資料夾' && d.work.sessions.every(s => s.host === 'shell'), d.work.observe);
   ok('示範運行中工作：AI 團隊會話工作中，連住任務 t3', d.work.sessions.some(s => s.host === 'shell' && s.state === 'working' && s.taskIds.includes('t3')) && d.work.tasks.some(t => t.id === 't3' && t.state === 'working'), d.work.sessions);
   const runs0 = runCount();
   let r = await post('/api/setup', { action: 'observe', op: 'add', path: FOLDER, name: 'company-folder' });
@@ -80,7 +80,7 @@ try {
   ok('輸出含標記、腳本同偽按鈕：角括號拆走，純文字', d && d.work.sessions.some(s => /script/.test(s.title) && !/[<>]/.test(s.title)), d && d.work.sessions.map(s => s.title));
   setFake({ mode: 'garbage' });
   d = await waitFor(async () => { const x = await get('/api/dashboard'); return x.work.observe.state === 'restricted' ? x : null; }, 15000);
-  ok('觀測程式出亂碼：受限（restricted），講原因唔講路徑', d && /讀取受限/.test(d.work.observe.text) && !/[A-Z]:[\\/]/.test(d.work.observe.text), d && d.work.observe);
+  ok('觀測程式出亂碼：受限（restricted），講原因唔講路徑', d && /暫時讀不到/.test(d.work.observe.text) && !/[A-Z]:[\\/]/.test(d.work.observe.text), d && d.work.observe);
   ok('受限：事件流一行「觀測來源讀取受限」', d && d.work.events.some(e => e.observed && e.title === '觀測來源讀取受限'), d && d.work.events.slice(0, 4));
   setFake({ sessions: [S_WORK, S_IDLE] });
   await waitFor(async () => (await get('/api/dashboard')).work.observe.state === 'ok', 15000);
@@ -91,14 +91,14 @@ try {
   await sleep(5200);
   setFake({ delayMs: 4000, sessions: [S_WORK, S_IDLE] });
   let t1 = Date.now(); d = await get('/api/dashboard'); const took = Date.now() - t1;
-  ok('觀測逾時：最多等 2.5 秒，沿用上一次結果並標「觀測逾時」', took < 3500 && d.work.observe.timedOut === true && /觀測逾時/.test(d.work.observe.text) && d.work.sessions.some(s => s.title === '撰寫市場調查' && s.state === 'idle'), { took, observe: d.work.observe });
+  ok('觀測逾時：最多等 2.5 秒，沿用上一次結果並標「暫時未能讀取」', took < 3500 && d.work.observe.timedOut === true && /暫時未能讀取/.test(d.work.observe.text) && d.work.sessions.some(s => s.title === '撰寫市場調查' && s.state === 'idle'), { took, observe: d.work.observe });
   d = await waitFor(async () => { const x = await get('/api/dashboard'); return x.work.sessions.some(s => s.title === '撰寫市場調查' && s.state === 'working') ? x : null; }, 15000);
   ok('觀測程式答完之後：下一次讀回更新、唔再標逾時', d && !d.work.observe.timedOut, d && d.work.observe);
   setFake({ sessions: [S_WORK, S_IDLE] });
   // 關閉觀測：observed 為 null、「未接觀測來源」；再開返
   r = await post('/api/setup', { action: 'observe', op: 'off' });
   d = await waitFor(async () => { const x = await get('/api/dashboard'); return x.observed === null ? x : null; }, 20000);
-  ok('系統頁關閉觀測：observed 為 null、寫「未接觀測來源」、冇觀測會話、資料夾清單照列（可以移除或者再開）', r.code === 202 && d && /未接觀測來源/.test(d.work.observe.text) && d.work.observe.off === true && !d.work.sessions.some(s => s.host === 'claude') && d.work.observe.folders.length === 1 && d.work.observe.folders[0].name === 'company-folder', d && d.work.observe);
+  ok('系統頁關閉觀測：observed 為 null、寫「未接觀測來源」、冇觀測會話、資料夾清單照列（可以移除或者再開）', r.code === 202 && d && /觀測已關閉/.test(d.work.observe.text) && d.work.observe.off === true && !d.work.sessions.some(s => s.host === 'claude') && d.work.observe.folders.length === 1 && d.work.observe.folders[0].name === 'company-folder', d && d.work.observe);
   r = await post('/api/setup', { action: 'observe', op: 'on' });
   d = await waitFor(async () => { const x = await get('/api/dashboard'); return x.observed && x.work.observe.state === 'ok' && x.work.sessions.some(s => s.host === 'claude') ? x : null; }, 20000);
   ok('再開啟觀測：會話返嚟', !!d, r);
@@ -113,13 +113,13 @@ try {
   // 運作環第三版：畫布資料屬性、工作中會話節點、立方體（.orbit.has-work）、AI 核心一行
   const flow = `(()=>{const f=document.querySelector('#flow');return {lit:+f.getAttribute('data-lit'),pts:+f.getAttribute('data-particles'),working:document.querySelectorAll('.o-node.working').length,engine:document.querySelector('#orbit').classList.contains('has-work'),ai:document.querySelector('.o-core .o-status').textContent}})()`;
   let fl = await c.ev(flow);
-  ok('有工作：會話節點工作中、有亮線同粒子、AI 核心寫「2 個會話工作中 · 子代理 2」', fl.working === 2 && fl.lit > 0 && fl.pts > 0 && fl.engine && /2 個會話工作中 · 子代理 2/.test(fl.ai), fl);
+  ok('有工作：會話節點工作中、有亮線同粒子、AI 核心寫「2 個 AI 對話工作中，另有 2 個助手協助」', fl.working === 2 && fl.lit > 0 && fl.pts > 0 && fl.engine && /2 個 AI 對話工作中，另有 2 個助手協助/.test(fl.ai), fl);
   ok('子代理衛星：工作中會話旁有 2 粒', await waitFor(async () => (await c.ev(`+document.querySelector('#flow').dataset.sub`)) === 2 && await c.ev(`document.querySelector('[data-node="session:claude-aaaaaaaaaaa1"]').dataset.sub==='2'`), 8000));
   ok('工作中會話冇對應任務：連去「未登記的工作」', await c.ev(`!!document.querySelector('[data-node="unlinked"]')`));
   setState(quiet); setFake({ sessions: [{ ...S_WORK, state: 'idle', subagents: { active: 0, windowMinutes: 15 } }, S_IDLE] });
   const t0 = Date.now();
   fl = await waitFor(async () => { const x = await c.ev(flow); return x.working === 0 && x.lit === 0 && x.pts === 0 ? x : null; }, 15000);
-  ok('全部閒置（唔重新載入）：零亮線、零粒子、立方體唔閃、冇工作中節點', fl && !fl.engine && /沒有工作進行中/.test(fl.ai), fl || await c.ev(flow));
+  ok('全部閒置（唔重新載入）：零亮線、零粒子、立方體唔閃、冇工作中節點', fl && !fl.engine && /目前沒有 AI 在工作/.test(fl.ai), fl || await c.ev(flow));
   console.log('停止用咗', Date.now() - t0, 'ms（觀測每 5 秒＋頁面每 5 秒讀回）');
   ok('全部閒置：分類索引冇一格工作中', await c.ev(`!document.querySelector('.module[data-activity="working"]')`));
   await sleep(1500);
@@ -129,7 +129,7 @@ try {
   ok('有會話開始工作（唔重新載入）：下一次讀回就有亮線同粒子', fl, await c.ev(flow));
   setFake({ mode: 'garbage' });
   fl = await waitFor(async () => { const x = await c.ev(`({ghost:!!document.querySelector('[data-node="session:restricted"].unknown'),lit:+document.querySelector('#flow').getAttribute('data-lit'),text:document.querySelector('[data-node="session:restricted"]').title})`); return x.ghost && x.lit === 0 ? x : null; }, 15000); // 畫布資料屬性喺下一格先更新
-  ok('觀測受限：一個虛線待核實節點、零亮線、節點寫原因', fl && fl.lit === 0 && /讀取不到/.test(fl.text), fl);
+  ok('觀測受限：一個虛線待核實節點、零亮線、節點寫原因', fl && fl.lit === 0 && /暫時讀不到 AI 對話狀態/.test(fl.text), fl);
   setFake({ sessions: [S_WORK, S_IDLE] }); setState(st);
   await waitFor(async () => (await c.ev(flow)).working >= 1, 15000);
 
@@ -251,7 +251,7 @@ try {
   ok('系統頁冇顯示資料夾路徑', !pathHits(await c.ev(`document.body.innerText`)));
   await c.click('#sys-observe [data-obs-remove]');
   const gone = await waitFor(async () => { const x = await get('/api/dashboard'); return x.work.observe.folders.length === 0 ? x : null; }, 20000);
-  ok('系統頁按移除：外殼套用後清單清空、寫「未登記觀察資料夾」', gone && /未登記觀察資料夾/.test(gone.work.observe.text) && !(JSON.parse(fs.readFileSync(SF, 'utf8')).observe.folders || []).length, gone && gone.work.observe);
+  ok('系統頁按移除：外殼套用後清單清空、寫「未登記資料夾」', gone && /未登記資料夾/.test(gone.work.observe.text) && !(JSON.parse(fs.readFileSync(SF, 'utf8')).observe.folders || []).length, gone && gone.work.observe);
   const stat = JSON.parse(fs.readFileSync(STATUS, 'utf8'));
   const old = new Date(Date.now() - 20 * 60000), iso = x => x.toISOString();
   stat.runs.unshift({ id: 'R-stale-test', kind: 'note', state: 'running', startedAt: iso(old), steps: [{ key: 'received', label: '收到要求', state: 'done', at: iso(old) }, { key: 'ai', label: 'AI 處理中', state: 'running', at: iso(old) }] });

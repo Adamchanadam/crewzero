@@ -21,7 +21,7 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
 | 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
 
-新版插件要先由創辦人喺自己嘅 AI 工具換入（Claude Code 喺命令列 `claude plugin update crewzero`；Codex `codex plugin marketplace upgrade` 再 `codex plugin add crewzero@crewzero`；Antigravity 喺之前下載嘅 crewzero 資料夾執行 `git pull`，再 `agy plugin uninstall crewzero`，然後重新 `agy plugin install crewzero/prototypes/proofread/adapters/claude-code/crewzero`），之後先輸入更新指令換項目入面嘅程式。換入插件呢步由創辦人做，你唔好代佢執行。
+相關插件指令只供 AI 使用，不交給創辦人；只有代做失敗時，才請創辦人到 AI 工具的插件設定更新 CrewZero，完成後再說「更新 CrewZero」。
 
 ## 先搵三個位置
 
@@ -32,16 +32,28 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
 ## 創辦人想更新（`/crewzero:update`、`$crewzero:update`、`/update`、「有冇新版本」）
 
 1. 先檢查，唔寫任何嘢：`node "<程式>/update.mjs" "<項目根>"`
-   - 結束碼 0：已經係最新版本。照命令印出嘅一句話講，然後停。
+   - 結束碼 0：已經係最新版本。照命令印出嘅一句話講，然後停；如果創辦人仍然想取得新版插件，跟「換入新版插件」處理。
    - 結束碼 2：未安裝。請創辦人輸入安裝指令（Claude Code `/crewzero:install`、Codex `$crewzero:install`、Antigravity `/install`），然後停。
    - 結束碼 4：AI 工作進行中。講「AI 工作進行中，完成後再更新」，然後停；唔好自己停止任何程序。
-   - 結束碼 3：有新版本。去第 2 步。
+   - 結束碼 3：有新版本。去第 2 步；如果命令另外印出「Founder Desk 目前開着（沒有工作進行中）：更新後會把它關閉，下次打開便是新版。」就照講。
    - 其他：照印出嘅原因話畀創辦人知（用白話講原因同點做，見「命令出錯時點講」），然後停；唔好自己改檔或者再試第二種方法。
-2. **寫入之前一定要停**：將命令印出嘅嗰句「將更新 … 不會改動 … data」原文俾創辦人睇（命令另外印有「Founder Desk 目前開着」嗰句都要照講），再問「好嗎？」。然後停，等創辦人答。冇答「好」（或者同樣明確嘅同意）就唔好做任何寫入。
+2. **寫入之前一定要停**：用白話講版本會更新、舊版會先備份、公司資料不會改動，再問「好嗎？」。然後停，等創辦人答。冇答「好」（或者同樣明確嘅同意）就唔好做任何寫入。
 3. 創辦人答「好」之後執行：`node "<程式>/update.mjs" "<項目根>" --apply`
-   - 結束碼 0：更新完成，照命令印出嘅結果用一兩句話講（新版本號、備份喺邊、`data/` 冇改動），再講下一步係打開 Founder Desk（Claude Code `/crewzero:desk`、Codex `$crewzero:desk`、Antigravity `/desk`）。
+   - 結束碼 0：更新完成，照命令印出嘅結果用一兩句話講（新版本號、公司資料沒有改動），再講下一步係打開 Founder Desk（Claude Code `/crewzero:desk`、Codex `$crewzero:desk`、Antigravity `/desk`）。
    - 結束碼 4：AI 啱啱開始咗工作，命令冇改任何檔；講一句，請創辦人遲啲再試。
    - 其他：更新未完成。命令會自己由備份還原，照佢印出嘅內容用白話講清楚：係咪已經還原、公司資料冇改動、原因係乜同下一步點做（見「命令出錯時點講」）。唔好自己改檔或者刪嘢。
+
+## 換入新版插件
+
+只在 `update.mjs` 檢查結果是「已是最新版本」，但創辦人仍想取得新版插件時使用。
+
+1. 先問一句：「將檢查並換入 CrewZero 新版插件，好嗎？」然後停。未答「好」不可執行任何插件指令。
+2. 創辦人答「好」後，按目前 AI 工具代為執行：
+   - Claude Code：`claude plugin update crewzero`
+   - Codex：先執行 `codex plugin marketplace upgrade`，再執行 `codex plugin add crewzero@crewzero`
+   - Antigravity：在之前下載的 crewzero 資料夾執行 `git pull`，再執行 `agy plugin uninstall crewzero`，然後執行 `agy plugin install crewzero/prototypes/proofread/adapters/claude-code/crewzero`
+3. 成功後只告訴創辦人：「新版插件已換入。請重新開啟你的 AI 工具，再說「更新 CrewZero」。」然後停。重新開啟後，才按上面的「創辦人想更新」流程更新項目內的程式。
+4. 代做失敗時，只請創辦人到 AI 工具的插件設定更新 CrewZero；不可把上述命令交給創辦人。
 
 ## 創辦人想還原上一個版本（「還原上一個版本」）
 

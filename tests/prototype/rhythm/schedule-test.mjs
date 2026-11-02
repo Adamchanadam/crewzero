@@ -32,17 +32,19 @@ try {
 
   /* 印定義：唔登記 */
   const p0 = sched();
-  const name = (p0.stdout.match(/crewzero-[0-9a-f]{8}/) || [])[0];
-  ok('印定義：寫明未登記、每日 21:00、登記名、啟動檔、補跑同命令全文；冇叫排程器、冇標記', p0.status === 0 && /未登記/.test(p0.stdout) && /每日 21:00/.test(p0.stdout) && !!name && p0.stdout.includes(CMD) && /-StartWhenAvailable/.test(p0.stdout) && !calls().length && !fs.existsSync(MARK), p0.stdout.slice(0, 400));
+  const name = (p0.stderr.match(/crewzero-[0-9a-f]{8}/) || [])[0];
+  ok('印定義：創辦人輸出只說明未登記、每日時間與補跑；登記名、啟動檔和命令全文只在技術細節；冇叫排程器、冇標記', p0.status === 0 && /未登記/.test(p0.stdout) && /每日 21:00/.test(p0.stdout) && !!name && p0.stderr.includes(CMD) && /-StartWhenAvailable/.test(p0.stderr) && !p0.stdout.includes(name) && !p0.stdout.includes(CMD) && !calls().length && !fs.existsSync(MARK), { out: p0.stdout, err: p0.stderr });
+  const mac = spawnSync(process.execPath, [S, '--os', 'mac'], { encoding: 'utf8', env });
+  ok('非 Windows：創辦人只見不支援說明，原有 launchd 定義只在技術細節', mac.status === 0 && /目前只支援在 Windows/.test(mac.stdout) && !/launchd|Label|執行環境/.test(mac.stdout) && /macOS launchd/.test(mac.stderr) && /Label/.test(mac.stderr) && /執行環境/.test(mac.stderr), { out: mac.stdout, err: mac.stderr });
   const P2 = path.join(OUT, 'proj2'); install(P2);
-  const n2 = (spawnSync(process.execPath, [path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stdout.match(/crewzero-[0-9a-f]{8}/) || [])[0];
+  const n2 = (spawnSync(process.execPath, [path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stderr.match(/crewzero-[0-9a-f]{8}/) || [])[0];
   ok('登記名含安裝資料夾識別：兩個安裝唔撞名', name && n2 && name !== n2, { name, n2 });
   // 改名前登記嘅排程叫 startup-os-<識別>：安裝資料夾仲叫 startup-os/（舊版原位更新），或者登記標記寫住舊名，就沿用舊名（排程狀態、移除、重新登記都對準同一個）
   const P3 = path.join(OUT, 'proj3'); install(P3); fs.renameSync(path.join(P3, 'crewzero'), path.join(P3, 'startup-os'));
-  const n3 = spawnSync(process.execPath, [path.join(P3, 'startup-os', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stdout;
+  const n3 = spawnSync(process.execPath, [path.join(P3, 'startup-os', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stderr;
   ok('舊版 startup-os/ 安裝：登記名沿用 startup-os-<識別>', /startup-os-[0-9a-f]{8}/.test(n3) && !/crewzero-[0-9a-f]{8}/.test(n3), n3.slice(0, 300));
   const P4 = path.join(OUT, 'proj4'); install(P4); const S4 = path.join(P4, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs');
-  const n4 = (spawnSync(process.execPath, [S4], { encoding: 'utf8', env }).stdout.match(/crewzero-([0-9a-f]{8})/) || [])[1];
+  const n4 = (spawnSync(process.execPath, [S4], { encoding: 'utf8', env }).stderr.match(/crewzero-([0-9a-f]{8})/) || [])[1];
   fs.mkdirSync(path.join(P4, 'crewzero', 'data', 'ledger'), { recursive: true }); fs.writeFileSync(path.join(P4, 'crewzero', 'data', 'ledger', 'schedule.json'), JSON.stringify({ name: 'startup-os-' + n4 }));
   const st4 = spawnSync(process.execPath, [S4, '--status'], { encoding: 'utf8', env: { ...env, SOS_SCHED_LOG: path.join(OUT, 'sched-calls-p4.jsonl') } }).stdout, jt4 = (() => { try { return JSON.parse(st4.split(/\r?\n/)[0]); } catch { return {}; } })();
   ok('登記標記寫住舊名：排程狀態用返舊名 startup-os-<識別>', !!n4 && jt4.name === 'startup-os-' + n4, st4.slice(0, 300));
@@ -65,7 +67,7 @@ try {
   /* 登記（假登記程式） */
   const r1 = sched('--register');
   const reg = calls().map(a => a[a.length - 1]).find(s => /Register-ScheduledTask/.test(s) && !/Unregister/.test(s)) || '';
-  ok('登記：成功並讀回下次執行時間同補跑設定', r1.status === 0 && /已登記每日排程/.test(r1.stdout) && /盡快補做/.test(r1.stdout), r1.stdout + r1.stderr);
+  ok('登記：成功並讀回下次執行時間同補跑設定；技術命令不在創辦人輸出', r1.status === 0 && /每日排程已登記/.test(r1.stdout) && /盡快補做/.test(r1.stdout) && r1.stderr.includes(name) && r1.stderr.includes(CMD) && !r1.stdout.includes(name) && !r1.stdout.includes(CMD) && !r1.stdout.includes('程式檔'), r1.stdout + r1.stderr);
   ok('登記參數：登記名、每日 21:00、啟動檔絕對路徑、錯過即補跑、執行時限（節奏上限加 15 分鐘）、唔准重疊；用完整排程介面（PowerShell）', reg.includes(`-TaskName '${name}'`) && /-Daily -At '21:00'/.test(reg) && reg.includes(`-Execute '${CMD}'`) && /-StartWhenAvailable/.test(reg) && /New-TimeSpan -Minutes 45/.test(reg) && /-MultipleInstances IgnoreNew/.test(reg) && calls()[0][0] === 'powershell.exe', reg.slice(0, 500));
   const m = readJ(MARK);
   ok('標記 ledger/schedule.json：登記名、節奏、登記時間、下次執行、命令全文、補跑', m && m.name === name && m.cadence === 'daily' && m.runTime === '21:00' && m.registeredAt && m.nextRunAt && m.startWhenAvailable === true && m.command.includes(CMD) && m.command.includes('Register-ScheduledTask'), m);
@@ -79,7 +81,7 @@ try {
   const SF = path.join(T, 'data', 'ledger', 'state.json');
   fs.writeFileSync(SF, JSON.stringify({ schemaVersion: 1, tasks: [], events: [], runs: [], company: { rhythm: { runCadence: 'daily', runTime: '08:00', timezone: 'Europe/London', interviewWeekday: 1, runCapMinutes: 30, triggeredRunsPerHour: 6, aiStartsPerDay: 40 } } }, null, 2));
   const s2 = await sys();
-  ok('系統頁：節奏已改須重新登記（登記時 21:00、現時 08:00，講明在對話輸入「重新登記排程」）；下次開工照實際登記嘅 21:00', s2 && s2.state === 'stale' && s2.text.includes('21:00') && s2.text.includes('08:00') && s2.text.includes('重新登記排程') && /21:00/.test(s2.next) && !/08:00/.test(s2.next), s2);
+  ok('系統頁：節奏已改須重新登記（登記時 21:00、現時 08:00，講明在對話輸入「重新登記排程」）；下次開工照實際登記嘅 21:00', s2 && s2.state === 'stale' && s2.text.includes('重新登記排程') && /21:00/.test(s2.next) && !/08:00/.test(s2.next), s2);
   await c.shot(path.join(OUT, 'sys-stale.png'));
   const todo = (await (await fetch(B + '/api/asks')).json()).todo || [];
   const card = todo.find(t => t.id === 'schedule-stale');

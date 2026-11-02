@@ -44,7 +44,7 @@ try {
     if (w === 1440) {
       ok('舞台頭：第 1 場、題目、待你採用、辯論結果不是證據', /第 1 場/.test(await text('#b-wargame .mhead')) && (await text('#b-wargame .mhead')).includes('辯論結果不是證據'), await text('#b-wargame .mhead'));
       ok('進度：藍方 → 紅方 → 藍方反駁 → 裁判 → 轉強 → 再攻 → 待你採用', (await count('#wg-stages .stg')) === 7 && (await count('#wg-stages .stg.done')) === 6, await text('#wg-stages'));
-      ok('記分牌：企得住 2 · 受傷 3 · 倒下 1、企得住率、命中率、證據分佈、核實', (await text('#scoreboard')).replace(/\s+/g, '').includes('2企得住3受傷1倒下') && (await text('#scoreboard')).includes('58%') && (await text('#scoreboard')).includes('78%') && (await count('#scoreboard .evbar i')) === 3 && (await text('#scoreboard')).includes('✓ 1'), await text('#scoreboard'));
+      ok('記分牌：站得住腳 2 · 被找到弱點 3 · 被推翻 1，並保留計分規則、攻擊高中特計和既有比率與核實', (await text('#scoreboard')).replace(/\s+/g, '').includes('2站得住腳3被找到弱點1被推翻') && (await text('#scoreboard')).includes('計分：站得住腳計 2 分、被找到弱點計 1 分、被推翻計 0 分。') && /攻擊：高 \d+ · 中 \d+ · 低 \d+/.test(await text('#scoreboard')) && (await text('#scoreboard')).includes('58%') && (await text('#scoreboard')).includes('78%') && (await count('#scoreboard .evbar i')) === 3 && (await text('#scoreboard')).includes('✓ 1'), await text('#scoreboard'));
       ok('裁判總評', (await text('#scoreboard')).includes('裁判總評'));
       ok('五個關鍵時刻（一擊倒下、最傷、盲點、反轉、遺漏的路線）', (await ev(`[...document.querySelectorAll('#key-moments .km .km-k')].map(x=>x.innerText).join()`)) === '一擊倒下,最傷,盲點,反轉,遺漏的路線');
       // 論點預設一次展開一條；撳「全部展開」先數得齊攻擊、反駁
@@ -134,7 +134,7 @@ try {
   await go(BASE + '/#/debate/' + mid, 1440, 1500);
   const done = await waitFor(async () => { await go(BASE + '/#/debate/' + mid, 1440, 1200); return has('#dm-respond'); }, 60000);
   ok('場次頁：完場顯示回應這場（三題）', done && (await text('#dm-respond')).includes('回應這場'));
-  ok('場次頁：進度、記分、關鍵時刻', (await count('#dm-steps li')) === 7 && (await text('#debate-match')).includes('記分') && (await count('#dm-moments li')) === 3);
+  ok('場次頁：進度、記分、關鍵時刻；記分規則與攻擊高中特計同時顯示', (await count('#dm-steps li')) === 7 && (await text('#debate-match')).includes('記分') && (await text('#debate-match')).includes('計分：站得住腳計 2 分、被找到弱點計 1 分、被推翻計 0 分。') && /攻擊：高 \d+ · 中 \d+ · 低 \d+/.test(await text('#debate-match')) && (await count('#dm-moments li')) === 3);
   await S('f02-match-done', '#debate-match');
   // 回應（照裁判）→ 轉強 → 再攻 → 等你採用
   const m = await matchApi(mid);

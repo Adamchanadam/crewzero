@@ -444,7 +444,7 @@ export function responsePack(v) {
   qs.push({ id: 'evg', priority: 5, ask: `如果有，這個證據去到哪一級？（${when(v.startedAt)} 場）`, kind: 'choice', options: [{ text: NAMES.dash.ev_1, rec: true }, { text: NAMES.dash.ev_2 }, { text: NAMES.dash.ev_3 }], value: NAMES.dash.ev_1, why: '按實際發生的事選擇；沒有證據便無須理會。' });
   qs.push({ id: 'ch', priority: 6, ask: `你覺得裁判判錯了哪一條？為甚麼？（${when(v.startedAt)} 場；沒有就留空）`, kind: 'text', value: '沒有', why: '寫了就會請裁判重判（最多三條，一場一次）；你的原話會原文交給裁判。' });
   return { format: 'startup-os.ask/0.1', title: clip('紅藍對打回應：' + name, 60), context: '裁判已判定。請對三個關鍵時刻表態；不答就按裁判判定開始轉強。辯論結果不算證據。',
-    afterConfirm: '按你的回應開始轉強：AI 把受傷及倒下的論點變成轉強卡，紅方再攻一輪，之後請你採用。', questions: qs, debate: { matchId: v.id, kind: 'response', refs } };
+    afterConfirm: '按你的回應開始轉強：AI 把被找到弱點及被推翻的論點變成轉強卡，紅方再攻一輪，之後請你採用。', questions: qs, debate: { matchId: v.id, kind: 'response', refs } };
 }
 const H_SHORT = { '修正': '修正', '反轉做優勢': '反轉做優勢', '先驗證': '先驗證', '接受並監察': '接受並監察' };
 export const ADOPT_OPTS = { adopt: '採用', test: '改為先驗證', reject: '不採用' };

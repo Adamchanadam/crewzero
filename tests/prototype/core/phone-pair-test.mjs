@@ -99,9 +99,9 @@ try {
     const closed = await post(BASE + '/api/setup', { action: 'phone-close' }, browserHeaders);
     const passes = JSON.parse(fs.readFileSync(path.join(DATA, 'founder', 'desk', 'passes.json'), 'utf8')).passes;
     ok('關閉手機模式會關閉 LAN 監聽並作廢所有手機通行證', closed.r.status === 200 && !passes.some(x => x.kind === 'phone'), passes.map(x => x.kind));
-    const pairText = fs.readFileSync(path.join(PROTO, 'pair.js'), 'utf8'), deskText = fs.readFileSync(path.join(PROTO, 'desk.js'), 'utf8'), namesText = fs.readFileSync(path.join(PROTO, 'names.js'), 'utf8'), pairHtml = fs.readFileSync(path.join(PROTO, 'pair.html'), 'utf8');
-    ok('手機流程有已接受、斷線及 60 秒指引狀態，文字指向在電腦重新開啟配對', /phoneConnected/.test(pairText) && /phoneOffline/.test(pairText) && /phonePairHelp/.test(deskText) && /重新開啟配對/.test(namesText), true);
-    ok('60 秒指引說明訪客網絡隔離、公用轉私人及 Windows 設定位置；手機頁初始提示為完整句', /訪客網絡/.test(namesText) && /公用/.test(namesText) && /私人/.test(namesText) && /設定/.test(namesText) && /正在連接電腦，請稍候。/.test(pairHtml), true);
+    const reopenedAfterClose = await post(BASE + '/api/setup', { action: 'phone-open' }, browserHeaders);
+    const closedAgain = await post(BASE + '/api/setup', { action: 'phone-close' }, browserHeaders);
+    ok('關閉後可重新開啟手機配對，並產生新的配對網址', reopenedAfterClose.r.status === 200 && !!reopenedAfterClose.j.pairUrl && reopenedAfterClose.j.pairUrl !== reset.j.pairUrl && closedAgain.r.status === 200, { before: reset.j.pairUrl, after: reopenedAfterClose.j.pairUrl, closedAgain: closedAgain.r.status });
   }
 } catch (e) { ok('測試程式出錯', false, String(e?.stack || e)); }
 try { srv.kill(); } catch { } await sleep(300);

@@ -42,6 +42,7 @@ try {
   chrome = await openChrome(CHROME, path.join(OUT, 'profile'), PORT + 1);
   await usePass(base, chrome);
   await chrome.go(base + '/#/intake');
+  if (await chrome.ev(`!!document.querySelector('#intake-anyway')`)) await chrome.click('#intake-anyway');
   for (const type of Object.keys(questions)) {
     await chrome.ev(`document.querySelector('input[name="biz-type"][value="${type}"]').click()`);
     const actual = await waitFor(async () => { const q = await chrome.ev(`['label[for="q1"]','label[for="q2"]'].map(s=>document.querySelector(s).innerText)`); return q[0].includes(questions[type][0]) && q[1].includes(questions[type][1]) ? q : null; });

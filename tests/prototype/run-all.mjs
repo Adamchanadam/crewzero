@@ -71,6 +71,7 @@ const TESTS = [
   ['由文件預填', 'core/prefill-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['由文件預填頁面', 'core/cdp-prefill.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['生意類別', 'core/biztype-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['新手收尾', 'core/novice-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['階段 B 頁面', 'core/cdp-desk-b.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['公司概覽', 'overview/overview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['監察台', 'dashboard/dash-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],

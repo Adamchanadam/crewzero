@@ -62,9 +62,9 @@ try {
   await scan('/dashboard/brain/wargame', '/dashboard/brain/wargame（下半場）', `(document.querySelector('#half-strengthen')||{click(){}}).click()`);
   await scan('/dashboard/path', '/dashboard/path（時間線）', `(document.querySelector('#view-timeline')||{click(){}}).click()`);
   const desk = ['/', '/#/intake', '/#/setup', '/#/log', '/#/debate', '/#/debate/new', '/#/request/order', '/#/request/adhoc', '/#/request/event', '/proofread.html'];
-  for (const u of desk) await scan(u);
+  for (const u of desk) await scan(u, '', u === '/#/intake' ? `(document.querySelector('#intake-anyway')||{click(){}}).click()` : '');
   // 交資料頁預填狀態：草稿指向一份已完成嘅預填，第 2 題當創辦人已寫（出「用這句」建議）；已有公司概覽就先按「重新提交」
-  if (/^[\w-]{1,40}$/.test(PREFILL)) await scan('/#/log', '/#/intake（由文件預填）', `(async()=>{localStorage.setItem('startup-os-intake-draft',JSON.stringify({q2:'我們按月收費。',_prefill:{id:${JSON.stringify(PREFILL)},st:{}}}));location.hash='#/intake';await new Promise(r=>setTimeout(r,1500));const b=document.querySelector('#reintake');if(b){b.click();await new Promise(r=>setTimeout(r,1500));}await new Promise(r=>setTimeout(r,2500));return !!document.querySelector('.pf-row:not(:empty)')})()`);
+  if (/^[\w-]{1,40}$/.test(PREFILL)) await scan('/#/log', '/#/intake（由文件預填）', `(async()=>{localStorage.setItem('startup-os-intake-draft',JSON.stringify({q2:'我們按月收費。',_prefill:{id:${JSON.stringify(PREFILL)},st:{}}}));location.hash='#/intake';await new Promise(r=>setTimeout(r,1500));const setup=document.querySelector('#intake-anyway');if(setup){setup.click();await new Promise(r=>setTimeout(r,800));}const b=document.querySelector('#reintake');if(b){b.click();await new Promise(r=>setTimeout(r,1500));}await new Promise(r=>setTimeout(r,2500));return !!document.querySelector('.pf-row:not(:empty)')})()`);
   const asks = (await (await fetch(BASE + '/api/asks')).json()).packs.filter(p => p.open).map(p => p.id).slice(0, 8);
   for (const id of asks) await scan('/#/ask/' + id);
   const ms = ((await (await fetch(BASE + '/api/debate')).json()).matches || []).map(m => m.id);

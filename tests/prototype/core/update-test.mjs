@@ -93,15 +93,15 @@ try {
   fs.rmSync(LOCK, { force: true });
   ok('AI 工作進行中（有鎖）：檢查同 --apply 都結束碼 4、冇改任何檔', b1.status === 4 && b2.status === 4 && /AI 工作進行中/.test(b2.stdout) && same(tree(T), before), { b1: b1.stdout, b2: b2.stdout });
 
-  /* 檢查（唔寫）：固定一句，數目啱 */
+  /* 檢查（唔寫）：創辦人只見版本和資料保障，技術數目與備份位置只在 stderr */
   const c1 = run(UPDATE, [PROJ]);
-  const m = c1.stdout.match(/將更新 .* 內的 (\d+) 個程式檔（版本 0\.3\.0 → ([\d.]+)）.*不會改動 .*data/);
-  ok('檢查：結束碼 3、印一句「將更新 N 個程式檔…不會改動 data」，N 同實際會改嘅檔數一致、版本號啱', c1.status === 3 && m && Number(m[1]) === expectCount && m[2] === newVersion, { out: c1.stdout, expectCount });
+  const m = c1.stderr.match(/程式檔數量：(\d+)；備份位置：(.+)/);
+  ok('檢查：結束碼 3、創辦人文字說明版本與公司資料保障；程式檔數目在技術細節且與實際一致', c1.status === 3 && c1.stdout.includes(`由版本 0.3.0 更新至 ${newVersion}`) && /公司資料不會改動/.test(c1.stdout) && m && Number(m[1]) === expectCount && !c1.stdout.includes('程式檔') && !c1.stdout.includes('.backup-') && !c1.stdout.includes(PROJ), { out: c1.stdout, err: c1.stderr, expectCount });
   ok('檢查冇寫任何嘢：安裝資料夾雜湊不變、冇備份、項目根冇暫存資料夾', same(tree(T), before) && fs.readdirSync(PROJ).join(',') === 'startup-os', fs.readdirSync(PROJ));
 
   /* 中途失敗：由備份還原到一模一樣 */
   const f1 = run(UPDATE, [PROJ, '--apply'], { SOS_UPDATE_FAIL_AFTER: '7' });
-  ok('換入第 7 個檔之後故意失敗：結束碼 1、講已由備份還原', f1.status === 1 && /已由備份還原到版本 0\.3\.0/.test(f1.stdout), { status: f1.status, out: f1.stdout, err: f1.stderr });
+  ok('換入第 7 個檔之後故意失敗：結束碼 1、講已由備份還原', f1.status === 1 && /已還原到原本版本/.test(f1.stdout), { status: f1.status, out: f1.stdout, err: f1.stderr });
   const f1Line = f1.stdout.split(/\r?\n/).find(l => /更新未完成/.test(l)) || '';
   ok('失敗句：講原因同做法、公司資料冇改動；冇錯誤原文、冇路徑（原文只去 stderr）', /原因：/.test(f1Line) && /公司資料沒有改動/.test(f1Line) && /請/.test(f1Line) && !/測試：故意|[A-Za-z]:\\/.test(f1Line) && /測試：故意/.test(f1.stderr), { f1Line, err: f1.stderr });
   ok('失敗後安裝資料夾逐檔雜湊同更新前一模一樣（含 VERSION、創辦人嘅檔、舊程式檔；冇留低備份）', same(tree(T), before), { extra: Object.keys(tree(T)).filter(k => !(k in before)), missing: Object.keys(before).filter(k => !(k in tree(T))), changed: Object.keys(before).filter(k => k in tree(T) && tree(T)[k] !== before[k]).slice(0, 5) });
@@ -121,7 +121,7 @@ try {
   const c2 = run(UPDATE, [PROJ]);
   ok('檢查時講明 Founder Desk 開着、更新後會關閉', c2.status === 3 && /Founder Desk 目前開着/.test(c2.stdout), c2.stdout);
   const a1 = run(UPDATE, [PROJ, '--apply']);
-  ok(`更新：結束碼 0、講版本 0.3.0 → ${newVersion}、備份位置、data/ 沒有改動、已關閉舊版 Founder Desk`, a1.status === 0 && new RegExp(`已更新 CrewZero：版本 0\\.3\\.0 → ${newVersion.replace(/\./g, '\\.')}`).test(a1.stdout) && /\.backup-0\.3\.0/.test(a1.stdout) && /沒有改動/.test(a1.stdout) && /已關閉開着的 Founder Desk/.test(a1.stdout), { status: a1.status, out: a1.stdout, err: a1.stderr });
+  ok(`更新：結束碼 0、講新版本 ${newVersion}、公司資料沒有改動、已關閉舊版 Founder Desk；備份位置只在技術細節`, a1.status === 0 && new RegExp(`已更新至版本 ${newVersion.replace(/\./g, '\\.')}`).test(a1.stdout) && /沒有改動/.test(a1.stdout) && /已關閉開着的 Founder Desk/.test(a1.stdout) && /備份位置：.*\.backup-0\.3\.0/.test(a1.stderr) && !a1.stdout.includes('.backup-') && !a1.stdout.includes('程式檔'), { status: a1.status, out: a1.stdout, err: a1.stderr });
   await sleep(500);
   ok('舊版伺服器已經唔再運行', !alive(oldPid), oldPid);
   ok('更新後 data/ 逐檔雜湊不變（連資料夾都冇多冇少）、冇留低鎖', same(tree(DATA), dataPre) && !fs.existsSync(LOCK), { changed: Object.keys(dataPre).filter(k => tree(DATA)[k] !== dataPre[k]), extra: Object.keys(tree(DATA)).filter(k => !(k in dataPre)) });
@@ -153,7 +153,7 @@ try {
   /* 還原上一個版本 */
   const afterUpdate = tree(T, ['.backup-']), dataMid = tree(DATA);
   const rb1 = run(UPDATE, [PROJ, '--rollback']);
-  ok('還原檢查：結束碼 3、一句「將把 … 還原到版本 0.3.0 … 不會改動 data」、冇寫任何嘢', rb1.status === 3 && /將把 .* 還原到版本 0\.3\.0.*不會改動 .*data/.test(rb1.stdout) && same(tree(T, ['.backup-']), afterUpdate), rb1.stdout);
+  ok('還原檢查：結束碼 3、創辦人文字只說版本與公司資料保障；備份位置和程式檔數目只在技術細節、冇寫任何檔', rb1.status === 3 && /還原到版本 0\.3\.0/.test(rb1.stdout) && /公司資料不會改動/.test(rb1.stdout) && /備份位置：.*\.backup-0\.3\.0/.test(rb1.stderr) && /程式檔數量：\d+/.test(rb1.stderr) && !rb1.stdout.includes('.backup-') && !rb1.stdout.includes('程式檔') && same(tree(T, ['.backup-']), afterUpdate), { out: rb1.stdout, err: rb1.stderr });
   const rb2 = run(UPDATE, [PROJ, '--rollback', '--apply']);
   await sleep(500);
   ok('還原：結束碼 0、講已還原到 0.3.0、data/ 沒有改動、關閉咗開着嘅新版伺服器', rb2.status === 0 && /已還原 CrewZero 到版本 0\.3\.0/.test(rb2.stdout) && /沒有改動/.test(rb2.stdout) && !alive(newPid), { status: rb2.status, out: rb2.stdout, err: rb2.stderr });

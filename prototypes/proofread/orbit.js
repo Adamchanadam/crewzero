@@ -71,8 +71,8 @@
     var g = el('div', 'o-gauge');
     var r1 = el('div', 'grow'); r1.append(el('span', null, n.workLevelL || '工作強度'), el('b', null, lv + ' / 3')); g.append(r1);
     var bars = el('div', 'gbars'); for (var i = 0; i < 3; i++) { var b = el('i'); if (i < lv) b.className = 'on'; bars.append(b); } g.append(bars);
-    var r2 = el('div', 'grow'); r2.append(el('span', null, (n.aiCore || 'AI 團隊') + ' ' + (n.sessionsL || '會話')), el('b', null, (d.meta.workingSessions || 0) + ' / ' + (d.sessions || []).length)); g.append(r2);
-    var r3 = el('div', 'grow'); r3.append(el('span', null, n.subagentsL || '子代理'), el('b', null, String(d.meta.activeSubagents || 0))); g.append(r3);
+    var r2 = el('div', 'grow'); r2.append(el('span', null, (n.aiCore || 'AI 團隊') + ' ' + (n.sessionsL || 'AI 對話')), el('b', null, (d.meta.workingSessions || 0) + ' / ' + (d.sessions || []).length)); g.append(r2);
+    var r3 = el('div', 'grow'); r3.append(el('span', null, n.subagentsL || '協助的助手'), el('b', null, String(d.meta.activeSubagents || 0))); g.append(r3);
     g.append(el('div', 'idle-note', d.connected === false ? (n.offlineNote || '連線中斷：保留最後紀錄，不代表即時工作。') : (n.idleNote || '目前沒有 AI 在工作：畫面靜止，不會假裝忙碌。')));
     st.append(g); S.gauge = g;
     // 創辦人決定核心（左）
@@ -100,7 +100,7 @@
     if (S.prevPose && S.prevPose !== pose && motionOK()) lead.classList.add('swap'); S.prevPose = pose; var cube = el('div', 'cube'); ['front', 'back', 'right', 'left', 'topf', 'bottomf'].forEach(function (f) { var face = el('span', 'face ' + f, f === 'front' ? (d.initials || 'AI') : f === 'right' ? '↗' : ''); cube.append(face); }); cube.append(el('i', 'cube-core')); engine.append(cube); core.append(engine);
     core.append(el('span', 'o-eyebrow', n.eyebrowAI || '統籌'));
     var idn = el('div', 'o-ident'); var mark = el('span', 'o-mark', (d.initials || 'AI').slice(0, 2)); idn.append(mark, el('b', null, n.aiCore || 'AI 團隊')); core.append(idn);
-    core.append(el('span', 'o-status', d.connected === false ? (n.offlineStatus || '回報待核實 · 保留最後紀錄') : d.scope ? (n.scopeStatus || '此站任務：進行中 {a} · 等待 {b} · 已交付 {c}').replace('{a}', d.scope.active || 0).replace('{b}', d.scope.waiting || 0).replace('{c}', d.scope.done || 0) : work ? (n.workingNow || '{n} 個會話工作中 · 子代理 {m}').replace('{n}', d.meta.workingSessions).replace('{m}', d.meta.activeSubagents) : (n.noWorkPlain || '沒有工作進行中')));
+    core.append(el('span', 'o-status', d.connected === false ? (n.offlineStatus || '回報待核實 · 保留最後紀錄') : d.scope ? (n.scopeStatus || '此站任務：進行中 {a} · 等待 {b} · 已交付 {c}').replace('{a}', d.scope.active || 0).replace('{b}', d.scope.waiting || 0).replace('{c}', d.scope.done || 0) : work ? (n.workingNow || '{n} 個 AI 對話工作中，另有 {m} 個助手協助').replace('{n}', d.meta.workingSessions).replace('{m}', d.meta.activeSubagents) : (n.noWorkPlain || '目前沒有 AI 在工作')));
     st.append(core); S.core = core;
     // 會話節點（≤ 6，溢出 +n）
     var list = (d.sessions || []).slice(0, 6), more = (d.sessions || []).length - list.length;
@@ -118,7 +118,7 @@
     var still = {}; S.nodes.forEach(function (x) { still[x.key] = true; });
     if (!firstBuild && motionOK()) old.forEach(function (o) { if (o.key !== 'more' && !still[o.key] && o.x != null) ghost(o); });
     S.built = true;
-    if (more > 0) { var mn = el('div', 'o-node more'); mn.dataset.node = 'session:more'; var mr = el('span', 'o-ring'); mr.append(el('b', null, '+' + more)); mn.append(mr); var ml = el('span', 'o-lb up'); ml.append(el('b', null, '+' + more + ' ' + (n.sessionsL || '會話'))); mn.append(ml); st.append(mn); S.nodes.push({ el: mn, lb: ml, i: list.length, key: 'more', working: false, sub: 0, taskIds: [], side: 'up', ang: null }); }
+    if (more > 0) { var mn = el('div', 'o-node more'); mn.dataset.node = 'session:more'; var mr = el('span', 'o-ring'); mr.append(el('b', null, '+' + more)); mn.append(mr); var ml = el('span', 'o-lb up'); ml.append(el('b', null, '+' + more + ' ' + (n.sessionsL || 'AI 對話'))); mn.append(ml); st.append(mn); S.nodes.push({ el: mn, lb: ml, i: list.length, key: 'more', working: false, sub: 0, taskIds: [], side: 'up', ang: null }); }
     // 任務欄（右，≤ 8，溢出「+n」，未登記）
     var tasks = (d.tasks || []).slice(0, 8), tmore = (d.tasks || []).length - tasks.length;
     var working = {}; S.nodes.forEach(function (x) { if (x.working) x.taskIds.forEach(function (id) { working[id] = true; }); });
@@ -148,8 +148,8 @@
     // 底部狀態行
     var foot = el('div', 'o-foot'); var route = el('span', 'route', 'view / ' + (n.orbit || '運作環')); route.append(el('i', 'cursor')); foot.append(route);
     var ws = S.nodes.filter(function (x) { return x.working; }), first = ws.map(function (x) { return x.taskIds[0]; }).filter(Boolean)[0], ft = first ? ((d.tasks || []).filter(function (t) { return t.id === first; })[0] || {}).title || '' : '';
-    foot.append(el('span', 'focus', d.connected === false ? (n.offlineFocus || '連線中斷 · 保留最後紀錄') : lv ? (n.act_working || '工作中') + ' · ' + (first ? taskLabel(first) + ' ' + ft : ws.length + ' ' + (n.unlinkedFocus || '個會話在做未登記的工作')) : (n.idleFocus || '目前沒有 AI 在工作 · 畫面靜止')));
-    var hb = el('span', 'hb'); hb.setAttribute('data-hb', '1'); hb.textContent = '讀回 0 秒前'; var lp = el('span', 'lp'); var l1 = el('b', null, '0'); l1.setAttribute('data-lit', '1'); var l2 = el('b', null, '0'); l2.setAttribute('data-pt', '1'); lp.append(document.createTextNode((n.litL || '亮線') + ' '), l1, document.createTextNode(' · ' + (n.particlesL || '粒子') + ' '), l2); foot.append(hb, lp, el('span', 'r', (n.taskUpdated || '任務更新') + ' ' + (d.updatedAt || '—')));
+    foot.append(el('span', 'focus', d.connected === false ? (n.offlineFocus || '連線中斷 · 保留最後紀錄') : lv ? (n.act_working || '工作中') + ' · ' + (first ? taskLabel(first) + ' ' + ft : ws.length + ' ' + (n.unlinkedFocus || '個 AI 對話在做未登記的工作')) : (n.idleFocus || '目前沒有 AI 在工作')));
+    var hb = el('span', 'hb'); hb.setAttribute('data-hb', '1'); hb.textContent = '讀回 0 秒前'; var lp = el('span', 'lp'); var l1 = el('b', null, '0'); l1.setAttribute('data-lit', '1'); var l2 = el('b', null, '0'); l2.setAttribute('data-pt', '1'); lp.append(document.createTextNode((n.litL || '工作連結') + ' '), l1, document.createTextNode(' · ' + (n.particlesL || '工作提示') + ' '), l2); foot.append(hb, lp, el('span', 'r', (n.taskUpdated || '任務更新') + ' ' + (d.updatedAt || '—')));
     st.append(foot); S.foot = foot;
   }
   function clip(s, n) { s = String(s || ''); var a = Array.from(s); return a.length > n ? a.slice(0, n - 1).join('') + '…' : s; }

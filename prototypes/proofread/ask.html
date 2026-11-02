@@ -246,6 +246,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (m) return showAsk(m[1]);
     if (location.hash === '#/log') return showLog();
     if (location.hash === '#/setup') return showSetup();
+    if (location.hash === '#/intake-anyway') { IN.open = true; return showIntake(); }
     if (location.hash === '#/intake') return showIntake();
     var pm = /^#\/practice(?:\/(new|s|card|debrief)\/([\w-]{1,60})|\/([\w-]{1,60}))?$/.exec(location.hash);
     if (pm) { $('#cbar').hidden = true; return pm[1] === 'new' ? showPracticeNew(pm[2]) : pm[1] === 's' ? showPracticeSession(pm[2]) : pm[1] === 'card' ? showPracticeCard(pm[2]) : pm[1] === 'debrief' ? showDebrief(pm[2]) : pm[3] ? showPracticePrep(pm[3]) : showPracticeList(); }
@@ -320,13 +321,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   // 「今日要做的事」卡（安裝後至首次訪問完成為止常駐，之後收成「第一星期指引」）同「上次離開之後」一行（規劃書 4.1）
   // 品牌場景圖：每個指引狀態一張（未交資料會直接轉去交資料頁、日常已收入「第一星期指引」，兩者都唔放圖）；載入失敗（例如離線快照）就靜靜收埋
-  var SCENE = { noAI: 'ready', proofread: 'goal', accept: 'handover', firstInterview: 'evidence', empty: 'rhythm', autoStop: 'sitting' };
+  var SCENE = { noAI: 'ready', proofread: 'goal', accept: 'handover', waitInterview: 'evidence', firstInterview: 'evidence', empty: 'rhythm', autoStop: 'sitting' };
   function scene(key) {
     return SCENE[key] ? h('div', { class: 'scene-bg', 'aria-hidden': 'true', style: "background-image:url('/assets/crew-scene-" + SCENE[key] + ".webp')" }) : null;
   }
   function todayCard(home) {
     var c = home && home.card; if (!c) return null;
-    var fill = function (s) { return c.date ? String(s || '').replace('{date}', dayOf(c.date)) : String(s || '').replace(/（\{date\}）|\{date\}/g, ''); };
+    var fill = function (s) { return String(s || '').replace(/\{date\}/g, c.date ? dayOf(c.date) : '稍後'); };
     var go = c.href ? h('a', { class: 'btn primary', href: c.href, id: 'today-go' }, c.button) : h('span', { class: 'small muted', id: 'today-wait' }, c.date ? T('todayNotOpen', { d: dayOf(c.date) }) : '');
     var body = [h('span', { class: 'eyebrow' }, N.ui.todayTitle),
       h('div', { class: 'row' }, h('div', null, h('div', { class: 't', id: 'today-do' }, fill(c.today)), h('div', { class: 'small muted', id: 'today-not' }, N.ui.todayNotAuto + fill(c.notAuto))), go)];
@@ -614,7 +615,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var s = PR.session; text = String(text || '').trim();
     if (!text || PR.busy) return;
     if (s.pending) { toast('對方仍在考慮，請稍候再發言。'); return; }
-    PR.busy = true; PR.hint = false; PR.draft = '';
+    PR.busy = true; PR.hint = false; PR.draft = ''; PR.suggestTimedOut = false;
     s.turns.push({ who: 'you', text: text }); renderPlay(true);
     post('/api/practice', { action: 'say', sessionId: s.id, text: text }).then(function (j) { PR.session = j.session; PR.busy = false; renderPlay(); if (j.session.pending) waitTags(j.session.id); })
       .catch(function (e) { s.turns.pop(); PR.busy = false; PR.draft = text; renderPlay(); toast(e.said || '未能發送：' + why(e)); });
@@ -627,7 +628,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       get('/api/practice/session?id=' + encodeURIComponent(id)).then(function (j) {
         if (!j.session.pending) { PR.session = j.session; renderPlay(); return; }
         // 約 12 秒後改為每 3 秒讀一次；約 5 分鐘仍未準備好，就講原因同做法（唔會一直停喺「準備中」而冇出口）
-        if (n > 120) { PR.session = j.session; renderPlay(); toast(N.ui.practiceTagsStuck); return; }
+        if (n > 120) { PR.session = j.session; PR.suggestTimedOut = true; renderPlay(); toast(N.ui.practiceTagsStuck); return; }
         waitTags(id, n + 1);
       }).catch(function (e) { toast(why(e)); });
     }, n > 20 ? 3000 : 600);
@@ -642,18 +643,18 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendLine(ta.value); } });
     var bar = h('div', { class: 'pbar', id: 'pbar' }, h('div', { class: 'pbar-in' },
       PR.hint ? h('div', { class: 'hintbox', id: 'hintbox' }, '💡 ', s.hint || ('是次只爭取：' + sc.goal.text)) : null,
-      s.pending ? h('p', { class: 'small muted', id: 'sugs-wait', style: 'margin:0 0 8px' }, '建議說法準備中……') : null,
+      s.pending ? h('p', { class: 'small muted', id: 'sugs-wait', style: 'margin:0 0 8px' }, PR.suggestTimedOut ? '建議說法尚未準備好，你可繼續發言或稍後再試。' : '建議說法準備中……') : null,
       h('div', { class: 'sugs', id: 'sugs' }, (s.pending ? [] : s.suggestions || []).map(function (x, i) {
         return h('div', { class: 'sug' }, h('button', { type: 'button', class: 'say', 'data-sug': String(i), disabled: PR.busy ? true : null, onclick: function () { sendLine(x); } }, x),
           h('button', { type: 'button', class: 'btn small', disabled: PR.busy ? true : null, onclick: function () { PR.draft = x; renderPlay(); var t = $('#pl-text'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } } }, '先修改'));
       })),
-      h('div', { class: 'pin' }, ta, h('button', { type: 'button', class: 'btn primary', id: 'pl-send', disabled: PR.busy || s.pending ? true : null, onclick: function () { sendLine(ta.value); } }, N.ui.practiceSend)),
+      h('div', { class: 'pin' }, ta, h('button', { type: 'button', class: 'btn primary', id: 'pl-send', disabled: PR.busy || (s.pending && !PR.suggestTimedOut) ? true : null, onclick: function () { sendLine(ta.value); } }, N.ui.practiceSend)),
       h('div', { class: 'pact' },
         h('button', { type: 'button', class: 'btn small', id: 'pl-hint', onclick: function () { PR.hint = !PR.hint; renderPlay(waiting); } }, N.ui.practiceHint),
-        h('button', { type: 'button', class: 'btn small', id: 'pl-undo', disabled: PR.busy || s.pending || !s.turns.some(function (t) { return t.who === 'you'; }) ? true : null, onclick: function () {
+        h('button', { type: 'button', class: 'btn small', id: 'pl-undo', disabled: PR.busy || (s.pending && !PR.suggestTimedOut) || !s.turns.some(function (t) { return t.who === 'you'; }) ? true : null, onclick: function () {
           post('/api/practice', { action: 'undo', sessionId: s.id }).then(function (j) { var last = s.turns.filter(function (t) { return t.who === 'you'; }).pop(); PR.session = j.session; PR.draft = last ? last.text : ''; renderPlay(); toast('對方會當作未聽過，你可以重新表達。'); }, function (e) { toast(why(e)); });
         } }, N.ui.practiceRedo),
-        h('button', { type: 'button', class: 'btn small', id: 'pl-end', disabled: PR.busy || s.pending ? true : null, onclick: function () { endPractice(); } }, N.ui.practiceEnd))));
+        h('button', { type: 'button', class: 'btn small', id: 'pl-end', disabled: PR.busy || (s.pending && !PR.suggestTimedOut) ? true : null, onclick: function () { endPractice(); } }, N.ui.practiceEnd))));
     setApp(h('div', { class: 'pl-top', id: 'pl-top' },
       h('div', { class: 'pl-who' }, h('div', null, h('b', null, sc.counterpart.name), h('small', null, sc.counterpart.role + ' · ' + LV[s.level] + ' · ' + N.ui.practiceLabel)), moodChip(s)),
       h('div', { class: 'small', style: 'margin-top:6px' }, N.ui.goal + '：' + sc.goal.text), tracker(s, sc)), chat, bar);
@@ -737,11 +738,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   /* ---------- 紅藍對打：開一場辯論（題目、紅方席位、力度）、場次頁（進度、回應、採用、再攻、重跑、再打一場）；舞台喺營運監察台 ---------- */
   var DD = N.dash, DT = { sent: null, timer: null, type: 'business', seats: null, level: 'normal', target: '', title: '' };
   var DLV = { easy: '溫和', normal: '一般', hard: '嚴厲' };
-  var DTYPE_HINT = { business: '整體生意能否成立：付款者、使用者、伙伴、競爭者、投資者輪流提出攻擊', strategy: '某一條路線或推進策略：與其他路線相比，為何選擇這一條', pricing: '價格與收費方式：客戶能否負擔、能否獲批', partner: '與某個伙伴合作的提案：對方為何會同意、如何分工及分成', pitch: '一份簡報：聽眾會提出哪些你未能回答的問題', milestone: '某一站能否在目標日期前真正實現' };
+  var DTYPE_HINT = { business: '整體能否成立：出錢的一方、使用者、合作伙伴、同類機構及資助者或投資者，輪流提出質疑', strategy: '某一條路線或推進策略：與其他路線相比，為何選擇這一條', pricing: '收費、捐款或資助安排：對方能否負擔、能否獲批', partner: '與某個伙伴合作的提案：對方為何會同意、如何分工及分成', pitch: '一份簡報：聽眾會提出哪些你未能回答的問題', milestone: '某一站能否在目標日期前真正實現' };
   var DPH = function (p) { return DD['ph_' + p] || p; };
   // 裁判判定係資料值（企得住／受傷／倒下），顯示時換成 names.js 嘅名稱
   var VERDICT = { '企得住': 'vStand', '受傷': 'vHurt', '倒下': 'vFall' };
   function verdictL(v) { return DD[VERDICT[v]] || v; }
+  function attackStats(m) {
+    var n = { '高': 0, '中': 0, '低': 0 };
+    (m.rows || []).forEach(function (r) { (r.attacks || []).forEach(function (a) { if (n[a.severity] != null) n[a.severity]++; }); });
+    return DD.attackStats.replace('{high}', n['高']).replace('{medium}', n['中']).replace('{low}', n['低']);
+  }
   function stageHref(id) { return '/dashboard/brain/wargame?match=' + encodeURIComponent(id); }
   function showDebateList() {
     Promise.all([get('/api/status'), get('/api/debate')]).then(function (r) {
@@ -779,7 +785,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (!DT.seats) DT.seats = T0.seats.slice();
       var pick = DT.type === 'strategy' ? d.routes : DT.type === 'milestone' ? d.milestones : [];
       if (!DT.title) { var tg = pick.filter(function (x) { return x.id === DT.target; })[0]; DT.title = tg ? tg.name : DT.type === 'business' ? ((d.company && d.company.name) || '') + DD.tp_business : ''; }
-      var title = h('input', { class: 'in', id: 'dt-title', maxlength: '120', value: DT.title, placeholder: { pricing: '例：每月收費 300 元、首月免費', partner: '例：請某伙伴負責送貨，按次收費', pitch: '例：給投資者的十頁簡報', strategy: '例：先舉辦試食會', milestone: '例：首條送貨路線', business: '例：' + DD.tp_business }[DT.type] });
+      var title = h('input', { class: 'in', id: 'dt-title', maxlength: '120', value: DT.title, placeholder: { pricing: '例：每月收費 300 元，或申請一筆社區資助', partner: '例：請某伙伴負責送貨，按次收費', pitch: '例：給投資者的十頁簡報', strategy: '例：先舉辦試食會', milestone: '例：首條送貨路線', business: '例：' + DD.tp_business }[DT.type] });
       title.addEventListener('input', function () { DT.title = title.value; });
       var addSeat = h('input', { class: 'in', id: 'dt-seat-add', maxlength: '20', placeholder: '例：發牌機關', style: 'max-width:220px' });
       var nAI = T0.passes + 3;
@@ -843,7 +849,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('h2', { class: 'layer-title' }, m.topic.title || DD['tp_' + m.topic.type]), h('p', { class: 'small muted', style: 'margin:4px 0 0' }, DD['tp_' + m.topic.type] + ' · ' + m.format + ' · ' + DPH(m.phase) + (m.startedAt ? ' · ' + dayOf(m.startedAt) + ' ' + hm(m.startedAt) : '')),
         h('p', null, h('span', { class: 'pr-tag' }, DD.notEvidenceDebate)),
         h('ol', { class: 'tr-steps', id: 'dm-steps' }, stepRows),
-        m.score ? h('p', { style: 'margin:12px 0 0' }, '記分：' + DD.vStand + ' ' + m.score.standing + ' · ' + DD.vHurt + ' ' + m.score.wounded + ' · ' + DD.vFall + ' ' + m.score.fallen + (m.score.redHitRate != null ? ' · 紅方命中 ' + Math.round(m.score.redHitRate * 100) + '%' : '')) : null,
+        m.score ? h('p', { style: 'margin:12px 0 0' }, '記分：' + DD.vStand + ' ' + m.score.standing + ' · ' + DD.vHurt + ' ' + m.score.wounded + ' · ' + DD.vFall + ' ' + m.score.fallen + (m.score.redHitRate != null ? ' · ' + DD.redHitRate + ' ' + Math.round(m.score.redHitRate * 100) + '%' : ''), h('small', { style: 'display:block;margin-top:4px' }, DD.scoreRules + ' ' + attackStats(m))) : null,
         km.length ? h('ul', { class: 'm-sum', id: 'dm-moments' }, km.map(function (k) { return h('li', null, tag(DD['km_' + ({ '一擊倒下': 'fall', '最傷': 'top', '盲點': 'blind', '反轉': 'flip', '漏咗嘅路': 'missed' }[k.kind])] || k.kind), ' ', k.text); })) : null,
         s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · AI 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · AI 未查' : ''); })) : null,
         running ? h('p', { class: 'guide' }, 'AI 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
@@ -1185,8 +1191,6 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function resultBox(res) {
     var box = h('div', { class: 'result' }, h('p', null, N.fix(res.summary)));
     if (res.warnings && res.warnings.length) box.append(h('p', { class: 'note-line' }, N.ui.autoFixed + '：' + res.warnings.join('；')));
-    if (res.styleWarnings && res.styleWarnings.length) box.append(h('p', { class: 'note-line', id: 'style-note' }, N.ui.styleNote + '：有 ' + res.styleWarnings.length + ' 處用字未能自動修正（' +
-      res.styleWarnings.slice(0, 4).map(function (w) { return w.where + '：' + w.term; }).join('；') + (res.styleWarnings.length > 4 ? '……' : '') + '）'));
     if (res.artifacts && res.artifacts.length) {
       box.append(h('h4', null, N.ui.aiOutputs));
       res.artifacts.forEach(function (a, i) { var d = h('details', { class: 'art' }, h('summary', null, a.title), window.SOS_MD ? SOS_MD(a.text) : h('pre', null, a.text)); if (i === 0) d.open = true; box.append(d); });
@@ -1234,13 +1238,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }
       var picked = pickHost(hosts);
       var pickCard = h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.aiTools),
-        h('p', { class: 'guide' }, '請選擇一個已在你電腦安裝並登入的 AI 工具。認證會檢查：AI 只可在指定資料夾工作；可上網讀取公開資料，但無法連接你的電腦及區域網絡；不可更改自身權限。'),
+        h('p', { class: 'guide' }, '請選擇你電腦上已登入的 AI 工具。認證約需兩分鐘，確保 AI 只處理 CrewZero 的工作，不會改動你電腦上的其他資料。'),
         (hosts.some(function (x) { return x.installed; }) ? hosts.filter(function (x) { return x.installed; }) : hosts).map(function (x) {
           var on = x.id === SET.pick;
           return h('button', { type: 'button', class: 'opt' + (on ? ' cur' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-host': x.id, disabled: running ? true : null, onclick: function () { SET.pick = x.id; showSetup(); } },
             h('span', { class: 'dot' }), h('span', null, x.label, ' ', x.installed ? h('span', { class: 'o-note' }, x.version) : tag(N.ui.notInstalled, 'qn'), x.why ? h('span', { class: 'o-note' }, x.why) : null));
         }),
-        hosts.some(function (x) { return x.installed; }) && hosts.some(function (x) { return !x.installed; })
+        !hosts.some(function (x) { return x.installed; }) ? h('p', { class: 'note-line' }, '這部電腦尚未安裝並登入可用的 AI 工具。請先安裝並登入 Claude Code、Codex 或 Antigravity 其中一個，再回到此頁認證。') : hosts.some(function (x) { return !x.installed; })
           ? h('p', { class: 'note-line' }, '此電腦未能使用：' + hosts.filter(function (x) { return !x.installed; }).map(function (x) { return x.label + '（' + (x.why || '未安裝，或此電腦未支援') + '）'; }).join('、') + '。') : null,
         h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary big', id: 'certify-go', disabled: (running || !picked || !picked.installed) ? true : null, onclick: startCertify },
           c && c.state === 'failed' ? N.ui.certifyRetry : N.ui.certifyGo)));
@@ -1297,6 +1301,11 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     Promise.all([get('/api/status'), IN.meta ? Promise.resolve(IN.meta) : get('/api/intake')]).then(function (r) {
       var st = r[0]; IN.meta = r[1]; V.status = st; checkInstance(st);
       var it = st.intake, final = it && (it.state === 'done' || it.state === 'failed');
+      var draft = draftLoad(), hasDraft = Object.keys(draft).some(function (k) { return /^q\d+$/.test(k) && String(draft[k] || '').trim(); });
+      if (!st.cert && !IN.open && !it && !(st.company && st.company.ready) && !hasDraft) {
+        setApp(head('intake', st), h('section', { class: 'layer block', id: 'intake-setup-first' }, h('span', { class: 'eyebrow' }, N.ui.aiNotSet), h('h2', { class: 'layer-title' }, '先設定 AI'), h('p', { class: 'guide' }, '設定完成後，AI 才會整理你交出的資料。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/setup', id: 'intake-go-setup' }, N.ui.goSetup), h('a', { class: 'btn', href: '#/intake-anyway', id: 'intake-anyway' }, '先填寫資料（設定 AI 後才會處理）'))));
+        DESK.title('intake'); return;
+      }
       var parts = [head('intake', st), aiBlock(st)], form = false;
       // 失敗要一直見到（重新打開頁面都係），否則創辦人只見到空白表格，唔知上次失敗咗、亦冇求助入口
       if (it && (!final || it.state === 'failed' || IN.sent || IN.watching)) {
@@ -1356,9 +1365,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var input = h('input', { type: 'file', multiple: true, id: 'intake-files', hidden: true, accept: lim.exts.map(function (e) { return '.' + e; }).join(',') });
     input.addEventListener('change', function () { addFiles(input.files); input.value = ''; });
     var drop = h('div', { class: 'drop', id: 'drop' },
-      h('p', null, '請拖入現有文件（商業計劃書、簡報、會議紀錄等），文件已載明的內容毋須重寫。'),
+      h('p', null, '可加入會議紀錄、計劃書、報價單等現有文件。'),
       h('button', { type: 'button', class: 'btn', onclick: function () { input.click(); } }, N.ui.pickFiles),
-      h('p', { class: 'small muted' }, '最多 ' + lim.files + ' 個，每個 ' + lim.fileMB + 'MB 以內，合共 ' + lim.totalMB + 'MB 以內；接受 ' + lim.exts.join('、') + '。'),
       input);
     drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
     drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
@@ -1584,7 +1592,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           })),
           g.runId ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () {
             get('/api/run?id=' + encodeURIComponent(g.runId)).then(function (rr) { runBox.replaceChildren(resultBox(rr.run)); })
-              .catch(function (e) { runBox.replaceChildren(h('p', { class: 'tr-sub' }, e.net ? why(e) : 'AI 尚未完成，或此次毋須 AI 跟進。')); });
+              .catch(function (e) { runBox.replaceChildren(h('p', { class: 'tr-sub' }, e.net ? why(e) : e.status === 404 ? '找不到這次工作的結果。請回到公司概覽再試。' : '暫時未能取得 AI 結果。請稍後再試。')); });
           } }, N.ui.viewAfter)) : null, runBox));
       });
       setApp(head('log', st),

@@ -62,6 +62,7 @@ try {
   ok('假 AI 認證開始', c0.status === 202, c0.status);
   await waitFor(async () => { const s = await (await fetch(BASE + 'api/setup')).json(); return s.certify && s.certify.state !== 'running'; });
   await send('Page.navigate', { url: BASE + '#/intake' }); await sleep(1800);
+  if (await ev(`!!document.querySelector('#intake-anyway')`)) await ev(`document.querySelector('#intake-anyway').click()`);
   ok('交資料頁：文件區排喺題目之前，有「由文件預填」掣', await ev(`(()=>{const b=document.querySelector('#pf-go'),q=document.querySelector('#q1');return !!b&&!!q&&!!(b.compareDocumentPosition(q)&Node.DOCUMENT_POSITION_FOLLOWING)})()`));
   ok('未加文件：「由文件預填」停用', await ev(`document.querySelector('#pf-go').disabled`));
   await ev(`document.querySelector('input[name="biz-type"][value="other"]').click()`); await sleep(500);

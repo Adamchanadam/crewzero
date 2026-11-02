@@ -52,7 +52,7 @@ try {
   step('1b 排程（假登記程式；唔登記真排程）');
   const S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
   const pr = spawnSync(process.execPath, [S], { encoding: 'utf8', env: { ...clean, ...SCHED } });
-  ok('印出排程定義全文（未登記）', pr.status === 0 && /未登記/.test(pr.stdout) && /Register-ScheduledTask/.test(pr.stdout), pr.stdout.slice(0, 200));
+  ok('印出排程說明（未登記）：創辦人輸出無命令，完整登記命令在技術細節', pr.status === 0 && /未登記/.test(pr.stdout) && /Register-ScheduledTask/.test(pr.stderr) && !/Register-ScheduledTask/.test(pr.stdout), (pr.stdout + pr.stderr).slice(0, 400));
   const rg = spawnSync(process.execPath, [S, '--register'], { encoding: 'utf8', env: { ...clean, ...SCHED } });
   const mark = readJ(path.join(T, 'data', 'ledger', 'schedule.json'));
   ok('登記（假）：標記寫入、讀回補跑開啟', rg.status === 0 && mark && mark.startWhenAvailable === true && mark.runTime === '21:00', rg.stdout);
@@ -83,6 +83,7 @@ try {
 
   step('4 交資料（虛構「從田間到餐桌」）');
   await c.go(B + '#/intake', 1280, 2500);
+  if (await has('#intake-anyway')) await c.click('#intake-anyway');
   const vals = ['「從田間到餐桌」把本地小農的當季蔬菜直送餐廳；客戶是注重食材來源的中小型餐廳。', '向農場按批採購，向餐廳按週收費，餐廳每週下一次或兩次單。', '已認識兩位農場主（甲、乙），口頭有興趣，未簽。餐廳未接觸。牌照保險未查。', '約第三位農場主（丙）見面。', '送貨我自己做；農場我自己談；餐廳我自己介紹；合規與保險未有人。'];
   for (let i = 0; i < 5; i++) { await c.ev(`document.querySelector('#q${i + 1}').focus()`); await c.send('Input.insertText', { text: vals[i] }); await sleep(80); }
   await shot('04-intake-filled.png');

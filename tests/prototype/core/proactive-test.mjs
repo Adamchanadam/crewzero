@@ -110,10 +110,12 @@ try {
   const failReason = '測試的具體失敗原因';
   writeJson(statusFile, { runs: [statusRun('R-once', 'same-ref', failReason)] });
   await cdp.go(BASE + '/?failure=one#/intake');
+  if (await cdp.ev('!!document.querySelector("#intake-anyway")')) await cdp.click('#intake-anyway');
   ok('同一參照只失敗一次時，重新打開頁面仍見失敗卡，但不顯示查找原因按鈕', await cdp.ev('!!document.querySelector("#track.bad") && !document.querySelector(".help-cause")'), await cdp.ev('document.body.innerText'));
 
   writeJson(statusFile, { runs: [statusRun('R-twice-b', 'same-ref', failReason), statusRun('R-twice-a', 'same-ref', failReason)] });
   await cdp.go(BASE + '/?failure=two#/intake');
+  if (await cdp.ev('!!document.querySelector("#intake-anyway")')) await cdp.click('#intake-anyway');
   const causeButton = await cdp.ev('(()=>{const b=document.querySelector(".help-cause button");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('同一參照失敗兩次時，顯示查找原因按鈕', causeButton && causeButton.text === N.ui.helpFindCause && !causeButton.disabled, causeButton);
   await cdp.click('.help-cause button');
