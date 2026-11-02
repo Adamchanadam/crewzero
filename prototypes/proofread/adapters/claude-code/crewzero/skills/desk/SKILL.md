@@ -1,6 +1,6 @@
 ---
 name: desk
-description: "Founder Desk（CrewZero 創辦人做決定嘅本機頁面）。Use when the founder asks to open Founder Desk, 決定紀錄 or 公司概覽 (e.g. 「打開 Founder Desk」, /crewzero:desk in Claude Code, $crewzero:desk in Codex, /desk in Antigravity). Also use whenever you need the founder to decide something or supply information: put the questions on Founder Desk as a question pack instead of asking in chat."
+description: "Founder Desk（CrewZero 創辦人做決定嘅本機頁面）。Use when the founder asks to open Founder Desk, 決定紀錄 or 公司概覽 (e.g. 「打開 Founder Desk」, /crewzero:desk in Claude Code, $crewzero:desk in Codex, /desk in Antigravity), or says 「我唔知點做」「卡住」「點用」「CrewZero 出錯」「打唔開」「下一步做乜」. Also use whenever you need the founder to decide something or supply information: put the questions on Founder Desk as a question pack instead of asking in chat."
 ---
 
 <!--
@@ -17,6 +17,14 @@ Founder Desk 係創辦人做決定嘅頁面：AI 有嘢要佢決定，就放上�
 兩個都搵唔到：講「這個項目未安裝 CrewZero」，請創辦人輸入安裝指令（按佢用緊嘅工具：Claude Code `/crewzero:install`、Codex `$crewzero:install`、Antigravity `/install`）安裝，然後停。唔好用其他位置嘅安裝代替。
 
 ## 創辦人想打開 Founder Desk
+
+## 創辦人唔知點做或者卡住
+
+先跟「先搵安裝位置」搵 `<安裝>`。
+
+- 搵唔到：講「這個項目未安裝 CrewZero」，請創辦人輸入安裝指令（按佢而家用緊嘅工具），然後停。
+- 搵到：先執行 `node "<安裝>/ask.mjs" --status`。用兩三句白話轉述目前情況、下一步同重新打開方法，然後執行 `node "<安裝>/ask.mjs" --desk` 打開頁面。
+- 如果係生意問題，例如應該先做乜或者點樣揀，請創辦人喺 Founder Desk 頁頂按「需要幫助」交出。答案會留喺紀錄；唔好喺對話逐條問。
 
 執行：`node "<安裝>/ask.mjs" --desk`
 

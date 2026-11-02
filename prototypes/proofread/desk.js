@@ -146,6 +146,7 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .pair-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.pair-qr{display:block;width:220px;height:220px;background:#fff;padding:16px;margin:16px auto;border-radius:4px}
 .pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
 .phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
+.help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
 .layer:after,.panel:after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);pointer-events:none}
 body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
 @keyframes cardin{from{transform:translateY(10px) scale(.992)}to{transform:none}}
@@ -328,10 +329,48 @@ body.paused .bg *{animation:none!important}
   function toolbar(cur, counts) {
     return el('div', { cls: 'toolbar' }, nav(cur, counts),
       el('div', { cls: 'tool-right' }, liveBadge(),
+        el('button', { type: 'button', cls: 'btn small', id: 'open-help', onclick: function () { helpDialog(cur); } }, U.helpOpen),
         el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
         el('button', { type: 'button', cls: 'btn small', id: 'pause', 'aria-pressed': ST.paused ? 'true' : 'false', onclick: togglePause }, ST.paused ? D.resume : D.pause)));
+  }
+  function helpDialog(page) {
+    var opener = document.getElementById('open-help');
+    var modal = el('div', { cls: 'pair-modal help-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title', id: 'help-modal' });
+    var close = function () { modal.remove(); if (opener) opener.focus(); };
+    var about = el('section', { cls: 'layer' }, el('h2', { id: 'help-title' }, U.helpTitle),
+      el('h3', { class: 'layer-title' }, U.helpAbout), el('p', null, U['help_' + page] || U.help_pending));
+    var next = el('section', { cls: 'layer', id: 'help-next' }, el('h3', { class: 'layer-title' }, U.helpNext));
+    var note = el('p', { cls: 'small help-note', id: 'help-note', 'aria-live': 'polite' });
+    var input = el('textarea', { id: 'help-text', rows: '4', maxlength: '2000', placeholder: U.helpText, 'aria-label': U.helpAskAI });
+    var submit = el('button', { type: 'button', cls: 'btn primary', id: 'help-send', onclick: submitHelp }, U.helpSend);
+    function showSent(status) {
+      input.value = '';
+      submit.disabled = false;
+      if (status && status.ai && status.ai.ready === false) {
+        note.replaceChildren(U.helpSentNoAI, ' ', el('a', { href: '/#/setup' }, U.helpSetup));
+      } else note.textContent = U.helpSent;
+    }
+    function submitHelp() {
+      var text = input.value.trim();
+      if (!text) { note.textContent = U.helpTextRequired; input.focus(); return; }
+      submit.disabled = true; note.textContent = U.sending;
+      send('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: text, context: { page: page } }) })
+        .then(function () { return send('/api/status', { cache: 'no-store' }).catch(function () { return null; }); })
+        .then(showSent, function (e) { submit.disabled = false; note.textContent = why(e); });
+    }
+    modal.append(el('section', { cls: 'layer' }, about, next, el('h3', { class: 'layer-title' }, U.helpAskAI), input, note,
+      el('div', { cls: 'pair-actions' }, submit, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    document.body.append(modal); input.focus();
+    send('/api/home', { cache: 'no-store' }).then(function (home) {
+      var card = home && home.card;
+      if (!card) { next.append(el('p', null, U.helpNoStep)); return; }
+      next.append(el('p', null, card.today || U.helpNoStep));
+      if (card.href) next.append(el('a', { cls: 'btn primary', href: card.href }, card.button || U.next));
+    }, function () { next.hidden = true; });
   }
   /* ---------- 公司標誌：頁頭標誌係一個掣，按咗可以上載或者移除（伺服器 /api/logo；冇標誌就顯示公司名首兩個字） ---------- */
   function markText(c) { return c.initials || String(c.name || 'OS').slice(0, 2); }

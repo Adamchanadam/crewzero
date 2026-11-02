@@ -15,11 +15,11 @@ import { fileURLToPath } from 'node:url';
 import { dataDirs, preparePacks, placePacks, listPacks, rootId, legacyRootId, SERVER_VERSION, BASE_PORT } from './ask-lib.mjs';
 import { seedDemo, DEMO_DIR } from './demo-seed.mjs';
 import { folderHash } from './folder-hash.mjs';
+import { dashboardState, guideCard } from './dash-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-// 示範（虛構公司「從田間到餐桌」）：用另一個資料夾，唔會郁真實資料；未有就建
-if (args.includes('--demo')) { process.env.SOS_DATA = DEMO_DIR; seedDemo(DEMO_DIR, { copyCert: true, reset: args.includes('--reset-demo') }); }
+const STATUS_ONLY = args.includes('--status');
 // 模擬實例（設計稿第 8 節）：獨立資料夾、模擬時鐘、預設 4650；唔係生意證據
 const si = args.indexOf('--sim');
 const PORT0 = si >= 0 ? 4650 : BASE_PORT;
@@ -28,7 +28,26 @@ if (si >= 0) {
   process.env.SOS_SIM = '1'; process.env.SOS_DATA = path.join(inst, 'data');
   if (fs.existsSync(fake)) process.env.SOS_ADAPTER = fake;
 }
-const DIR = dataDirs(ROOT);
+// 示範（虛構公司「從田間到餐桌」）：用另一個資料夾，唔會郁真實資料；未有就建
+if (args.includes('--demo')) process.env.SOS_DATA = DEMO_DIR;
+const DIR = dataDirs(ROOT, { create: !STATUS_ONLY });
+if (STATUS_ONLY) {
+  if (!fs.existsSync(DIR.data)) {
+    console.log('未能讀取目前安排：尚未找到 CrewZero 資料。');
+    process.exit(1);
+  }
+  let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
+  let card = null; try { card = guideCard(firstWeek, dashboardState(DIR)); } catch {}
+  if (!card || !card.today || !card.button) {
+    console.log('未能讀取目前安排：目前沒有可顯示的下一步。');
+    process.exit(1);
+  }
+  console.log('目前：' + card.today);
+  console.log('下一步：' + card.button + '（在 Founder Desk 按此按鈕）');
+  console.log('重新打開：在 AI 對話說「打開 Founder Desk」');
+  process.exit(0);
+}
+if (args.includes('--demo')) seedDemo(DEMO_DIR, { copyCert: true, reset: args.includes('--reset-demo') });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let legacyServer = null;
 

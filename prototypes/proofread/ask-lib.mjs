@@ -110,7 +110,7 @@ export const INTAKE_QUESTIONS = [
 ];
 
 // 測試用 SOS_DATA 指定另一個資料夾，唔會郁到創辦人用緊嘅 data/
-export function dataDirs(root) {
+export function dataDirs(root, options = {}) {
   const data = process.env.SOS_DATA || path.join(root, 'data');
   const d = {
     data,
@@ -124,7 +124,7 @@ export function dataDirs(root) {
     sandbox: path.join(data, 'sandbox'),
     work: path.join(data, 'work')
   };
-  for (const [k, v] of Object.entries(d)) if (k !== 'data') fs.mkdirSync(v, { recursive: true });
+  if (options.create !== false) for (const [k, v] of Object.entries(d)) if (k !== 'data') fs.mkdirSync(v, { recursive: true });
   return d;
 }
 

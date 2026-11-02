@@ -352,7 +352,7 @@ function simSetAI(mode) {
   hostCache = null;
   return [200, { ok: true, ai: mode, ready: fs.existsSync(CERT_FILE) }];
 }
-const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f))].sort();
+const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f))].sort();
 const EXTS = ['md', 'txt', 'csv', 'pdf', 'docx', 'pptx', 'xlsx', 'png', 'jpg', 'jpeg'];
 const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
 const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -433,7 +433,7 @@ function prefillStatus(id) {
 
 /* ---------- 創辦人交要求（「我想改次序／加一站」「交一件臨時工作」）：寫入收件匣，交外殼叫 AI 擬成問題包 ---------- */
 // 同交資料一樣只新增檔案，AI 寫唔到 founder 資料夾，所以 AI 冒充唔到創辦人嘅要求；真正改路線或開工要等創辦人答咗問題包先生效。
-const NOTE_TYPES = ['order', 'adhoc', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc'];
+const NOTE_TYPES = ['order', 'adhoc', 'help', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc'];
 const BRAIN_ITEMS = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 const DEBATE_ACTIONS = ['respond', 'adopt', 'reattack2', 'rerun'];
 function receiveNote(body) {
@@ -496,6 +496,22 @@ function receiveNote(body) {
       got.files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
       fs.writeFileSync(path.join(DIR.inbox, `${id}-note-doc.md`), `kind: note\ntype: doc\nat: ${localIso()}\n\n${say || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records })}\n\`\`\`\n`, { flag: 'wx' });
     } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
+    return { ok: true, id, receivedAt: localIso() };
+  }
+  if (body.type === 'help') {
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text) return fail('請用一句話寫下你卡住的地方。');
+    if (text.length > 2000) return fail('內容最多 2000 字。');
+    const context = {};
+    const source = body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? body.context : {};
+    if (/^[\w-]{1,30}$/.test(String(source.page || ''))) context.page = String(source.page);
+    if (/^[\w-]{1,80}$/.test(String(source.packId || ''))) context.packId = String(source.packId);
+    if (typeof source.packTitle === 'string' && source.packTitle.trim().length <= 300) context.packTitle = source.packTitle.trim();
+    if (typeof source.ask === 'string' && source.ask.trim().length <= 300) context.ask = source.ask.trim();
+    const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
+    const file = id + '-note-help.md';
+    const content = ['kind: note', 'type: help', 'at: ' + localIso(), '', text, '', '```json', JSON.stringify({ context }), '```', ''].join('\n');
+    fs.writeFileSync(path.join(DIR.inbox, file), content, { flag: 'wx' });
     return { ok: true, id, receivedAt: localIso() };
   }
   const text = typeof body.text === 'string' ? body.text.trim() : '';

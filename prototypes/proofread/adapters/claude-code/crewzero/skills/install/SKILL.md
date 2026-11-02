@@ -29,6 +29,8 @@ CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項�
 
 ## 創辦人要安裝（`/crewzero:install`、`$crewzero:install` 或 `/install`）
 
+0. **先檢查環境**：執行 `node --version`。失敗就講「CrewZero 需要一個叫 Node.js 的免費程式才可以運行。請到 https://nodejs.org 下載標示 LTS 的版本並安裝，裝好後重開這個 AI 工具，再輸入安裝指令。」然後停。
+   - 如果 `<項目根>` 係創辦人個人資料夾、桌面或者磁碟根目錄，先建議「為這門生意建立一個專用資料夾」，徵得同意後先繼續。
 1. 如果已經搵到 `<安裝>`：唔好再安裝。
    - `<安裝>` 係 `crewzero/`：講「呢個項目已經安裝咗 CrewZero」；想換新版本嘅話叫佢輸入更新指令（Claude Code `/crewzero:update`、Codex `$crewzero:update`、Antigravity `/update`；安裝命令唔會覆寫舊版）。
    - `<安裝>` 係 `startup-os/`（舊版）：講「呢個項目已經有舊版安裝（`startup-os/`），CrewZero 會沿用呢個資料夾，唔會另建 `crewzero/`；請輸入更新指令換成新版程式，公司資料不會改動」（填入創辦人工具嘅更新指令叫法）。

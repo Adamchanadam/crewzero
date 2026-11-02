@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, NAMES, parseFounderReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
-import { milestonesFromPage, assumptionsFromPage, depthOf } from './dash-lib.mjs';
+import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard } from './dash-lib.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
 
@@ -324,6 +324,10 @@ function markRequest(run, raw, packs) {
     p.request = { type: run.noteType, noteId: run.ref };
     p.todoType = run.noteType === 'order' ? 'order' : 'question';
     if (run.noteType === 'adhoc') p.taskId = 'a-' + run.ref;
+    if (run.noteType === 'help') {
+      p.help = { noteId: run.ref };
+      if (run.helpRetries) p.helpRetries = run.helpRetries;
+    }
     for (const q of p.questions) for (const o of q.options || []) {
       if (!o.apply) continue;
       const a = o.apply;
@@ -342,7 +346,7 @@ function markRequest(run, raw, packs) {
   if (run.noteType === 'adhoc' && typeof raw.taskTitle === 'string' && raw.taskTitle.trim()) upsertTask({ id: 'a-' + run.ref, title: clip(raw.taskTitle.trim(), 30) });
 }
 // 改次序／加一站、臨時工作：AI 要擬問題包；生意大腦意見嘅修改唔使
-const isRequest = run => run.kind === 'note' && (run.noteType === 'order' || run.noteType === 'adhoc' || run.noteType === 'debrief');
+const isRequest = run => run.kind === 'note' && (run.noteType === 'order' || run.noteType === 'adhoc' || run.noteType === 'help' || run.noteType === 'debrief');
 async function runAIStep(run, sb, label, allowEmpty) {
   if (pausedNow() && run.kind !== 'intake') { run.waitingFor = 'paused'; step(run, 'ai', label, 'waiting', U.skip_pausedByFounder); return finish(run, 'waiting'); }
   const ad = certified(ROOT, DIR.ledger);
@@ -554,10 +558,13 @@ async function finishIntake(run, sb, label) {
 }
 /* ---------- 創辦人交要求：登記後叫 AI 擬成問題包（未答之前乜都唔改） ---------- */
 async function handleNote(run, file) {
-  const m = /^(.*)-note-(order|adhoc|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.exec(file) || /^(.*)-(feedback)-[a-z]+\.md$/.exec(file);
+  const m = /^(.*)-note-(order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.exec(file) || /^(.*)-(feedback)-[a-z]+\.md$/.exec(file);
   run.kind = 'note'; run.ref = m[1]; run.noteType = m[2]; run.replyFiles = [file];
   const raw = fs.readFileSync(path.join(DIR.inbox, file), 'utf8');
-  step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc }[run.noteType]);
+  const parsed = parseReply(raw), machine = parsed.machine || {};
+  const retry = /^help\s+[\w-]+\s+([12])$/.exec(String(parsed.head.from || ''));
+  run.helpRetries = retry ? Number(retry[1]) : 0;
+  step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc }[run.noteType]);
   const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
   fs.mkdirSync(dest, { recursive: true });
@@ -569,14 +576,16 @@ async function handleNote(run, file) {
   if (run.noteType === 'debrief') return handleDebrief(run, parseReply(raw).machine || {}, text.replace(/```json[\s\S]*$/, '').trim());
   if (run.noteType === 'debate-action') return handleDebateAction(run, parseReply(raw).machine || {});
   if (run.noteType === 'debate-start') { if (!loadPage()) { const why = '未有公司概覽，請先交資料'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); } return handleDebateStart(run, parseReply(raw).machine || {}); }
-  if (!loadPage()) { const why = '未有公司概覽，請先交資料'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
+  if (run.noteType !== 'help' && !loadPage()) { const why = '未有公司概覽，請先交資料'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
   if (run.noteType === 'adhoc') {
     upsertTask({ id: 'a-' + run.ref, title: clip(text.replace(/\s+/g, ' '), 30), adhoc: true, status: 'planned', waitingFor: 'AI 正在擬定範圍', noteId: run.ref });
     addEvent({ actor: 'founder', type: 'input', title: '提交臨時工作：' + clip(text.replace(/\s+/g, ' '), 30), relatedIds: ['a-' + run.ref], moduleIds: ['inputs', 'decisions'] });
-  } else addEvent({ actor: 'founder', type: 'input', title: '要求改路線：' + clip(text.replace(/\s+/g, ' '), 30), relatedIds: [], moduleIds: ['inputs', 'paths'] });
+  } else if (run.noteType === 'help') addEvent({ actor: 'founder', type: 'input', title: '提出求助：' + clip(text.replace(/\s+/g, ' '), 30), moduleIds: ['inputs'] });
+  else addEvent({ actor: 'founder', type: 'input', title: '要求改路線：' + clip(text.replace(/\s+/g, ' '), 30), relatedIds: [], moduleIds: ['inputs', 'paths'] });
   step(run, 'applied', U.stepReqRegistered, 'done', '');
   const sb = newSandbox(run);
-  noteTask(sb, run.noteType, text);
+  if (run.noteType === 'help') helpNoteTask(sb, text.replace(/\x60\x60\x60json[\s\S]*$/, '').trim(), machine.context || {});
+  else noteTask(sb, run.noteType, text);
   await runAIStep(run, sb, U.stepReqAI, true);
 }
 /* ---------- 生意大腦：結果卡意見（有用／沒有用照記；要修改就叫 AI 按意見改）同「要你決定」放上 Founder Desk ---------- */
@@ -686,6 +695,20 @@ function noteTask(sb, type, text) {
   if (!fs.existsSync(path.join(sb, 'confirmed-page.md'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
   fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-note.md'), 'utf8') + `\n## 今次嘅要求類型\n\n${type === 'order' ? '類型一：改次序／加一站' : '類型二：臨時工作'}\n`);
   writeJSON(path.join(sb, 'job.json'), { type: 'note', noteType: type });
+}
+function helpNoteTask(sb, text, context = {}) {
+  const extra = context && typeof context === 'object' ? [context.page ? '- 目前頁面：' + context.page : '', context.packTitle ? '- 題目包：' + context.packTitle : '', context.ask ? '- 題目：' + context.ask : ''].filter(Boolean) : [];
+  fs.writeFileSync(path.join(sb, 'note.md'), '# 創辦人的求助\n\n' + text + '\n' + (extra.length ? '\n## 頁面或題目資料\n\n' + extra.join('\n') + '\n' : ''));
+  writeJSON(path.join(sb, 'route.json'), currentRoute());
+  writeConfirmedPage(sb);
+  if (!fs.existsSync(path.join(sb, 'confirmed-page.md')) && fs.existsSync(path.join(DIR.company, 'page.json'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
+  let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
+  const card = guideCard(firstWeek, dashboardState(DIR, { cert: certified(ROOT, DIR.ledger) })) || {};
+  const runs = readJSON(STATUS, { runs: [] }).runs || [];
+  const failed = runs.find(r => r.state === 'failed');
+  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', certified(ROOT, DIR.ledger).host ? '已設定。' : '未設定。'].join('\n') + '\n');
+  fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-note.md'), 'utf8') + '\n## 今次嘅要求類型\n\n類型三：求助\n');
+  writeJSON(path.join(sb, 'job.json'), { type: 'note', noteType: 'help' });
 }
 /* ---------- 記錄真實事件（規劃書 3.10 (2)(3)、3.3、3.7）：登記輸入 → AI 擬確認問題（證據級、站點進度）→ 你逐項確認 → 外殼套用 ----------
    AI 唔可以自己改級或者標站點完成：佢只交建議（out/event.json），問題包由外殼按建議機械生成，選項帶套用內容；
@@ -1132,6 +1155,21 @@ function founderNote(type, text, from) {
   fs.writeFileSync(f, `kind: note\ntype: ${type}\nat: ${localIso()}\nfrom: ${from}\n\n${text.replace(/\s+/g, ' ').trim()}\n`, { flag: 'wx' });
   return path.basename(f);
 }
+function handleHelpAnswer(run, pack, store) {
+  const q = pack.questions[0], answer = q && store.answers[q.id];
+  if (!answer || answer.value !== U.helpStill) {
+    run.result = { summary: U.helpAnswerRecorded, artifacts: [], founderNext: [] };
+    return finish(run, 'done');
+  }
+  const retries = Math.max(0, Number(pack.helpRetries) || 0);
+  if (retries >= 2) {
+    run.result = { summary: U.helpRepeatLimit, artifacts: [], founderNext: [] };
+    return finish(run, 'done');
+  }
+  founderNote('help', [String(pack.context || '').trim(), '創辦人表示仍然不明白，請換一個完全不同的方式解釋', q && q.ask ? '原來的問題：' + q.ask : ''].filter(Boolean).join('\n\n'), 'help ' + pack.id + ' ' + String(retries + 1));
+  run.result = { summary: U.helpAgain, artifacts: [], founderNext: [] };
+  return finish(run, 'done');
+}
 // 機會內容喺問題包入面（之後再掃描、結果檔換咗都照用得）
 function handleOpportunityAnswer(run, pack, store) {
   const said = [], fb = readJSON(FEEDBACK, {}) || {};
@@ -1279,6 +1317,10 @@ async function handleAsk(run, file) {
   archive([file]);
   appendLog(DIR, entries);
   markUnknowns(pack, machine.answers || [], at);
+  if (pack.help) {
+    step(run, 'applied', U.stepAppliedAns, 'done', '已記錄求助答案');
+    return handleHelpAnswer(run, pack, store);
+  }
   const left = pack.questions.filter(q => !store.answers[q.id]).length;
   const applied = pack.request && pack.request.type === 'order' ? applyOrder(pack, store, run) : '';
   step(run, 'applied', U.stepAppliedAns, 'done', `今次回答了 ${entries.length} 條` + (left ? `；另有 ${left} 條暫按 AI 建議` : '；此問題包已全部回答') + (applied ? '；' + applied : ''));
@@ -2394,7 +2436,7 @@ async function main() {
     const replies = fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')).sort();
     const intakes = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort();
     const prefills = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-prefill.md')).sort();
-    const notes = fs.readdirSync(DIR.inbox).filter(f => /-note-(?:order|adhoc|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f) || /-feedback-[a-z]+\.md$/.test(f)).sort();
+    const notes = fs.readdirSync(DIR.inbox).filter(f => /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f) || /-feedback-[a-z]+\.md$/.test(f)).sort();
     const retry = readJSON(RETRY, null);
     // 辯論回合排最後：創辦人嘅回覆同要求先處理
     const debates = pendingMatches(DIR);
@@ -2486,8 +2528,8 @@ async function main() {
           await runAIStep(run, sb, U.stepEventAI, true);
           return;
         }
-        if (!['order', 'adhoc'].includes(prev.noteType)) { finish(run, 'failed', '這項工作不能直接重試，請回到原本的頁面重新提交一次。'); return; }
-        run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType;
+        if (!['order', 'adhoc', 'help'].includes(prev.noteType)) { finish(run, 'failed', '這項工作不能直接重試，請回到原本的頁面重新提交一次。'); return; }
+        run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.helpRetries = prev.helpRetries || 0;
         step(run, 'received', U.stepReqReceived, 'done', '重試上一次');
         step(run, 'applied', U.stepReqRegistered, 'done', '沿用上一次');
         const old = path.join(DIR.sandbox, prev.id, 'note.md');

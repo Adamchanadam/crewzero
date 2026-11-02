@@ -859,7 +859,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     Promise.all([get('/api/ask?id=' + encodeURIComponent(id)), get('/api/status')]).then(function (r) {
       P = r[0].pack; A = r[0].answers || {}; V.status = r[1]; checkInstance(r[1]);
       var b = pickBatch();
-      S = { edits: {}, ok: {}, extra: false, open: null, drafts: {}, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
+      S = { edits: {}, ok: {}, extra: false, open: null, drafts: {}, help: {}, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
       DESK.title('pending', N.fix(P.title));
       renderAsk();
       window.scrollTo(0, 0);
@@ -917,6 +917,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         body.append(h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () { S.open = key; renderAsk({ sel: '#q-' + q.id + ' textarea' }); } }, N.ui.custom)));
       }
     }
+    var help = S.help[q.id] || (S.help[q.id] = {});
+    var helpNote = h('span', { class: 'small muted', 'aria-live': 'polite' }, help.sent ? N.ui.helpAsked : help.error || '');
+    var helpBtn = h('button', { type: 'button', class: 'btn link q-help', disabled: help.sent ? true : null, onclick: function () {
+      if (help.sent || help.sending) return;
+      help.sending = true; help.error = ''; helpBtn.disabled = true; helpNote.textContent = N.ui.sending;
+      post('/api/intake', { kind: 'note', type: 'help', text: T('helpQuestionText', { q: q.ask }), context: { packId: P.id, packTitle: P.title, ask: q.ask } })
+        .then(function () { help.sending = false; help.sent = true; helpBtn.textContent = N.ui.helpAsked; helpBtn.disabled = true; helpNote.textContent = ''; })
+        .catch(function (e) { help.sending = false; help.error = why(e); helpBtn.disabled = false; helpNote.textContent = help.error; });
+    } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
+    body.append(h('div', { class: 'foot q-help-line' }, helpBtn, helpNote));
     c.append(body);
     return c;
   }
