@@ -54,6 +54,6 @@ try {
   console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (e && e.message || e));
   process.exit(1);
 }
-say(`已安裝 CrewZero ${version || ''}：${target}（${files.length} 個程式檔；空的 data/；VERSION；START-HERE.md；排程啟動檔）。`);
-say(`沒有改動項目的其他檔案。建議把 ${INSTALL_DIR}/data/ 排除在版本控制之外。`);
-say('下一步：登記每日排程（要你批准），然後打開 Founder Desk 設定 AI。');
+say('CrewZero 已安裝完成，其他資料沒有改動。');
+say('下一步可登記每日排程，再設定 AI。');
+say('以後在 AI 對話說「打開 Founder Desk」，便可再次打開。');

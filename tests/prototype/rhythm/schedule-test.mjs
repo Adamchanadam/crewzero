@@ -81,6 +81,12 @@ try {
   ok('上次結果非零：說明工作未能完成並指向營運監察台', failedStatus.status === 0 && /未能完成/.test(failedStatus.stdout.split(/\r?\n/)[1] || '') && /營運監察台/.test(failedStatus.stdout.split(/\r?\n/)[1] || ''), failedStatus.stdout);
   const unreadableStatus = schedWith({ SOS_SCHED_FAIL: '1' }, '--status');
   ok('狀態查詢失敗：保留第一行 JSON、說明暫時未能讀取，並以非零結束', unreadableStatus.status !== 0 && /^\{/.test(unreadableStatus.stdout) && /暫時未能讀取每日排程的狀態/.test(unreadableStatus.stdout), { out: unreadableStatus.stdout, err: unreadableStatus.stderr, status: unreadableStatus.status });
+  const notFoundStatus = schedWith({ SOS_SCHED_QUERY: 'not-found' }, '--status');
+  const notFoundJson = (() => { try { return JSON.parse(notFoundStatus.stdout.split(/\r?\n/)[0]); } catch { return null; } })();
+  const statusScript = calls().at(-1)?.at(-1) || '';
+  ok('查詢明確找不到排程：以 registered:false 成功回覆，並使用可辨識的 ObjectNotFound 分支', notFoundStatus.status === 0 && notFoundJson && notFoundJson.registered === false && /每日排程未登記/.test(notFoundStatus.stdout) && /Get-ScheduledTask[^;]*-ErrorAction Stop/.test(statusScript) && /CategoryInfo\.Category -eq 'ObjectNotFound'/.test(statusScript), { out: notFoundStatus.stdout, script: statusScript });
+  const deniedStatus = schedWith({ SOS_SCHED_QUERY: 'access-denied' }, '--status');
+  ok('查詢存取被拒：不會誤報未登記，保留狀態 JSON 並以非零結束', deniedStatus.status !== 0 && /^\{/.test(deniedStatus.stdout) && /暫時未能讀取每日排程的狀態/.test(deniedStatus.stdout) && !/每日排程未登記/.test(deniedStatus.stdout), { out: deniedStatus.stdout, err: deniedStatus.stderr, status: deniedStatus.status });
   const s1 = await sys();
   ok('系統頁：已登記 · 每日 21:00，寫明錯過即補跑，有下次開工時間', s1 && s1.state === 'on' && s1.text.includes(N.t('schedOs', { c: U.cad_daily, t: '21:00' })) && s1.text.includes(U.schedCatchUpOn) && /21:00/.test(s1.next), s1);
   await c.shot(path.join(OUT, 'sys-on.png'));

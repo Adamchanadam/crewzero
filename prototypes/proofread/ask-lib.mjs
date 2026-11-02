@@ -249,6 +249,7 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
   if (raw.actionConfirm && !actionConfirm) errors.push('本人行動題的工作編號不正確');
   const sourceQs = Array.isArray(raw.questions) ? raw.questions : [];
   if (actionConfirm && sourceQs.length > 1) errors.push('本人行動問題包只可有一條題目');
+  if (noDedupe && sourceQs.length > 1) errors.push('求助問題包只可有一條題目');
   const qs = actionConfirm ? sourceQs.map(q => ({ id: q && q.id, priority: q && q.priority, about: q && q.about, ask: q && q.ask, judge: q && q.judge, kind: 'choice', effect: 'now',
     options: [{ text: NAMES.ui.actionDone }, { text: NAMES.ui.actionNotDone }, { text: NAMES.ui.actionReschedule }], ...(q && q.conflict ? { conflict: q.conflict } : {}) })) : sourceQs;
   if (!qs.length) errors.push('缺少題目');

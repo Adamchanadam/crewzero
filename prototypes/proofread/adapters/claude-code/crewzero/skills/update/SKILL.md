@@ -45,15 +45,17 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
 
 ## 換入新版插件
 
-只在 `update.mjs` 檢查結果是「已是最新版本」，但創辦人仍想取得新版插件時使用。
+只在項目與目前插件版本相同，而創辦人答應檢查新版插件時使用。
 
 1. 先問一句：「將檢查並換入 CrewZero 新版插件，好嗎？」然後停。未答「好」不可執行任何插件指令。
 2. 創辦人答「好」後，按目前 AI 工具代為執行：
    - Claude Code：`claude plugin update crewzero`
    - Codex：先執行 `codex plugin marketplace upgrade`，再執行 `codex plugin add crewzero@crewzero`
     - Antigravity：在之前下載的資料夾內執行 `git pull`；先確認 `prototypes/proofread/adapters/claude-code/crewzero` 存在，才執行 `agy plugin uninstall crewzero`，然後執行 `agy plugin install prototypes/proofread/adapters/claude-code/crewzero`。
-3. 成功後只告訴創辦人：「新版插件已換入。請重新開啟你的 AI 工具，再說「更新 CrewZero」。」然後停。重新開啟後，才按上面的「創辦人想更新」流程更新項目內的程式。
-4. 換入了新版後，請創辦人重新開啟 AI 工具，再說「更新 CrewZero」；沒有新版才說已是最新，然後停。代做失敗時，只請創辦人到 AI 工具的插件設定更新 CrewZero；不可把上述命令交給創辦人。
+3. 指令完成後，比較更新前後讀取到的插件版本號：
+   - 版本有變：只告訴創辦人：「新版插件已換入。請重新開啟你的 AI 工具，再說「更新 CrewZero」。」然後停。重新開啟後，才按上面的「創辦人想更新」流程更新項目內的程式。
+   - 版本沒有變：只告訴創辦人：「已是最新版本。」然後停，不要求重新開啟。
+4. 任一插件指令失敗：只請創辦人到 AI 工具的插件設定更新 CrewZero；不可把上述命令交給創辦人，然後停。
 
 ## 創辦人想還原上一個版本（「還原上一個版本」）
 

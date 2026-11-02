@@ -36,15 +36,14 @@ const nowRisk = { format: 'startup-os.ask/0.1', title: '風險檢查', questions
 const missingRisk = lib.preparePacks(nowRisk, { dirs: coreDirs });
 ok('AI 問題包的即時生效題目沒有風險說明會被拒絕', !missingRisk.ok && missingRisk.errors.some(x => x.includes('不合規格')), missingRisk.errors);
 
-const systemRisk = lib.preparePacks(nowRisk, { dirs: coreDirs, system: true });
-ok('系統自動產生的即時生效題目可沒有風險說明', systemRisk.ok, systemRisk.errors);
-
 const withRisk = lib.preparePacks({ format: 'startup-os.ask/0.1', title: '風險及差異檢查', questions: [{ id: 'q', ask: '是否作出承諾？', kind: 'choice', options: [{ text: '是', rec: true }, { text: '否' }], value: '是', why: '創辦人已提出此安排。', effect: 'now', risk: '最壞情況是承諾未能履行；可在確認前撤回。', conflict: '你提交資料時表示暫不作出承諾。' }] }, { dirs: coreDirs });
 ok('AI 提供的風險與差異會保留在新問題包', withRisk.ok && withRisk.packs[0].questions[0].risk && withRisk.packs[0].questions[0].conflict, withRisk.ok && withRisk.packs[0].questions[0]);
 
   const judge = debate.checkJudge({ topRisks: [{ risk: '訂金可能無法退回。', cheapestTest: '先查閱退款條款。', stop: '條款不清楚便停止。' }], founderDecisions: [{ question: '是否支付二萬元訂金？', options: ['支付訂金', '暫不支付'], recommend: '暫不支付', why: '先核對退款條款。', risk: '訂金可能無法退回。', conflict: '先前決定暫不付款。' }] }, { claims: [] }, { attacks: [] });
   const judgeDecision = judge.data && judge.data.founderDecisions[0];
   ok('裁判決策轉成待決事項前保留風險及既有差異', !!judgeDecision && judgeDecision.risk === '訂金可能無法退回。' && judgeDecision.conflict === '先前決定暫不付款。', judgeDecision);
+  const judgeWithoutRisk = debate.checkJudge({ topRisks: [{ risk: '訂金可能無法退回。', cheapestTest: '先查閱退款條款。', stop: '條款不清楚便停止。' }], founderDecisions: [{ question: '是否支付二萬元訂金？', options: ['支付訂金', '暫不支付'], recommend: '暫不支付', why: '先核對退款條款。' }] }, { claims: [] }, { attacks: [] });
+  ok('裁判決策沒有具體風險會被退回，不會當作系統成功結果', !judgeWithoutRisk.ok && judgeWithoutRisk.errors.some(x => x.includes('缺少風險')), judgeWithoutRisk);
 
 const action = lib.preparePacks({ format: 'startup-os.ask/0.1', title: '本人行動確認', actionConfirm: { taskId: 'task-1' }, questions: [{ id: 'done', ask: '是否已完成？', kind: 'choice', options: [{ text: '任意選項', rec: true }], value: '任意答案', why: '任意理由。', effect: 'now' }] }, { dirs: coreDirs });
 const actionQ = action.ok && action.packs[0].questions[0];
@@ -168,8 +167,17 @@ try {
     const s = await (await fetch(BASE + '/api/status')).json();
     return (s.helpInFlight || []).find(h => h.packId === 'ask-stale') || null;
   }, 5000);
-  await cdp.go(BASE + '/?stale=refresh');
-  ok('處理中的待決事項求助在刷新後仍顯示等待，不能重複送出', !!helpWaiting && !(await cdp.ev('!!document.querySelector(".q-help-line button")')), helpWaiting);
+  await cdp.go(BASE + '/?stale=refresh#/ask/ask-stale');
+  await cdp.send('Page.reload'); await sleep(1600);
+  const afterRefreshHelp = await cdp.ev('(()=>{const b=document.querySelector(".q-help-line button");return b?{text:b.textContent,disabled:b.disabled}:null})()');
+  ok('重新載入題目頁後，處理中的求助仍顯示已交出並不能重複送出', !!helpWaiting && afterRefreshHelp && afterRefreshHelp.text === N.ui.helpAsked && afterRefreshHelp.disabled, { helpWaiting, afterRefreshHelp });
+  writeJson(statusFile, { runs: [
+    { id: 'R-help-resumed', kind: 'note', noteType: 'help', state: 'resumed', helpForPackId: 'ask-stale', helpForRunRef: '', startedAt: new Date().toISOString(), steps: [] },
+    { id: 'R-help-finished', kind: 'note', noteType: 'help', state: 'done', retryOf: 'R-help-resumed', helpForPackId: 'ask-stale', helpForRunRef: '', startedAt: new Date().toISOString(), steps: [] }
+  ] });
+  await cdp.send('Page.reload'); await sleep(1600);
+  const afterCompletionHelp = await cdp.ev('(()=>{const b=document.querySelector(".q-help-line button");return b?{text:b.textContent,disabled:b.disabled}:null})()');
+  ok('續做完成後，原題的求助入口會恢復可用', afterCompletionHelp && afterCompletionHelp.text === N.ui.helpNotClear && !afterCompletionHelp.disabled, afterCompletionHelp);
 
   writeJson(lastSeenFile, { at: ago(4), version: 'test' });
   await cdp.go(BASE + '/?away=old');
@@ -189,6 +197,16 @@ try {
   ok('按採用 AI 建議時，風險及差異題目不會被略過，畫面定位題目並提示', !heldRisk.modal && heldRisk.focus === 'q-decision' && heldRisk.notice.includes('請先逐題作答'), heldRisk);
 
   await certifyDirect(DATA, PROTO, ADAPTER);
+  clearPacks();
+  const retryPack = { format: 'startup-os.ask/0.1', id: 'ask-retry-required', title: '重試前確認', askedBy: 'AI', askedAt: new Date().toISOString(), next: { task: '按確認內容製作草稿。' }, questions: [{ id: 'commit', priority: 1, ask: '是否確認這項承諾？', kind: 'choice', effect: 'now', options: [{ text: '確認' }, { text: '暫緩' }], value: '暫緩', why: '先確認承諾範圍。', risk: '未確認便執行可能造成不適當承諾。' }] };
+  writePack(retryPack);
+  writeJson(statusFile, { runs: [{ id: 'R-retry-required-source', kind: 'ask', ref: retryPack.id, state: 'done', startedAt: new Date().toISOString(), steps: [] }] });
+  const retryResponse = await fetch(BASE + '/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: JSON.stringify({ runId: 'R-retry-required-source' }) });
+  const blockedRetry = await waitFor(async () => {
+    const s = await (await fetch(BASE + '/api/status')).json();
+    return (s.runs || []).find(r => r.kind === 'ask' && r.ref === retryPack.id && r.id !== 'R-retry-required-source' && r.state === 'done') || null;
+  }, 10000);
+  ok('/api/retry 指向未回答必答題時不會開啟 AI，工作如實說明尚未開始', retryResponse.status === 200 && blockedRetry && /AI 尚未開始/.test(blockedRetry.result?.summary || '') && !fs.existsSync(path.join(DATA, 'sandbox', blockedRetry.id)), { status: retryResponse.status, blockedRetry });
   clearPacks();
   writeJson(stateFile, { company: { name: '測試公司' }, tasks: [
     { id: 'task-action-done', title: '確認實地行動', owner: 'founder', status: 'waiting' },
@@ -225,12 +243,17 @@ try {
 
   const mixed = { ...actionPack('ask-action-mixed', 'task-action-mixed', '是否已送出申請？'), questions: [{ id: 'sent', priority: 1, ask: '是否已送出申請？', kind: 'choice', effect: 'now', options: [{ text: N.ui.actionDone }, { text: N.ui.actionNotDone }, { text: N.ui.actionReschedule }] }, { id: 'receipt', priority: 2, ask: '是否已取得收件確認？', kind: 'choice', effect: 'now', options: [{ text: N.ui.actionDone }, { text: N.ui.actionNotDone }, { text: N.ui.actionReschedule }] }] };
   writePack(mixed);
+  const priorMixedRunIds = new Set((await (await fetch(BASE + '/api/status')).json()).runs.filter(r => r.ref === mixed.id).map(r => r.id));
   const mixedReply = await submitAsk(mixed, [{ id: 'sent', value: N.ui.actionDone, ai: '', changed: true }, { id: 'receipt', value: N.ui.actionNotDone, ai: '', changed: true }]);
+  const mixedRun = await waitFor(async () => {
+    const s = await (await fetch(BASE + '/api/status')).json();
+    return (s.runs || []).find(r => r.kind === 'ask' && r.ref === mixed.id && !priorMixedRunIds.has(r.id) && r.state === 'done') || null;
+  }, 10000);
   const mixedWaiting = await waitFor(() => {
     const task = (readJson(stateFile, {}).tasks || []).find(x => x.id === 'task-action-mixed');
     return task && task.status === 'waiting' ? task : null;
   }, 10000);
-  ok('舊的兩題本人行動包混合答案時，整項工作維持等待', mixedReply.status === 200 && !!mixedWaiting && mixedWaiting.confirmedBy !== 'founder', { status: mixedReply.status, task: mixedWaiting });
+  ok('舊的兩題本人行動包混合答案時，處理完成後整項工作維持等待', mixedReply.status === 200 && !!mixedRun && !!mixedWaiting && mixedWaiting.confirmedBy !== 'founder', { status: mixedReply.status, run: mixedRun, task: mixedWaiting });
 
   writePack(acceptancePack('ask-accept', 'task-accept', { title: '測試產出全文', text: '第一段產出內容。\n\n第二段產出內容。' }));
   await cdp.go(BASE + '/#/ask/ask-accept');

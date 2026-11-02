@@ -10,6 +10,8 @@ function nextAt() { const d = new Date(); d.setHours(at[0] ?? 21, at[1] ?? 0, 0,
 if (process.env.SOS_SCHED_FAIL === '1') { console.error('假排程器：登記失敗（測試）'); process.exit(1); }
 if (/Unregister-ScheduledTask/.test(script)) { if (STATE) fs.rmSync(STATE, { force: true }); console.log('{"removed":true}'); process.exit(0); }
 if (/Register-ScheduledTask/.test(script)) { const s = { registered: true, next: nextAt(), startWhenAvailable: /-StartWhenAvailable/.test(script) }; if (STATE) fs.writeFileSync(STATE, JSON.stringify(s)); }
+if (/Get-ScheduledTask\b/.test(script) && process.env.SOS_SCHED_QUERY === 'not-found') { console.log('{"registered":false}'); process.exit(0); }
+if (/Get-ScheduledTask\b/.test(script) && process.env.SOS_SCHED_QUERY === 'access-denied') { console.error('假排程器：存取被拒（測試）'); process.exit(1); }
 const s = read();
 const last = process.env.SOS_SCHED_LAST || '', lastResult = last ? Number(process.env.SOS_SCHED_LAST_RESULT || 0) : 267011;
 console.log(JSON.stringify(s ? { ...s, last, lastResult } : { registered: false }));

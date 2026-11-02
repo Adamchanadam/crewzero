@@ -37,7 +37,7 @@
     if (!/^[a-f0-9]{64}$/.test(secret)) { show(N.phonePairExpired); return; }
     show(N.phoneConnecting);
     fetch('/api/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: secret }) }).then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); }).then(function (v) {
-      if (!v.r.ok) { show(v.j.message || N.phonePairExpired); return; }
+      if (!v.r.ok) { show(v.j.message || (v.j.error === 'origin' ? N.phoneNoPrivateNetwork : N.phonePairExpired)); return; }
       show(N.phoneWaiting, v.j.code || '');
       var until = Date.now() + 5 * 60000;
       var timer = setInterval(function () {
@@ -45,7 +45,7 @@
           if (r.ok) { clearInterval(timer); show(N.phoneConnected); setTimeout(function () { location.replace('/'); }, 300); return null; }
           if (r.status !== 403) return null;
           return r.json().then(function (j) { if (j.error !== 'pending') { clearInterval(timer); show(N.phoneRejected); } });
-        }).catch(function () { clearInterval(timer); show(N.phoneOffline); });
+        }).catch(function () { if (Date.now() > until) { clearInterval(timer); show(N.phoneRejected); } });
         if (Date.now() > until) { clearInterval(timer); show(N.phoneRejected); }
       }, 3000);
     }).catch(function () { show(N.phoneOffline); });

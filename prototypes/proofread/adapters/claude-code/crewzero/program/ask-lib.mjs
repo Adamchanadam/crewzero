@@ -94,20 +94,75 @@ export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnershi
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 
+export const BIZ_TYPES = Object.assign(Object.create(null), {
+  service: { label: '服務', example: '上門照顧、顧問、維修' },
+  goods: { label: '實體貨品', example: '手作、零售、食品' },
+  online: { label: '網上或內容', example: '網店、課程、訂閱' },
+  nonprofit: { label: '非牟利或社企', example: '社區計劃、資助項目' },
+  other: { label: '其他', example: '請用一句說明' }
+});
+
+const PROGRESS_HINT = '程度說明：口頭表示是對方說有興趣；實際行動是對方試用、預訂或參與；付出成本是對方付款或投入資源。';
+
 export const INTAKE_QUESTIONS = [
-  { n: 1, ask: '你提供甚麼產品或服務？對象是誰？', hint: '以一句說明：你提供甚麼產品或服務，主要客戶是哪類人士或機構。', example: '我們為社區診所整理預約流程，客戶是 5 至 20 人規模的私家診所。', required: true },
-  { n: 2, ask: '如何收費？', hint: '由誰付款、大致如何收費（每次、每月、每年或按項目）。尚未定價可寫「未定」。非牟利機構請寫明資金來源（資助、捐款）。', example: '診所每月繳付月費，價錢未定；計劃首三個月免費試用。', required: true },
-  { n: 3, ask: '目前進展如何？', hint: '公司以外已發生的事。每項寫明對象及其行動，再選擇一個程度：口頭表示、實際行動、付出成本。尚未有進展可寫「未有」。', example: '兩間診所的負責人表示有興趣（口頭表示）；一間已試用兩星期（實際行動）；尚未有人付款。', required: true },
-  { n: 4, ask: '下一步要與誰會面、做甚麼？', hint: '你的下一個對外行動：約見誰、商談甚麼、希望對方答覆甚麼。', example: '下星期約見第三間診所的負責人，邀請對方試用一個月。', required: true },
-  { n: 5, ask: '有誰參與協助？', hint: '有哪些人士或機構參與（合夥人、顧問、合作夥伴、供應商、兼職人員）。每項寫明：已確定、商討中、未接洽。', example: '表哥負責編寫程式（已確定）；一間醫療用品公司或可協助轉介客戶（商討中）。', required: true },
-  { n: 6, ask: '希望在何時之前達到甚麼成果？', hint: 'AI 將按你的文件建議一個目標，並標示為「暫定」', example: '年底前有三間診所付款', required: false },
-  { n: 7, ask: '產品或服務有哪些必須做到的要求或特別之處？', hint: 'AI 將從文件摘錄，供你校對', example: '', required: false },
+  { n: 1, ask: '你提供甚麼？對象是誰？', hint: '以一句說明你正在做的事，以及主要面向哪類人士或機構。', example: '我們協助小型機構整理日常預約和聯絡安排。', required: true },
+  { n: 2, ask: '如何收取款項或得到資金支持？', hint: '說明由誰付款或支持，以及大致方式；尚未決定可寫「未定」。', example: '目前正考慮按月收費，價錢未定。', required: true },
+  { n: 3, ask: '目前有哪些實際進展？', hint: '只寫公司以外已發生的事，並說明對象及行動。' + PROGRESS_HINT + '尚未有進展可寫「未有」。', example: '兩個機構表示有興趣（口頭表示）；其中一個已安排試用（實際行動）。', required: true },
+  { n: 4, ask: '下一步打算做甚麼？會接觸誰？', hint: '寫出下一個行動、接觸對象及希望得到的答覆。', example: '下星期聯絡一個合作機構，了解是否可安排試行。', required: true },
+  { n: 5, ask: '誰會參與或協助？', hint: '列出參與人士或機構，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位兼職人員協助整理資料（已確定）；一個合作單位正商討參與方式（商討中）。', required: true },
+  { n: 6, ask: '希望在何時之前達到甚麼成果？', hint: 'AI 將按你的文件建議一個目標，並標示為「暫定」', example: '年底前完成三次試行', required: false },
+  { n: 7, ask: '這項工作有哪些必須做到的要求或特別之處？', hint: 'AI 將從文件摘錄，供你校對', example: '', required: false },
   { n: 8, ask: '有哪些事情 AI 絕不可自行處理？', hint: '預設：對外聯絡、支出、作出承諾及刪除檔案，均須先徵求你的同意', example: '', required: false },
   { n: 9, ask: '希望 AI 多久工作一次？每星期哪一天向你了解近況？', hint: '預設：每日晚上 9 時工作一次；逢星期一了解近況；每次最多 30 分鐘', example: '', required: false },
-  { n: 10, ask: '是否經營兩項互不相干的業務（客戶及收入來源均不同）？', hint: '預設：視為同一項業務處理', example: '', required: false },
+  { n: 10, ask: '是否同時進行兩項彼此獨立的工作（對象、資金或做法均不同）？', hint: '預設：視為同一項工作處理', example: '', required: false },
   { n: 11, ask: '你最擔心甚麼？', hint: 'AI 將從文件列出估計，供你校對', example: '', required: false },
   { n: 12, ask: '現有文件清單（名稱、日期、是否最新版本）', hint: 'AI 將閱讀你提交的全部文件，以最新日期為準', example: '', required: false }
 ];
+
+const TYPE_OVERRIDES = {
+  service: {
+    1: { ask: '你提供甚麼服務？服務誰？', hint: '以一句說明服務內容及服務對象。', example: '我們為長者家庭提供上門電腦設定服務。' },
+    2: { ask: '如何收費？', hint: '說明按次、按月或按項目的收費方式；尚未定價可寫「未定」。', example: '每次上門服務收費 300 元，長期支援按月收費。' },
+    3: { ask: '已有誰試用服務或付款嗎？', hint: '只寫服務對象已經做過的事。' + PROGRESS_HINT, example: '兩個家庭查詢服務（口頭表示）；一個家庭已預約（實際行動）；一個家庭已付款（付出成本）。' },
+    4: { ask: '下一步要見誰？談甚麼？', hint: '寫出下一次接觸的服務對象或合作方，以及希望談妥的事。', example: '下星期約見社區中心主任，商談是否安排試用服務。' },
+    5: { ask: '誰參與協助服務？', hint: '列出參與服務的人士或機構，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位兼職導師已協助服務（已確定）；一名顧問表示願意提供意見（商討中）。' },
+    7: { ask: '服務有哪些要求或特別之處？', hint: '例如服務範圍、回應時間、保密安排或必須具備的資格。', example: '每次服務後提供簡短紀錄，涉及個人資料時不得外傳。' }
+  },
+  goods: {
+    1: { ask: '你賣甚麼貨品？賣給誰？', hint: '以一句說明貨品及主要購買者。', example: '我們製作低糖果醬，主要賣給附近家庭和小型咖啡店。' },
+    2: { ask: '定價多少？每件成本約多少？', hint: '寫出售價、每件成本或尚未確定的部分。', example: '每瓶售 68 元，每瓶材料和包裝成本約 24 元。' },
+    3: { ask: '已賣出多少？有人預訂嗎？', hint: '只寫購買者已經做過的事。' + PROGRESS_HINT, example: '五人查詢（口頭表示）；兩人預訂共六瓶（實際行動）；其中一人已付款（付出成本）。' },
+    4: { ask: '下一步要做甚麼？', hint: '例如擺檔、上架或聯絡供應商，並說明希望得到的結果。', example: '下星期在市集擺檔，並向兩間包裝供應商索取報價。' },
+    5: { ask: '誰參與？', hint: '列出供應商、工匠、代賣點或協助者，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位工匠已完成首批貨品（已確定）；一間選物店表示願意代賣（商討中）。' },
+    7: { ask: '貨品規格、每月可做多少、在哪裏賣？', hint: '寫出貨品規格、產量、保存要求及銷售地點。', example: '每月可製作 120 瓶，冷藏保存，在市集和網店出售。' }
+  },
+  online: {
+    1: { ask: '你提供甚麼內容或網上服務？對象是誰？', hint: '以一句說明內容或服務，以及主要使用者或觀眾。', example: '我們提供給初學者的家居烘焙短片課程。' },
+    2: { ask: '如何收費？', hint: '說明訂閱、單次收費、廣告或其他方式；尚未定價可寫「未定」。', example: '首三課免費，其後按月訂閱，每月 48 元。' },
+    3: { ask: '已有多少人使用？有人付款嗎？', hint: '只寫使用者或觀眾已經做過的事。' + PROGRESS_HINT, example: '二十人觀看試看片段（實際行動）；三人表示願意訂閱（口頭表示）；一人已付款（付出成本）。' },
+    4: { ask: '下一步要推出甚麼？接觸誰？', hint: '寫出下一項內容、功能或合作接觸，以及希望得到的結果。', example: '下星期推出首個完整單元，並聯絡一個內容平台商談合作。' },
+    5: { ask: '誰參與？', hint: '列出製作、技術或合作平台，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位剪輯師已完成試看片段（已確定）；一個平台表示可安排推介（商討中）。' },
+    7: { ask: '平台或內容有哪些規格？', hint: '例如發布平台、內容長度、更新頻率、存取安排或技術要求。', example: '每節課不超過 12 分鐘，每兩星期更新一次，支援手機觀看。' }
+  },
+  nonprofit: {
+    1: { ask: '計劃做甚麼？服務對象是誰？', hint: '以一句說明計劃內容及服務對象。', example: '我們為獨居長者安排社區飯聚和電話關懷。' },
+    2: { ask: '資金來自哪裏？', hint: '說明資助、捐款、收費或其他資金來源；尚未確定可寫「未定」。', example: '正申請社區資助，同時接受小額捐款。' },
+    3: { ask: '已服務多少人？已申請或取得哪些資助？', hint: '只寫服務對象、資助方或捐款方已經做過的事。' + PROGRESS_HINT, example: '十名長者參加過活動（實際行動）；一個基金表示有興趣（口頭表示）；已收到一筆捐款（付出成本）。' },
+    4: { ask: '下一步要接觸誰？', hint: '例如基金、合作機構或服務對象，並說明希望談妥的事。', example: '下星期聯絡一間社區中心，商談轉介服務對象。' },
+    5: { ask: '誰參與？', hint: '列出核心成員、義工或合作機構，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '兩名義工已協助活動（已確定）；一間機構表示願意借出場地（商討中）。' },
+    7: { ask: '計劃有甚麼法規或受資助條件？', hint: '例如服務資格、申請條件、保密要求或報告責任。', example: '服務對象須由合作機構轉介，每季提交活動和資金使用紀錄。' }
+  }
+};
+
+export function intakeQuestions(type) {
+  const changes = TYPE_OVERRIDES[type] || {};
+  return INTAKE_QUESTIONS.map(q => ({ ...q, ...(changes[q.n] || {}) }));
+}
+
+export function bizTypeLabel(type, other = '') {
+  const label = BIZ_TYPES[type] && BIZ_TYPES[type].label;
+  return type === 'other' && String(other).trim() ? `${label}：${String(other).trim()}` : label || '';
+}
 
 // 測試用 SOS_DATA 指定另一個資料夾，唔會郁到創辦人用緊嘅 data/
 export function dataDirs(root, options = {}) {
@@ -182,7 +237,7 @@ export const MAX_PER_PACK = 12;
 // 所有畫面名稱（書面語）；問題包標題要過同一條口語字檢查
 export const NAMES = createRequire(import.meta.url)('./names.js');
 // strictTitle：命令入口（AI 可以即刻改）用 true，標題有口語字就退回；AI 流程入面用 false，只記警告照樣放上去，免得創辦人睇唔到問題
-export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strictTitle = true, system = false } = {}) {
+export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strictTitle = true, system = false, noDedupe = false } = {}) {
   const errors = [], warnings = [];
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['內容不是問題包'] };
   if (raw.format !== 'startup-os.ask/0.1') errors.push('問題包格式版本不正確');
@@ -193,6 +248,8 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
   const actionConfirm = raw.actionConfirm && /^[\w-]{1,80}$/.test(String(raw.actionConfirm.taskId || '')) ? { taskId: String(raw.actionConfirm.taskId) } : null;
   if (raw.actionConfirm && !actionConfirm) errors.push('本人行動題的工作編號不正確');
   const sourceQs = Array.isArray(raw.questions) ? raw.questions : [];
+  if (actionConfirm && sourceQs.length > 1) errors.push('本人行動問題包只可有一條題目');
+  if (noDedupe && sourceQs.length > 1) errors.push('求助問題包只可有一條題目');
   const qs = actionConfirm ? sourceQs.map(q => ({ id: q && q.id, priority: q && q.priority, about: q && q.about, ask: q && q.ask, judge: q && q.judge, kind: 'choice', effect: 'now',
     options: [{ text: NAMES.ui.actionDone }, { text: NAMES.ui.actionNotDone }, { text: NAMES.ui.actionReschedule }], ...(q && q.conflict ? { conflict: q.conflict } : {}) })) : sourceQs;
   if (!qs.length) errors.push('缺少題目');
@@ -238,7 +295,7 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
   const seen = dirs ? askedBefore(dirs) : new Set(), unknowns = dirs ? openUnknowns(dirs) : [];
   const dropped = [], keep = [];
   qs.forEach((q, i) => {
-    if (seen.has(norm(q.ask))) { dropped.push(q.ask); return; }
+    if (!noDedupe && seen.has(norm(q.ask))) { dropped.push(q.ask); return; }
     if (q.effect !== 'now' && unknowns.some(u => sameThing(q, u))) { dropped.push(q.ask); warnings.push('你已答「' + NAMES.ui.unknownLater + '」的事項，到期前不再詢問：' + q.ask); return; }
     const fixed = q.effect === 'now' ? q : unknownOption(q);
     if (fixed !== q) warnings.push('AI 建議只是提示句，已改為「' + NAMES.ui.unknownLater + '」：' + q.ask);

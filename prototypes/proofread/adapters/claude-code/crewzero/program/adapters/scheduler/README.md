@@ -1,6 +1,6 @@
 # 排程轉接層
 
-`install-schedule.mjs` 叫作業系統每日按時執行安裝資料夾入面嘅 `run-schedule.cmd`（排程啟動檔：以絕對路徑執行 `node run.mjs --type auto --trigger schedule`，唔靠環境變數）。
+`install-schedule.mjs` 叫作業系統每日按時執行安裝資料夾入面嘅 `run-schedule.cmd`（排程啟動檔：以絕對路徑執行 `node run.mjs --type auto --trigger schedule`，唔靠環境變數）。創辦人可讀的結果只寫到 stdout；登記名、啟動檔和完整命令寫到 stderr，並標明只供 AI 排查。
 
 | 動作 | 命令 | 用到嘅作業系統命令（Windows） |
 |---|---|---|
@@ -14,4 +14,4 @@
 - **未核實**：用「只在使用者登入時執行」登記時，電腦睡眠或關機後係咪真係補跑，要第一星期第一次漏跑時觀察一次（MVP 規格第 3 節）。
 - **標記**：登記成功寫 `data/ledger/schedule.json`（登記名、節奏、登記時間、下次執行、命令全文）；伺服器見到標記就喺系統頁顯示「已登記」，節奏同帳本唔同就顯示「節奏已改，須重新登記」並喺待決事項放提示卡。
 - **測試**：環境變數 `SOS_SCHED_CMD` 指向假程式（例如 `tests/prototype/lib/fake-schtasks.mjs`），只記錄參數，唔郁電腦上任何排程。
-- **其他系統**：MVP 只支援 Windows 自動登記；macOS、Linux 只印定義，由人照住登記。
+- **其他系統**：MVP 只支援 Windows 自動登記；macOS、Linux 只說明目前不支援自動登記，原有登記定義寫到 stderr 供 AI 排查。

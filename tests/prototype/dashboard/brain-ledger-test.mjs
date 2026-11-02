@@ -84,6 +84,7 @@ async function shot(name) { const r = await send('Page.captureScreenshot', { for
 try {
   await usePass(BASE);
   await waitFor(async () => { try { return (await get('/api/status')).ok; } catch { return false; } }, 60000);
+  fs.mkdirSync(path.join(DATA, 'company'), { recursive: true }); fs.writeFileSync(path.join(DATA, 'company', 'biz.json'), JSON.stringify({ type: 'goods', other: '' }));
   await post('/api/setup', { action: 'certify', host: 'test' });
   const cert = await waitFor(async () => { const s = await get('/api/setup'); return s.certify && s.certify.state !== 'running' ? s.certify : null; });
   ok('假 AI 認證通過', cert && cert.state === 'passed', cert);
@@ -105,6 +106,7 @@ try {
   ok('證據級由帳本假設讀，唔係 AI 寫', ck && ck.weak.every(w => w.evidence === Math.max(0, N.EV_KEYS.indexOf(asmById[w.assumptionId].grade))), ck && ck.weak.map(w => [w.assumptionId, w.evidence]));
   ok('體檢唔改任何假設級別', ((st1.company || {}).assumptions || []).every(a => a.grade === 'guess'), (st1.company || {}).assumptions);
   const ckSb = path.join(DATA, 'sandbox', r1.id + '-checkup');
+  ok('生意體檢的工作資料夾附生意類別用字表', fs.existsSync(path.join(ckSb, 'biz.md')) && /類別：實體貨品/.test(fs.readFileSync(path.join(ckSb, 'biz.md'), 'utf8')));
   const ckTask = fs.readFileSync(path.join(ckSb, 'task.md'), 'utf8');
   ok('體檢工作說明：第一行今日日期、有已確認公司概覽同帳本', ckTask.startsWith('> 今日日期：' + lib.localIso().slice(0, 10)) && fs.existsSync(path.join(ckSb, 'confirmed-page.md')) && fs.existsSync(path.join(ckSb, 'ledger.json')) && fs.readFileSync(path.join(ckSb, 'feedback.md'), 'utf8').includes('（沒有）'), ckTask.slice(0, 80));
   const d1 = await get('/api/dashboard');

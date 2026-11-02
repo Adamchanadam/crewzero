@@ -3,13 +3,16 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
-import { usePass, seedCompany } from '../lib/testkit.mjs';
+import { certifyDirect, usePass, seedCompany } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT_ARG] = process.argv.slice(2);
 const PORT = Number(PORT_ARG), DATA = path.join(OUT, 'data'), OLD_DATA = path.join(OUT, 'old-data'), WEEK_DATA = path.join(OUT, 'week-data');
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const servers = [];
+const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+const fence = String.fromCharCode(96).repeat(3);
 const write = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value, null, 2)); };
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 function start(data, port) {
@@ -20,6 +23,11 @@ function start(data, port) {
 async function waitFor(fn, ms = 30000) { const until = Date.now() + ms; while (Date.now() < until) { try { const value = await fn(); if (value) return value; } catch { } await sleep(250); } return null; }
 const post = async (base, body) => { const r = await fetch(base + '/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; };
 const status = async base => (await fetch(base + '/api/status')).json();
+const submitAsk = async (base, pack, answers) => {
+  const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: lib.localIso(), batch: answers.map(a => a.id), answers };
+  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  return fetch(base + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ kind: 'ask-answer', ref: pack.id, text: head.join('\n') + '\n\n# 答案\n\n' + fence + 'json\n' + JSON.stringify(machine) + '\n' + fence + '\n' }) });
+};
 const questions = {
   service: ['提供甚麼服務', '如何收費'], goods: ['賣甚麼貨品', '定價多少'], online: ['提供甚麼內容', '如何收費'], nonprofit: ['計劃做甚麼', '資金來自哪裏'], other: ['你提供甚麼', '如何收取款項']
 };
@@ -76,9 +84,19 @@ try {
   ok('提交後寫入正確的 biz.json、intake.md 類別行及公司資料 bizType', biz.type === 'goods' && biz.other === '' && !!archived && fs.readFileSync(path.join(DATA, 'archive', archived), 'utf8').includes('生意類別：實體貨品') && shell.company.bizType === 'goods', { biz, archived, company: shell.company });
   const sandbox = await waitFor(() => intake && fs.existsSync(path.join(DATA, 'sandbox', intake.runId, 'biz.md')) ? path.join(DATA, 'sandbox', intake.runId, 'biz.md') : null);
   ok('AI 工作資料夾在共用位置取得 biz.md 用字表', !!sandbox && /類別：實體貨品/.test(fs.readFileSync(sandbox, 'utf8')) && /賣出件數/.test(fs.readFileSync(sandbox, 'utf8')), sandbox && fs.readFileSync(sandbox, 'utf8'));
-  await post(base, { kind: 'note', type: 'help', text: '請說明下一步。' });
-  const helpBiz = await waitFor(() => fs.existsSync(path.join(DATA, 'sandbox')) && fs.readdirSync(path.join(DATA, 'sandbox')).map(id => path.join(DATA, 'sandbox', id, 'biz.md')).find(file => fs.existsSync(file) && /類別：實體貨品/.test(fs.readFileSync(file, 'utf8'))) || null);
-  ok('非交資料的求助工作同樣取得 biz.md 用字表', !!helpBiz, helpBiz);
+  const helpRequest = await post(base, { kind: 'note', type: 'help', text: '請說明下一步。' });
+  const helpRun = await waitFor(async () => (await status(base)).runs?.find(r => r.kind === 'note' && r.noteType === 'help' && r.ref === helpRequest.j?.id) || null);
+  const helpBiz = await waitFor(() => helpRun && fs.existsSync(path.join(DATA, 'sandbox', helpRun.id, 'biz.md')) ? path.join(DATA, 'sandbox', helpRun.id, 'biz.md') : null);
+  ok('非交資料的求助工作同樣取得本次工作資料夾的 biz.md 用字表', helpRequest.code === 202 && !!helpRun && !!helpBiz && /類別：實體貨品/.test(fs.readFileSync(helpBiz, 'utf8')), { request: helpRequest, run: helpRun, file: helpBiz });
+
+  await waitFor(async () => !(await status(base)).busy, 10000);
+  seedCompany(DATA, PROTO);
+  const confirmedPage = read(path.join(DATA, 'company', 'page.json'));
+  const confirmedState = read(path.join(DATA, 'ledger', 'state.json'));
+  confirmedState.intake = { ...(confirmedState.intake || {}), confirmedAt: new Date().toISOString() };
+  write(path.join(DATA, 'ledger', 'state.json'), confirmedState);
+  write(path.join(DATA, 'ledger', 'confirmed.json'), { company: confirmedPage.company.name, pageId: confirmedPage.page.id, values: {}, order: confirmedPage.path.milestones.map(m => m.id), kinds: {} });
+  await certifyDirect(DATA, PROTO, ADAPTER);
 
   seedCompany(OLD_DATA, PROTO);
   const oldBase = start(OLD_DATA, PORT + 3);
@@ -118,6 +136,12 @@ try {
   await chrome.click('#all-same'); await chrome.click('#do-confirm');
   const serviceAnswers = await waitFor(() => { const f = path.join(WEEK_DATA, 'ledger', 'answers', servicePack.pack.id + '.json'); return fs.existsSync(f) ? read(f).answers : null; });
   ok('「全部沒有變化」不會帶過每週成果題', !!serviceAnswers && !serviceAnswers.results && Object.keys(serviceAnswers).length > 0, serviceAnswers);
+  const oldRunIds = new Set((await status(weekBase)).runs.filter(r => r.ref === servicePack.pack.id).map(r => r.id));
+  const blankResult = await submitAsk(weekBase, servicePack.pack, [{ id: 'results', value: '   ', ai: '', changed: true }]);
+  const blankRun = await waitFor(async () => (await status(weekBase)).runs.find(r => r.kind === 'ask' && r.ref === servicePack.pack.id && !oldRunIds.has(r.id) && r.state === 'done') || null);
+  const afterBlankAnswers = read(beforeResultAnswer).answers;
+  const afterBlankState = read(path.join(WEEK_DATA, 'ledger', 'state.json'));
+  ok('空白每週成果不會入帳；同一次訪問仍可補答', blankResult.status === 200 && !!blankRun && !afterBlankAnswers.results && !afterBlankState.interviews.lastFor && afterBlankState.interviews.nextOn === servicePack.pack.rhythm.on, { status: blankResult.status, run: blankRun, answers: afterBlankAnswers, interviews: afterBlankState.interviews });
   const beforeResults = await waitFor(() => {
     const s = read(path.join(WEEK_DATA, 'ledger', 'state.json'));
     return s.interviews && (s.interviews.applied || {})[servicePack.pack.id] ? s : null;

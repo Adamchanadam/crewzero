@@ -237,7 +237,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 <div class="shell" id="app">
   <div class="layer">
     <span class="eyebrow">載入中……</span>
-    <p class="guide">如畫面一直停留於此，表示此視窗未有執行網頁程式（例如應用程式內的預覽）。請在 AI 對話打開 Founder Desk，再於該處打開公司概覽。</p>
+    <p class="guide">此頁未能在這個視窗顯示。請在 AI 對話說「打開 Founder Desk」，再按「公司概覽」。</p>
   </div>
 </div>
 <div class="cbar" id="cbar" hidden></div>
@@ -331,14 +331,14 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     s.src = p;
     s.onload = function () {
       if (window.STARTUP_OS_PAGE) start(window.STARTUP_OS_PAGE);
-      else fatal('已讀取資料檔，但其中沒有公司概覽資料。');
+      else fatal();
     };
     // 經伺服器開而未有公司概覽：帶去交資料，唔當錯誤
-    s.onerror = function () { if (/^https?:$/.test(location.protocol)) noCompany(); else fatal('找不到公司概覽資料檔。'); };
+    s.onerror = function () { if (/^https?:$/.test(location.protocol)) noCompany(); else fatal(); };
     document.head.append(s);
     // 有啲預覽視窗會靜靜雞擋住資料檔，咁就唔會有 onload 亦冇 onerror
     setTimeout(function () {
-      if (!D && !NOCO) fatal('等候 5 秒仍未讀取到公司概覽資料檔。請用 Chrome 或 Edge 直接開啟此網頁，或選擇資料檔。');
+      if (!D && !NOCO) fatal();
     }, 5000);
   }
   function check(d) {
@@ -416,13 +416,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       DESK.title('company');
     });
   }
-  function fatal(msg) {
+  function fatal() {
     $('#cbar').hidden = true;
     $('#app').replaceChildren(h('div', { class: 'layer fatal' },
       h('span', { class: 'eyebrow' }, N.ui.loadFail),
-      h('p', null, msg),
-      h('p', { class: 'guide' }, '可選擇一份公司概覽資料檔：'),
-      h('button', { type: 'button', class: 'btn primary', onclick: pickFile }, N.ui.pickFile)));
+      h('p', null, '此頁未能在這個視窗顯示。請在 AI 對話說「打開 Founder Desk」，再按「公司概覽」。')));
   }
   function pickFile() {
     var inp = h('input', { type: 'file', accept: '.json,.js,application/json,text/javascript' });
@@ -1316,8 +1314,6 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (state === 'done' && r.result) {
       var res = r.result, box = h('div', { class: 'tr-result' });
       box.append(h('p', null, N.fix(res.summary)));
-      if (res.styleWarnings && res.styleWarnings.length) box.append(h('p', { class: 'tr-sub' }, N.ui.styleNote + '：有 ' + res.styleWarnings.length + ' 處用字未能自動修正（' +
-        res.styleWarnings.slice(0, 4).map(function (w) { return w.where + '：' + w.term; }).join('；') + (res.styleWarnings.length > 4 ? '……' : '') + '）'));
       if (res.artifacts.length) box.append(h('h4', null, N.ui.aiOutputs));
       res.artifacts.forEach(function (a, i) {
         var d = h('details', null, h('summary', null, a.title), window.SOS_MD ? SOS_MD(a.text) : h('pre', null, a.text));

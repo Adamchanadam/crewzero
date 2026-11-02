@@ -717,6 +717,13 @@ function noteTask(sb, type, text) {
   fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-note.md'), 'utf8') + `\n## 今次嘅要求類型\n\n${type === 'order' ? '類型一：改次序／加一站' : '類型二：臨時工作'}\n`);
   writeJSON(path.join(sb, 'job.json'), { type: 'note', noteType: type });
 }
+function writeHelpState(sb, firstWeek = '') {
+  const checked = certified(ROOT, DIR.ledger);
+  const card = guideCard(firstWeek, dashboardState(DIR, { cert: checked && checked.host ? checked : null })) || {};
+  const runs = readJSON(STATUS, { runs: [] }).runs || [];
+  const failed = runs.find(r => r.state === 'failed');
+  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', checked && checked.host ? '已設定。' : '未設定。'].join('\n') + '\n');
+}
 function helpNoteTask(sb, text, context = {}) {
   const extra = context && typeof context === 'object' ? [context.page ? '- 目前頁面：' + context.page : '', context.packTitle ? '- 題目包：' + context.packTitle : '', context.ask ? '- 題目：' + context.ask : ''].filter(Boolean) : [];
   fs.writeFileSync(path.join(sb, 'note.md'), '# 創辦人的求助\n\n' + text + '\n' + (extra.length ? '\n## 頁面或題目資料\n\n' + extra.join('\n') + '\n' : ''));
@@ -724,11 +731,7 @@ function helpNoteTask(sb, text, context = {}) {
   writeConfirmedPage(sb);
   if (!fs.existsSync(path.join(sb, 'confirmed-page.md')) && fs.existsSync(path.join(DIR.company, 'page.json'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
   let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
-  const checked = certified(ROOT, DIR.ledger);
-  const card = guideCard(firstWeek, dashboardState(DIR, { cert: checked && checked.host ? checked : null })) || {};
-  const runs = readJSON(STATUS, { runs: [] }).runs || [];
-  const failed = runs.find(r => r.state === 'failed');
-  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', checked && checked.host ? '已設定。' : '未設定。'].join('\n') + '\n');
+  writeHelpState(sb, firstWeek);
   fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-note.md'), 'utf8') + '\n## 今次嘅要求類型\n\n類型三：求助\n');
   writeJSON(path.join(sb, 'job.json'), { type: 'note', noteType: 'help' });
 }
@@ -1189,7 +1192,6 @@ async function handleHelpAnswer(run, pack, store) {
   }
   if (answer.value !== U.helpStill) {
     if (pack.next && pack.next.task) {
-      if (pack.taskId) { run.taskId = pack.taskId; upsertTask({ id: pack.taskId, status: 'active', waitingFor: '', next: clip(pack.next.task, 60) }); }
       return aiAfterAsk(run, pack);
     }
     run.result = { summary: U.helpAnswerRecorded, artifacts: [], founderNext: [] };
@@ -1295,6 +1297,12 @@ async function handleProofread(run, files) {
 }
 
 /* ---------- 問題包 ---------- */
+const requiresFounderAnswer = (pack, q) => !!(q && (q.effect === 'now' || q.conflict || q.bind === 'results' || pack.actionConfirm || pack.acceptance && q.id === 'accept'));
+const hasAnswer = answer => !!(answer && String(answer.value == null ? '' : answer.value).trim());
+function requiredLeft(pack, store) {
+  const answers = store && store.answers || {};
+  return (pack.questions || []).filter(q => requiresFounderAnswer(pack, q) && !hasAnswer(answers[q.id]));
+}
 function answersMarkdown(pack, ans) {
   const L = [`# ${pack.title}：而家嘅答案`, ''];
   for (const q of pack.questions) {
@@ -1302,14 +1310,20 @@ function answersMarkdown(pack, ans) {
     L.push(`## ${q.ask}`);
     if (a && a.value === U.unknownLater) L.push(`- 答案：${U.unknownLater}`, '- 狀態：創辦人而家答唔到，稍後提供；一星期內唔好再問，用到時當未知處理');
     else if (a) L.push(`- 答案：${showAns(q, a.value)}`, `- 狀態：創辦人答咗（${a.changed ? '改咗 AI 建議' : '照 AI 建議'}）`);
-    else if (q.effect === 'now' || q.conflict || q.bind === 'results' || pack.actionConfirm || pack.acceptance) L.push('- 答案：尚未回答', '- 狀態：創辦人尚未確認，不能作為 AI 的後續依據。');
+    else if (requiresFounderAnswer(pack, q)) L.push('- 答案：尚未回答', '- 狀態：創辦人尚未確認，不能作為 AI 的後續依據。');
     else L.push(`- 答案：${showAns(q, q.value)}`, '- 狀態：先咁計住（AI 建議，創辦人未答）');
     L.push('');
   }
   return L.join('\n');
 }
 async function aiAfterAsk(run, pack) {
-  const ans = loadAnswers(DIR, pack.id).answers;
+  const store = loadAnswers(DIR, pack.id), ans = store.answers;
+  const left = requiredLeft(pack, store);
+  if (left.length) {
+    run.result = { summary: `尚有 ${left.length} 條必須由你逐項確認的問題未回答，AI 尚未開始後續工作。`, artifacts: [], founderNext: [] };
+    return finish(run, 'done');
+  }
+  if (pack.taskId) { run.taskId = pack.taskId; upsertTask({ id: pack.taskId, status: 'active', waitingFor: '', next: clip(pack.next.task, 60) }); }
   const sb = newSandbox(run);
   writeJSON(path.join(sb, 'job.json'), { type: 'ask-continue' });
   writeJSON(path.join(sb, 'pack.json'), pack);
@@ -1341,25 +1355,27 @@ async function handleAsk(run, file) {
   if (why) { archive([file]); step(run, 'applied', U.stepApplyAns, 'failed', why); return finish(run, 'failed', why); }
   const store = loadAnswers(DIR, pack.id);
   const qs = Object.fromEntries(pack.questions.map(q => [q.id, q]));
-  const at = localIso(), entries = [];
+  const at = localIso(), entries = [], acceptedAnswers = [];
   for (const a of machine.answers || []) {
     const q = qs[a.id];
     if (!q) continue;
+    if (requiresFounderAnswer(pack, q) && !hasAnswer({ value: a.value })) continue;
+    acceptedAnswers.push(a);
     store.answers[a.id] = { value: a.value, changed: !!a.changed, at, reply: file, runId: run.id, ...(machine.allSame && !a.changed ? { confirmedSame: true } : {}) };
     entries.push({ at, source: 'ask', via, packId: pack.id, packTitle: pack.title, qid: q.id, question: q.ask, ai: showAns(q, q.value), answer: showAns(q, a.value), changed: !!a.changed, effect: q.effect || 'tentative', reply: file, runId: run.id, ...(a.value === U.unknownLater ? { unknown: true } : {}), ...(machine.allSame && !a.changed ? { confirmedSame: true } : {}) });
   }
   writeJSON(path.join(DIR.answers, pack.id + '.json'), store);
   archive([file]);
   appendLog(DIR, entries);
-  markUnknowns(pack, machine.answers || [], at);
+  markUnknowns(pack, acceptedAnswers, at);
   if (pack.help) {
     step(run, 'applied', U.stepAppliedAns, 'done', '已記錄求助答案');
     return handleHelpAnswer(run, pack, store);
   }
-  const left = pack.questions.filter(q => !store.answers[q.id]).length;
-  const requiredLeft = pack.questions.filter(q => !store.answers[q.id] && (q.effect === 'now' || q.conflict || q.bind === 'results' || pack.actionConfirm || pack.acceptance));
+  const left = pack.questions.filter(q => !store.answers[q.id] || requiresFounderAnswer(pack, q) && !hasAnswer(store.answers[q.id])).length;
+  const unanswered = requiredLeft(pack, store);
   const applied = pack.request && pack.request.type === 'order' ? applyOrder(pack, store, run) : '';
-  step(run, 'applied', U.stepAppliedAns, 'done', `今次回答了 ${entries.length} 條` + (left ? (requiredLeft.length ? `；尚有 ${left} 條未回答` : `；另有 ${left} 條暫按 AI 建議`) : '；此問題包已全部回答') + (applied ? '；' + applied : ''));
+  step(run, 'applied', U.stepAppliedAns, 'done', `今次回答了 ${entries.length} 條` + (left ? (unanswered.length ? `；尚有 ${left} 條未回答` : `；另有 ${left} 條暫按 AI 建議`) : '；此問題包已全部回答') + (applied ? '；' + applied : ''));
   if (pack.rhythm) { const fresh = new Set((machine.answers || []).map(a => a.id)), k = pack.rhythm.kind;
     if (k === 'interview') return handleInterviewAnswer(run, pack, store, fresh);
     if (k === 'monthly') return handleMonthlyAnswer(run, pack, store);
@@ -1374,11 +1390,6 @@ async function handleAsk(run, file) {
   if (pack.acceptance) return handleAcceptance(run, pack, store);
   if (pack.actionConfirm) return handleActionConfirm(run, pack, store);
   if (pack.debate) return handleDebateAnswer(run, pack, store);
-  if (requiredLeft.length && pack.next && pack.next.task) {
-    run.result = { summary: `已記錄你的答案；尚有 ${requiredLeft.length} 條必須由你逐項確認的問題未回答，AI 尚未開始後續工作。`, artifacts: [], founderNext: [] };
-    return finish(run, 'done');
-  }
-  if (pack.taskId && pack.next && pack.next.task) { run.taskId = pack.taskId; upsertTask({ id: pack.taskId, status: 'active', waitingFor: '', next: clip(pack.next.task, 60) }); }
   if (pack.next && pack.next.task) return aiAfterAsk(run, pack);
   if (applied) { run.result = { summary: applied, artifacts: [], founderNext: [] }; return finish(run, 'done'); }
   run.result = { summary: '已記錄你的答案；此問題包沒有需要 AI 即時跟進的工作。', artifacts: [], founderNext: [] };
@@ -2587,15 +2598,15 @@ async function main() {
           return;
         }
         if (!['order', 'adhoc', 'help'].includes(prev.noteType)) { finish(run, 'failed', '這項工作不能直接重試，請回到原本的頁面重新提交一次。'); return; }
-        run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.helpRetries = prev.helpRetries || 0; run.helpForPackId = prev.helpForPackId || '';
+        run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.helpRetries = prev.helpRetries || 0; run.helpForPackId = prev.helpForPackId || ''; run.helpForRunRef = prev.helpForRunRef || '';
         step(run, 'received', U.stepReqReceived, 'done', '重試上一次');
         step(run, 'applied', U.stepReqRegistered, 'done', '沿用上一次');
         const sb = newSandbox(run);
         const oldDir = path.join(DIR.sandbox, prev.id);
         if (run.noteType === 'help' && fs.existsSync(oldDir)) {
           fs.cpSync(oldDir, sb, { recursive: true, filter: source => source === oldDir || (path.basename(source) !== 'out' && path.basename(source) !== 'biz.md' && !source.endsWith('.txt')) });
-          const oldNote = fs.readFileSync(path.join(sb, 'note.md'), 'utf8').replace(/^# 創辦人的求助\r?\n\r?\n/, '').split(/\r?\n## 頁面或題目資料\r?\n/)[0].trim();
-          helpNoteTask(sb, oldNote);
+          let firstWeek = ''; try { firstWeek = fs.readFileSync(path.join(ROOT, 'FIRST-WEEK.md'), 'utf8'); } catch {}
+          writeHelpState(sb, firstWeek);
         } else if (run.noteType === 'help') {
           const archive = fs.readdirSync(DIR.archive, { withFileTypes: true }).filter(x => x.isDirectory()).map(x => path.join(DIR.archive, x.name));
           const old = archive.map(d => path.join(d, prev.ref + '-note-help.md')).find(f => fs.existsSync(f));

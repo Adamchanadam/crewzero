@@ -33,11 +33,12 @@ const LIMIT = (Number(r.runCapMinutes) || 30) + 15;
 const CADENCE = { daily: '每日', weekdays: '平日（星期一至五）', weekly: '每星期一次' };
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const say = s => console.log(s);
+const tech = s => console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + s);
 const q = s => String(s).replace(/'/g, "''");
 
 // Windows 工作排程器（完整介面）：觸發、補跑、執行時限、唔准重疊
 function winScript(op) {
-  const status = `$x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction SilentlyContinue; if (-not $x) { '{"registered":false}' } else { $i = Get-ScheduledTaskInfo -TaskName '${q(NAME)}'; [pscustomobject]@{ registered = $true; next = $(if ($i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }); last = $(if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToString('o') } else { '' }); lastResult = $i.LastTaskResult; startWhenAvailable = [bool]$x.Settings.StartWhenAvailable } | ConvertTo-Json -Compress }`;
+  const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { $i = Get-ScheduledTaskInfo -TaskName '${q(NAME)}' -ErrorAction Stop; [pscustomobject]@{ registered = $true; next = $(if ($i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }); last = $(if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToString('o') } else { '' }); lastResult = $i.LastTaskResult; startWhenAvailable = [bool]$x.Settings.StartWhenAvailable } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { '{"registered":false}' } else { throw } }`;
   if (op === 'status') return status;
   if (op === 'remove') return `Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction SilentlyContinue; '{"removed":true}'`;
   const at = `'${hh}:${mm}'`;
@@ -50,8 +51,10 @@ function winScript(op) {
     `Register-ScheduledTask -TaskName '${q(NAME)}' -Description 'CrewZero daily work' -Action $a -Trigger $t -Settings $s -Force | Out-Null`,
     status].join('; ');
 }
+function winArgs(op) { return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', winScript(op)]; }
+function scheduleTech(op) { return `登記名：${NAME}\n啟動檔：${launcher}\n命令：powershell.exe ${winArgs(op).join(' ')}`; }
 function runWin(op) {
-  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', winScript(op)];
+  const args = winArgs(op);
   const fake = process.env.SOS_SCHED_CMD;
   const res = fake ? spawnSync(process.execPath, [fake, 'powershell.exe', ...args], { encoding: 'utf8', windowsHide: true })
     : spawnSync('powershell.exe', args, { encoding: 'utf8', windowsHide: true });
@@ -63,12 +66,10 @@ const local = iso => { if (!iso) return '未有'; const d = new Date(iso); if (i
 const human = `${CADENCE[r.runCadence] || '每日'} ${r.runTime}`;
 
 if (os !== 'windows') {
-  // MVP 只支援 Windows 登記；其他系統照舊只印定義，由人照住登記
+  say('目前只支援在 Windows 電腦設定每日自動開工。在這部電腦，AI 會在你交答案或提出要求時工作；你亦可每日在 AI 對話說「打開 Founder Desk」。');
   const node = process.execPath, cmd = `"${launcher}"`;
-  if (has('register') || has('remove') || has('status')) { say('目前只支援在 Windows 電腦設定每日自動開工。在這部電腦，AI 會在你交答案或提出要求時工作；你亦可每日在 AI 對話說「打開 Founder Desk」。'); say('（以下技術定義只供 AI 參考，毋須交給創辦人。）'); }
-  if (os === 'mac') say(`macOS launchd：每日 ${hh}:${mm} 執行 ${cmd}（Label ${NAME}）`);
-  else say(`Linux cron（crontab 一行）：${Number(mm)} ${Number(hh)} * * ${r.runCadence === 'weekdays' ? '1-5' : r.runCadence === 'weekly' ? String(Number(r.interviewWeekday) % 7) : '*'} ${cmd}`);
-  say('（執行環境：' + node + '）');
+  if (os === 'mac') tech(`macOS launchd：每日 ${hh}:${mm} 執行 ${cmd}（Label ${NAME}）\n（執行環境：${node}）`);
+  else tech(`Linux cron（crontab 一行）：${Number(mm)} ${Number(hh)} * * ${r.runCadence === 'weekdays' ? '1-5' : r.runCadence === 'weekly' ? String(Number(r.interviewWeekday) % 7) : '*'} ${cmd}\n（執行環境：${node}）`);
   process.exit(has('register') || has('remove') || has('status') ? 1 : 0);
 }
 
@@ -76,39 +77,40 @@ if (has('status')) {
   const m = readJSON(MARK), x = runWin('status');
   const j = { marked: !!m, registered: !!(x.json && x.json.registered), next: (x.json && x.json.next) || '', last: (x.json && x.json.last) || '', lastResult: x.json && x.json.lastResult != null ? x.json.lastResult : null, startWhenAvailable: !!(x.json && x.json.startWhenAvailable), name: NAME, ok: x.ok };
   console.log(JSON.stringify(j));
-  say(j.registered ? `已登記（${NAME}）：下次 ${local(j.next)}；上次執行 ${local(j.last)}${j.lastResult != null && j.last ? '（結果碼 ' + j.lastResult + '）' : ''}；錯過即補跑：${j.startWhenAvailable ? '開啟' : '關閉'}` : `未登記（${NAME}）${m ? '；但仲有登記標記，請重新登記或者移除' : ''}`);
-  process.exit(0);
+  if (!j.ok) say('暫時未能讀取每日排程的狀態，請稍後再試。');
+  else if (!j.registered) say(`每日排程未登記${m ? '，請在 AI 對話說「重新登記排程」。' : '。'}`);
+  else if (j.lastResult === 0) say(`每日排程已登記：下次 ${local(j.next)}；上次已執行。`);
+  else if (!j.last || j.lastResult === 267011) say(`每日排程已登記：下次 ${local(j.next)}；尚未到首次執行時間。`);
+  else say(`每日排程已登記：下次 ${local(j.next)}；上次排定的工作未能完成，請打開營運監察台查看。`);
+  tech(scheduleTech('status'));
+  process.exit(j.ok ? 0 : 1);
 }
 if (has('remove')) {
   const x = runWin('remove');
   fs.rmSync(MARK, { force: true });
-  say(x.ok ? `已移除每日排程（${NAME}）；AI 只會在你提交答案或要求時開始工作。` : '每日排程未能完全移除：電腦拒絕了這項設定，CrewZero 已停用這個排程的紀錄。請重新開機後，再說一次「移除排程」。');
-  if (!x.ok) console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (x.err || '讀回時沒有結果'));
+  say(x.ok ? '已移除每日排程；AI 只會在你提交答案或要求時開始工作。' : '每日排程未能完全移除：電腦拒絕了這項設定，CrewZero 已停用這個排程的紀錄。請重新開機後，再說一次「移除排程」。');
+  tech(scheduleTech('remove') + (!x.ok ? '\n結果：' + (x.err || '讀回時沒有結果') : ''));
   process.exit(x.ok ? 0 : 1);
 }
-if (!fs.existsSync(launcher)) { say(`未有排程啟動檔：${launcher}。請先以安裝命令安裝 CrewZero。`); process.exit(1); }
+if (!fs.existsSync(launcher)) { say('找不到排程啟動檔。請先以安裝命令安裝 CrewZero。'); tech(scheduleTech('register')); process.exit(1); }
 if (has('register')) {
   const x = runWin('register');
   if (!x.ok || !x.json || !x.json.registered) {
     // 第一句交畀創辦人（原因同做法）；英文錯誤同命令全文只寫去 stderr 供 AI 排查，唔好叫創辦人自己執行
     say('每日排程未能登記：電腦拒絕了這項設定。安裝已完成，AI 仍會在你交答案或提出要求時工作；如要每日自動開工，請重新開機後再說「安裝排程」。');
-    console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (x.err || '讀回時找不到這個排程'));
-    console.error(winScript('register'));
+    tech(scheduleTech('register') + '\n結果：' + (x.err || '讀回時找不到這個排程'));
     process.exit(1);
   }
   const mark = { name: NAME, os: 'windows', cadence: r.runCadence, runTime: r.runTime, timezone: r.timezone, interviewWeekday: r.interviewWeekday, limitMinutes: LIMIT,
     registeredAt: new Date().toISOString(), nextRunAt: x.json.next || '', startWhenAvailable: !!x.json.startWhenAvailable, launcher, command: ['powershell.exe', ...x.args].join(' ') };
   fs.mkdirSync(path.dirname(MARK), { recursive: true });
   fs.writeFileSync(MARK, JSON.stringify(mark, null, 2));
-  say(`已登記每日排程：${human}（${r.timezone}），下次 ${local(mark.nextRunAt)}。`);
-  say(mark.startWhenAvailable ? '電腦當時關機或睡眠，會在下次可用時盡快補做；每次最多 ' + LIMIT + ' 分鐘。' : '注意：讀回「錯過即補跑」設定未開啟，請在系統頁核對。');
-  say('登記名：' + NAME + '（Windows「工作排程器」入面見到）。要移除：在對話輸入「移除排程」。');
+  say(`每日排程已登記：${human}，下次 ${local(mark.nextRunAt)}。`);
+  say(mark.startWhenAvailable ? '電腦當時關機或睡眠，會在下次可用時盡快補做；每次最多 ' + LIMIT + ' 分鐘。' : '電腦關機時錯過的工作不會補做。請在 AI 對話說「重新登記排程」。');
+  tech(scheduleTech('register'));
   process.exit(0);
 }
 // 預設：只印定義全文，等創辦人批准
-say('【未登記：以下係將會登記嘅每日排程，你批准之後先登記】');
-say(`經營節奏：${human}（${r.timezone}），每次最多 ${LIMIT} 分鐘；電腦當時關機或睡眠，會在下次可用時盡快補做${state.company && state.company.rhythm ? '' : '；公司紀錄未有節奏，用預設（交資料時可改）'}`);
-say('登記名：' + NAME);
-say('執行：' + launcher);
-say('Windows 工作排程器（PowerShell）命令全文：');
-say(winScript('register'));
+say('每日排程尚未登記。');
+say(`批准後，電腦會於${human}自動開工；每次最多 ${LIMIT} 分鐘。電腦當時關機或睡眠，會在下次可用時盡快補做。`);
+tech(scheduleTech('register'));

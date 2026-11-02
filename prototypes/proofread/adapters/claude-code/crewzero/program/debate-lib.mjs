@@ -330,6 +330,8 @@ export function checkJudge(j, blue, red) {
   const verdicts = claims.map(c => { const v = arr(j.verdicts).find(x => x && x.claimId === c.id); return v && VERDICTS.includes(v.verdict) ? { claimId: c.id, verdict: v.verdict, reason: txt(v.reason, 300) || '未寫理由' } : null; });
   if (verdicts.some(x => !x)) e.push('裁判未判定所有論點');
   const LAND = ['成立', '部分', '不成立'];
+  const decisions = arr(j.founderDecisions);
+  if (decisions.some(d => !d || !txt(d.risk, 120))) e.push('裁判的創辦人決定缺少風險');
   const data = {
     verdicts: verdicts.filter(Boolean),
     topRisks: arr(j.topRisks).filter(r => r && txt(r.risk, 300)).slice(0, 3).map((r, i) => {
@@ -338,7 +340,7 @@ export function checkJudge(j, blue, red) {
       return { rank: i + 1, risk: txt(r.risk, 300), cheapestTest: txt(r.cheapestTest, 300), stop: txt(r.stop, 300), testBy, aiChecked };
     }),
     routes: arr(j.routes).filter(r => r && txt(r.name, 40)).slice(0, 5).map((r, i) => ({ id: /^S\d{1,2}$/.test(String(r.id)) ? r.id : 'S' + (9 + i), name: txt(r.name, 40), recommended: r.recommended === true, why: txt(r.why, 300), redScore: SEV.includes(r.redScore) ? r.redScore : '中', firstTest: txt(r.firstTest, 300), stop: txt(r.stop, 300) })),
-    founderDecisions: arr(j.founderDecisions).filter(d => d && txt(d.question, 200) && arr(d.options).length >= 2).slice(0, 3).map(d => ({ question: txt(d.question, 200), options: arr(d.options).slice(0, 3).map(o => txt(String(o), 120)), recommend: txt(String(d.recommend || ''), 10), why: txt(d.why, 300) })),
+    founderDecisions: decisions.filter(d => d && txt(d.question, 200) && arr(d.options).length >= 2 && txt(d.risk, 120)).slice(0, 3).map(d => ({ question: txt(d.question, 200), options: arr(d.options).slice(0, 3).map(o => txt(String(o), 120)), recommend: txt(String(d.recommend || ''), 10), why: txt(d.why, 300), risk: txt(d.risk, 120), ...(txt(d.conflict, 120) ? { conflict: txt(d.conflict, 120) } : {}) })),
     assumptionChanges: arr(j.assumptionChanges).filter(a => a && txt(a.change, 300)).slice(0, 12).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: txt(a.change, 300), label: 'AI 建議 · 未確認' })),
     attackVerdicts: arr(j.attackVerdicts).filter(x => x && aids.has(x.attackId) && LAND.includes(x.landed)).map(x => ({ attackId: x.attackId, landed: x.landed, note: txt(x.note, 200) })),
     overall: txt(j.overall, 300),
@@ -444,7 +446,7 @@ export function responsePack(v) {
   qs.push({ id: 'evg', priority: 5, ask: `如果有，這個證據去到哪一級？（${when(v.startedAt)} 場）`, kind: 'choice', options: [{ text: NAMES.dash.ev_1, rec: true }, { text: NAMES.dash.ev_2 }, { text: NAMES.dash.ev_3 }], value: NAMES.dash.ev_1, why: '按實際發生的事選擇；沒有證據便無須理會。' });
   qs.push({ id: 'ch', priority: 6, ask: `你覺得裁判判錯了哪一條？為甚麼？（${when(v.startedAt)} 場；沒有就留空）`, kind: 'text', value: '沒有', why: '寫了就會請裁判重判（最多三條，一場一次）；你的原話會原文交給裁判。' });
   return { format: 'startup-os.ask/0.1', title: clip('紅藍對打回應：' + name, 60), context: '裁判已判定。請對三個關鍵時刻表態；不答就按裁判判定開始轉強。辯論結果不算證據。',
-    afterConfirm: '按你的回應開始轉強：AI 把受傷及倒下的論點變成轉強卡，紅方再攻一輪，之後請你採用。', questions: qs, debate: { matchId: v.id, kind: 'response', refs } };
+    afterConfirm: '按你的回應開始轉強：AI 把被找到弱點及被推翻的論點變成轉強卡，紅方再攻一輪，之後請你採用。', questions: qs, debate: { matchId: v.id, kind: 'response', refs } };
 }
 const H_SHORT = { '修正': '修正', '反轉做優勢': '反轉做優勢', '先驗證': '先驗證', '接受並監察': '接受並監察' };
 export const ADOPT_OPTS = { adopt: '採用', test: '改為先驗證', reject: '不採用' };

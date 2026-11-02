@@ -1,6 +1,6 @@
 # 公司概覽資料格式
 
-資料必須是有效 JSON，`format` 以 `startup-os.proofread/` 開頭。`page` 包含 `id`、`kind`、`revision`、`preparedAt`，其餘可有 `nextAskOn`、`latestUntil`、`minutes`。`company` 包含 `name`、`initials`、`oneLiner`。`sources` 是來源清單，每項有 `id`、`title`，可有 `date`、`note`。
+資料必須是有效 JSON，`format` 以 `startup-os.proofread/` 開頭。`page` 包含 `id`、`kind`、`revision`、`preparedAt`，其餘可有 `nextAskOn`、`latestUntil`、`minutes`。`company` 包含 `name`、`initials`、`oneLiner`。`sources` 是來源清單，每項有 `id`、`title`，可有 `date`、`note`。如工作資料夾有 `biz.md`，按其中用字寫欄位內容。
 
 `glance.rows` 是目標及下一步清單；每項是可改項目，期限可放在 `due` 可改項目。`glance.status` 可有 `title`、`prepared`、`items`；`prepared` 係一句講創辦人已經準備好邊啲資料，例如「已準備好：商業計劃（10 月 1 日版）、農場訪問紀錄」，唔好淨係寫日子，冇就唔寫；每項是 `kind: "grade"` 的可改項目，值只能是 `none`、`said`、`did`、`paid`。`decide.items` 是首屏項目編號清單；`@status` 代表現況，預設次序為現況、G5、G1。首屏三項（現況、G5、G1 嗰兩項）一定要寫 `ask`（白話一句問題，例如「下一步對外做乜？」「今季要去到邊？」）同 `judge`（一句判斷標準）；`glance.status` 一定要寫 `judge`（例如「冇發生就唔使撳；撳咗嘅再揀去到幾盡。」）。`label` 由畫面按格式決定，唔使花心機。
 

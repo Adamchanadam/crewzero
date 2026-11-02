@@ -168,6 +168,10 @@ try {
   ok('設定測試 AI 後認證完成', cert && cert.certify && cert.certify.state === 'passed', cert && cert.certify);
   const first = await waitFor(() => allPacks().find(p => p.help && p.help.noteId === sent.j.id), 45000);
   ok('設定 AI 後重試求助：沿用原工作資料產生固定問題和原題關聯，不建立工作', first && JSON.stringify(first.help) === JSON.stringify({ noteId: sent.j.id, packId: 'p-1' }) && first.questions.length === 1 && first.questions[0].ask === '你想怎樣做？' && first.questions[0].options.at(-1).text === helpStill && !(state().tasks || []).length, first && { help: first.help, questions: first.questions, tasks: state().tasks });
+  const retriedHelpSandbox = first && path.join(DATA, 'sandbox', first.fromRun);
+  const retriedHelpNote = retriedHelpSandbox && fs.existsSync(path.join(retriedHelpSandbox, 'note.md')) ? fs.readFileSync(path.join(retriedHelpSandbox, 'note.md'), 'utf8') : '';
+  const retriedHelpState = retriedHelpSandbox && fs.existsSync(path.join(retriedHelpSandbox, 'state.md')) ? fs.readFileSync(path.join(retriedHelpSandbox, 'state.md'), 'utf8') : '';
+  ok('重試求助後保留原題文字及頁面脈絡，只更新 state.md 的 AI 設定狀態', !!first && retriedHelpNote.includes('公司概覽尚未建立時，我仍然不知道下一步。') && retriedHelpNote.includes('這題怎樣回答？') && retriedHelpState.includes('已設定。'), { sandbox: retriedHelpSandbox, note: retriedHelpNote, state: retriedHelpState });
 
   await cdp.go(BASE + '/#/', 1280, 1800);
   const firstHome = await cdp.ev('(()=>{const a=document.querySelector(".hero a.btn.primary.big");return a?{href:a.getAttribute("href"),text:a.textContent,screen:document.body.innerText}:null})()');

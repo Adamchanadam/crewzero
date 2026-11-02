@@ -660,7 +660,7 @@ function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { 
       add(context.packId, context.runRef);
     } catch { }
   }
-  for (const run of (status.runs || [])) if (run && run.kind === 'note' && run.noteType === 'help' && ['running', 'waiting', 'resumed'].includes(run.state)) add(run.helpForPackId, run.helpForRunRef);
+  for (const run of (status.runs || [])) if (run && run.kind === 'note' && run.noteType === 'help' && ['running', 'waiting'].includes(run.state)) add(run.helpForPackId, run.helpForRunRef);
   return found;
 }
 

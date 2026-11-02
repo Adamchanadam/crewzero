@@ -38,7 +38,7 @@ const q = s => String(s).replace(/'/g, "''");
 
 // Windows 工作排程器（完整介面）：觸發、補跑、執行時限、唔准重疊
 function winScript(op) {
-  const status = `$x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction SilentlyContinue; if (-not $x) { '{"registered":false}' } else { $i = Get-ScheduledTaskInfo -TaskName '${q(NAME)}'; [pscustomobject]@{ registered = $true; next = $(if ($i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }); last = $(if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToString('o') } else { '' }); lastResult = $i.LastTaskResult; startWhenAvailable = [bool]$x.Settings.StartWhenAvailable } | ConvertTo-Json -Compress }`;
+  const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { $i = Get-ScheduledTaskInfo -TaskName '${q(NAME)}' -ErrorAction Stop; [pscustomobject]@{ registered = $true; next = $(if ($i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }); last = $(if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToString('o') } else { '' }); lastResult = $i.LastTaskResult; startWhenAvailable = [bool]$x.Settings.StartWhenAvailable } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { '{"registered":false}' } else { throw } }`;
   if (op === 'status') return status;
   if (op === 'remove') return `Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction SilentlyContinue; '{"removed":true}'`;
   const at = `'${hh}:${mm}'`;

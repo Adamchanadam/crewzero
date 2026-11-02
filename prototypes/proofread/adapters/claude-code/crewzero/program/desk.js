@@ -369,11 +369,11 @@ body.paused .bg *{animation:none!important}
       var card = home && home.card;
       if (!card) { next.append(el('p', null, U.helpNoStep)); return; }
       next.append(el('p', null, card.today || U.helpNoStep));
-      if (card.href) next.append(el('a', { cls: 'btn primary', href: card.href }, card.button || U.next));
+      if (card.href) next.append(el('a', { cls: 'btn primary', href: String(card.href).startsWith('#') ? '/' + card.href : card.href }, card.button || U.next));
     }, function () { next.hidden = true; });
   }
   /* ---------- 公司標誌：頁頭標誌係一個掣，按咗可以上載或者移除（伺服器 /api/logo；冇標誌就顯示公司名首兩個字） ---------- */
-  function markText(c) { return c.initials || String(c.name || 'OS').slice(0, 2); }
+  function markText(c) { return c.initials || String(c.name || 'CZ').slice(0, 2); }
   function markInner(m, c) {
     m.classList.toggle('has-logo', !!c.logo); m.setAttribute('data-logo', String(c.logo || 0));
     var img = c.logo ? el('img', { src: '/company-logo?v=' + c.logo, alt: '' }) : null;
@@ -472,6 +472,7 @@ body.paused .bg *{animation:none!important}
     var begin = el('button', { type: 'button', cls: 'btn primary big', onclick: function () { begin.disabled = true; setupPost({ action: 'phone-open' }).then(function (v) { showPhoneCode(v); }, function (e) { begin.disabled = false; toast(why(e)); }); } }, U.phoneEnable);
     card.append(el('div', { cls: 'pair-actions' }, begin, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))); modal.append(card); document.body.append(modal);
     function showPhoneCode(v) {
+      clearInterval(modal.timer);
       card.replaceChildren(el('span', { cls: 'eyebrow' }, U.brand), el('h2', null, U.phonePairTitle));
       var qr = el('div', { cls: 'pair-qr-box' });
       try { qr.innerHTML = g.SOS_PAIR.qr(v.pairUrl); } catch (e) { qr.textContent = U.phoneOpenFailed; }
@@ -485,6 +486,7 @@ body.paused .bg *{animation:none!important}
       }
       function poll() {
         var left = Math.max(0, Math.ceil((until - Date.now()) / 1000)); clock.textContent = N.t('phonePairExpires', { n: left });
+        if (!left) return showState(el('span', null, U.phonePairExpired), el('button', { type: 'button', cls: 'btn primary', id: 'phone-new-code', onclick: function (e) { e.target.disabled = true; setupPost({ action: 'phone-close' }).then(function () { return setupPost({ action: 'phone-open' }); }).then(showPhoneCode, function (er) { e.target.disabled = false; toast(why(er)); }); } }, '產生新二維碼'));
         fetch('/api/setup', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
           var phone = j.phone || {}, p = phone.pending && phone.pending[0], paired = phone.paired && phone.paired[0];
           if (p) return showState(el('span', null, U.phonePending + ' · ' + U.phoneCode + '：'), el('strong', null, p.confirmationCode || ''), el('button', { type: 'button', cls: 'btn primary', onclick: function () { setupPost({ action: 'phone-accept', id: p.id }).then(function () { decided = true; poll(); }, function (e) { toast(why(e)); }); } }, U.phoneAccept), el('button', { type: 'button', cls: 'btn', onclick: function () { setupPost({ action: 'phone-reject', id: p.id }).then(function () { decided = true; poll(); }, function (e) { toast(why(e)); }); } }, U.phoneReject));

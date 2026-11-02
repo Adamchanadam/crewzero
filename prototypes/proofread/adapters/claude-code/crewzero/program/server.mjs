@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
+import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
 import { dashboardState, touchLastSeen, pendingTodo, guideCard, companyLogo, LOGO_EXTS } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
@@ -376,6 +376,12 @@ function takeFiles(list) {
 function receiveIntake(body) {
   const fail = message => ({ error: 'invalid', message });
   if (!body || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields) || !Array.isArray(body.files)) return fail('請填寫資料並檢查附件。');
+  const bizType = typeof body.bizType === 'string' ? body.bizType : '';
+  if (!bizType) return fail('請先選擇你的生意類別。');
+  if (!BIZ_TYPES[bizType]) return fail('請選擇有效的生意類別。');
+  const bizOther = typeof body.bizOther === 'string' ? body.bizOther.trim() : '';
+  if (body.bizOther != null && typeof body.bizOther !== 'string') return fail('其他類別的說明必須是文字。');
+  if (bizOther.length > 60) return fail('其他類別的說明不可超過 60 字。');
   const fields = {};
   for (const q of INTAKE_QUESTIONS) {
     const value = body.fields['q' + q.n] ?? '';
@@ -394,12 +400,13 @@ function receiveIntake(body) {
   const provenance = provenanceOf(fields, body.provenance, loadPrefills(path.join(DIR.ledger, 'prefill'), prefillId));
   if (unconfirmed(provenance, body.provenance).length) return fail(NAMES.ui.prefillUnconfirmed);
   for (const q of Object.keys(provenance)) if (provenance[q].kind !== 'founder' && !provenance[q].moved) provenance[q].confirmed = true;
-  const machine = { format: 'startup-os.intake/0.1', id, fields, files: records, ...(prefill ? { prefillId } : {}), provenance };
-  const text = INTAKE_QUESTIONS.map(q => `## ${q.n}. ${q.ask}\n\n${fields['q' + q.n]}\n${fields['q' + q.n].trim() ? '\n' + provenanceLine(provenance['q' + q.n]) + '\n' : ''}`).join('\n') + '\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
+  const machine = { format: 'startup-os.intake/0.1', id, bizType, bizOther: bizType === 'other' ? bizOther : '', fields, files: records, ...(prefill ? { prefillId } : {}), provenance };
+  const text = '# 交資料\n\n生意類別：' + bizTypeLabel(bizType, bizOther) + '\n\n' + intakeQuestions(bizType).map(q => `## ${q.n}. ${q.ask}\n\n${fields['q' + q.n]}\n${fields['q' + q.n].trim() ? '\n' + provenanceLine(provenance['q' + q.n]) + '\n' : ''}`).join('\n') + '\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
   const created = [];
   try {
     files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
     const p = path.join(DIR.inbox, `${id}-intake.md`); fs.writeFileSync(p, text, { flag: 'wx' }); created.push(p);
+    writeJSON(path.join(DIR.company, 'biz.json'), { type: bizType, other: bizType === 'other' ? bizOther : '' });
   } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
   return { ok: true, id, receivedAt: localIso() };
 }
@@ -410,9 +417,11 @@ function receivePrefill(body) {
   if (!Array.isArray(body.files) || !body.files.length) return fail('請先加入文件。');
   const got = takeFiles(body.files);
   if (got.error) return fail(got.error);
+  const bizType = typeof body.bizType === 'string' && BIZ_TYPES[body.bizType] ? body.bizType : '';
+  const bizOther = typeof body.bizOther === 'string' ? body.bizOther.trim().slice(0, 60) : '';
   const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
   const records = got.files.map((f, i) => ({ name: f.name, stored: `${id}-prefill-${pad(i + 1)}-${f.name}`, bytes: f.bytes.length }));
-  const machine = { format: 'startup-os.prefill/0.1', id, files: records };
+  const machine = { format: 'startup-os.prefill/0.1', id, files: records, ...(bizType ? { bizType, bizOther: bizType === 'other' ? bizOther : '' } : {}) };
   const created = [];
   try {
     got.files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
@@ -506,6 +515,7 @@ function receiveNote(body) {
     const source = body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? body.context : {};
     if (/^[\w-]{1,30}$/.test(String(source.page || ''))) context.page = String(source.page);
     if (/^[\w-]{1,80}$/.test(String(source.packId || ''))) context.packId = String(source.packId);
+    if (/^[\w-]{1,80}$/.test(String(source.runRef || ''))) context.runRef = String(source.runRef);
     if (typeof source.packTitle === 'string' && source.packTitle.trim().length <= 300) context.packTitle = source.packTitle.trim();
     if (typeof source.ask === 'string' && source.ask.trim().length <= 300) context.ask = source.ask.trim();
     const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
@@ -637,6 +647,23 @@ function serverVia(text, via) {
   header.splice(kind >= 0 ? kind + 1 : 0, 0, 'via: ' + via);
   return header.concat(lines.slice(end)).join('\n');
 }
+function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] })) {
+  const found = [], add = (packId, ref) => {
+    const pack = /^[\w-]{1,80}$/.test(String(packId || '')) ? String(packId) : '';
+    const runRef = /^[\w-]{1,80}$/.test(String(ref || '')) ? String(ref) : '';
+    if ((pack || runRef) && !found.some(x => x.packId === pack && x.ref === runRef)) found.push({ packId: pack, ref: runRef });
+  };
+  for (const file of fs.readdirSync(DIR.inbox).filter(f => /-note-help\.md$/.test(f))) {
+    try {
+      const parsed = parseFounderReply(fs.readFileSync(path.join(DIR.inbox, file), 'utf8'));
+      const context = (parsed.machine || {}).context || {};
+      add(context.packId, context.runRef);
+    } catch { }
+  }
+  for (const run of (status.runs || [])) if (run && run.kind === 'note' && run.noteType === 'help' && ['running', 'waiting'].includes(run.state)) add(run.helpForPackId, run.helpForRunRef);
+  return found;
+}
+
 function statusPayload() {
   const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
   const packs = listPacks(DIR);
@@ -644,7 +671,7 @@ function statusPayload() {
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, openAsks: packs.filter(p => p.open).length, company: companyStatus(), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, openAsks: packs.filter(p => p.open).length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -669,7 +696,9 @@ function saveLogo(body) {
 function companyStatus() {
   const c = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const page = readJSON(path.join(DIR.company, 'page.json'), null), co = page?.company || {};
-  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null };
+  const biz = readJSON(path.join(DIR.company, 'biz.json'), null);
+  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null,
+    ...(biz && BIZ_TYPES[biz.type] ? { bizType: biz.type } : {}) };
 }
 /* ---------- 觀測來源（規劃書 4.12、4.9；設計稿 2026-10-28 第 3 節）：轉接層嘅唯讀觀測程式 ----------
    觀察範圍只限帳本 observe.folders[]（只存雜湊同顯示名，唔存路徑；系統頁經 /api/setup 增刪，外殼下次第一步寫入）。
@@ -910,7 +939,7 @@ const handler = async (req, res) => {
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-logo') { const l = companyLogo(DIR); return l ? send(res, 200, fs.readFileSync(l.file), TYPES['.' + l.ext]) : send(res, 404, { error: 'not found' }); }
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-page.js') { const page = readJSON(path.join(DIR.company, 'page.json'), null); return page ? send(res, 200, 'window.STARTUP_OS_PAGE = ' + JSON.stringify(page).replace(/</g, '\\u003c') + ';', TYPES['.js']) : send(res, 404, { error: 'not found' }); }
     if (req.method === 'GET') {
-      if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, limits });
+      if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, questionsByBizType: Object.fromEntries(Object.keys(BIZ_TYPES).map(type => [type, intakeQuestions(type)])), bizTypes: Object.entries(BIZ_TYPES).map(([id, x]) => ({ id, label: x.label, example: x.example })), limits });
       if (p === '/api/prefill') { const r = prefillStatus(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, ...r }) : send(res, 404, { error: 'not found' }); }
        if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
       if (p === '/api/status') return send(res, 200, statusPayload());
@@ -929,7 +958,7 @@ const handler = async (req, res) => {
         const back = ds.since && ds.since.awayDays >= 3 ? card && card.today ? { text: card.today, href: card.href, button: card.button } : fallback ? { text: fallback.text, href: fallbackHref, button: NAMES.ui.goAnswer } : null : null;
         return send(res, 200, { ok: true, guide: ds.guide, card, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null });
       }
-      if (p === '/api/asks') return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR) });
+      if (p === '/api/asks') return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR), helpInFlight: helpInFlight() });
       if (p === '/api/ask') {
         const pack = loadPack(DIR, url.searchParams.get('id'));
         return pack ? send(res, 200, { ok: true, pack, answers: loadAnswers(DIR, pack.id).answers }) : send(res, 404, { error: 'not found' });

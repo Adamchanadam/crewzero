@@ -17,6 +17,7 @@ import { rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, BASE
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const say = s => console.log('[CrewZero] ' + s);
+const tech = s => console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + s);
 // 出錯原因（創辦人會經 AI 聽到）：按系統錯誤代號講白話原因同做法；其他（包括程式自己嘅核對）用通用句。錯誤原文另外寫去 stderr
 function plainCause(e) {
   const c = e && e.code, m = String(e && e.message || '');
@@ -29,12 +30,12 @@ function plainCause(e) {
 const CMD = n => `Claude Code：/crewzero:${n}；Codex：$crewzero:${n}；Antigravity：/${n}`;
 const argv = process.argv.slice(2), has = k => argv.includes('--' + k);
 const arg = argv.find(a => !a.startsWith('--'));
-if (!arg) { say('用法：node update.mjs <項目根> [--apply] [--rollback]'); process.exit(1); }
+if (!arg) { say('未有提供項目資料夾，今次沒有改動任何檔案。請從項目內的 AI 對話再次更新。'); tech('用法：node update.mjs <項目根> [--apply] [--rollback]'); process.exit(1); }
 const proj = path.resolve(arg);
 let isDir = false; try { isDir = fs.statSync(proj).isDirectory(); } catch { }
-if (!isDir) { say('找不到項目資料夾：' + proj); process.exit(1); }
+if (!isDir) { say('找不到項目資料夾，今次沒有改動任何檔案。請在正確項目內再次更新。'); tech('找不到項目資料夾：' + proj); process.exit(1); }
 const target = findInstall(proj), DATA = path.join(target || proj, 'data');
-if (!target) { say(`這個項目未安裝 CrewZero（${path.join(proj, INSTALL_DIR)}）。要安裝請在對話輸入安裝指令（${CMD('install')}）。`); process.exit(2); }
+if (!target) { say(`這個項目未安裝 CrewZero。要安裝請在對話輸入安裝指令（${CMD('install')}）。`); tech('找不到安裝資料夾：' + path.join(proj, INSTALL_DIR)); process.exit(2); }
 if (path.resolve(ROOT).toLowerCase().startsWith(path.resolve(target).toLowerCase() + path.sep) || path.resolve(ROOT).toLowerCase() === path.resolve(target).toLowerCase()) { say(`不可以用安裝資料夾自己更新自己；請經插件的更新指令執行（${CMD('update')}）。`); process.exit(1); }
 const APPLY = has('apply'), ROLLBACK = has('rollback');
 const FAIL_AFTER = Number(process.env.SOS_UPDATE_FAIL_AFTER) || 0;
@@ -102,7 +103,7 @@ const servers = await runningServers();
 if (servers.some(s => s.busy) || runLockHeld()) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
 if (APPLY && servers.some(s => s.pid && !ownsServerPort(s.port, s.pid))) {
   say('今次未有更新：Founder Desk 正在開着，系統未能安全關閉它。請重新開機後再更新一次。項目沒有任何改動。');
-  console.error('（技術細節，只供 AI 排查）無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
+  tech('無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
   process.exit(4);
 }
 function closeServers() {
@@ -120,12 +121,13 @@ function closeServers() {
 if (ROLLBACK) {
   const backups = fs.readdirSync(target, { withFileTypes: true }).filter(e => e.isDirectory() && e.name.startsWith('.backup-'))
     .map(e => ({ dir: path.join(target, e.name), at: fs.statSync(path.join(target, e.name)).mtimeMs })).sort((a, b) => b.at - a.at);
-  if (!backups.length) { say(`沒有可以還原的備份（${target} 內沒有 .backup-<版本> 資料夾）。今次沒有改動任何檔案。`); process.exit(1); }
+  if (!backups.length) { say('沒有可以還原的備份。今次沒有改動任何檔案。'); tech(`安裝資料夾：${target}；找不到 .backup-<版本> 資料夾。`); process.exit(1); }
   const backup = backups[0].dir, bVersion = readVersion(backup) || path.basename(backup).replace(/^\.backup-/, ''), cur = readVersion(target) || '未知';
   const bFiles = listInstall(backup);
-  if (!bFiles.includes('ask.mjs')) { say(`備份不完整（${backup} 內沒有 ask.mjs），不能還原。今次沒有改動任何檔案。`); process.exit(1); }
+  if (!bFiles.includes('ask.mjs')) { say('備份不完整，不能還原。今次沒有改動任何檔案。'); tech(`備份位置：${backup}；缺少 ask.mjs。`); process.exit(1); }
   if (!APPLY) {
-    say(`將把 ${target} 還原到版本 ${bVersion}（來自 ${backup}，${bFiles.length} 個檔），現時版本 ${cur} 的程式檔會被取代；不會改動 ${DATA}。`);
+    say(`將把 CrewZero 還原到版本 ${bVersion}；現時版本 ${cur} 的程式會被取代，公司資料不會改動。`);
+    tech(`備份位置：${backup}；程式檔數量：${bFiles.length}；公司資料：${DATA}`);
     if (servers.length) say('Founder Desk 目前開着（沒有工作進行中）：還原後會把它關閉，下次打開便是還原後的版本。');
     process.exit(3);
   }
@@ -135,11 +137,12 @@ if (ROLLBACK) {
   try {
     const known = [...Object.keys(parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '')), ...GENERATED];
     bad = restoreFrom(backup, target, known);
-  } catch (e) { bad = ['還原時出錯']; console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (e && e.message || e)); }
+  } catch (e) { bad = ['還原時出錯']; tech(e && e.message || e); }
   finally { release(); }
-  if (bad.length) { say('還原未完成：電腦未能完成檔案更換。備份仍然保留，公司資料沒有改動；請重新開機後，再說一次「還原上一個版本」。'); console.error('（技術細節，只供 AI 排查）' + bad.slice(0, 5).join('、') + '；備份：' + backup); process.exit(1); }
+  if (bad.length) { say('還原未完成：電腦未能完成檔案更換。備份仍然保留，公司資料沒有改動；請重新開機後，再說一次「還原上一個版本」。'); tech(bad.slice(0, 5).join('、') + '；備份位置：' + backup); process.exit(1); }
   closeServers();
-  say(`已還原 CrewZero 到版本 ${bVersion}（${bFiles.length} 個檔已逐一核對）。備份資料夾保留在 ${backup}；沒有改動 ${DATA}。`);
+  say(`已還原 CrewZero 到版本 ${bVersion}，公司資料沒有改動。`);
+  tech(`已逐一核對 ${bFiles.length} 個程式檔；備份位置：${backup}；公司資料：${DATA}`);
   say(`下一步：打開 Founder Desk（${CMD('desk')}）。`);
   process.exit(0);
 }
@@ -153,7 +156,7 @@ const lines = manifestOf(ROOT, files), want = parseManifest(lines.join('\n'));
 if (fs.existsSync(path.join(ROOT, 'MANIFEST.sha256'))) {
   const m = parseManifest(fs.readFileSync(path.join(ROOT, 'MANIFEST.sha256'), 'utf8'));
   const off = [...files.filter(f => m[f] !== want[f]), ...Object.keys(m).filter(f => !want[f] && !INSTALL_SKIP.includes(f))];
-  if (off.length) { say('CrewZero 插件檔案不完整，今次沒有改動任何檔案。請重新安裝 CrewZero 插件，然後再更新一次。'); console.error(`（技術細節，只供 AI 排查）插件附帶的程式檔與清單不符：${off.length} 個，例如 ${off[0]}`); process.exit(1); }
+  if (off.length) { say('CrewZero 插件檔案不完整，今次沒有改動任何檔案。請重新安裝 CrewZero 插件，然後再更新一次。'); tech(`插件附帶的程式檔與清單不符：${off.length} 個，例如 ${off[0]}`); process.exit(1); }
 }
 const oldManifest = parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '');
 // 新版已經冇嘅舊程式檔：只刪舊清單列明嘅（創辦人自己放入嘅檔唔喺清單，唔會刪）；舊安裝冇清單就一個都唔刪
@@ -162,14 +165,16 @@ const changed = files.filter(f => shaOr(at(target, f)) !== want[f]);
 const cmp = compareVersions(oldVersion, newVersion);
 if (cmp > 0) { say(`已安裝的版本 ${oldVersion} 比插件的版本 ${newVersion} 新，不會改成舊版。今次沒有改動任何檔案。`); process.exit(1); }
 if (cmp === 0) {
-  say(`已是最新版本 ${newVersion}，沒有改動任何檔案。` + (changed.length + stale.length ? `（注意：有 ${changed.length + stale.length} 個程式檔與插件不同但版本號相同；要推出新版，請先提高插件版本號。）` : ''));
+  say(`CrewZero 已與目前的插件版本（${newVersion}）相同。公司資料沒有改動。`);
+  if (changed.length + stale.length) tech(`有 ${changed.length + stale.length} 個程式檔與插件不同但版本號相同。`);
   process.exit(0);
 }
 const oldLabel = oldVersion || '未知';
 let backup = path.join(target, '.backup-' + oldLabel);
 for (let i = 2; fs.existsSync(backup); i++) backup = path.join(target, `.backup-${oldLabel}-${i}`);
 if (!APPLY) {
-  say(`將更新 ${target} 內的 ${changed.length + stale.length} 個程式檔（版本 ${oldLabel} → ${newVersion}），並重新生成 VERSION、START-HERE.md 和排程啟動檔；舊版會先備份到 ${backup}；不會改動 ${DATA}。`);
+  tech(`程式檔數量：${changed.length + stale.length}；備份位置：${backup}`);
+  say(`將把 CrewZero 由版本 ${oldLabel} 更新至 ${newVersion}；舊版會先備份，公司資料不會改動。好嗎？`);
   if (servers.length) say('Founder Desk 目前開着（沒有工作進行中）：更新後會把它關閉，下次打開便是新版。');
   process.exit(3);
 }
@@ -201,12 +206,12 @@ try {
 } catch (e) {
   // 創辦人會經 AI 聽到呢度嘅句：只講原因同做法；錯誤原文（英文、路徑）只寫去 stderr 供 AI 排查
   const why = plainCause(e);
-  console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (e && e.message || String(e)));
+  tech(e && e.message || String(e));
   if (touched) {
     let bad = [];
-    try { bad = restoreFrom(backup, target, stageFiles); } catch (e2) { bad = ['還原時出錯']; console.error('（技術細節）' + (e2 && e2.message || e2)); }
-    if (bad.length) { say(`更新未完成，而且未能完全還原；備份仍然保留，公司資料沒有改動。請說「還原上一個版本」再試。原因：${why}`); console.error('（技術細節）與備份不符：' + bad.slice(0, 5).join('、') + '；備份：' + backup); }
-    else { try { fs.rmSync(backup, { recursive: true, force: true }); } catch { } say(`更新未完成，已由備份還原到版本 ${oldLabel}（逐檔核對一致）；公司資料沒有改動。原因：${why}`); }
+    try { bad = restoreFrom(backup, target, stageFiles); } catch (e2) { bad = ['還原時出錯']; tech(e2 && e2.message || e2); }
+    if (bad.length) { say(`更新未完成，而且未能完全還原；備份仍然保留，公司資料沒有改動。請說「還原上一個版本」再試。原因：${why}`); tech('與備份不符：' + bad.slice(0, 5).join('、') + '；備份位置：' + backup); }
+    else { try { fs.rmSync(backup, { recursive: true, force: true }); } catch { } say(`更新未完成，已還原到原本版本，公司資料沒有改動。原因：${why}`); }
   } else {
     try { fs.rmSync(backup, { recursive: true, force: true }); } catch { }
     say(`更新未完成，項目沒有任何改動。原因：${why}`);
@@ -218,5 +223,7 @@ try {
 try { fs.rmSync(stage, { recursive: true, force: true }); } catch { }
 release();
 closeServers();
-say(`已更新 CrewZero：版本 ${oldLabel} → ${newVersion}（${files.length} 個程式檔已逐一核對${stale.length ? '，刪除了 ' + stale.length + ' 個新版已沒有的舊程式檔' : ''}）。舊版備份在 ${backup}；沒有改動 ${DATA}。`);
-say(`下一步：打開 Founder Desk（${CMD('desk')}）；原有資料照用。若新版有問題，在對話輸入「還原上一個版本」。`);
+say(`CrewZero 已更新至版本 ${newVersion}，公司資料沒有改動。`);
+tech(`備份位置：${backup}；程式檔數量：${stageFiles.length}`);
+say('以後在 AI 對話說「打開 Founder Desk」，便可再次打開。');
+say('如新版有問題，在 AI 對話說「還原上一個版本」。');

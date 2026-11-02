@@ -917,7 +917,11 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     Promise.all([get('/api/ask?id=' + encodeURIComponent(id)), get('/api/status')]).then(function (r) {
       P = r[0].pack; A = r[0].answers || {}; V.status = r[1]; checkInstance(r[1]);
       var b = pickBatch();
-      S = { edits: {}, ok: {}, extra: false, open: null, drafts: {}, help: {}, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
+      var help = {};
+      P.questions.forEach(function (q) {
+        if ((V.status.helpInFlight || []).some(function (x) { return x && x.packId === P.id; })) help[q.id] = { sent: true };
+      });
+      S = { edits: {}, ok: {}, extra: false, open: null, drafts: {}, help: help, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
       DESK.title('pending', N.fix(P.title));
       renderAsk();
       window.scrollTo(0, 0);

@@ -1418,7 +1418,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       od.tasks.map(function (t) { return h('li', { class: 'tk' }, h('i'), h('span', null, D.tasksL + ' ' + (t.no || '') + ' · ' + t.title), h('em', null, D['ms_' + t.status] || '')); })];
   }
   function orbitHead(od) {
-    return [h('div', null, h('h2', null, D.workNet), h('span', { class: 'sub' }, D.orbitSub)),
+    return [h('div', null, h('h2', null, D.workNet)),
       h('span', { class: 'legend' }, V.scope !== 'all' ? h('button', { type: 'button', class: 'chipb', id: 'scope-all', onclick: function () { setScope('all'); } }, D.allL) : null,
         h('span', null, '● ' + D.act_working), h('span', null, '○ ' + D.act_idle), h('span', null, '▮ ' + D.tasksL), h('span', null, '◎ ' + D.humanCore))];
   }
@@ -1681,11 +1681,11 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   }
   function localAct(action) { return postJSON('/api/setup', { action: action }); }
   function pageInputs() {
-    var x = V.data, iv = x.interviews, inp = x.inputs, U = N.ui, ivTodo = x.todo.filter(function (t) { return t.type === 'interview'; })[0];
+    var x = V.data, iv = x.interviews, inp = x.inputs, U = N.ui, ivTodo = x.todo.filter(function (t) { return t.type === 'interview'; })[0], ivPast = !!(iv && iv.nextOn && parseDay(iv.nextOn) < today());
     var hl = x.health || {}, stopped = hl.pausedByFounder ? U.skip_pausedByFounder : hl.autoStopped ? U.skip_autoStopped : '';
     var stName = function (st) { return st === 'processed' ? D.processed : st === 'awaitingFounder' ? D.awaiting : D.unprocessed; };
     var ivCol = h('section', { class: 'panel', id: 'in-interview' }, h('div', { class: 'ph' }, h('h2', null, D.interview)),
-      iv && iv.nextOn ? h('p', null, '下次訪問：', h('b', null, mdw(iv.nextOn)), '（' + rel(iv.nextOn) + '） ', ivTodo ? h('a', { class: 'btn primary', href: ivTodo.href }, '★ ' + D.startInterview) : h('span', { class: 'muted small' }, '到期當日，Founder Desk 會出現「開始訪問」。')) : h('p', { class: 'muted' }, '未安排每週訪問：確認公司概覽後按經營節奏排期。'),
+      iv && iv.nextOn ? h('p', null, '下次訪問：', h('b', null, mdw(iv.nextOn)), '（' + rel(iv.nextOn) + '） ', ivTodo ? h('a', { class: 'btn primary', href: ivTodo.href }, '★ ' + D.startInterview) : h('span', { class: 'muted small' }, ivPast ? 'AI 正在準備今次訪問，完成後會顯示「開始訪問」。' : '到期當日，Founder Desk 會出現「開始訪問」。')) : h('p', { class: 'muted' }, '未安排每週訪問：確認公司概覽後按經營節奏排期。'),
       iv && iv.lastSummary && iv.lastSummary.length ? [h('h4', null, D.lastInterview + (iv.lastOn ? '（' + md(iv.lastOn) + '）' : '')), h('ul', null, iv.lastSummary.map(function (t) { return h('li', null, t); })), iv.changed ? h('p', null, h('b', null, D.changedBy + '：'), iv.changed) : null] : null);
     var evs = inp.events || [];
     var evCol = h('section', { class: 'panel', id: 'in-events' }, h('div', { class: 'ph' }, h('h2', null, D.evCol)),
@@ -1813,7 +1813,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var path = h('input', { type: 'text', id: 'obs-path', class: 'obs-in', 'aria-label': D.observeAdd, value: V.obsPath || '', oninput: function (e) { V.obsPath = e.target.value; } });
     var name = h('input', { type: 'text', id: 'obs-name', class: 'obs-in', placeholder: D.observeNameL, 'aria-label': D.observeNameL, value: V.obsName || '', oninput: function (e) { V.obsName = e.target.value; } });
     return h('div', { id: 'sys-observe', 'data-off': ob.off ? 'true' : 'false' }, list,
-      h('p', { class: 'small muted', id: 'sys-observe-text' }, ob.text + (ob.state === 'ok' ? '（唯讀；監察台開啟時最多每 5 秒讀取一次；只顯示這些資料夾內的本機 AI 會話）' : '')),
+      h('p', { class: 'small muted', id: 'sys-observe-text' }, ob.text),
       ob.pending ? h('p', { class: 'small', id: 'sys-observe-pending' }, fill(D.observePending, { n: ob.pending })) : null,
       h('div', { class: 'obs-add' }, path, name, h('button', { type: 'button', class: 'btn small', id: 'obs-add', onclick: function (e) { var p = (V.obsPath || '').trim(); if (!p) { toast(D.observePathInvalid); return; } observeSetup({ op: 'add', path: p, name: (V.obsName || '').trim() }, e.target); } }, D.observeAdd)),
       h('p', { class: 'small muted' }, D.observeAddHint),
@@ -1845,11 +1845,12 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         h('p', null, x.ai.ready ? ['已設定：', h('b', null, x.ai.label), '（認證日期 ' + md(x.ai.certifiedAt) + '）'] : [h('b', null, '未設定'), '：AI 團隊暫未能開始工作。']),
         h('p', null, h('a', { class: 'btn' + (x.ai.ready ? '' : ' primary'), href: '/#/setup', id: 'sys-setup' }, (x.ai.ready ? '' : '★ ') + D.goSetup), ' ', h('span', { class: 'small muted' }, '選擇 AI 工具與認證，請在 Founder Desk 系統設定頁進行（只限本機）。')),
         h('h4', null, D.sysNow),
-        h('p', null, x.work.meta.workingSessions ? fill(D.workingNow, { n: x.work.meta.workingSessions, m: x.work.meta.activeSubagents }) : x.ai.running ? '工作中：' + x.ai.running.label + '（' + when(x.ai.running.startedAt) + ' 開始）' : '閒置'),
+        h('p', null, x.health && (x.health.pausedByFounder || x.health.autoStopped) ? (x.work.meta.workingSessions ? 'AI 團隊的日常工作已暫停；另有 ' + x.work.meta.workingSessions + ' 個本機 AI 對話正在進行。' : 'AI 團隊的日常工作已暫停。') : x.work.meta.workingSessions ? fill(D.workingNow, { n: x.work.meta.workingSessions, m: x.work.meta.activeSubagents }) : x.ai.running ? '工作中：' + x.ai.running.label + '（' + when(x.ai.running.startedAt) + ' 開始）' : '閒置'),
         h('h4', null, D.observeFolders),
         observePanel(x.work.observe),
         h('h4', null, U.devices),
         DESK.devices(x.devices || [], { onRevoke: function (id, btn) { postJSON('/api/setup', { action: 'revoke', id: id }).then(function () { toast(U.deviceRevoked); load(); }).catch(function (e) { btn.disabled = false; toast(why(e)); }); } }),
+        h('p', { class: 'small muted', id: 'sys-data-location' }, '公司資料只存放在這部電腦。其他人要使用，請在這部電腦的瀏覽器開啟。'),
         h('h4', null, D.sysRhythm),
         // 經營節奏：未確認公司概覽前未有（用預設）；排程一行三態（MVP 規格第 2 節第 3 項）：未登記／已登記／節奏已改須重新登記——公司概覽未確認都照顯示
         h('dl', { class: 'kv' }, x.rhythm ? [h('dt', null, '開工'), h('dd', null, (CAD[x.rhythm.runCadence] || '每日') + ' ' + x.rhythm.runTime + '，每次最多 ' + (x.rhythm.runCapMinutes || 30) + ' 分鐘'), h('dt', null, '訪問日'), h('dd', null, '星期' + WD[(x.rhythm.interviewWeekday || 1) % 7] + (x.interviews && x.interviews.nextOn ? '（下次 ' + md(x.interviews.nextOn) + '）' : ''))]
@@ -1858,7 +1859,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
           h('dt', null, U.schedLast), h('dd', { id: 'sys-last' }, ri.lastScheduleAt ? [when(ri.lastScheduleAt) + ' ', ri.lastSchedule ? runTags(ri.lastSchedule) : null] : U.schedNever),
           h('dt', null, U.schedNext), h('dd', { id: 'sys-next' }, ri.nextRunAt ? when(ri.nextRunAt) + '（' + left(ri.nextRunAt) + '）' : '未有：排程未登記，AI 只會在你提交答案或要求時開始工作')),
         h('h4', null, D.brain),
-        h('p', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? '未有資料：提交資料並確認公司概覽後，由公司紀錄供料。' : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : '找不到指定的試驗資料夾'),
+        h('p', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? '未有資料：提交資料並確認公司概覽後，由公司紀錄供料。' : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : '找不到先前指定的參考資料夾。請在 AI 對話說「打開營運監察台」重新開啟。'),
         h('h4', null, D.sysHealth),
         (x.health.warnings || []).length ? h('ul', null, x.health.warnings.map(function (w) { return h('li', null, w); })) : h('p', { class: 'muted' }, '沒有。')),
       h('section', { class: 'panel' }, h('div', { class: 'ph' }, h('h2', null, D.sysRuns)),
@@ -2122,15 +2123,18 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function scoreBoard(d) {
     var s = d.score;
     if (!s) return null;
+    var attacks = { '高': 0, '中': 0, '低': 0 };
+    (d.rows || []).forEach(function (r) { (r.attacks || []).forEach(function (a) { if (attacks[a.severity] != null) attacks[a.severity]++; }); });
+    var attackStats = D.attackStats.replace('{high}', attacks['高']).replace('{medium}', attacks['中']).replace('{low}', attacks['低']);
     var evb = h('div', { class: 'evbar', title: D.evDist }, s.evidence.map(function (n, i) { return n ? h('i', { class: 'e' + i, style: 'flex:' + n, title: EV[i] + ' ' + n }, String(n)) : null; }));
     return h('div', { class: 'sb', id: 'scoreboard', 'data-act': 'score' },
       h('div', { class: 'sb-v' }, [['vStand', 'stand', s.standing], ['vHurt', 'hurt', s.wounded], ['vFall', 'fall', s.fallen]].map(function (k) { return h('div', { class: 'sb-n ' + k[1] }, h('strong', null, String(k[2])), h('span', null, D[k[0]])); })),
-      h('div', { class: 'sb-m' }, h('label', null, D.blueRate), h('strong', null, pct(s.blueRate)), h('small', null, '企得住計 2 分、受傷計 1 分、倒下計 0 分')),
-      h('div', { class: 'sb-m' }, h('label', null, D.redHitRate), s.redHitRate == null ? h('strong', { class: 'na' }, D.noHitRate) : h('strong', null, pct(s.redHitRate)), h('small', null, '攻擊：高 ' + s.attacks.high + ' · 中 ' + s.attacks.mid + ' · 低 ' + s.attacks.low)),
+      h('div', { class: 'sb-m' }, h('label', null, D.blueRate), h('strong', null, pct(s.blueRate)), h('small', null, D.scoreRules + ' ' + attackStats)),
+      h('div', { class: 'sb-m' }, h('label', null, D.redHitRate), s.redHitRate == null ? h('strong', { class: 'na' }, D.noHitRate) : h('strong', null, pct(s.redHitRate)), h('small', null, '紅方命中率是質疑成立的比例。')),
       h('div', { class: 'sb-m' }, h('label', null, D.evDist), evb, h('small', null, '藍方論點的證據級分佈')),
       h('div', { class: 'sb-m' }, h('label', null, D.verifiedL), d.verified ? h('strong', null, '✓ ' + d.verified.ok + ' · ✗ ' + d.verified.failed) : h('strong', { class: 'na' }, d.legacy || d.web ? D.verifiedNone : D.verifiedOffline)),
       s.overall ? h('p', { class: 'sb-o' }, h('b', null, D.overallL + '：'), s.overall, ' ', tag('AI 解讀', 'src-read')) : null,
-      d.delta ? h('p', { class: 'sb-d' }, D.deltaL + '（' + D.matchN.replace('{n}', d.delta.prevN) + '）：企得住 ' + sign(d.delta.standing) + ' · 受傷 ' + sign(d.delta.wounded) + ' · 倒下 ' + sign(d.delta.fallen)) : null);
+      d.delta ? h('p', { class: 'sb-d' }, D.deltaL + '（' + D.matchN.replace('{n}', d.delta.prevN) + '）：' + D.vStand + ' ' + sign(d.delta.standing) + ' · ' + D.vHurt + ' ' + sign(d.delta.wounded) + ' · ' + D.vFall + ' ' + sign(d.delta.fallen)) : null);
   }
   function moments(d) {
     if (!(d.keyMoments || []).length) return null;
@@ -2294,7 +2298,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         (f.challenges || []).map(function (c) { var r = (d.rows || []).filter(function (z) { return z.claim.id === c.claimId; })[0]; return h('li', null, tag(D.founderChallenge, 'eff'), ' ', (r ? '「' + clip(r.claim.claim, 30) + '」：' : '') + c.note + (c.rejudged ? '（已重判）' : '')); }))));
     if (!s) {
       out.push(h('div', { class: 'wc pending' + (['strengthening', 'reattack'].indexOf(d.phase) >= 0 ? ' now' : ''), style: 'max-width:560px', 'data-act': 'strengthen' },
-        ['strengthening', 'reattack'].indexOf(d.phase) >= 0 ? 'AI 正將受傷及倒下的論點變成轉強卡……' : '你回應這場辯論之後，AI 會將受傷及倒下的論點變成轉強卡。'));
+        ['strengthening', 'reattack'].indexOf(d.phase) >= 0 ? 'AI 正將被找到弱點及被推翻的論點變成轉強卡……' : '你回應這場辯論之後，AI 會將被找到弱點及被推翻的論點變成轉強卡。'));
       return out;
     }
     var first = s.cards[0] ? s.cards[0].id : null, op = V.wgCard !== undefined ? V.wgCard : first;

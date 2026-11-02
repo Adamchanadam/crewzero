@@ -38,6 +38,7 @@ export function seedDemo(dir = DEMO_DIR, { reset = false, now = new Date(), copy
   const page = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures', 'example-company-page.json'), 'utf8'));
   page.page.preparedAt = resolveTimes('@-26d', now);
   write(path.join(dir, 'company', 'page.json'), page);
+  write(path.join(dir, 'company', 'biz.json'), { type: 'goods', other: '' });
   const values = {};
   (function walk(o) { if (Array.isArray(o)) return o.forEach(walk); if (!o || typeof o !== 'object') return; if (typeof o.id === 'string' && 'value' in o && 'label' in o) values[o.id] = String(o.value); for (const k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]); })(page);
   write(path.join(dir, 'ledger', 'confirmed.json'), { company: page.company.name, pageId: page.page.id, confirmedAt: resolveTimes('@-25d 22:10', now), replyFile: 'demo', order: ['m1', 'm4', 'm2', 'm3', 'm5'], orderChanged: true, nextActionMilestone: 'm1', edits: [], stillMissing: [], note: '', values });

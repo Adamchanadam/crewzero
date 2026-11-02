@@ -43,11 +43,11 @@
   "topRisks": [ { "rank": 1, "risk": "一句", "cheapestTest": "一句", "stop": "一句：幾時之前未見到乜就停、縮或換", "testBy": "ai|founder|approval",
       "aiChecked": [ { "finding": "一句", "label": "observation|fact", "sources": [ { "title": "…", "url": "…", "readOn": "YYYY-MM-DD" } ], "minutes": 9 } ] } ],
   "routes": [ { "id": "S1", "name": "短名", "recommended": true, "why": "一句", "redScore": "高|中|低", "firstTest": "一句", "stop": "一句" } ],
-  "founderDecisions": [ { "question": "一句", "options": [ "A …", "B …" ], "recommend": "A", "why": "一句" } ],
+  "founderDecisions": [ { "question": "一句", "options": [ "A …", "B …" ], "recommend": "A", "why": "一句", "risk": "一句具體後果" } ],
   "assumptionChanges": [ { "assumptionId": "H1", "change": "一句", "label": "AI 建議 · 未確認" } ] }
 ```
 
-`factChecks` 係原型多出嘅可選欄（畫面「外部事實核實」用）。最傷三點、要你決定嘅事最多三條。
+`factChecks` 係原型多出嘅可選欄（畫面「外部事實核實」用）。最傷三點、要你決定嘅事最多三條；每項 `founderDecisions` 必須寫 `risk`，說明不作或作出該決定的具體後果。
 
 ## rejudge.json（重判：創辦人挑戰之後，只可以改指定嘅論點，最多三條）
 
