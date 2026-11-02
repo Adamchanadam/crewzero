@@ -65,7 +65,7 @@ const human = `${CADENCE[r.runCadence] || '每日'} ${r.runTime}`;
 if (os !== 'windows') {
   // MVP 只支援 Windows 登記；其他系統照舊只印定義，由人照住登記
   const node = process.execPath, cmd = `"${launcher}"`;
-  if (has('register') || has('remove') || has('status')) { say('呢部電腦唔係 Windows：MVP 未支援自動登記。請照下面定義自行登記。'); }
+  if (has('register') || has('remove') || has('status')) { say('目前只支援在 Windows 電腦設定每日自動開工。在這部電腦，AI 會在你交答案或提出要求時工作；你亦可每日在 AI 對話說「打開 Founder Desk」。'); say('（以下技術定義只供 AI 參考，毋須交給創辦人。）'); }
   if (os === 'mac') say(`macOS launchd：每日 ${hh}:${mm} 執行 ${cmd}（Label ${NAME}）`);
   else say(`Linux cron（crontab 一行）：${Number(mm)} ${Number(hh)} * * ${r.runCadence === 'weekdays' ? '1-5' : r.runCadence === 'weekly' ? String(Number(r.interviewWeekday) % 7) : '*'} ${cmd}`);
   say('（執行環境：' + node + '）');
@@ -82,16 +82,18 @@ if (has('status')) {
 if (has('remove')) {
   const x = runWin('remove');
   fs.rmSync(MARK, { force: true });
-  say(x.ok ? `已移除每日排程（${NAME}）；AI 只會在你提交答案或要求時開始工作。` : `移除時出錯：${x.err || '未知原因'}；標記已刪走。可以自行在「工作排程器」刪除「${NAME}」。`);
+  say(x.ok ? `已移除每日排程（${NAME}）；AI 只會在你提交答案或要求時開始工作。` : '每日排程未能完全移除：電腦拒絕了這項設定，CrewZero 已停用這個排程的紀錄。請重新開機後，再說一次「移除排程」。');
+  if (!x.ok) console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (x.err || '讀回時沒有結果'));
   process.exit(x.ok ? 0 : 1);
 }
 if (!fs.existsSync(launcher)) { say(`未有排程啟動檔：${launcher}。請先以安裝命令安裝 CrewZero。`); process.exit(1); }
 if (has('register')) {
   const x = runWin('register');
   if (!x.ok || !x.json || !x.json.registered) {
-    say('登記未成功：' + (x.err || '讀回時找不到這個排程'));
-    say('可以自行在 PowerShell 執行以下命令登記（複製命令）：');
-    say(winScript('register'));
+    // 第一句交畀創辦人（原因同做法）；英文錯誤同命令全文只寫去 stderr 供 AI 排查，唔好叫創辦人自己執行
+    say('每日排程未能登記：電腦拒絕了這項設定。安裝已完成，AI 仍會在你交答案或提出要求時工作；如要每日自動開工，請重新開機後再說「安裝排程」。');
+    console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + (x.err || '讀回時找不到這個排程'));
+    console.error(winScript('register'));
     process.exit(1);
   }
   const mark = { name: NAME, os: 'windows', cadence: r.runCadence, runTime: r.runTime, timezone: r.timezone, interviewWeekday: r.interviewWeekday, limitMinutes: LIMIT,

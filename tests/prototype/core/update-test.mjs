@@ -102,6 +102,9 @@ try {
   /* 中途失敗：由備份還原到一模一樣 */
   const f1 = run(UPDATE, [PROJ, '--apply'], { SOS_UPDATE_FAIL_AFTER: '7' });
   ok('換入第 7 個檔之後故意失敗：結束碼 1、講已由備份還原', f1.status === 1 && /已由備份還原到版本 0\.3\.0/.test(f1.stdout), { status: f1.status, out: f1.stdout, err: f1.stderr });
+  const f1Line = f1.stdout.split(/?
+/).find(l => /更新未完成/.test(l)) || '';
+  ok('失敗句：講原因同做法、公司資料冇改動；冇錯誤原文、冇路徑（原文只去 stderr）', /原因：/.test(f1Line) && /公司資料沒有改動/.test(f1Line) && /請/.test(f1Line) && !/測試：故意|[A-Za-z]:\/.test(f1Line) && /測試：故意/.test(f1.stderr), { f1Line, err: f1.stderr });
   ok('失敗後安裝資料夾逐檔雜湊同更新前一模一樣（含 VERSION、創辦人嘅檔、舊程式檔；冇留低備份）', same(tree(T), before), { extra: Object.keys(tree(T)).filter(k => !(k in before)), missing: Object.keys(before).filter(k => !(k in tree(T))), changed: Object.keys(before).filter(k => k in tree(T) && tree(T)[k] !== before[k]).slice(0, 5) });
   ok('失敗後 data/ 逐檔不變、冇留低鎖、項目根冇暫存資料夾', same(tree(DATA), dataBefore) && !fs.existsSync(LOCK) && fs.readdirSync(PROJ).join(',') === 'startup-os', fs.readdirSync(PROJ));
 
