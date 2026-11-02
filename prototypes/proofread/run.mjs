@@ -326,7 +326,7 @@ function takeAIQuestions(sb, run) {
   const f = path.join(sb, 'out', 'ask.json');
   if (!fs.existsSync(f)) return;
   const raw = readJSON(f, null);
-  const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: run.id, strictTitle: false });
+  const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: run.id, strictTitle: false, noDedupe: run.kind === 'note' && run.noteType === 'help' });
   if (!prep.ok) { run.result.askRejected = prep.errors.slice(0, 3); log(`${run.id} AI 問題包退回：${prep.errors.join('；')}`); return; }
   if (isRequest(run)) markRequest(run, raw, prep.packs);
   run.result.asks = placePacks(DIR, prep.packs);
@@ -584,6 +584,7 @@ async function handleNote(run, file) {
   const retry = /^help\s+[\w-]+\s+([12])$/.exec(String(parsed.head.from || ''));
   run.helpRetries = retry ? Number(retry[1]) : 0;
   run.helpForPackId = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).packId || '')) ? String(machine.context.packId) : '';
+  run.helpForRunRef = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).runRef || '')) ? String(machine.context.runRef) : '';
   step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc }[run.noteType]);
   const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
@@ -639,7 +640,7 @@ function handleBrainDecide(run, m) {
   if (!ds.length) { const why = '紅藍對打未整合好，未有要你決定的事'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
   const raw = { format: 'startup-os.ask/0.1', title: '紅藍對打：需要你決定的事', context: '裁判整合紅藍對打之後，有以下事情要你拍板；紅隊結果不算證據。', afterConfirm: '答案會記入決定紀錄。',
     questions: ds.slice(0, 3).map((d, i) => { const opts = (d.options || []).slice(0, 3).map(o => String(o)); const rec = opts.find(o => o === d.recommend || o.startsWith(String(d.recommend || '') + ' ')) || opts[0];
-      return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || '裁判建議'), ...(String(d.risk || '').trim() ? { risk: clip(String(d.risk), 120) } : {}) }; }) };
+      return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || '裁判建議'), ...(String(d.risk || '').trim() ? { risk: clip(String(d.risk), 120) } : {}), ...(String(d.conflict || '').trim() ? { conflict: clip(String(d.conflict), 120) } : {}) }; }) };
   const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: null, strictTitle: false, system: true });
   if (!prep.ok || !prep.packs.length) { const why = prep.ok ? '這幾條先前已經回答' : '裁判提供的選項格式不正確，未能放上 Founder Desk'; step(run, 'applied', U.stepReqRegistered, prep.ok ? 'done' : 'failed', why); if (prep.ok) { run.result = { summary: why, artifacts: [], founderNext: [] }; return finish(run, 'done'); } return finish(run, 'failed', why); }
   for (const p of prep.packs) { p.todoType = 'decision'; p.brainItem = 'wargame'; }
@@ -1105,6 +1106,7 @@ async function brainStep(run, item, opts = {}) {
   if (!ad.host) return false;
   const sb = path.join(DIR.sandbox, run.id + '-' + item);
   fs.mkdirSync(path.join(sb, 'out'), { recursive: true });
+  writeBizContext(sb);
   writeConfirmedPage(sb);
   const L = brainLedger(), prev = readJSON(brainFile(DIR, item), null), fb = feedbackFor(item, prev);
   writeJSON(path.join(sb, 'ledger.json'), L);
@@ -1179,9 +1181,17 @@ function founderNote(type, text, from) {
   fs.writeFileSync(f, `kind: note\ntype: ${type}\nat: ${localIso()}\nfrom: ${from}\n\n${text.replace(/\s+/g, ' ').trim()}\n`, { flag: 'wx' });
   return path.basename(f);
 }
-function handleHelpAnswer(run, pack, store) {
+async function handleHelpAnswer(run, pack, store) {
   const q = pack.questions[0], answer = q && store.answers[q.id];
-  if (!answer || answer.value !== U.helpStill) {
+  if (!answer) {
+    run.result = { summary: '尚待你選擇求助回覆的做法。', artifacts: [], founderNext: [] };
+    return finish(run, 'done');
+  }
+  if (answer.value !== U.helpStill) {
+    if (pack.next && pack.next.task) {
+      if (pack.taskId) { run.taskId = pack.taskId; upsertTask({ id: pack.taskId, status: 'active', waitingFor: '', next: clip(pack.next.task, 60) }); }
+      return aiAfterAsk(run, pack);
+    }
     run.result = { summary: U.helpAnswerRecorded, artifacts: [], founderNext: [] };
     return finish(run, 'done');
   }
@@ -1292,6 +1302,7 @@ function answersMarkdown(pack, ans) {
     L.push(`## ${q.ask}`);
     if (a && a.value === U.unknownLater) L.push(`- 答案：${U.unknownLater}`, '- 狀態：創辦人而家答唔到，稍後提供；一星期內唔好再問，用到時當未知處理');
     else if (a) L.push(`- 答案：${showAns(q, a.value)}`, `- 狀態：創辦人答咗（${a.changed ? '改咗 AI 建議' : '照 AI 建議'}）`);
+    else if (q.effect === 'now' || q.conflict || q.bind === 'results' || pack.actionConfirm || pack.acceptance) L.push('- 答案：尚未回答', '- 狀態：創辦人尚未確認，不能作為 AI 的後續依據。');
     else L.push(`- 答案：${showAns(q, q.value)}`, '- 狀態：先咁計住（AI 建議，創辦人未答）');
     L.push('');
   }
@@ -1346,8 +1357,9 @@ async function handleAsk(run, file) {
     return handleHelpAnswer(run, pack, store);
   }
   const left = pack.questions.filter(q => !store.answers[q.id]).length;
+  const requiredLeft = pack.questions.filter(q => !store.answers[q.id] && (q.effect === 'now' || q.conflict || q.bind === 'results' || pack.actionConfirm || pack.acceptance));
   const applied = pack.request && pack.request.type === 'order' ? applyOrder(pack, store, run) : '';
-  step(run, 'applied', U.stepAppliedAns, 'done', `今次回答了 ${entries.length} 條` + (left ? `；另有 ${left} 條暫按 AI 建議` : '；此問題包已全部回答') + (applied ? '；' + applied : ''));
+  step(run, 'applied', U.stepAppliedAns, 'done', `今次回答了 ${entries.length} 條` + (left ? (requiredLeft.length ? `；尚有 ${left} 條未回答` : `；另有 ${left} 條暫按 AI 建議`) : '；此問題包已全部回答') + (applied ? '；' + applied : ''));
   if (pack.rhythm) { const fresh = new Set((machine.answers || []).map(a => a.id)), k = pack.rhythm.kind;
     if (k === 'interview') return handleInterviewAnswer(run, pack, store, fresh);
     if (k === 'monthly') return handleMonthlyAnswer(run, pack, store);
@@ -1362,6 +1374,10 @@ async function handleAsk(run, file) {
   if (pack.acceptance) return handleAcceptance(run, pack, store);
   if (pack.actionConfirm) return handleActionConfirm(run, pack, store);
   if (pack.debate) return handleDebateAnswer(run, pack, store);
+  if (requiredLeft.length && pack.next && pack.next.task) {
+    run.result = { summary: `已記錄你的答案；尚有 ${requiredLeft.length} 條必須由你逐項確認的問題未回答，AI 尚未開始後續工作。`, artifacts: [], founderNext: [] };
+    return finish(run, 'done');
+  }
   if (pack.taskId && pack.next && pack.next.task) { run.taskId = pack.taskId; upsertTask({ id: pack.taskId, status: 'active', waitingFor: '', next: clip(pack.next.task, 60) }); }
   if (pack.next && pack.next.task) return aiAfterAsk(run, pack);
   if (applied) { run.result = { summary: applied, artifacts: [], founderNext: [] }; return finish(run, 'done'); }
@@ -1372,13 +1388,15 @@ async function handleAsk(run, file) {
 // 你嘅現實行動（見客、打電話、線下交付）：只有你喺 Founder Desk 確認先算完成，AI 冇得標
 function handleActionConfirm(run, pack, store) {
   const t = getTask(pack.actionConfirm.taskId);
-  const a = Object.values(store.answers)[0];
-  const done = !!a && a.value === U.actionDone;
+  const answers = pack.questions.map(q => store.answers[q.id]);
+  const allAnswered = answers.every(Boolean);
+  const done = allAnswered && answers.every(a => a.value === U.actionDone);
+  const hasReschedule = answers.some(a => a && a.value === U.actionReschedule);
   if (t) {
     if (done) { upsertTask({ id: t.id, status: 'done', confirmedBy: 'founder', waitingFor: '' }); addEvent({ actor: 'founder', type: 'input', title: '你已完成：' + t.title, relatedIds: [t.id], moduleIds: ['now', 'evidence'] }); }
-    else upsertTask({ id: t.id, status: 'waiting', confirmedBy: null, packId: a ? '' : t.packId || '', waitingFor: !a ? '等待你確認是否完成' : a.value === U.actionReschedule ? '等待你改期' : '等待你完成', next: a ? '你表示未完成，需要改期' : t.next || '' });
+    else upsertTask({ id: t.id, status: 'waiting', confirmedBy: null, packId: allAnswered ? '' : t.packId || '', waitingFor: !allAnswered ? '等待你確認是否完成' : hasReschedule ? '等待你改期' : '等待你完成', next: allAnswered ? '你表示尚未完成，需要改期' : t.next || '' });
   }
-  run.result = { summary: t ? (done ? '已記錄：你已完成「' + t.title + '」。' : a ? '已記錄：「' + t.title + '」未完成，需要改期。' : '尚待你確認「' + t.title + '」是否完成。') : '已記錄你的答案。', artifacts: [], founderNext: [] };
+  run.result = { summary: t ? (done ? '已記錄：你已完成「' + t.title + '」。' : !allAnswered ? '尚待你確認「' + t.title + '」是否完成。' : hasReschedule ? '已記錄：「' + t.title + '」需要改期。' : '已記錄：「' + t.title + '」尚未完成。') : '已記錄你的答案。', artifacts: [], founderNext: [] };
   return finish(run, 'done');
 }
 async function handleAcceptance(run, pack, store) {
@@ -1810,7 +1828,7 @@ async function plainOne(run, key, srcFile, n, extraRefs = {}) {
     else {
       sbName = run.id + '-plain-' + n;
       const sb = path.join(DIR.sandbox, sbName);
-      fs.mkdirSync(path.join(sb, 'out'), { recursive: true }); fs.mkdirSync(path.join(sb, 'in'), { recursive: true }); fs.mkdirSync(path.join(sb, 'ref'), { recursive: true });
+      fs.mkdirSync(path.join(sb, 'out'), { recursive: true }); fs.mkdirSync(path.join(sb, 'in'), { recursive: true }); fs.mkdirSync(path.join(sb, 'ref'), { recursive: true }); writeBizContext(sb);
       fs.writeFileSync(path.join(sb, 'in', name), text);
       for (const [f, body] of Object.entries(extraRefs.files || {})) fs.writeFileSync(path.join(sb, 'ref', f), body);
       plainTask(sb, name, isJSON, hits, { codes: extraRefs.codes || [] });
@@ -2083,6 +2101,7 @@ function placeInterviewIfDue() {
 }
 function handleInterviewAnswer(run, pack, store, fresh) {
   const s = loadState(), iv = s.interviews = s.interviews || {}, today = todayIso(), said = [], texts = [], extra = [], placedNow = [];
+  const resultsPending = pack.questions.some(q => q.bind === 'results' && !String((store.answers[q.id] || {}).value || '').trim());
   iv.applied = iv.applied || {};
   const done = new Set(iv.applied[pack.id] || []);
   let structuredSeen = false;
@@ -2176,7 +2195,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   if (extra.length) { const n = pack.questions.length; pack.questions.push(...extra.map((q, i) => ({ ...q, priority: n + i + 1 }))); writeJSON(path.join(DIR.asks, pack.id + '.json'), pack); }
   let monthly = null;
   // 同一份訪問收到至少一題選項答案（包括「無變化」）先算做咗：更新上次、下次（3.9 (3)）
-  if (structuredSeen && iv.lastFor !== pack.rhythm.on) {
+  if (structuredSeen && !resultsPending && iv.lastFor !== pack.rhythm.on) {
     const r = rhythmOf(s);
     let next = addDays(pack.rhythm.on, 7);
     if (next <= today) next = nextWeekday(today, r.interviewWeekday);
@@ -2194,7 +2213,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   }
   if (monthly) monthly = placeMonthly(run);
   writeInterviewRecord(pack, store, said);
-  const summary = (said.length ? '已更新：' + said.join('；') + '。' : '已記錄你的答案；公司紀錄沒有變化。') + (extra.length ? '另有 ' + extra.length + ' 條補充題已加入這份訪問。' : '') + (structuredSeen ? '下次訪問：' + dayText(iv.nextOn) + '。' : '') + (monthly ? '每月覆核已放上待決事項。' : '');
+  const summary = (resultsPending ? '已記錄你的答案；本週成果尚未填寫。' : said.length ? '已更新：' + said.join('；') + '。' : '已記錄你的答案；公司紀錄沒有變化。') + (extra.length ? '另有 ' + extra.length + ' 條補充題已加入這份訪問。' : '') + (structuredSeen && !resultsPending ? '下次訪問：' + dayText(iv.nextOn) + '。' : '') + (monthly ? '每月覆核已放上待決事項。' : '');
   step(run, 'interview', U.interviewTitle.replace('（{d}）', ''), 'done', summary);
   run.result = { summary, artifacts: [], founderNext: [], asks: asks.concat(monthly ? [monthly] : []) };
   if (!texts.length) return finish(run, 'done');
@@ -2568,13 +2587,15 @@ async function main() {
           return;
         }
         if (!['order', 'adhoc', 'help'].includes(prev.noteType)) { finish(run, 'failed', '這項工作不能直接重試，請回到原本的頁面重新提交一次。'); return; }
-        run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.helpRetries = prev.helpRetries || 0;
+        run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.helpRetries = prev.helpRetries || 0; run.helpForPackId = prev.helpForPackId || '';
         step(run, 'received', U.stepReqReceived, 'done', '重試上一次');
         step(run, 'applied', U.stepReqRegistered, 'done', '沿用上一次');
         const sb = newSandbox(run);
         const oldDir = path.join(DIR.sandbox, prev.id);
         if (run.noteType === 'help' && fs.existsSync(oldDir)) {
           fs.cpSync(oldDir, sb, { recursive: true, filter: source => source === oldDir || (path.basename(source) !== 'out' && path.basename(source) !== 'biz.md' && !source.endsWith('.txt')) });
+          const oldNote = fs.readFileSync(path.join(sb, 'note.md'), 'utf8').replace(/^# 創辦人的求助\r?\n\r?\n/, '').split(/\r?\n## 頁面或題目資料\r?\n/)[0].trim();
+          helpNoteTask(sb, oldNote);
         } else if (run.noteType === 'help') {
           const archive = fs.readdirSync(DIR.archive, { withFileTypes: true }).filter(x => x.isDirectory()).map(x => path.join(DIR.archive, x.name));
           const old = archive.map(d => path.join(d, prev.ref + '-note-help.md')).find(f => fs.existsSync(f));

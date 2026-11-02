@@ -59,26 +59,6 @@ function allPacks() {
 function pack(id) {
   return JSON.parse(fs.readFileSync(path.join(DATA, 'asks', id + '.json'), 'utf8'));
 }
-function writePack(p) {
-  fs.writeFileSync(path.join(DATA, 'asks', p.id + '.json'), JSON.stringify(p, null, 2));
-  return p;
-}
-function makeHelpPack(p, retries) {
-  delete p.next; delete p.taskTitle;
-  p.context = '這是求助回覆的測試內容。你可以先照建議做，或要求換一個方式解釋。';
-  p.help = { noteId: p.help.noteId };
-  if (retries) p.helpRetries = retries; else delete p.helpRetries;
-  p.questions = [{
-    id: 'how',
-    priority: 1,
-    ask: '你想怎樣做？',
-    kind: 'choice',
-    options: [{ text: '先按建議做', rec: true }, { text: helpStill }],
-    value: '先按建議做',
-    why: '先用最直接的方式處理。'
-  }];
-  return writePack(p);
-}
 async function answer(p, value) {
   const q = p.questions[0];
   const machine = {
@@ -143,9 +123,14 @@ try {
   }, 5000);
   ok('AI 未設定：照樣收到求助，說明會自動處理並有前往設定連結', noAi && noAi.text.includes('已收到') && noAi.text.includes('設定') && noAi.href === '/#/setup', noAi);
   await cdp.ev('document.getElementById("help-modal")?.remove()');
-  await cdp.go(BASE + '/dashboard', 1280, 1600);
+  await cdp.go(BASE + '/dashboard/system', 1280, 1600);
   const dashboardHelp = await cdp.ev('(()=>{const b=document.getElementById("open-help");return b?b.textContent:""})()');
   ok('營運監察台共用同一個「需要幫助」入口', dashboardHelp === N.ui.helpOpen, dashboardHelp);
+  await cdp.click('#open-help');
+  const dashboardNext = await waitFor(async () => await cdp.ev('(()=>{const a=document.querySelector("#help-next a");return a&&a.getAttribute("href")})()'), 5000);
+  await cdp.click('#help-next a');
+  const dashboardDestination = await cdp.ev('location.pathname + location.hash');
+  ok('從營運監察台的求助框按下一步，會打開 Founder Desk 對應頁', dashboardNext === '/#/setup' && dashboardDestination === '/#/setup', { href: dashboardNext, destination: dashboardDestination });
 
   await cdp.go(BASE + '/', 1280, 1300);
   await cdp.click('#open-help');
@@ -182,10 +167,12 @@ try {
   const cert = await certify(BASE);
   ok('設定測試 AI 後認證完成', cert && cert.certify && cert.certify.state === 'passed', cert && cert.certify);
   const first = await waitFor(() => allPacks().find(p => p.help && p.help.noteId === sent.j.id), 45000);
-  ok('設定 AI 後重試求助：沿用原工作資料產生問題包，不建立工作', first && JSON.stringify(first.help) === JSON.stringify({ noteId: sent.j.id, packId: 'p-1' }) && !(state().tasks || []).length, first && { help: first.help, request: first.request, tasks: state().tasks });
+  ok('設定 AI 後重試求助：沿用原工作資料產生固定問題和原題關聯，不建立工作', first && JSON.stringify(first.help) === JSON.stringify({ noteId: sent.j.id, packId: 'p-1' }) && first.questions.length === 1 && first.questions[0].ask === '你想怎樣做？' && first.questions[0].options.at(-1).text === helpStill && !(state().tasks || []).length, first && { help: first.help, questions: first.questions, tasks: state().tasks });
 
-  const firstReady = first && makeHelpPack(first, 0);
-  await cdp.go(BASE + '/#/ask/' + encodeURIComponent(firstReady.id), 1280, 1800);
+  await cdp.go(BASE + '/#/', 1280, 1800);
+  const firstHome = await cdp.ev('(()=>{const a=document.querySelector(".hero a.btn.primary.big");return a?{href:a.getAttribute("href"),text:a.textContent,screen:document.body.innerText}:null})()');
+  ok('未有公司概覽而已有求助回覆：首頁顯示待決事項並保留交資料入口', firstHome && firstHome.href === '#/ask/' + first.id && firstHome.screen.includes(N.ui.goIntake), firstHome);
+  await cdp.click('.hero a.btn.primary.big');
   const qButton = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('每條問題有「不明白」入口', qButton && qButton.text === N.ui.helpNotClear && !qButton.disabled, qButton);
   await cdp.click('.q-help');
@@ -195,18 +182,16 @@ try {
   }, 5000);
   ok('題目求助送出後顯示已交出並避免重複送出', qSent && qSent.text === N.ui.helpAsked && qSent.disabled, qSent);
 
-  const a1 = await answer(firstReady, helpStill);
+  const a1 = await answer(first, helpStill);
   ok('第一次要求換方式：答案可送出', a1.code === 200, a1);
   const second = await waitFor(() => allPacks().find(p => p.help && p.helpRetries === 1), 45000);
   ok('第一次仍不明白：自動排入不同方式的求助，計數為 1', second && second.helpRetries === 1, second && { id: second.id, retries: second.helpRetries });
 
-  const secondReady = second && makeHelpPack(second, 1);
-  const a2 = secondReady && await answer(secondReady, helpStill);
+  const a2 = second && await answer(second, helpStill);
   const third = await waitFor(() => allPacks().find(p => p.help && p.helpRetries === 2), 45000);
   ok('第二次仍不明白：只再自動重問一次，計數為 2', a2 && a2.code === 200 && third && third.helpRetries === 2, { answer: a2, third: third && { id: third.id, retries: third.helpRetries } });
 
-  const thirdReady = third && makeHelpPack(third, 2);
-  const a3 = thirdReady && await answer(thirdReady, helpStill);
+  const a3 = third && await answer(third, helpStill);
   const limit = await waitFor(async () => {
     const s = (await get('/api/status')).j;
     return s && (s.runs || []).find(r => r.kind === 'ask' && r.result && r.result.summary === N.ui.helpRepeatLimit);
@@ -215,13 +200,21 @@ try {
 
   const ordinaryRequest = await post('/api/intake', { kind: 'note', type: 'help', text: '我已明白，請記錄這個答案。' });
   const ordinary = ordinaryRequest.code === 202 && await waitFor(() => allPacks().find(p => p.help && p.help.noteId === ordinaryRequest.j.id), 45000);
-  const ordinaryReady = ordinary && makeHelpPack(ordinary, 0);
-  const normal = ordinaryReady && await answer(ordinaryReady, '先按建議做');
+  const normal = ordinary && await answer(ordinary, '先按建議做');
   const recorded = await waitFor(async () => {
     const s = (await get('/api/status')).j;
     return s && (s.runs || []).find(r => r.kind === 'ask' && r.result && r.result.summary === N.ui.helpAnswerRecorded);
   });
   ok('一般回答：只記錄求助答案，不建立工作或再次提問', normal && normal.code === 200 && recorded && !(state().tasks || []).length, { normal, recorded: recorded && recorded.result, tasks: state().tasks });
+
+  const documentRequest = await post('/api/intake', { kind: 'note', type: 'help', text: '請幫我製作文件。' });
+  const documentPack = documentRequest.code === 202 && await waitFor(() => allPacks().find(p => p.help && p.help.noteId === documentRequest.j.id && p.next && p.next.task), 45000);
+  const documentAnswer = documentPack && await answer(documentPack, '先按建議做');
+  const documentFollow = await waitFor(async () => {
+    const s = (await get('/api/status')).j;
+    return s && (s.runs || []).find(r => r.kind === 'ask' && r.ref === documentPack.id && r.state === 'done' && r.result && r.result.summary !== N.ui.helpAnswerRecorded);
+  }, 45000);
+  ok('求助內同意製作文件：按確認後啟動後續 AI 工作', documentAnswer && documentAnswer.code === 200 && !!documentFollow, { answer: documentAnswer, follow: documentFollow && documentFollow.result });
 
   await waitFor(async () => {
     const s = (await get('/api/status')).j;

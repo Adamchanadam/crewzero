@@ -369,7 +369,7 @@ body.paused .bg *{animation:none!important}
       var card = home && home.card;
       if (!card) { next.append(el('p', null, U.helpNoStep)); return; }
       next.append(el('p', null, card.today || U.helpNoStep));
-      if (card.href) next.append(el('a', { cls: 'btn primary', href: card.href }, card.button || U.next));
+      if (card.href) next.append(el('a', { cls: 'btn primary', href: String(card.href).startsWith('#') ? '/' + card.href : card.href }, card.button || U.next));
     }, function () { next.hidden = true; });
   }
   /* ---------- 公司標誌：頁頭標誌係一個掣，按咗可以上載或者移除（伺服器 /api/logo；冇標誌就顯示公司名首兩個字） ---------- */

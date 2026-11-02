@@ -165,7 +165,7 @@ const changed = files.filter(f => shaOr(at(target, f)) !== want[f]);
 const cmp = compareVersions(oldVersion, newVersion);
 if (cmp > 0) { say(`已安裝的版本 ${oldVersion} 比插件的版本 ${newVersion} 新，不會改成舊版。今次沒有改動任何檔案。`); process.exit(1); }
 if (cmp === 0) {
-  say(`CrewZero 已是最新版本 ${newVersion}，公司資料沒有改動。`);
+  say(`CrewZero 已與目前的插件版本（${newVersion}）相同。公司資料沒有改動。`);
   if (changed.length + stale.length) tech(`有 ${changed.length + stale.length} 個程式檔與插件不同但版本號相同。`);
   process.exit(0);
 }

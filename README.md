@@ -11,11 +11,13 @@ Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安�
 
 ## 安裝（每部電腦一次）
 
-| 工具 | 輸入 |
+| 工具 | 在已登入的 AI 對話交給它 |
 |---|---|
-| Claude Code | 在對話輸入 `/plugin marketplace add Adamchanadam/crewzero`，再 `/plugin install crewzero@crewzero` |
-| Codex | 在命令列輸入 `codex plugin marketplace add Adamchanadam/crewzero`，再 `codex plugin add crewzero@crewzero` |
-| Antigravity | 在命令列輸入 `git clone https://github.com/Adamchanadam/crewzero`，再 `agy plugin install crewzero/prototypes/proofread/adapters/claude-code/crewzero`（已在用 Claude Code 的話，`agy plugin import claude` 亦可） |
+| Claude Code | 在對話輸入 `/plugin marketplace add Adamchanadam/crewzero`，再輸入 `/plugin install crewzero@crewzero` |
+| Codex | 說：「請幫我安裝 CrewZero 插件：`codex plugin marketplace add Adamchanadam/crewzero`，再 `codex plugin add crewzero@crewzero`。」 |
+| Antigravity | 說：「請幫我安裝 CrewZero 插件：`git clone https://github.com/Adamchanadam/crewzero`，再 `agy plugin install crewzero/prototypes/proofread/adapters/claude-code/crewzero`。」（已在用 Claude Code 的話，`agy plugin import claude` 亦可） |
+
+你不用自己開命令列；AI 工具會先問過你才執行。如 AI 工具要求重新開啟，請照做。
 
 ## 開始
 

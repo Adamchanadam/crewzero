@@ -338,7 +338,7 @@ export function checkJudge(j, blue, red) {
       return { rank: i + 1, risk: txt(r.risk, 300), cheapestTest: txt(r.cheapestTest, 300), stop: txt(r.stop, 300), testBy, aiChecked };
     }),
     routes: arr(j.routes).filter(r => r && txt(r.name, 40)).slice(0, 5).map((r, i) => ({ id: /^S\d{1,2}$/.test(String(r.id)) ? r.id : 'S' + (9 + i), name: txt(r.name, 40), recommended: r.recommended === true, why: txt(r.why, 300), redScore: SEV.includes(r.redScore) ? r.redScore : '中', firstTest: txt(r.firstTest, 300), stop: txt(r.stop, 300) })),
-    founderDecisions: arr(j.founderDecisions).filter(d => d && txt(d.question, 200) && arr(d.options).length >= 2).slice(0, 3).map(d => ({ question: txt(d.question, 200), options: arr(d.options).slice(0, 3).map(o => txt(String(o), 120)), recommend: txt(String(d.recommend || ''), 10), why: txt(d.why, 300) })),
+    founderDecisions: arr(j.founderDecisions).filter(d => d && txt(d.question, 200) && arr(d.options).length >= 2).slice(0, 3).map(d => ({ question: txt(d.question, 200), options: arr(d.options).slice(0, 3).map(o => txt(String(o), 120)), recommend: txt(String(d.recommend || ''), 10), why: txt(d.why, 300), ...(txt(d.risk, 120) ? { risk: txt(d.risk, 120) } : {}), ...(txt(d.conflict, 120) ? { conflict: txt(d.conflict, 120) } : {}) })),
     assumptionChanges: arr(j.assumptionChanges).filter(a => a && txt(a.change, 300)).slice(0, 12).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: txt(a.change, 300), label: 'AI 建議 · 未確認' })),
     attackVerdicts: arr(j.attackVerdicts).filter(x => x && aids.has(x.attackId) && LAND.includes(x.landed)).map(x => ({ attackId: x.attackId, landed: x.landed, note: txt(x.note, 200) })),
     overall: txt(j.overall, 300),

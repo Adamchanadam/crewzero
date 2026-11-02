@@ -145,7 +145,7 @@ try {
   srv.kill(); await sleep(400);
   let bar = null;
   for (let i = 0; i < 40 && !bar; i++) { await sleep(500); bar = await cdp.ev(`(()=>{const b=document.getElementById('stopped');return b?b.innerText:null})()`); }
-  ok('CrewZero 停咗：頁頂講已停止、資料完好、點樣重新開啟', bar === U.stoppedDesk && /資料完好/.test(bar) && /打開 Founder Desk/.test(bar), bar);
+  ok('CrewZero 停咗：頁頂講已停止、資料完好、點樣重新開啟', bar === U.stoppedDesk && /未能連接/.test(bar) && !/已停止|資料完好/.test(bar) && /打開 Founder Desk/.test(bar), bar);
   await cdp.shot(path.join(OUT, 'stopped-banner-1440.png'));
   start();
   let gone = false;

@@ -20,6 +20,7 @@ process.env.SOS_DATA = DATA;
 
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const dash = await import(pathToFileURL(path.join(PROTO, 'dash-lib.mjs')).href);
+const debate = await import(pathToFileURL(path.join(PROTO, 'debate-lib.mjs')).href);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const results = [];
 const ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
@@ -41,9 +42,16 @@ ok('系統自動產生的即時生效題目可沒有風險說明', systemRisk.ok
 const withRisk = lib.preparePacks({ format: 'startup-os.ask/0.1', title: '風險及差異檢查', questions: [{ id: 'q', ask: '是否作出承諾？', kind: 'choice', options: [{ text: '是', rec: true }, { text: '否' }], value: '是', why: '創辦人已提出此安排。', effect: 'now', risk: '最壞情況是承諾未能履行；可在確認前撤回。', conflict: '你提交資料時表示暫不作出承諾。' }] }, { dirs: coreDirs });
 ok('AI 提供的風險與差異會保留在新問題包', withRisk.ok && withRisk.packs[0].questions[0].risk && withRisk.packs[0].questions[0].conflict, withRisk.ok && withRisk.packs[0].questions[0]);
 
+  const judge = debate.checkJudge({ topRisks: [{ risk: '訂金可能無法退回。', cheapestTest: '先查閱退款條款。', stop: '條款不清楚便停止。' }], founderDecisions: [{ question: '是否支付二萬元訂金？', options: ['支付訂金', '暫不支付'], recommend: '暫不支付', why: '先核對退款條款。', risk: '訂金可能無法退回。', conflict: '先前決定暫不付款。' }] }, { claims: [] }, { attacks: [] });
+  const judgeDecision = judge.data && judge.data.founderDecisions[0];
+  ok('裁判決策轉成待決事項前保留風險及既有差異', !!judgeDecision && judgeDecision.risk === '訂金可能無法退回。' && judgeDecision.conflict === '先前決定暫不付款。', judgeDecision);
+
 const action = lib.preparePacks({ format: 'startup-os.ask/0.1', title: '本人行動確認', actionConfirm: { taskId: 'task-1' }, questions: [{ id: 'done', ask: '是否已完成？', kind: 'choice', options: [{ text: '任意選項', rec: true }], value: '任意答案', why: '任意理由。', effect: 'now' }] }, { dirs: coreDirs });
 const actionQ = action.ok && action.packs[0].questions[0];
 ok('本人行動題沒有 AI 預設、理由或通用風險句，並固定三個選項', action.ok && !('value' in actionQ) && !('why' in actionQ) && !('risk' in actionQ) && actionQ.options.map(x => x.text).join('|') === [N.ui.actionDone, N.ui.actionNotDone, N.ui.actionReschedule].join('|'), actionQ);
+
+  const multiAction = lib.preparePacks({ format: 'startup-os.ask/0.1', title: '本人行動確認', actionConfirm: { taskId: 'task-1' }, questions: [{ id: 'done', ask: '是否已送出？' }, { id: 'receipt', ask: '是否已取得確認？' }] }, { dirs: coreDirs });
+  ok('新的本人行動問題包只可有一題', !multiAction.ok && multiAction.errors.some(x => x.includes('只可有一條')), multiAction.errors);
 
 writeJson(path.join(coreDirs.asks, 'legacy.json'), normalPack('legacy', ago(1), { questions: [{ id: 'old', ask: '舊題仍可讀取？', kind: 'choice', options: [{ text: '是', rec: true }, { text: '否' }], value: '是', why: '舊資料沒有風險欄位。', effect: 'now' }] }));
 ok('舊問題包沒有風險欄位仍可讀取', !!lib.loadPack(coreDirs, 'legacy'), lib.loadPack(coreDirs, 'legacy'));
@@ -69,6 +77,11 @@ const statusFile = path.join(DIR.ledger, 'status.json');
 const stateFile = path.join(DIR.ledger, 'state.json');
 const lastSeenFile = path.join(DATA, 'founder', 'desk', 'last-seen.json');
 const writePack = pack => writeJson(path.join(DIR.asks, pack.id + '.json'), pack);
+  const submitAsk = async (pack, answers) => {
+    const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: lib.localIso(), batch: answers.map(a => a.id), answers };
+    const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: ' + lib.localIso()];
+    return fetch(BASE + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: JSON.stringify({ kind: 'ask-answer', ref: pack.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' }) });
+  };
 const clearPacks = () => {
   if (!fs.existsSync(DIR.asks)) return;
   for (const file of fs.readdirSync(DIR.asks)) if (file.endsWith('.json')) fs.unlinkSync(path.join(DIR.asks, file));
@@ -146,10 +159,17 @@ try {
   ok('已有同一待決事項的未答求助包時，不重複顯示求助按鈕', !(await cdp.ev('!!document.querySelector(".q-help-line button")')), await cdp.ev('document.body.innerText'));
 
   fs.unlinkSync(path.join(DIR.asks, 'ask-stale-help.json'));
+  fs.writeFileSync(path.join(DATA, 'fake-mode.txt'), 'timeout\n');
   await cdp.go(BASE + '/?stale=click');
   await cdp.click('.q-help-line button');
   const staleDisabled = await cdp.ev('(()=>{const b=document.querySelector(".q-help-line button");return b?b.disabled:false})()');
   ok('送出待決事項求助後，按鈕不可再次按下', staleDisabled, staleDisabled);
+  const helpWaiting = await waitFor(async () => {
+    const s = await (await fetch(BASE + '/api/status')).json();
+    return (s.helpInFlight || []).find(h => h.packId === 'ask-stale') || null;
+  }, 5000);
+  await cdp.go(BASE + '/?stale=refresh');
+  ok('處理中的待決事項求助在刷新後仍顯示等待，不能重複送出', !!helpWaiting && !(await cdp.ev('!!document.querySelector(".q-help-line button")')), helpWaiting);
 
   writeJson(lastSeenFile, { at: ago(4), version: 'test' });
   await cdp.go(BASE + '/?away=old');
@@ -173,6 +193,7 @@ try {
   writeJson(stateFile, { company: { name: '測試公司' }, tasks: [
     { id: 'task-action-done', title: '確認實地行動', owner: 'founder', status: 'waiting' },
     { id: 'task-action-reschedule', title: '改期實地行動', owner: 'founder', status: 'waiting' },
+    { id: 'task-action-mixed', title: '送出並取得確認', owner: 'founder', status: 'waiting' },
     { id: 'task-accept', title: '驗收測試產出', owner: 'ai', status: 'review', needsAcceptance: true }
   ] });
   writePack(actionPack('ask-action-done', 'task-action-done', '是否已完成實地行動？'));
@@ -201,6 +222,15 @@ try {
     return task && task.status === 'waiting' && String(task.waitingFor || '').includes('改期') ? task : null;
   }, 10000);
   ok('本人選擇「需要改期」後，工作維持等待', !!rescheduled, rescheduled);
+
+  const mixed = { ...actionPack('ask-action-mixed', 'task-action-mixed', '是否已送出申請？'), questions: [{ id: 'sent', priority: 1, ask: '是否已送出申請？', kind: 'choice', effect: 'now', options: [{ text: N.ui.actionDone }, { text: N.ui.actionNotDone }, { text: N.ui.actionReschedule }] }, { id: 'receipt', priority: 2, ask: '是否已取得收件確認？', kind: 'choice', effect: 'now', options: [{ text: N.ui.actionDone }, { text: N.ui.actionNotDone }, { text: N.ui.actionReschedule }] }] };
+  writePack(mixed);
+  const mixedReply = await submitAsk(mixed, [{ id: 'sent', value: N.ui.actionDone, ai: '', changed: true }, { id: 'receipt', value: N.ui.actionNotDone, ai: '', changed: true }]);
+  const mixedWaiting = await waitFor(() => {
+    const task = (readJson(stateFile, {}).tasks || []).find(x => x.id === 'task-action-mixed');
+    return task && task.status === 'waiting' ? task : null;
+  }, 10000);
+  ok('舊的兩題本人行動包混合答案時，整項工作維持等待', mixedReply.status === 200 && !!mixedWaiting && mixedWaiting.confirmedBy !== 'founder', { status: mixedReply.status, task: mixedWaiting });
 
   writePack(acceptancePack('ask-accept', 'task-accept', { title: '測試產出全文', text: '第一段產出內容。\n\n第二段產出內容。' }));
   await cdp.go(BASE + '/#/ask/ask-accept');

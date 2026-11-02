@@ -444,7 +444,8 @@ export function guideCard(text, ds) {
   if (!s || !s.today) return null;
   const first = type => (ds.todo || []).find(t => t.type === type);
   const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', waitInterview: '#/request/event', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: (ds.todo || [])[0] ? (ds.todo[0].kind === 'overview' ? '/proofread.html' : '#/ask/' + ds.todo[0].id) : '' }[ds.guide];
-  return { key: ds.guide, today: s.today, button: s.button || '', notAuto: s.notAuto || '', href, date: (ds.interviews && ds.interviews.nextOn) || '' };
+  const date = (ds.interviews && ds.interviews.nextOn) || '';
+  return { key: ds.guide, today: String(s.today).replace(/\{date\}/g, /^\d{4}-\d{2}-\d{2}$/.test(date) ? Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8)) + ' 日' : '稍後'), button: s.button || '', notAuto: s.notAuto || '', href, date };
 }
 
 const INBOX_KINDS = ['intake', 'note', 'ask', 'proofread'];

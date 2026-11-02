@@ -77,9 +77,13 @@ if (has('status')) {
   const m = readJSON(MARK), x = runWin('status');
   const j = { marked: !!m, registered: !!(x.json && x.json.registered), next: (x.json && x.json.next) || '', last: (x.json && x.json.last) || '', lastResult: x.json && x.json.lastResult != null ? x.json.lastResult : null, startWhenAvailable: !!(x.json && x.json.startWhenAvailable), name: NAME, ok: x.ok };
   console.log(JSON.stringify(j));
-  say(j.registered ? `每日排程已登記：下次 ${local(j.next)}；${j.last ? '上次已按時執行。' : '尚未到首次執行時間。'}` : `每日排程未登記${m ? '，請在 AI 對話說「重新登記排程」。' : '。'}`);
+  if (!j.ok) say('暫時未能讀取每日排程的狀態，請稍後再試。');
+  else if (!j.registered) say(`每日排程未登記${m ? '，請在 AI 對話說「重新登記排程」。' : '。'}`);
+  else if (j.lastResult === 0) say(`每日排程已登記：下次 ${local(j.next)}；上次已執行。`);
+  else if (!j.last || j.lastResult === 267011) say(`每日排程已登記：下次 ${local(j.next)}；尚未到首次執行時間。`);
+  else say(`每日排程已登記：下次 ${local(j.next)}；上次排定的工作未能完成，請打開營運監察台查看。`);
   tech(scheduleTech('status'));
-  process.exit(0);
+  process.exit(j.ok ? 0 : 1);
 }
 if (has('remove')) {
   const x = runWin('remove');

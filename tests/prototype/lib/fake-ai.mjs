@@ -209,7 +209,12 @@ if (type === 'certify') {
   const route = JSON.parse(fs.readFileSync('route.json', 'utf8'));
   const said = fs.readFileSync('note.md', 'utf8').split(/\r?\n/).filter(Boolean).pop().slice(0, 20);
   let ask = null;
-  if (job.noteType === 'order') {
+  if (job.noteType === 'help') {
+    const wantsDocument = /製作文件/.test(fs.readFileSync('note.md', 'utf8'));
+    ask = { format: 'startup-os.ask/0.1', title: '求助回覆：測試說明', context: '這是測試 AI 的直接說明。你可以先按建議處理，或要求以另一種方式解釋。', afterConfirm: '確認後會記錄你的選擇。', ...(wantsDocument ? { next: { task: '按創辦人確認的內容擬定一份文件草稿。' } } : {}), questions: [
+      { id: 'how', priority: 1, ask: '你想怎樣做？', kind: 'choice', options: [{ text: '先按建議做', rec: true }, { text: '仍然不明白，請換個方式解釋' }], value: '先按建議做', why: '先用最直接的方式處理。' }
+    ] };
+  } else if (job.noteType === 'order') {
     const order = route.map(r => r.id); order.splice(1, 0, 'new');
     if (M === 'note-badorder') order.pop();
     ask = { format: 'startup-os.ask/0.1', title: '新增一站：廚師試食會', context: '測試 AI 按你的要求擬好新次序。', questions: [

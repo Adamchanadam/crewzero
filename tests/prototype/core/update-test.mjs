@@ -76,7 +76,7 @@ try {
   const T2 = path.join(PROJ2, 'crewzero'), snap2 = tree(T2);
   ok('新項目安裝成 crewzero/（冇 startup-os/）', fs.existsSync(path.join(T2, 'ask.mjs')) && !fs.existsSync(path.join(PROJ2, 'startup-os')), fs.readdirSync(PROJ2));
   const u1 = run(UPDATE, [PROJ2]), u2 = run(UPDATE, [PROJ2, '--apply']);
-  ok('已是最新：檢查同 --apply 都結束碼 0、講已是最新、一個檔都唔改', u1.status === 0 && u2.status === 0 && /已是最新/.test(u1.stdout) && /已是最新/.test(u2.stdout) && same(tree(T2), snap2), { u1: u1.stdout, u2: u2.stdout, err: u1.stderr });
+  ok('已是最新：檢查同 --apply 都結束碼 0、講已是最新、一個檔都唔改', u1.status === 0 && u2.status === 0 && /與目前的插件版本.*相同/.test(u1.stdout) && /與目前的插件版本.*相同/.test(u2.stdout) && same(tree(T2), snap2), { u1: u1.stdout, u2: u2.stdout, err: u1.stderr });
   fs.writeFileSync(path.join(T2, 'VERSION'), '9.9.9\n');
   const u3 = run(UPDATE, [PROJ2, '--apply']);
   ok('已安裝版本比插件新：拒絕（結束碼 1），唔改成舊版', u3.status === 1 && /比插件的版本/.test(u3.stdout) && fs.readFileSync(path.join(T2, 'VERSION'), 'utf8').trim() === '9.9.9' && same(Object.fromEntries(Object.entries(tree(T2)).filter(([k]) => k !== 'VERSION')), Object.fromEntries(Object.entries(snap2).filter(([k]) => k !== 'VERSION'))), u3.stdout);

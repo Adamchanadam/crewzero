@@ -28,6 +28,7 @@ try {
   const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
   ok('先安裝（全新空資料夾）', install(PROJ).status === 0);
   const sched = (...a) => spawnSync(process.execPath, [S, ...a], { encoding: 'utf8', env, cwd: T });
+  const schedWith = (more, ...a) => spawnSync(process.execPath, [S, ...a], { encoding: 'utf8', env: { ...env, ...more }, cwd: T });
   const MARK = path.join(T, 'data', 'ledger', 'schedule.json'), CMD = path.join(T, 'run-schedule.cmd');
 
   /* 印定義：唔登記 */
@@ -73,6 +74,13 @@ try {
   ok('標記 ledger/schedule.json：登記名、節奏、登記時間、下次執行、命令全文、補跑', m && m.name === name && m.cadence === 'daily' && m.runTime === '21:00' && m.registeredAt && m.nextRunAt && m.startWhenAvailable === true && m.command.includes(CMD) && m.command.includes('Register-ScheduledTask'), m);
   const st1 = sched('--status'), j1 = (() => { try { return JSON.parse(st1.stdout.split(/\r?\n/)[0]); } catch { return null; } })();
   ok('讀回（--status）：已登記、下次執行、補跑開啟', j1 && j1.registered && j1.next && j1.startWhenAvailable && j1.name === name, st1.stdout);
+  ok('尚未首次執行：267011 明確說明尚未到首次執行時間', st1.status === 0 && /尚未到首次執行時間/.test(st1.stdout.split(/\r?\n/)[1] || ''), st1.stdout);
+  const successStatus = schedWith({ SOS_SCHED_LAST: '2026-11-01T09:00:00.000Z' }, '--status');
+  ok('上次結果為 0：只說上次已執行', successStatus.status === 0 && /上次已執行/.test(successStatus.stdout.split(/\r?\n/)[1] || ''), successStatus.stdout);
+  const failedStatus = schedWith({ SOS_SCHED_LAST: '2026-11-01T09:00:00.000Z', SOS_SCHED_LAST_RESULT: '1' }, '--status');
+  ok('上次結果非零：說明工作未能完成並指向營運監察台', failedStatus.status === 0 && /未能完成/.test(failedStatus.stdout.split(/\r?\n/)[1] || '') && /營運監察台/.test(failedStatus.stdout.split(/\r?\n/)[1] || ''), failedStatus.stdout);
+  const unreadableStatus = schedWith({ SOS_SCHED_FAIL: '1' }, '--status');
+  ok('狀態查詢失敗：保留第一行 JSON、說明暫時未能讀取，並以非零結束', unreadableStatus.status !== 0 && /^\{/.test(unreadableStatus.stdout) && /暫時未能讀取每日排程的狀態/.test(unreadableStatus.stdout), { out: unreadableStatus.stdout, err: unreadableStatus.stderr, status: unreadableStatus.status });
   const s1 = await sys();
   ok('系統頁：已登記 · 每日 21:00，寫明錯過即補跑，有下次開工時間', s1 && s1.state === 'on' && s1.text.includes(N.t('schedOs', { c: U.cad_daily, t: '21:00' })) && s1.text.includes(U.schedCatchUpOn) && /21:00/.test(s1.next), s1);
   await c.shot(path.join(OUT, 'sys-on.png'));

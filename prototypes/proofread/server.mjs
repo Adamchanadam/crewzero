@@ -515,6 +515,7 @@ function receiveNote(body) {
     const source = body.context && typeof body.context === 'object' && !Array.isArray(body.context) ? body.context : {};
     if (/^[\w-]{1,30}$/.test(String(source.page || ''))) context.page = String(source.page);
     if (/^[\w-]{1,80}$/.test(String(source.packId || ''))) context.packId = String(source.packId);
+    if (/^[\w-]{1,80}$/.test(String(source.runRef || ''))) context.runRef = String(source.runRef);
     if (typeof source.packTitle === 'string' && source.packTitle.trim().length <= 300) context.packTitle = source.packTitle.trim();
     if (typeof source.ask === 'string' && source.ask.trim().length <= 300) context.ask = source.ask.trim();
     const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
@@ -646,6 +647,23 @@ function serverVia(text, via) {
   header.splice(kind >= 0 ? kind + 1 : 0, 0, 'via: ' + via);
   return header.concat(lines.slice(end)).join('\n');
 }
+function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] })) {
+  const found = [], add = (packId, ref) => {
+    const pack = /^[\w-]{1,80}$/.test(String(packId || '')) ? String(packId) : '';
+    const runRef = /^[\w-]{1,80}$/.test(String(ref || '')) ? String(ref) : '';
+    if ((pack || runRef) && !found.some(x => x.packId === pack && x.ref === runRef)) found.push({ packId: pack, ref: runRef });
+  };
+  for (const file of fs.readdirSync(DIR.inbox).filter(f => /-note-help\.md$/.test(f))) {
+    try {
+      const parsed = parseFounderReply(fs.readFileSync(path.join(DIR.inbox, file), 'utf8'));
+      const context = (parsed.machine || {}).context || {};
+      add(context.packId, context.runRef);
+    } catch { }
+  }
+  for (const run of (status.runs || [])) if (run && run.kind === 'note' && run.noteType === 'help' && ['running', 'waiting', 'resumed'].includes(run.state)) add(run.helpForPackId, run.helpForRunRef);
+  return found;
+}
+
 function statusPayload() {
   const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
   const packs = listPacks(DIR);
@@ -653,7 +671,7 @@ function statusPayload() {
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, openAsks: packs.filter(p => p.open).length, company: companyStatus(), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, openAsks: packs.filter(p => p.open).length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -940,7 +958,7 @@ const handler = async (req, res) => {
         const back = ds.since && ds.since.awayDays >= 3 ? card && card.today ? { text: card.today, href: card.href, button: card.button } : fallback ? { text: fallback.text, href: fallbackHref, button: NAMES.ui.goAnswer } : null : null;
         return send(res, 200, { ok: true, guide: ds.guide, card, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null });
       }
-      if (p === '/api/asks') return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR) });
+      if (p === '/api/asks') return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR), helpInFlight: helpInFlight() });
       if (p === '/api/ask') {
         const pack = loadPack(DIR, url.searchParams.get('id'));
         return pack ? send(res, 200, { ok: true, pack, answers: loadAnswers(DIR, pack.id).answers }) : send(res, 404, { error: 'not found' });

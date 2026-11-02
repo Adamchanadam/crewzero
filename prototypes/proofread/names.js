@@ -286,8 +286,8 @@
     fileUnread: '未能讀取「{f}」：檔案可能已移動或損壞，請重新選擇。',
     practiceTagsStuck: '建議說法未能準備好。請按「重新載入」；你之前的發言已記錄。',
     // 已開住嘅頁面，CrewZero 停咗：頁頂提示（重新連上就自動消失）
-    stoppedDesk: 'CrewZero 已停止運作，你的資料完好；在 AI 對話說「打開 Founder Desk」即可重新開啟。',
-    stoppedDashboard: 'CrewZero 已停止運作，你的資料完好；在 AI 對話說「打開營運監察台」即可重新開啟。',
+    stoppedDesk: '目前未能連接 CrewZero。請確認電腦已開機；用手機時請連接與電腦相同的 Wi-Fi。如仍未恢復，請在 AI 對話說「打開 Founder Desk」。',
+    stoppedDashboard: '目前未能連接 CrewZero。請確認電腦已開機；用手機時請連接與電腦相同的 Wi-Fi。如仍未恢復，請在 AI 對話說「打開 Founder Desk」。',
     // AI 工作失敗卡：原因空白、按「重試」失敗
     failNoReason: 'AI 未能完成這項工作，原因未有記錄。請按「重試」；仍然失敗，請到「系統設定」重新認證 AI 工具。',
     retryFailed: '未能重試',

@@ -11,4 +11,5 @@ if (process.env.SOS_SCHED_FAIL === '1') { console.error('假排程器：登記�
 if (/Unregister-ScheduledTask/.test(script)) { if (STATE) fs.rmSync(STATE, { force: true }); console.log('{"removed":true}'); process.exit(0); }
 if (/Register-ScheduledTask/.test(script)) { const s = { registered: true, next: nextAt(), startWhenAvailable: /-StartWhenAvailable/.test(script) }; if (STATE) fs.writeFileSync(STATE, JSON.stringify(s)); }
 const s = read();
-console.log(JSON.stringify(s ? { ...s, last: process.env.SOS_SCHED_LAST || '', lastResult: process.env.SOS_SCHED_LAST ? 0 : 267011 } : { registered: false }));
+const last = process.env.SOS_SCHED_LAST || '', lastResult = last ? Number(process.env.SOS_SCHED_LAST_RESULT || 0) : 267011;
+console.log(JSON.stringify(s ? { ...s, last, lastResult } : { registered: false }));

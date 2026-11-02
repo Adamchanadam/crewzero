@@ -237,7 +237,7 @@ export const MAX_PER_PACK = 12;
 // 所有畫面名稱（書面語）；問題包標題要過同一條口語字檢查
 export const NAMES = createRequire(import.meta.url)('./names.js');
 // strictTitle：命令入口（AI 可以即刻改）用 true，標題有口語字就退回；AI 流程入面用 false，只記警告照樣放上去，免得創辦人睇唔到問題
-export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strictTitle = true, system = false } = {}) {
+export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strictTitle = true, system = false, noDedupe = false } = {}) {
   const errors = [], warnings = [];
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['內容不是問題包'] };
   if (raw.format !== 'startup-os.ask/0.1') errors.push('問題包格式版本不正確');
@@ -248,6 +248,7 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
   const actionConfirm = raw.actionConfirm && /^[\w-]{1,80}$/.test(String(raw.actionConfirm.taskId || '')) ? { taskId: String(raw.actionConfirm.taskId) } : null;
   if (raw.actionConfirm && !actionConfirm) errors.push('本人行動題的工作編號不正確');
   const sourceQs = Array.isArray(raw.questions) ? raw.questions : [];
+  if (actionConfirm && sourceQs.length > 1) errors.push('本人行動問題包只可有一條題目');
   const qs = actionConfirm ? sourceQs.map(q => ({ id: q && q.id, priority: q && q.priority, about: q && q.about, ask: q && q.ask, judge: q && q.judge, kind: 'choice', effect: 'now',
     options: [{ text: NAMES.ui.actionDone }, { text: NAMES.ui.actionNotDone }, { text: NAMES.ui.actionReschedule }], ...(q && q.conflict ? { conflict: q.conflict } : {}) })) : sourceQs;
   if (!qs.length) errors.push('缺少題目');
@@ -293,7 +294,7 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
   const seen = dirs ? askedBefore(dirs) : new Set(), unknowns = dirs ? openUnknowns(dirs) : [];
   const dropped = [], keep = [];
   qs.forEach((q, i) => {
-    if (seen.has(norm(q.ask))) { dropped.push(q.ask); return; }
+    if (!noDedupe && seen.has(norm(q.ask))) { dropped.push(q.ask); return; }
     if (q.effect !== 'now' && unknowns.some(u => sameThing(q, u))) { dropped.push(q.ask); warnings.push('你已答「' + NAMES.ui.unknownLater + '」的事項，到期前不再詢問：' + q.ask); return; }
     const fixed = q.effect === 'now' ? q : unknownOption(q);
     if (fixed !== q) warnings.push('AI 建議只是提示句，已改為「' + NAMES.ui.unknownLater + '」：' + q.ask);

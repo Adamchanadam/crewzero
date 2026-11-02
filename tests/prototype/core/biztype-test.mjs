@@ -76,6 +76,9 @@ try {
   ok('提交後寫入正確的 biz.json、intake.md 類別行及公司資料 bizType', biz.type === 'goods' && biz.other === '' && !!archived && fs.readFileSync(path.join(DATA, 'archive', archived), 'utf8').includes('生意類別：實體貨品') && shell.company.bizType === 'goods', { biz, archived, company: shell.company });
   const sandbox = await waitFor(() => intake && fs.existsSync(path.join(DATA, 'sandbox', intake.runId, 'biz.md')) ? path.join(DATA, 'sandbox', intake.runId, 'biz.md') : null);
   ok('AI 工作資料夾在共用位置取得 biz.md 用字表', !!sandbox && /類別：實體貨品/.test(fs.readFileSync(sandbox, 'utf8')) && /賣出件數/.test(fs.readFileSync(sandbox, 'utf8')), sandbox && fs.readFileSync(sandbox, 'utf8'));
+  await post(base, { kind: 'note', type: 'help', text: '請說明下一步。' });
+  const helpBiz = await waitFor(() => fs.existsSync(path.join(DATA, 'sandbox')) && fs.readdirSync(path.join(DATA, 'sandbox')).map(id => path.join(DATA, 'sandbox', id, 'biz.md')).find(file => fs.existsSync(file) && /類別：實體貨品/.test(fs.readFileSync(file, 'utf8'))) || null);
+  ok('非交資料的求助工作同樣取得 biz.md 用字表', !!helpBiz, helpBiz);
 
   seedCompany(OLD_DATA, PROTO);
   const oldBase = start(OLD_DATA, PORT + 3);
@@ -115,15 +118,21 @@ try {
   await chrome.click('#all-same'); await chrome.click('#do-confirm');
   const serviceAnswers = await waitFor(() => { const f = path.join(WEEK_DATA, 'ledger', 'answers', servicePack.pack.id + '.json'); return fs.existsSync(f) ? read(f).answers : null; });
   ok('「全部沒有變化」不會帶過每週成果題', !!serviceAnswers && !serviceAnswers.results && Object.keys(serviceAnswers).length > 0, serviceAnswers);
+  const beforeResults = await waitFor(() => {
+    const s = read(path.join(WEEK_DATA, 'ledger', 'state.json'));
+    return s.interviews && (s.interviews.applied || {})[servicePack.pack.id] ? s : null;
+  });
+  ok('成果題未填寫時，首次訪問仍未完成且下次日期不變', !!beforeResults && !beforeResults.interviews.lastOn && !beforeResults.interviews.lastFor && !beforeResults.interviews.count && beforeResults.interviews.nextOn === servicePack.pack.rhythm.on, beforeResults && beforeResults.interviews);
   await chrome.go(weekBase + '/#/');
   await chrome.go(weekBase + '/#/ask/' + servicePack.pack.id);
   await chrome.type('#q-results textarea', '本週完成 3 次服務，收到 900 元'); await chrome.click('#go-main'); await sleep(300);
   ok('已輸入但未按記錄的每週成果會在送出前記錄', await chrome.ev(`!!document.querySelector('#do-confirm')`));
   await chrome.click('#do-confirm');
   const resultEvent = await waitFor(() => { const s = read(path.join(WEEK_DATA, 'ledger', 'state.json')); return (s.events || []).find(e => e.title === '本週成果：本週完成 3 次服務，收到 900 元') || null; });
-  const grade = read(path.join(WEEK_DATA, 'ledger', 'state.json')).company.assumptions[0].grade;
+  const afterResults = read(path.join(WEEK_DATA, 'ledger', 'state.json'));
+  const grade = afterResults.company.assumptions[0].grade;
   const record = path.join(WEEK_DATA, 'work', 'interviews', servicePack.pack.rhythm.on + '.md');
-  ok('每週成果答案寫入事件與訪問紀錄，不改變證據級', !!resultEvent && grade === 'guess' && fs.existsSync(record) && fs.readFileSync(record, 'utf8').includes('本週完成 3 次服務，收到 900 元'), { resultEvent, grade, record });
+  ok('每週成果答案寫入事件與訪問紀錄，才完成訪問並推進下次日期，不改變證據級', !!resultEvent && afterResults.interviews.lastFor === servicePack.pack.rhythm.on && afterResults.interviews.nextOn !== servicePack.pack.rhythm.on && grade === 'guess' && fs.existsSync(record) && fs.readFileSync(record, 'utf8').includes('本週完成 3 次服務，收到 900 元'), { resultEvent, interviews: afterResults.interviews, grade, record });
   for (const type of ['goods', 'online', 'nonprofit', 'other']) {
     const placed = await placeWeek(type);
     ok(`每週訪問的首題按 ${type} 類別設定`, placed?.pack.questions[0]?.ask === resultAsk[type], placed?.pack.questions[0]);

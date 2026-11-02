@@ -291,11 +291,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   function failureHelp(r, fallback) {
     if (!r || !r.repeatFailed) return null;
+    if ((((V.status && V.status.helpInFlight) || []).some(function (h) { return h.ref === r.ref; }))) return h('p', { class: 'small muted help-cause', 'aria-live': 'polite' }, N.ui.helpAsked);
     var note = h('span', { class: 'small muted', 'aria-live': 'polite' }), title = runTitle(r, fallback), reason = r.error || N.ui.failNoReason;
     var button = h('button', { type: 'button', class: 'btn', onclick: function () {
       if (button.disabled) return;
       button.disabled = true; note.textContent = N.ui.sending;
-      post('/api/intake', { kind: 'note', type: 'help', text: T('helpCauseText', { t: title, r: reason }), context: { page: 'pending' } })
+      post('/api/intake', { kind: 'note', type: 'help', text: T('helpCauseText', { t: title, r: reason }), context: { page: 'pending', runRef: r.ref } })
         .then(function () { button.textContent = N.ui.helpSent; note.textContent = ''; })
         .catch(function (e) { button.disabled = false; note.textContent = why(e); });
     } }, N.ui.helpFindCause);
@@ -351,12 +352,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; })]).then(function (r) {
       var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open; }), todo = asks.todo || [], rank = {}, pendingHelp = {};
       asks.packs.forEach(function (p) { if (p.open && p.helpForPackId) pendingHelp[p.helpForPackId] = true; });
+      (st.helpInFlight || []).forEach(function (h) { if (h.packId) pendingHelp[h.packId] = true; });
       V.home = home;
       todo.forEach(function (t, i) { rank[t.id] = i; });
       open.sort(function (a, b) { return (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
       V.status = st; checkInstance(st);
       // 第一次打開（未有公司概覽）：直接去交資料
-      if (!st.company || !st.company.ready) { location.replace('#/intake'); return; }
+      if ((!st.company || !st.company.ready) && !open.length) { location.replace('#/intake'); return; }
       var first = open[0], c = asks.company || st.company || {}, firstTodo = first ? todo.filter(function (t) { return t.id === first.id; })[0] : null;
       var main = first
         ? h('section', { class: 'hero' },
@@ -385,8 +387,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var companyCard = h('section', { class: 'layer accent' + (c.confirmed ? ' ok' : '') },
         h('span', { class: 'eyebrow' }, N.ui.company),
         h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, c.confirmed ? N.ui.confirmed + '（' + dayOf(c.confirmedAt) + '）' : N.ui.unconfirmed),
-          h('div', { class: 'small muted' }, c.confirmed ? '如有改動，可隨時再次確認。' : 'AI 已擬定，請你查閱。')),
-          h('a', { class: 'btn' + (c.confirmed ? '' : ' primary'), href: '/proofread.html' }, c.confirmed ? N.ui.viewEdit : N.ui.goConfirm)));
+          h('div', { class: 'small muted' }, c.confirmed ? '如有改動，可隨時再次確認。' : c.ready ? 'AI 已擬定，請你查閱。' : '請先交資料，讓 AI 建立公司概覽。')),
+          h('a', { class: 'btn' + (c.confirmed ? '' : ' primary'), href: c.ready ? '/proofread.html' : '#/intake' }, c.confirmed ? N.ui.viewEdit : c.ready ? N.ui.goConfirm : N.ui.goIntake)));
       // 只列 AI 工作；舊分頁送錯、套用都未成功嗰類失敗唔係 AI 工作，唔列（同公司概覽一樣）
       var runs = st.runs.filter(function (rn) { return !(rn.state === 'failed' && (rn.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; })); }).slice(0, 3);
       var aiCard = h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.aiWork),

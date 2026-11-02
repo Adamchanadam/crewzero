@@ -54,7 +54,7 @@ CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項�
 ## 其他要求
 
 - 「移除排程」：先問一次「移除之後，電腦不會再每日叫 AI 開工，確定嗎？」，答確定先執行 `node "<安裝>/adapters/scheduler/install-schedule.mjs" --remove`。
-- 「排程狀態」：執行 `node "<安裝>/adapters/scheduler/install-schedule.mjs" --status`，用一句話講第二行嘅內容。
+- 「排程狀態」：執行 `node "<安裝>/adapters/scheduler/install-schedule.mjs" --status`。先讀第一行 JSON 的 `ok`；如為 `false`，只說「暫時未能讀取每日排程的狀態，請稍後再試。」；如為 `true`，才用一句話講第二行內容。
 - 排程登記名：新安裝係 `crewzero-` 開頭；改名前登記嘅舊版排程係 `startup-os-` 開頭，命令會自己認得，唔使你處理。
 
 ## 命令出錯時點講
