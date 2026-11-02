@@ -51,6 +51,7 @@ const TESTS = [
   ['宿主認證與隔離', 'core/certify-test.mjs', ['{proto}', '{out}', '{port}']],
   ['手機配對', 'core/phone-pair-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['伺服器安全反例', 'core/round3-server-safety-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['公司標誌', 'core/logo-test.mjs', ['{chrome}', '{out}', '{proto}', '{port}'], true],
   ['旅程（主線）', 'core/journey.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}', 'main'], true],
   ['旅程（出錯）', 'core/journey.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}', 'errors'], true],
   ['答題', 'core/cdp-ask.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', path.join(FX, 'demo-14.json')], true],

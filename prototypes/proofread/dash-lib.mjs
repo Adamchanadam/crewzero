@@ -9,6 +9,18 @@ import { NAMES, readJSON, listPacks, loadAnswers, localIso, pad, clockNow } from
 import { loadBrain } from './brain-lib.mjs';
 import { rhythmOf, nextRunAt } from './rhythm-lib.mjs';
 
+// 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
+// v 係修改時間，頁面用嚟分辨換咗新圖；冇就 null。
+export const LOGO_EXTS = ['png', 'jpg', 'webp'];
+export function companyLogo(DIR) {
+  let best = null;
+  for (const ext of LOGO_EXTS) {
+    const file = path.join(DIR.company, 'logo.' + ext);
+    try { const s = fs.statSync(file); if (s.isFile() && (!best || s.mtimeMs > best.v)) best = { file, ext, v: Math.round(s.mtimeMs) }; } catch { }
+  }
+  return best;
+}
+
 const DAY = 86400000;
 // 作業系統排程（MVP 規格第 2 節第 3 項）：登記標記 ledger/schedule.json；登記時嘅節奏同帳本而家嘅節奏唔同＝須重新登記
 export const scheduleMark = DIR => readJSON(path.join(DIR.ledger, 'schedule.json'), null);
@@ -110,7 +122,7 @@ export function dashboardState(DIR, extra = {}) {
 
   /* 公司 */
   const co = { ...(page && page.company || {}), ...(state.company || {}) };
-  const company = { name: co.name || '', initials: co.initials || '', oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
+  const company = { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
   const values = page ? registryValues(page, confirmed) : {};
   const goalRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G1');
   const nextRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G5');

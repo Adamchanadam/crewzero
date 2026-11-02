@@ -16,7 +16,7 @@ import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, r
 import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, guideCard } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, guideCard, companyLogo, LOGO_EXTS } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource } from './brain-lib.mjs';
@@ -235,7 +235,7 @@ const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'pr
 const DASH_TABS = ['path', 'brain', 'inputs', 'team', 'log', 'system'];
 const BRAIN_PAGES = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 let lastSeenPrev = null;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const KINDS = ['proofread', 'ask-answer'];
 
 const pad = n => String(n).padStart(2, '0');
@@ -355,12 +355,13 @@ function simSetAI(mode) {
 const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f))].sort();
 const EXTS = ['md', 'txt', 'csv', 'pdf', 'docx', 'pptx', 'xlsx', 'png', 'jpg', 'jpeg'];
 const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
+const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 // 附件核對（交資料、真實事件證明共用）：回 { files } 或 { error }
 function takeFiles(list) {
   if (list.length > 20) return { error: '附件最多 20 份。' };
   const files = []; let total = 0;
   for (const f of list) {
-    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(f.data)) return { error: '附件內容無法讀取。' };
+    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !B64.test(f.data)) return { error: '附件內容無法讀取。' };
     const ext = path.extname(f.name).slice(1).toLowerCase();
     if (!EXTS.includes(ext)) return { error: '附件格式不支援。' };
     const bytes = Buffer.from(f.data, 'base64'); total += bytes.length;
@@ -625,10 +626,29 @@ function statusPayload() {
     cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs: st.runs.slice(0, 5), openAsks: packs.filter(p => p.open).length, company: companyStatus(), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
+// 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
+// 存喺 data/company/logo.<格式>：先寫暫存檔再改名，之後刪走其他格式嘅舊標誌。移除就三個格式都刪。
+const LOGO_MAX = 1024 * 1024;
+const logoKind = b => b.length >= 12 && b[0] === 0x89 && b.toString('latin1', 1, 4) === 'PNG' ? 'png'
+  : b.length >= 12 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff ? 'jpg'
+  : b.length >= 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' ? 'webp' : null;
+function saveLogo(body) {
+  const drop = keep => { for (const e of LOGO_EXTS) if (e !== keep) fs.rmSync(path.join(DIR.company, 'logo.' + e), { force: true }); };
+  if (body.action === 'remove') { drop(null); say('公司標誌已移除'); return [200, { ok: true, logo: 0 }]; }
+  if (body.action !== 'set' || typeof body.data !== 'string' || !B64.test(body.data)) return [400, { error: 'invalid', message: NAMES.ui.logoBad }];
+  const bytes = Buffer.from(body.data, 'base64'), ext = logoKind(bytes);
+  if (bytes.length > LOGO_MAX) return [400, { error: 'large', message: NAMES.ui.logoLarge }];
+  if (!ext) return [400, { error: 'type', message: NAMES.ui.logoBad }];
+  fs.mkdirSync(DIR.company, { recursive: true });
+  const tmp = path.join(DIR.company, `.logo-${process.pid}.tmp`);
+  fs.writeFileSync(tmp, bytes); fs.renameSync(tmp, path.join(DIR.company, 'logo.' + ext));
+  drop(ext); say(`公司標誌已更換（${ext.toUpperCase()}，${Math.ceil(bytes.length / 1024)}KB）`);
+  return [200, { ok: true, logo: companyLogo(DIR).v }];
+}
 function companyStatus() {
   const c = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const page = readJSON(path.join(DIR.company, 'page.json'), null), co = page?.company || {};
-  return { name: co.name || '', initials: co.initials || '', oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null };
+  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null };
 }
 /* ---------- 觀測來源（規劃書 4.12、4.9；設計稿 2026-10-28 第 3 節）：轉接層嘅唯讀觀測程式 ----------
    觀察範圍只限帳本 observe.folders[]（只存雜湊同顯示名，唔存路徑；系統頁經 /api/setup 增刪，外殼下次第一步寫入）。
@@ -866,6 +886,7 @@ const handler = async (req, res) => {
     /* ---- 由此起全部只限創辦人：要有效通行證，否則 403 {error:'pass'}，乜都唔寫 ---- */
     const pass = passOf(req);
     if (!pass) return refuse(req, res, url, pendingOf(req) ? 'pending' : 'pass');
+    if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-logo') { const l = companyLogo(DIR); return l ? send(res, 200, fs.readFileSync(l.file), TYPES['.' + l.ext]) : send(res, 404, { error: 'not found' }); }
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-page.js') { const page = readJSON(path.join(DIR.company, 'page.json'), null); return page ? send(res, 200, 'window.STARTUP_OS_PAGE = ' + JSON.stringify(page).replace(/</g, '\\u003c') + ';', TYPES['.js']) : send(res, 404, { error: 'not found' }); }
     if (req.method === 'GET') {
       if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, limits });
@@ -906,18 +927,19 @@ const handler = async (req, res) => {
       if (p === '/api/practice/session') { const s = loadSession(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, session: s, scenario: loadScenario(DIR, s.scenarioId) }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/run') { const r = runResult(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, run: r }) : send(res, 404, { error: 'not found' }); }
     }
-    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || (p === '/api/sim' && SIM))) {
+    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
       const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
       if (!loopback && !phone) return refuse(req, res, url, 'origin');
       if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
       const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
-      const body = JSON.parse(await readBody(req, (p === '/api/intake' ? 75 * 1024 * 1024 : 32 * 1024)) || '{}');
+      const body = JSON.parse(await readBody(req, (p === '/api/intake' ? 75 * 1024 * 1024 : p === '/api/logo' ? 1.5 * 1024 * 1024 : 32 * 1024)) || '{}');
       // 半截手機請求在讀 body 期間可被撤銷；讀完後、套用任何動作前必須以同一代手機模式重驗。
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
       if (p === '/api/practice') return send(res, ...await practiceAction(body));
+      if (p === '/api/logo') return send(res, ...saveLogo(body));
       if (p === '/api/sim') return send(res, ...(body.action === 'advance' ? simAdvance() : body.action === 'ai' ? simSetAI(body.mode) : [400, { error: 'invalid' }]));
       if (p === '/api/intake') { const result = body.kind === 'note' ? receiveNote(body) : body.kind === 'prefill' ? receivePrefill(body) : receiveIntake(body); if (!result.ok) return send(res, 400, result); schedule(); return send(res, 202, result); }
       if (p === '/api/setup') {

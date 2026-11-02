@@ -42,6 +42,14 @@ h1{font-size:var(--fs-h1);font-weight:650;margin:2px 0;letter-spacing:-.01em;lin
 .ident{display:flex;gap:14px;align-items:center;min-width:0}
 .ident .one{font-size:var(--fs-sub);opacity:.86;margin:0}
 .mark{width:52px;height:52px;flex:none;border:1px solid rgba(232,141,79,.5);border-radius:14px;display:grid;place-items:center;font:600 var(--fs-title) var(--mono);color:var(--amber);background:linear-gradient(160deg,rgba(232,141,79,.16),rgba(232,141,79,.02));box-shadow:0 0 50px rgba(232,141,79,.08),inset 0 1px 0 rgba(255,255,255,.08)}
+button.mark{position:relative;padding:0;overflow:visible;cursor:pointer;appearance:none;-webkit-appearance:none}
+.mark.has-logo{background:#f4f1ec;padding:5px}
+.mark img{width:100%;height:100%;object-fit:contain;display:block;border-radius:8px}
+.mark .pen{position:absolute;right:-6px;bottom:-6px;width:18px;height:18px;border:2px solid var(--bg);border-radius:50%;display:grid;place-items:center;font:600 10px/1 system-ui,sans-serif;color:#1a0f07;background:var(--amber);opacity:.9}
+.mark .pen::before{content:'✎'}
+button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
+.logo-prev{width:96px;height:96px;margin:4px 0 12px;font-size:var(--fs-page);cursor:default}
+.logo-in{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .metrics{display:flex;gap:22px;margin-left:auto}
 .metric{position:relative;display:block;min-width:130px;text-decoration:none;padding:2px 0;color:inherit}
 .metric label{display:block;color:var(--muted);font-size:var(--fs-label);white-space:nowrap;cursor:inherit}
@@ -325,6 +333,73 @@ body.paused .bg *{animation:none!important}
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
         el('button', { type: 'button', cls: 'btn small', id: 'pause', 'aria-pressed': ST.paused ? 'true' : 'false', onclick: togglePause }, ST.paused ? D.resume : D.pause)));
   }
+  /* ---------- 公司標誌：頁頭標誌係一個掣，按咗可以上載或者移除（伺服器 /api/logo；冇標誌就顯示公司名首兩個字） ---------- */
+  function markText(c) { return c.initials || String(c.name || 'OS').slice(0, 2); }
+  function markInner(m, c) {
+    m.classList.toggle('has-logo', !!c.logo); m.setAttribute('data-logo', String(c.logo || 0));
+    var img = c.logo ? el('img', { src: '/company-logo?v=' + c.logo, alt: '' }) : null;
+    if (img) img.addEventListener('error', function () { m.classList.remove('has-logo'); img.replaceWith(markText(c)); });
+    m.replaceChildren(img || markText(c));
+    return m;
+  }
+  function markBtn(c) {
+    var m = el('button', { type: 'button', cls: 'mark', id: 'co-mark', title: U.logoChange, 'aria-label': U.logoChange, onclick: function () { logoDialog(); } });
+    markInner(m, c); m.append(el('span', { cls: 'pen', 'aria-hidden': 'true' }));
+    return m;
+  }
+  // 每次讀回：標誌換咗（例如喺手機換）就就地更新
+  function syncMark(c) {
+    var m = document.getElementById('co-mark'); if (!m || !c) return;
+    if (m.getAttribute('data-logo') === String(c.logo || 0) && (c.logo || m.firstChild.textContent === markText(c))) return;
+    var pen = m.querySelector('.pen'); markInner(m, c); if (pen) m.append(pen);
+  }
+  function logoDialog() {
+    var c = (ST.data || {}).company || ST.company || {};
+    var modal = el('div', { cls: 'pair-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'logo-title', id: 'logo-modal' });
+    var close = function () { modal.remove(); var m = document.getElementById('co-mark'); if (m) m.focus(); };
+    var prev = markInner(el('div', { cls: 'mark logo-prev', 'aria-hidden': 'true' }), c);
+    var note = el('p', { cls: 'small muted', id: 'logo-note' }, c.logo ? '' : U.logoNone);
+    var input = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', cls: 'logo-in', id: 'logo-file', tabindex: '-1', 'aria-hidden': 'true' });
+    var pick = el('button', { type: 'button', cls: 'btn primary', id: 'logo-pick', onclick: function () { input.click(); } }, U.logoPick);
+    var rm = c.logo ? el('button', { type: 'button', cls: 'btn', id: 'logo-remove', onclick: function () { send({ action: 'remove' }, U.logoRemoved); } }, U.logoRemove) : null;
+    function busy(on) { pick.disabled = on; if (rm) rm.disabled = on; if (on) note.textContent = U.logoSaving; }
+    function send(body, done) {
+      busy(true);
+      fetch('/api/logo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) { var er = new Error(j.message || U.logoFailed); er.srv = true; throw er; } return j; }); })
+        .then(function (j) {
+          var co = (ST.data || {}).company || ST.company; if (co) co.logo = j.logo || 0;
+          syncMark({ name: c.name, initials: c.initials, logo: j.logo || 0 });
+          close(); toast(done);
+        }, function (e) { busy(false); note.textContent = e && e.srv ? e.message : U.logoFailed; });
+    }
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0]; input.value = '';
+      if (!f) return;
+      if (['image/png', 'image/jpeg', 'image/webp'].indexOf(f.type) < 0) { note.textContent = U.logoBad; return; }
+      if (f.size > 30 * 1024 * 1024) { note.textContent = U.logoHuge; return; }
+      // 自動縮放：長邊最多 512 像素（細圖唔放大），保留比例同透明底；先出 PNG，太大就改 WebP（伺服器只收 1MB 以內）
+      busy(true);
+      var url = URL.createObjectURL(f), im = new Image();
+      im.onload = function () {
+        URL.revokeObjectURL(url);
+        var k = Math.min(1, 512 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+        var cx = cv.getContext('2d'); cx.imageSmoothingQuality = 'high'; cx.drawImage(im, 0, 0, cv.width, cv.height);
+        var data = cv.toDataURL('image/png');
+        if (data.length * 0.75 > 900 * 1024) data = cv.toDataURL('image/webp', 0.9);
+        send({ action: 'set', data: data.split(',')[1] || '' }, U.logoDone);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); busy(false); note.textContent = U.logoUnread; };
+      im.src = url;
+    });
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    modal.append(el('section', { cls: 'layer' }, el('span', { cls: 'eyebrow' }, U.brand), el('h2', { id: 'logo-title' }, U.logoTitle),
+      prev, el('p', null, U.logoHint), note, input,
+      el('div', { cls: 'pair-actions' }, pick, rm, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
+    document.body.append(modal); pick.focus();
+  }
   function toast(t) { var e = document.getElementById('toast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { e.hidden = true; }, 4000); }
   function setupPost(body) { return fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.message || j.error || 'failed'); return j; }); }); }
   function phoneDialog() {
@@ -386,6 +461,7 @@ body.paused .bg *{animation:none!important}
     o = o || {};
     var pg = o.tab ? [o.tab, o.sub] : (PAGE[o.page] || ['pending']), cur = pg[0], sub = o.sub || pg[1];
     var d = ST.data || {}, c = o.company || d.company || {}, mt = o.metrics || d.metrics;
+    ST.company = c;
     if (o.pending != null) ST.pending = o.pending;
     var counts = { pending: o.pending != null ? o.pending : (mt ? mt.pending : 0), brain: o.brainWaiting != null ? o.brainWaiting : brainWaiting(d) };
     var simText = o.sim && o.sim.clock ? U.simBadge + ' · ' + U.simClock + ' ' + o.sim.clock : U.simBadge;
@@ -393,7 +469,7 @@ body.paused .bg *{animation:none!important}
       el('a', { cls: 'skip', href: '#app' }, D.skipToContent),
       el('header', { cls: 'dtop' },
         el('div', { cls: 'ident' },
-          el('div', { cls: 'mark', 'aria-hidden': 'true' }, c.initials || String(c.name || 'OS').slice(0, 2)),
+          markBtn(c),
           el('div', null,
             el('span', { cls: 'eyebrow' }, D.shell + ' · ' + tabName(cur) + (sub ? ' · ' + sub : '')),
             el('h1', null, c.name || D.shell),
@@ -439,6 +515,7 @@ body.paused .bg *{animation:none!important}
     var ps = document.querySelector('[data-m="pendingText"]'); if (ps) ps.textContent = mt.pending ? U.pending : D.noPendingShort;
     var is = document.querySelector('[data-m="inputsText"]'); if (is) is.textContent = inSmall(mt);
     setCount('brain', brainWaiting(d));
+    syncMark(d.company);
     if (d.sample && !document.getElementById('sample')) { var top = document.querySelector('.dtop'); if (top) top.after(el('div', { cls: 'banner', id: 'sample' }, D.sample)); }
     if (ST.pending == null) setCount('pending', mt.pending || 0);
     [].forEach.call(document.querySelectorAll('[data-tele]'), function (e) { var c = e.querySelector('[data-cd]'), p = e.querySelector('[data-tele-parts]'), t = d.tele || {}; if (c) c.setAttribute('data-cd', t.nextRunAt || ''); if (p) { var s = teleParts(t); if (p.textContent !== s) p.textContent = s; } });
