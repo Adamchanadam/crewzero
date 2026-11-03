@@ -62,8 +62,12 @@ try {
 
   /* ---------- B. 快打（定價）：藍 → 紅 → 裁判 → 完場出回應包 ---------- */
   const seats1 = ['付款者', '採購或審批者', '競爭者'];
+  mode(DEMO, 'debate-blue:slow\nnote:slow');
   ok('開場：快打收到', (await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'pricing', title: '每週訂菜定價', seats: seats1, level: 'hard' })).code === 202);
   const id1 = await waitFor(() => latestId(A, 2));
+  const priorityHelp = await A.post('/api/intake', { kind: 'note', type: 'help', text: '請在下一輪前說明。' });
+  const priorityRun = priorityHelp.code === 202 && await waitFor(async () => (await A.get('/api/status')).runs.find(r => r.kind === 'note' && r.ref === priorityHelp.j.id && r.state === 'running'), 20000);
+  ok('求助優先：藍方完成後先處理求助，紅方尚未開始', priorityRun && !fs.existsSync(path.join(DEMO, 'debates', id1, 'red.json')), { priorityRun, redExists: id1 && fs.existsSync(path.join(DEMO, 'debates', id1, 'red.json')) });
   let m1 = await until(A, id1, m => m.phase === 'done');
   ok('快打：三個回合做完（冇反駁）、完場', m1 && m1.format === '快打' && m1.rebuttals === 0 && m1.budget.aiStarts === 3 && !fs.existsSync(path.join(DEMO, 'debates', id1, 'rebuttal.json')), m1 && { f: m1.format, b: m1.budget, ph: m1.phase });
   ok('快打：紅方身份全部係今場席位、每個身份有最在意', m1 && m1.rows.every(r => r.attacks.every(a => seats1.includes(a.persona))) && m1.seats.length === 3 && m1.seats.every(s => s.cares), m1 && m1.seats);
@@ -72,6 +76,14 @@ try {
   const rp1 = m1 && m1.packs.response;
   const pk1 = rp1 && (await A.get('/api/ask?id=' + rp1)).pack;
   ok('完場：回應包有三條關鍵時刻、證據、證據級、挑戰裁判', pk1 && ['v1', 'v2', 'v3', 'ev', 'evg', 'ch'].every(q => pk1.questions.some(x => x.id === q)) && pk1.debate.kind === 'response', pk1 && pk1.questions.map(q => q.id));
+  const dp1 = m1 && m1.packs.decisions, dk1 = dp1 && (await A.get('/api/ask?id=' + dp1)).pack;
+  const decisionMap = JSON.parse(fs.readFileSync(path.join(DEMO, 'ledger', 'brain-decisions.json'), 'utf8'));
+  ok('裁判決定題自動到 Founder Desk：最多三題、即時生效並保留風險', dp1 && decisionMap[id1] === dp1 && dk1 && dk1.questions.length <= 3 && dk1.questions.every(q => q.effect === 'now' && q.risk), dk1 && dk1.questions);
+  const asksBeforeManual = fs.readdirSync(path.join(DEMO, 'asks')).filter(f => f.endsWith('.json')).length;
+  const manualDecision = await A.post('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide', matchId: id1 });
+  if (manualDecision.code === 202) await waitFor(async () => (await A.get('/api/status')).runs.find(r => r.ref === manualDecision.j.id && r.state !== 'running'), 20000);
+  const asksAfterManual = fs.readdirSync(path.join(DEMO, 'asks')).filter(f => f.endsWith('.json')).length;
+  ok('裁判決定題同一場只放一次，手動舊入口不會重複建立', manualDecision.code === 202 && asksBeforeManual === asksAfterManual && JSON.parse(fs.readFileSync(path.join(DEMO, 'ledger', 'brain-decisions.json'), 'utf8'))[id1] === dp1, { before: asksBeforeManual, after: asksAfterManual });
   ok('監察台：紅藍對打等你回應、深連回應包', (await A.get('/api/dashboard')).brain.items.find(x => x.id === 'wargame').waitHref === '/#/ask/' + rp1);
 
   /* ---------- C. 全場（成盤生意）：加藍方反駁；第二場回應包照出（唔會當答過） ---------- */
@@ -197,6 +209,7 @@ try {
   const B2 = await startServer(REAL, Number(PORT) + 1), A2 = api(B2);
   let w1 = (await A2.get('/api/debate')).matches[0];
   ok('試驗資料夾：舊場 W1 照常顯示（完場、冇轉強）', w1 && w1.id === 'W1' && w1.phase === 'done' && w1.cards === 0, w1);
+  ok('試驗資料夾：舊場沒有裁判決定題仍可讀取，不會報錯', w1 && !w1.packs.decisions && (await A2.get('/api/status')).runs.every(r => r.state !== 'failed'), w1 && w1.packs);
   let wv = await match(A2, 'W1');
   ok('試驗資料夾：冇裁判命中 → 命中率留空、身份冇命中率；冇核實紀錄', wv && wv.score.redHitRate === null && wv.seats.every(s => s.hitRate === null) && wv.verified === null && wv.keyMoments.length >= 3, wv && { s: wv.score, v: wv.verified });
   ok('試驗資料夾：舊式自認弱點（文字）都讀到', wv && wv.admittedWeaknesses.length === 2);

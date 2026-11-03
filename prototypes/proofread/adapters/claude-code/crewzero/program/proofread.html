@@ -408,7 +408,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       // 未配對（403）：共用殼已全頁顯示配對指引，唔再畫「未有公司概覽」
       if (st === 'pass') return;
       $('#cbar').hidden = true;
-      $('#app').replaceChildren(DESK.header({ page: 'company', company: st && st.company, pending: st ? st.openAsks : 0, sim: !!(st && st.sim) }),
+      $('#app').replaceChildren(DESK.header({ page: 'company', company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim) }),
         h('section', { class: 'layer', id: 'no-company' }, h('span', { class: 'eyebrow' }, N.ui.company),
           h('h2', { class: 'layer-title' }, N.ui.noCompany),
           h('p', { class: 'guide' }, '請先提交公司背景資料，AI 會為你擬定公司概覽。'),
@@ -735,7 +735,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function header() {
     var srcs = (D.sources || []).map(function (s) { return s.title + (s.date ? '（' + md(s.date) + '）' : ''); }).join('、');
     return DESK.header({
-      page: 'company', company: D.company, nav: !!S.server, pending: S.server ? S.server.openAsks : 0, sim: !!(S.server && S.server.sim),
+      page: 'company', company: D.company, nav: !!S.server, pending: S.server ? S.server.openAsks : 0, work: S.server && S.server.work, sim: !!(S.server && S.server.sim),
       basis: 'AI 根據' + (srcs ? '：' + srcs : '你的資料') + ' 擬定 · 約 ' + (D.page.minutes || 3) + ' 分鐘可閱畢'
     });
   }
@@ -800,15 +800,17 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function qHelp(id, ask) {
     S.help = S.help || {};
     var help = S.help[id] || (S.help[id] = {});
+    var note = h('span', { class: 'small muted help-status', 'aria-live': 'polite' });
     var btn = h('button', { type: 'button', class: 'btn link q-help', disabled: help.sent ? true : null, onclick: function () {
       if (help.sent || help.sending) return;
-      help.sending = true; btn.disabled = true; btn.textContent = N.ui.sending;
-      fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: T('helpQuestionText', { q: ask }), context: { page: 'overview', ask: ask } }) })
-        .then(function (r) { if (!r.ok) throw new Error('help'); help.sent = true; btn.textContent = N.ui.helpAsked; })
-        .catch(function () { btn.disabled = false; btn.textContent = N.ui.helpNotClear; announce('未能交出，請再試一次。'); })
+      help.sending = true; btn.disabled = true; btn.textContent = N.ui.sending; note.textContent = N.ui.sending;
+      DESK.send('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: T('helpQuestionText', { q: ask }), context: { page: 'overview', ask: ask } }) })
+        .then(function (result) { help.sent = true; help.noteId = result.id; btn.textContent = N.ui.helpAsked; DESK.watchHelp(help.noteId, note); })
+        .catch(function () { btn.disabled = false; btn.textContent = N.ui.helpNotClear; note.textContent = ''; announce('未能交出，請再試一次。'); })
         .then(function () { help.sending = false; });
     } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
-    return btn;
+    if (help.sent && help.noteId) setTimeout(function () { DESK.watchHelp(help.noteId, note); }, 0);
+    return h('span', { class: 'q-help-line' }, btn, note);
   }
   function statusCard(i) {
     var st = D.glance.status, items = statusItems();

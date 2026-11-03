@@ -150,7 +150,7 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
 .tool-more{position:relative}.tool-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center}.tool-more>summary::-webkit-details-marker{display:none}
 .tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:128px;padding:8px;background:#14161c;border:1px solid var(--line);border-radius:10px}.tool-menu .btn{width:100%;justify-content:center}
-.btn.link.q-help{color:var(--muted);text-decoration:none;font-size:var(--fs-label);font-weight:400;margin-left:auto}.btn.link.q-help:hover:not(:disabled){color:var(--text,#e8e6e3);text-decoration:underline}
+.btn.link.q-help{color:var(--muted);text-decoration:none;font-size:var(--fs-label);font-weight:400;margin-left:auto}.dq-foot .q-help-line{margin-left:auto;display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap}.dq-foot .q-help-line .q-help{margin-left:0}.btn.link.q-help:hover:not(:disabled){color:var(--text,#e8e6e3);text-decoration:underline}
 .tools-label{margin:20px 0 -2px;color:var(--muted);font-size:var(--fs-label);letter-spacing:.08em}
 .layer:after,.panel:after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);pointer-events:none}
 body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
@@ -276,7 +276,7 @@ body.paused .bg *{animation:none!important}
   var PAGE = { pending: ['pending'], request: ['inputs'], company: ['company'], intake: ['company', U.intake], log: ['log', D.logDecisions], setup: ['system', U.setup], practice: ['brain', U.practice], debate: ['brain', U.debate] };
 
   /* ---------- 狀態：暫停動效、特效開關（同一部電腦記住） ---------- */
-  var ST = { paused: !!REDUCED, fx: true, conn: 'live', readAt: Date.now(), data: null, provider: false, pending: null, cbs: { pause: [], fx: [], refresh: [] } };
+  var ST = { paused: !!REDUCED, fx: true, conn: 'live', readAt: Date.now(), data: null, work: null, provider: false, pending: null, title: null, cbs: { pause: [], fx: [], refresh: [] } };
   try { if (localStorage.getItem('sos-dash-paused') === '1') ST.paused = true; if (localStorage.getItem('sos-fx') === '0') ST.fx = false; } catch (e) { }
   function bodyFlags() { if (document.body) document.body.classList.toggle('paused', !!ST.paused); }
 
@@ -334,7 +334,7 @@ body.paused .bg *{animation:none!important}
   }
   function liveBadge() {
     var bad = ST.conn !== 'live';
-    return el('span', { cls: 'live' + (bad ? ' offline' : ''), id: 'conn', role: 'status' }, el('i'), ST.conn === 'live' ? D.live : ST.conn === 'rejected' ? D.rejected : D.offline);
+    return el('span', { cls: 'live' + (bad ? ' offline' : ''), id: 'conn', role: 'status', 'aria-live': 'off' }, el('i'), el('span', { 'data-live-text': '1' }, ST.conn === 'live' ? workText() : ST.conn === 'rejected' ? D.rejected : D.offline));
   }
   function toolbar(cur, counts) {
     return el('div', { cls: 'toolbar' }, nav(cur, counts),
@@ -367,20 +367,21 @@ body.paused .bg *{animation:none!important}
     var note = el('p', { cls: 'small help-note', id: 'help-note', 'aria-live': 'polite' });
     var input = el('textarea', { id: 'help-text', rows: '4', maxlength: '2000', placeholder: U.helpText, 'aria-label': U.helpAskAI });
     var submit = el('button', { type: 'button', cls: 'btn primary', id: 'help-send', onclick: submitHelp }, U.helpSend);
-    function showSent(status) {
+    function showSent(status, id) {
       input.value = '';
       submit.disabled = false;
       if (status && status.ai && status.ai.ready === false) {
         note.replaceChildren(U.helpSentNoAI, ' ', el('a', { href: '/#/setup' }, U.helpSetup));
-      } else note.textContent = U.helpSent;
+      } else if (id) watchHelp(id, note);
+      else note.textContent = U.helpSent;
     }
     function submitHelp() {
       var text = input.value.trim();
       if (!text) { note.textContent = U.helpTextRequired; input.focus(); return; }
       submit.disabled = true; note.textContent = U.sending;
       send('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: text, context: { page: page } }) })
-        .then(function () { return send('/api/status', { cache: 'no-store' }).catch(function () { return null; }); })
-        .then(showSent, function (e) { submit.disabled = false; note.textContent = why(e); });
+        .then(function (result) { return send('/api/status', { cache: 'no-store' }).catch(function () { return null; }).then(function (status) { return { status: status, id: result.id }; }); })
+        .then(function (result) { showSent(result.status, result.id); }, function (e) { submit.disabled = false; note.textContent = why(e); });
     }
     // 輸入欄平時收起：先講要做的一件事，真係卡住先寫
     var askBox = el('div', { cls: 'help-part', id: 'help-ask-box' }, el('h3', { class: 'layer-title' }, U.helpAskAI), input, note, el('div', { cls: 'pair-actions' }, submit));
@@ -490,6 +491,54 @@ body.paused .bg *{animation:none!important}
     var k = ERR_KEY[e.code] || (e.status === 404 ? 'err_notFound' : e.status === 413 ? 'err_tooLarge' : '');
     return (k && U[k]) || U.errGeneric;
   }
+  function elapsed(iso) {
+    var at = Date.parse(String(iso || '')), sec = isNaN(at) ? 0 : Math.max(0, Math.floor((Date.now() - at) / 1000));
+    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  }
+  function elapsedSeconds(iso) { var at = Date.parse(String(iso || '')); return Math.max(0, isNaN(at) ? 0 : Math.floor((Date.now() - at) / 1000)) + ' 秒'; }
+  function workText() {
+    var work = ST.work || {}, run = work.running;
+    if (!run) return work.queued ? D.live + ' ' + D.workQueued.replace('{n}', String(work.queued)) : D.live;
+    var text = D.workRunning.replace('{time}', elapsed(run.startedAt));
+    if (work.queued) text += ' ' + D.workQueued.replace('{n}', String(work.queued));
+    return text;
+  }
+  function refreshLiveText() {
+    var b = document.getElementById('conn'), text = b && b.querySelector('[data-live-text]');
+    if (text && ST.conn === 'live') { var want = workText(); if (text.textContent !== want) text.textContent = want; }
+  }
+  function watchHelp(noteId, target) {
+    if (!noteId || !target) return;
+    var born = Date.now(), timer = null;
+    target.setAttribute('aria-live', 'polite'); target.setAttribute('aria-busy', 'true');
+    function retry(run) {
+      return function () {
+        send('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: run.id }) }).then(function () {
+          born = Date.now(); target.textContent = U.helpQueued; timer = setTimeout(read, 500);
+        }, function (e) { target.textContent = why(e); });
+      };
+    }
+    function read() {
+      if (!document.documentElement.contains(target)) return;
+      send('/api/status', { cache: 'no-store' }).then(function (st) {
+        var runs = st.runs || [], run = runs.find(function (r) { return r && r.ref === noteId && r.kind === 'note' && r.noteType === 'help'; }), work = st.work || {};
+        if (run && run.state === 'failed') {
+          target.removeAttribute('aria-busy'); target.replaceChildren(U.helpFailed.replace('{reason}', run.error || U.failNoReason), ' ', el('button', { type: 'button', cls: 'btn link', onclick: retry(run) }, U.retry));
+          return;
+        }
+        var pack = run && run.state === 'done' && run.result && (run.result.asks || [])[0];
+        if (pack && pack.id) { target.removeAttribute('aria-busy'); target.replaceChildren(el('a', { cls: 'btn link', href: '/#/ask/' + pack.id }, U.helpReady)); return; }
+        var started = run && run.startedAt || work.running && work.running.ref === noteId && work.running.startedAt || '';
+        var since = Date.parse(started) || born;
+        if (Date.now() - since >= 180000) { target.removeAttribute('aria-busy'); target.textContent = U.helpLong; return; }
+        if (work.running && work.running.ref === noteId) target.textContent = U.helpWorking.replace('{time}', elapsedSeconds(work.running.startedAt));
+        else target.textContent = U.helpQueued;
+        timer = setTimeout(read, 3000);
+      }, function () { target.textContent = U.helpQueued; timer = setTimeout(read, 3000); });
+    }
+    read();
+    return function () { clearTimeout(timer); };
+  }
   function setupPost(body) { return send('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
   function phoneDialog() {
     var modal = el('div', { cls: 'pair-modal', role: 'dialog', 'aria-modal': 'true' });
@@ -547,9 +596,10 @@ body.paused .bg *{animation:none!important}
     else poll(true);
   }
 
-  // o: { tab | page, sub, company, metrics, pending, brainWaiting, sim, sample, since(節點) }
+  // o: { tab | page, sub, company, metrics, pending, work, brainWaiting, sim, sample, since(節點) }
   function shell(o) {
     o = o || {};
+    if (o.work !== undefined) ST.work = o.work;
     var pg = o.tab ? [o.tab, o.sub] : (PAGE[o.page] || ['pending']), cur = pg[0], sub = o.sub || pg[1];
     var d = ST.data || {}, c = o.company || d.company || {}, mt = o.metrics || d.metrics;
     ST.company = c;
@@ -592,15 +642,21 @@ body.paused .bg *{animation:none!important}
     var t = (ST.data || {}).tele;
     return el('div', { cls: 'tele', 'data-tele': 'ai' }, el('span', { cls: 'hb' }, hbRing(), el('span', { 'data-hb': '1' }, D.readAgo.replace('{n}', '0'))), el('span', null, D.nextRunL + ' ', el('b', { cls: 'cd', 'data-cd': t ? t.nextRunAt : '' }, t ? cd(t.nextRunAt) : '—')), el('span', { 'data-tele-parts': '1' }, t ? teleParts(t) : ''));
   }
-  // 舊介面（ask.html／proofread.html）：header({ page, company, pending, sim, basis, nav })
-  function header(o) { return shell({ page: o.page, company: o.company, pending: o.pending, sim: o.sim, basis: o.basis }); }
-  function title(page, extra) { var pg = PAGE[page] || [page]; document.title = (extra ? extra + ' · ' : '') + (tabName(pg[0]) || pg[0]) + ' · ' + D.shell; }
+  // 舊介面（ask.html／proofread.html）：header({ page, company, pending, work, sim, basis, nav })
+  function header(o) { return shell({ page: o.page, company: o.company, pending: o.pending, work: o.work, sim: o.sim, basis: o.basis }); }
+  function updateTitle() {
+    if (!ST.title) return;
+    var pg = PAGE[ST.title.page] || [ST.title.page], mt = (ST.data || {}).metrics || {}, n = Number(mt.pending != null ? mt.pending : ST.pending || 0) || 0;
+    document.title = (document.hidden && n ? '(' + n + ') ' : '') + (ST.title.extra ? ST.title.extra + ' · ' : '') + (tabName(pg[0]) || pg[0]) + ' · ' + D.shell;
+  }
+  function title(page, extra) { ST.title = { page: page, extra: extra || '' }; updateTitle(); }
 
   /* ---------- 就地更新（每次讀回）：指標、分頁徽章、連線徽章；唔重畫頁面 ---------- */
   function update(d) {
     if (!d) return;
-    ST.data = d; ST.conn = 'live'; ST.readAt = Date.now();
-    var mt = d.metrics || {}, q = mt.quarter || {};
+    var beforeData = ST.data, beforeWork = ST.work && ST.work.running;
+    ST.data = d; ST.work = d.workStatus || d.work || null; ST.conn = 'live'; ST.readAt = Date.now();
+    var mt = d.metrics || beforeData && beforeData.metrics || {}, q = mt.quarter || {};
     setOdo('done', qText(q)); setOdo('pending', String(mt.pending || 0)); setOdo('inbox', String(mt.inbox || 0));
     var qs = document.querySelector('[data-m="quarterText"]'); if (qs) qs.textContent = q.text ? clip(q.text, 26) : D.noQuarter;
     var ps = document.querySelector('[data-m="pendingText"]'); if (ps) ps.textContent = mt.pending ? U.pending : D.noPendingShort;
@@ -610,7 +666,10 @@ body.paused .bg *{animation:none!important}
     if (d.sample && !document.getElementById('sample')) { var top = document.querySelector('.dtop'); if (top) top.after(el('div', { cls: 'banner', id: 'sample' }, D.sample)); }
     if (ST.pending == null) setCount('pending', mt.pending || 0);
     [].forEach.call(document.querySelectorAll('[data-tele]'), function (e) { var c = e.querySelector('[data-cd]'), p = e.querySelector('[data-tele-parts]'), t = d.tele || {}; if (c) c.setAttribute('data-cd', t.nextRunAt || ''); if (p) { var s = teleParts(t); if (p.textContent !== s) p.textContent = s; } });
-    footData(d);
+    footData(d); updateTitle();
+    if (ST.work && ST.work.running) ST.doneWork = null;
+    else if (ST.doneWork) { toast(U.workDone.replace('{label}', ST.doneWork.label || U.brand)); ST.doneWork = null; }
+    else if (beforeWork) ST.doneWork = beforeWork;
     setConn('live'); livePulse();
   }
   function setCount(t, n) {
@@ -636,9 +695,10 @@ body.paused .bg *{animation:none!important}
     missed = s === 'live' ? 0 : missed + 1;
     stoppedBar(missed >= 2);
     var b = document.getElementById('conn'); if (!b) return;
-    var want = s === 'live' ? D.live : s === 'rejected' ? D.rejected : D.offline;
+    var want = s === 'live' ? workText() : s === 'rejected' ? D.rejected : D.offline;
     b.classList.toggle('offline', s !== 'live');
-    if (b.lastChild && b.lastChild.nodeType === 3) { if (b.lastChild.textContent !== want) b.lastChild.textContent = want; } else b.append(want);
+    var text = b.querySelector('[data-live-text]');
+    if (text) { if (text.textContent !== want) text.textContent = want; } else b.append(want);
   }
   function livePulse() { var b = document.getElementById('conn'); if (!b || ST.paused || REDUCED) return; b.classList.remove('live-pulse'); void b.offsetWidth; b.classList.add('live-pulse'); setTimeout(function () { b.classList.remove('live-pulse'); }, 520); }
   // 每秒：「讀回 n 秒前」（本機時鐘，唔打網路）
@@ -646,6 +706,8 @@ body.paused .bg *{animation:none!important}
     var s = Math.max(0, Math.round((Date.now() - ST.readAt) / 1000));
     [].forEach.call(document.querySelectorAll('[data-hb]'), function (e) { var t = D.readAgo.replace('{n}', s); if (e.textContent !== t) e.textContent = t; });
     [].forEach.call(document.querySelectorAll('[data-cd]'), function (e) { var t = cd(e.getAttribute('data-cd')); if (e.textContent !== t) e.textContent = t; });
+    [].forEach.call(document.querySelectorAll('[data-since]'), function (e) { var t = U.usedTime.replace('{time}', elapsed(e.getAttribute('data-since'))); if (e.textContent !== t) e.textContent = t; });
+    refreshLiveText();
   }, 1000);
 
   /* ---------- 冇自己讀回嘅頁（Founder Desk 畫面）：每 5 秒讀一次頁頭資料，只更新頁頭 ---------- */
@@ -655,16 +717,16 @@ body.paused .bg *{animation:none!important}
     clearTimeout(pollTimer);
     var run = function () {
       if (ST.provider) return;
-      if (document.hidden) { pollTimer = setTimeout(run, 5000); return; }
       polling = true;
       fetch('/api/shell', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-        .then(function (j) { polling = false; if (j && j.ok) update(j); pollTimer = setTimeout(run, 5000); })
-        .catch(function () { polling = false; setConn('offline'); pollTimer = setTimeout(run, 5000); });
+        .then(function (j) { polling = false; if (j && j.ok) update(j); pollTimer = setTimeout(run, document.hidden ? 15000 : 5000); })
+        .catch(function () { polling = false; setConn('offline'); pollTimer = setTimeout(run, document.hidden ? 15000 : 5000); });
     };
-    if (now || !ST.data) run(); else pollTimer = setTimeout(run, 5000);
+    if (now || !ST.data) run(); else pollTimer = setTimeout(run, document.hidden ? 15000 : 5000);
   }
   // 頁面自己每 5 秒讀 /api/dashboard（監察台）：由頁面餵資料，殼唔再自己讀
   function provide() { ST.provider = true; clearTimeout(pollTimer); }
+  document.addEventListener('visibilitychange', updateTitle);
 
   /* ---------- 進場只播一次：第一次畫好之後加 body.settled（之後同頁讀回就地更新，唔會成頁彈一下） ---------- */
   var settleTimer = null;
@@ -737,7 +799,7 @@ body.paused .bg *{animation:none!important}
 
   g.SOS_DESK = {
     shell: shell, header: header, devices: devices, title: title, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
-    logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast,
+    logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast, watchHelp: watchHelp,
     send: send, why: why, netError: netError, apiError: apiError,
     paused: function () { return !!ST.paused; }, fx: function () { return !!ST.fx; }, reduced: !!REDUCED,
     onPause: function (f) { ST.cbs.pause.push(f); }, onFx: function (f) { ST.cbs.fx.push(f); }, onRefresh: function (f) { ST.cbs.refresh.push(f); },

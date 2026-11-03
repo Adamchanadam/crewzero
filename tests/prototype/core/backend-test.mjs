@@ -31,6 +31,8 @@ try {
   await waitFor(async () => { try { return (await get('/api/status')).ok; } catch { return false; } }, 15000);
   const st0 = await get('/api/status');
   ok('開始時未有認證、未有公司概覽', st0.cert === null && st0.company.ready === false, { cert: st0.cert, company: st0.company });
+  const shell0 = await get('/api/shell');
+  ok('外殼程序不在時：狀態與頁頭工作均為空，沒有排隊', st0.work && st0.work.running === null && st0.work.queued === 0 && shell0.work && shell0.work.running === null && shell0.work.queued === 0, { status: st0.work, shell: shell0.work });
   const setup = await get('/api/setup');
   ok('系統設定列出 AI 工具（含測試 AI）', setup.hosts.some(h => h.id === 'test' && h.installed), setup.hosts.map(h => h.id + ':' + h.installed));
   ok('冇公司概覽時 /company-page.js 回 404', (await fetch(BASE + '/company-page.js')).status === 404);

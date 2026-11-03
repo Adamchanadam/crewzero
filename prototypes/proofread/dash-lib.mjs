@@ -21,6 +21,20 @@ export function companyLogo(DIR) {
   return best;
 }
 
+// 頁頭同各畫面共用：只在外殼程序仍然存在時，才把 status.json 的 running
+// 記錄顯示為真正工作中；遺留的狀態檔不能自己變成「進行中」。
+export function workStatus(DIR, { outerAlive = false, pending = [], status = null } = {}) {
+  const shell = status || readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }) || { runs: [] };
+  const running = outerAlive ? (shell.runs || []).find(r => r && r.state === 'running') : null;
+  const activeFiles = new Set(running && Array.isArray(running.replyFiles) ? running.replyFiles : []);
+  const files = Array.isArray(pending) ? pending : [];
+  const step = running && (running.steps || []).find(s => s && s.key === 'ai');
+  return {
+    running: running ? { label: String((step && step.label) || running.label || ''), startedAt: running.startedAt || '', kind: running.kind || '', ref: running.ref || '' } : null,
+    queued: files.filter(file => !activeFiles.has(file)).length
+  };
+}
+
 const DAY = 86400000;
 // 作業系統排程（MVP 規格第 2 節第 3 項）：登記標記 ledger/schedule.json；登記時嘅節奏同帳本而家嘅節奏唔同＝須重新登記
 export const scheduleMark = DIR => readJSON(path.join(DIR.ledger, 'schedule.json'), null);

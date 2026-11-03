@@ -80,7 +80,7 @@ export function loadBrain(DIR, { now = new Date(), runs = [], packs = [] } = {})
   const items = ITEMS.map(x => ({ ...x, status: 'not_started', summary: '', progress: null, updatedAt: '', detail: null, waitHref: '', waitText: '' }));
   const it = id => items.find(x => x.id === id);
   // 未設定來源但喺 Founder Desk 開過辯論：只顯示紅藍對打
-  if (!src && matchIds(DIR, null).length) { Object.assign(it('wargame'), wargameItem(DIR, null, now, null, packs)); return { source: { kind: 'debates' }, items, feedback: feedbackOf(DIR, items, runs), decided: {} }; }
+  if (!src && matchIds(DIR, null).length) { Object.assign(it('wargame'), wargameItem(DIR, null, now, null, packs)); const decided = {}; for (const [cardId, packId] of Object.entries(readJSON(path.join(DIR.ledger, 'brain-decisions.json'), {}) || {})) decided[cardId] = { packId, open: packs.some(p => p.id === packId) }; return { source: { kind: 'debates' }, items, feedback: feedbackOf(DIR, items, runs), decided }; }
   if (!src) return { source: null, items, feedback: feedbackOf(DIR, items, runs), decided: {} };
   if (src.kind === 'missing') return { source: { kind: 'missing' }, items, feedback: feedbackOf(DIR, items, runs), decided: {} };
 

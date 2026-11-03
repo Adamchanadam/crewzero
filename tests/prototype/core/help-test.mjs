@@ -18,6 +18,7 @@ const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const lib = await import(new URL('file:///' + path.join(PROTO, 'ask-lib.mjs').replace(/\\/g, '/')).href);
 const results = [];
 const ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
+const mode = m => fs.writeFileSync(path.join(DATA, 'fake-mode.txt'), m + '\n');
 const fence = String.fromCharCode(96).repeat(3);
 const helpStill = N.ui.helpStill;
 
@@ -176,7 +177,7 @@ try {
   const retriedHelpSandbox = first && path.join(DATA, 'sandbox', first.fromRun);
   const retriedHelpNote = retriedHelpSandbox && fs.existsSync(path.join(retriedHelpSandbox, 'note.md')) ? fs.readFileSync(path.join(retriedHelpSandbox, 'note.md'), 'utf8') : '';
   const retriedHelpState = retriedHelpSandbox && fs.existsSync(path.join(retriedHelpSandbox, 'state.md')) ? fs.readFileSync(path.join(retriedHelpSandbox, 'state.md'), 'utf8') : '';
-  ok('重試求助後保留原題文字及頁面脈絡，只更新 state.md 的 AI 設定狀態', !!first && retriedHelpNote.includes('公司概覽尚未建立時，我仍然不知道下一步。') && retriedHelpNote.includes('這題怎樣回答？') && retriedHelpState.includes('已設定。'), { sandbox: retriedHelpSandbox, note: retriedHelpNote, state: retriedHelpState });
+  ok('重試求助後保留原題文字及頁面脈絡，state.md 有待決事項和最近紀錄結構', !!first && retriedHelpNote.includes('公司概覽尚未建立時，我仍然不知道下一步。') && retriedHelpNote.includes('這題怎樣回答？') && retriedHelpState.includes('## 待決事項') && retriedHelpState.includes('## 最近紀錄') && retriedHelpState.includes('### 事件') && retriedHelpState.includes('### 已記錄答案') && retriedHelpState.includes('已設定。'), { sandbox: retriedHelpSandbox, note: retriedHelpNote, state: retriedHelpState });
 
   await cdp.go(BASE + '/#/', 1280, 1800);
   const firstHome = await cdp.ev('(()=>{const a=document.querySelector(".hero a.btn.primary.big");return a?{href:a.getAttribute("href"),text:a.textContent,screen:document.body.innerText}:null})()');
@@ -184,12 +185,23 @@ try {
   await cdp.click('.hero a.btn.primary.big');
   const qButton = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('每條問題有「不明白」入口', qButton && qButton.text === N.ui.helpNotClear && !qButton.disabled, qButton);
+  mode('note:slow');
   await cdp.click('.q-help');
   const qSent = await waitFor(async () => {
     const value = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
     return value && value.disabled ? value : null;
   }, 5000);
   ok('題目求助送出後顯示已交出並避免重複送出', qSent && qSent.text === N.ui.helpAsked && qSent.disabled, qSent);
+  const qQueued = await waitFor(async () => { const v = await cdp.ev('(()=>{const e=document.querySelector(".help-status");return e&&e.innerText})()'); return v === N.ui.helpQueued ? v : null; }, 5000);
+  ok('題目求助：先顯示排隊狀態', qQueued === N.ui.helpQueued, qQueued);
+  const qWorking = await waitFor(async () => { const v = await cdp.ev('(()=>{const e=document.querySelector(".help-status");return e&&e.innerText})()'); return v && v.includes('AI 正在回覆') ? v : null; }, 8000);
+  ok('題目求助：AI 接手後顯示處理中與已用時間', qWorking && /已用 \d+ 秒/.test(qWorking), qWorking);
+  const qReady = await waitFor(async () => await cdp.ev('(()=>{const a=document.querySelector(".help-status a");return a&&a.getAttribute("href")})()'), 12000);
+  ok('題目求助：完成後提供回覆連結', qReady && /^\/#\/ask\//.test(qReady), qReady);
+  const contextual = await waitFor(() => allPacks().find(p => p.help && p.help.packId === first.id && p.help.noteId !== sent.j.id), 45000);
+  const contextualSandbox = contextual && path.join(DATA, 'sandbox', contextual.fromRun);
+  const contextualNote = contextualSandbox && fs.readFileSync(path.join(contextualSandbox, 'note.md'), 'utf8');
+  ok('題目求助的 note.md 只帶該題原因、風險和選項', contextualNote && contextualNote.includes('原因：先用最直接的方式處理。') && contextualNote.includes('風險：沒有。') && contextualNote.includes('選項：先按建議做') && contextualNote.includes('選項：' + helpStill), contextualNote);
 
   const a1 = await answer(first, helpStill);
   ok('第一次要求換方式：答案可送出', a1.code === 200, a1);
@@ -215,6 +227,22 @@ try {
     return s && (s.runs || []).find(r => r.kind === 'ask' && r.result && r.result.summary === N.ui.helpAnswerRecorded);
   });
   ok('一般回答：只記錄求助答案，不建立工作或再次提問', normal && normal.code === 200 && recorded && !(state().tasks || []).length, { normal, recorded: recorded && recorded.result, tasks: state().tasks });
+
+  mode('note:help-fact');
+  const unsafeRequest = await post('/api/intake', { kind: 'note', type: 'help', text: '請給我下一步。' });
+  const unsafe = unsafeRequest.code === 202 && await waitFor(() => allPacks().find(p => p.help && p.help.noteId === unsafeRequest.j.id), 45000);
+  const unsafeQ = unsafe && unsafe.questions[0];
+  ok('求助建議把守：不安全既成事實不會成為建議或預設答案', unsafeQ && unsafeQ.value === '先確認目前情況' && unsafeQ.options.find(o => o.rec).text === '先確認目前情況', unsafeQ);
+
+  mode('note:note-noask');
+  const failedRequest = await post('/api/intake', { kind: 'note', type: 'help', text: '請測試失敗後重試。' });
+  const failedRun = failedRequest.code === 202 && await waitFor(async () => (await get('/api/status')).j.runs.find(r => r.ref === failedRequest.j.id && r.state === 'failed'), 45000);
+  if (failedRun) await post('/api/retry', { runId: failedRun.id });
+  await waitFor(() => allPacks().find(p => p.help && p.help.noteId === failedRequest.j.id), 45000);
+  const freshRequest = await post('/api/intake', { kind: 'note', type: 'help', text: '請讀取最新狀況。' });
+  const fresh = freshRequest.code === 202 && await waitFor(() => allPacks().find(p => p.help && p.help.noteId === freshRequest.j.id), 45000);
+  const freshState = fresh && fs.readFileSync(path.join(DATA, 'sandbox', fresh.fromRun, 'state.md'), 'utf8');
+  ok('舊失敗重試成功後：state.md 有待決、事件、答案，未完成原因不誤報舊失敗', failedRun && freshState && freshState.includes('## 待決事項') && freshState.includes('### 事件') && freshState.includes('提出求助') && freshState.includes('題目：你想怎樣做？；答案：先按建議做') && freshState.includes('## 最近一次未完成的原因\n\n沒有。'), freshState);
 
   const documentRequest = await post('/api/intake', { kind: 'note', type: 'help', text: '請幫我製作文件。' });
   const documentPack = documentRequest.code === 202 && await waitFor(() => allPacks().find(p => p.help && p.help.noteId === documentRequest.j.id && p.next && p.next.task), 45000);

@@ -213,7 +213,7 @@ try {
   fs.writeFileSync(path.join(DATA, 'asks', bp.id + '.json'), JSON.stringify(bp));
   const d2 = await get('/api/dashboard'), asks = await get('/api/asks');
   const tb = d2.todo.filter(t => t.brain), ab = asks.todo.filter(t => t.brain);
-  ok('生意大腦嘅問題包（辯論回應包、要你決定包）喺待決事項標明屬生意大腦，監察台同 Founder Desk 同一份', tb.length === 2 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.response) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
+  ok('生意大腦嘅問題包（辯論回應包、裁判決定包、要你決定包）喺待決事項標明屬生意大腦，監察台同 Founder Desk 同一份', tb.length === 3 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.response) && tb.some(t => t.id === dm.packs.decisions) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
 
   /* 畫面 */
   await openChrome();

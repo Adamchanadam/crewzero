@@ -16,7 +16,7 @@ import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, r
 import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, guideCard, companyLogo, LOGO_EXTS } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, guideCard, companyLogo, LOGO_EXTS, workStatus } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource } from './brain-lib.mjs';
@@ -485,7 +485,8 @@ function receiveNote(body) {
     if (say.length > 500) return fail('意見最多 500 字。');
     if (body.type === 'feedback' && body.verdict === 'revise' && !say) return fail('要修改請寫一句改甚麼。');
     const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
-    const machine = { cardId: body.cardId, item: body.item, verdict: body.verdict || '', text: say };
+    const machine = { cardId: body.cardId, item: body.item, verdict: body.verdict || '', text: say,
+      ...(body.type === 'brain-decide' && /^[\w-]{1,40}$/.test(String(body.matchId || '')) ? { matchId: body.matchId } : {}) };
     // 規劃書 4.9：結果卡意見檔名為時間前綴加 feedback-（項目），決定沿用 note-
     const fname = body.type === 'feedback' ? `${id}-feedback-${body.item}.md` : `${id}-note-${body.type}.md`;
     fs.writeFileSync(path.join(DIR.inbox, fname), `kind: note\ntype: ${body.type}\nat: ${localIso()}\n\n${say || '（沒有填寫意見）'}\n\n\`\`\`json\n${JSON.stringify(machine)}\n\`\`\`\n`, { flag: 'wx' });
@@ -648,30 +649,31 @@ function serverVia(text, via) {
   return header.concat(lines.slice(end)).join('\n');
 }
 function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] })) {
-  const found = [], add = (packId, ref) => {
+  const found = [], add = (packId, ref, noteId) => {
     const pack = /^[\w-]{1,80}$/.test(String(packId || '')) ? String(packId) : '';
     const runRef = /^[\w-]{1,80}$/.test(String(ref || '')) ? String(ref) : '';
-    if ((pack || runRef) && !found.some(x => x.packId === pack && x.ref === runRef)) found.push({ packId: pack, ref: runRef });
+    if ((pack || runRef) && !found.some(x => x.packId === pack && x.ref === runRef)) found.push({ packId: pack, ref: runRef, noteId: String(noteId || '') });
   };
   for (const file of fs.readdirSync(DIR.inbox).filter(f => /-note-help\.md$/.test(f))) {
     try {
       const parsed = parseFounderReply(fs.readFileSync(path.join(DIR.inbox, file), 'utf8'));
       const context = (parsed.machine || {}).context || {};
-      add(context.packId, context.runRef);
+      add(context.packId, context.runRef, file.replace(/-note-help\.md$/, ''));
     } catch { }
   }
-  for (const run of (status.runs || [])) if (run && run.kind === 'note' && run.noteType === 'help' && ['running', 'waiting'].includes(run.state)) add(run.helpForPackId, run.helpForRunRef);
+  for (const run of (status.runs || [])) if (run && run.kind === 'note' && run.noteType === 'help' && ['running', 'waiting'].includes(run.state)) add(run.helpForPackId, run.helpForRunRef, run.ref);
   return found;
 }
 
 function statusPayload() {
   const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
   const packs = listPacks(DIR);
+  const work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles(), status: st });
   const failedByRef = (st.runs || []).filter(r => r && r.state === 'failed' && r.ref).reduce((all, r) => ({ ...all, [r.ref]: (all[r.ref] || 0) + 1 }), {});
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, openAsks: packs.filter(p => p.open).length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: packs.filter(p => p.open).length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -944,10 +946,10 @@ const handler = async (req, res) => {
        if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
       if (p === '/api/status') return send(res, 200, statusPayload());
       if (p === '/api/sim' && SIM) return send(res, 200, { ok: true, sim: simInfo() });
-       if (p === '/api/dashboard') { const observedLive = await observeNow(), oc = observeCfg(); return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: shellAlive(), scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), version: SERVER_VERSION, instance: INSTANCE }); }
+       if (p === '/api/dashboard') { const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), version: SERVER_VERSION, instance: INSTANCE }); }
       // Founder Desk 待決事項頁：「今日要做的事」卡同「上次離開之後」；頁面第一次載入（seen=1）先記低今次時間，輪詢唔算
       // 一個殼嘅頁頭（決定二十五）：公司、三個業務指標、生意大腦等你處理數目；唔觀測、唔寫檔（Founder Desk 畫面每 5 秒讀一次）
-      if (p === '/api/shell') { const ds = dashboardState(DIR, { cert: certInfo(), sim: simInfo() }); return send(res, 200, { ok: true, company: ds.company, metrics: ds.metrics, brain: { items: ((ds.brain || {}).items || []).map(x => ({ id: x.id, status: x.status })) }, tele: ds.tele, freshness: ds.deck && ds.deck.freshness, sample: ds.sample, version: SERVER_VERSION, instance: INSTANCE }); }
+      if (p === '/api/shell') { const ds = dashboardState(DIR, { cert: certInfo(), sim: simInfo() }), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ok: true, company: ds.company, metrics: ds.metrics, brain: { items: ((ds.brain || {}).items || []).map(x => ({ id: x.id, status: x.status })) }, tele: ds.tele, freshness: ds.deck && ds.deck.freshness, sample: ds.sample, work, version: SERVER_VERSION, instance: INSTANCE }); }
       if (p === '/api/home') {
         if (url.searchParams.get('seen') === '1' && fs.existsSync(path.join(DIR.company, 'page.json'))) lastSeenPrev = touchLastSeen(DIR, SERVER_VERSION);
         const ds = dashboardState(DIR, { cert: certInfo(), lastSeen: lastSeenPrev });

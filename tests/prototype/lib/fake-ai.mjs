@@ -1,6 +1,6 @@
 // 測試用假 AI：喺 cwd（沙盒）工作，按 job.json 嘅 type 做嘢；冇 job.json 就用舊做法（按檔案判斷）。
 // 測試可以喺 <SOS_DATA>/fake-mode.txt 寫一次性模式（讀完即刪）：
-//   fail 失敗、timeout 超時、certify-escape 認證時寫出界、intake-bad 第一次擬錯格式、
+//   fail 失敗、timeout 超時、slow 延長一次工作、help-fact 交出不安全建議、certify-escape 認證時寫出界、intake-bad 第一次擬錯格式、
 //   intake-jargon 擬嘅內容有內部術語（改寫會改好）、jargon-stuck 內部術語改寫都改唔走
 import fs from 'node:fs';
 import path from 'node:path';
@@ -62,7 +62,7 @@ const job = fs.existsSync('job.json') ? JSON.parse(fs.readFileSync('job.json', '
 const M = mode(job ? job.type : '');
 if (M === 'fail') { console.log(JSON.stringify({ is_error: true, result: 'fake failure' })); process.exit(1); }
 if (M === 'timeout') { await sleep(10 * 60 * 1000); }
-await sleep(1200);
+await sleep(M === 'slow' ? 5000 : 1200);
 fs.mkdirSync('out', { recursive: true });
 fs.readFileSync('task.md', 'utf8');
 // 記低啟動參數（測試核對研究工作有冇加網上讀取）
@@ -211,8 +211,11 @@ if (type === 'certify') {
   let ask = null;
   if (job.noteType === 'help') {
     const wantsDocument = /製作文件/.test(fs.readFileSync('note.md', 'utf8'));
+    const unsafe = M === 'help-fact';
+    const options = unsafe ? [{ text: '我已與社工約好', rec: true }, { text: '先確認目前情況' }, { text: '仍然不明白，請換個方式解釋' }]
+      : [{ text: '先按建議做', rec: true }, { text: '仍然不明白，請換個方式解釋' }];
     ask = { format: 'startup-os.ask/0.1', title: '求助回覆：測試說明', context: '這是測試 AI 的直接說明。你可以先按建議處理，或要求以另一種方式解釋。', afterConfirm: '確認後會記錄你的選擇。', ...(wantsDocument ? { next: { task: '按創辦人確認的內容擬定一份文件草稿。' } } : {}), questions: [
-      { id: 'how', priority: 1, ask: '你想怎樣做？', kind: 'choice', options: [{ text: '先按建議做', rec: true }, { text: '仍然不明白，請換個方式解釋' }], value: '先按建議做', why: '先用最直接的方式處理。' }
+      { id: 'how', priority: 1, ask: '你想怎樣做？', kind: 'choice', options, value: unsafe ? '我已與社工約好' : '先按建議做', why: '先用最直接的方式處理。' }
     ] };
   } else if (job.noteType === 'order') {
     const order = route.map(r => r.id); order.splice(1, 0, 'new');

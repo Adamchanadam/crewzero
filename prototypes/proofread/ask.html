@@ -224,7 +224,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   var why = DESK.why;
   function retryCatch(e) { toast(N.ui.retryFailed + '：' + why(e)); }
   function failReason(err) { return err ? N.ui.reason + '：' + N.fix(err) : N.ui.failNoReason; }
-  function head(page, st) { return DESK.header({ page: page, company: st && st.company, pending: st ? st.openAsks : 0, sim: !!(st && st.sim) }); }
+  function head(page, st) { return DESK.header({ page: page, company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim) }); }
   function showAns(q, v) { return Array.isArray(v) ? v.join('、') : (q && q.kind === 'date' ? fmtDay(v) : String(v == null ? '' : v)); }
 
   /* ---------- 伺服器重新開過：頁面可能過時 ---------- */
@@ -837,6 +837,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         var stt = m.phase === 'adopted' || cur > k || (x[0] === 'done' && f.respondedAt) ? 'done' : cur === k ? (m.phase === 'failed' ? 'failed' : x[0] === 'done' || x[0] === 'adopt' ? 'waiting' : 'running') : m.phase === 'failed' && m.failed && order.indexOf({ red: 'red', blue: 'blue', rebuttal: 'rebuttal', judge: 'judge', rejudge: 'judge', strengthen: 'strengthening', 'reattack-red': 'reattack', 'reattack-judge': 'reattack' }[m.failed.pass]) === k ? 'failed' : 'pending';
         return trRow(stt, x[1], stt === 'failed' && m.failed ? m.failed.reason : '');
       });
+      var debateSteps = stepsL.filter(function (x) { return ['blue', 'red', 'rebuttal', 'judge'].indexOf(x[0]) >= 0; });
+      var activeStep = debateSteps.findIndex(function (x) { return x[0] === m.phase; });
+      var debateEta = running && activeStep >= 0 ? h('p', { class: 'small muted' }, N.t('debateExpected', { step: activeStep + 1, total: debateSteps.length })) : null;
       var act = [];
       var sent = DM.sent[id];
       if (m.phase === 'done') act.push(isOpen(m.packs.response) ? h('a', { class: 'btn primary big', id: 'dm-respond', href: '#/ask/' + m.packs.response }, '★ ' + N.ui.debateRespond + '（三題）')
@@ -854,6 +857,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('h2', { class: 'layer-title' }, m.topic.title || DD['tp_' + m.topic.type]), h('p', { class: 'small muted', style: 'margin:4px 0 0' }, DD['tp_' + m.topic.type] + ' · ' + m.format + ' · ' + DPH(m.phase) + (m.startedAt ? ' · ' + dayOf(m.startedAt) + ' ' + hm(m.startedAt) : '')),
         h('p', null, h('span', { class: 'pr-tag' }, DD.notEvidenceDebate)),
         h('ol', { class: 'tr-steps', id: 'dm-steps' }, stepRows),
+        debateEta,
         m.score ? h('p', { style: 'margin:12px 0 0' }, '記分：' + DD.vStand + ' ' + m.score.standing + ' · ' + DD.vHurt + ' ' + m.score.wounded + ' · ' + DD.vFall + ' ' + m.score.fallen + (m.score.redHitRate != null ? ' · ' + DD.redHitRate + ' ' + Math.round(m.score.redHitRate * 100) + '%' : ''), h('small', { style: 'display:block;margin-top:4px' }, DD.scoreRules + ' ' + attackStats(m))) : null,
         km.length ? h('ul', { class: 'm-sum', id: 'dm-moments' }, km.map(function (k) { return h('li', null, tag(DD['km_' + ({ '一擊倒下': 'fall', '最傷': 'top', '盲點': 'blind', '反轉': 'flip', '漏咗嘅路': 'missed' }[k.kind])] || k.kind), ' ', k.text); })) : null,
         s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · AI 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · AI 未查' : ''); })) : null,
@@ -922,7 +926,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var b = pickBatch();
       var help = {};
       P.questions.forEach(function (q) {
-        if ((V.status.helpInFlight || []).some(function (x) { return x && x.packId === P.id; })) help[q.id] = { sent: true };
+        var pending = (V.status.helpInFlight || []).find(function (x) { return x && x.packId === P.id; });
+        if (pending) help[q.id] = { sent: true, noteId: pending.noteId };
       });
       S = { edits: {}, ok: {}, extra: false, open: null, drafts: {}, help: help, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
       DESK.title('pending', N.fix(P.title));
@@ -995,15 +1000,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }
     }
     var help = S.help[q.id] || (S.help[q.id] = {});
-    var helpNote = h('span', { class: 'small muted', 'aria-live': 'polite' }, help.sent ? N.ui.helpAsked : help.error || '');
+    var helpNote = h('span', { class: 'small muted help-status', 'aria-live': 'polite' }, help.sent && !help.noteId ? N.ui.helpAsked : help.error || '');
     var helpBtn = h('button', { type: 'button', class: 'btn link q-help', disabled: help.sent ? true : null, onclick: function () {
       if (help.sent || help.sending) return;
       help.sending = true; help.error = ''; helpBtn.disabled = true; helpNote.textContent = N.ui.sending;
       post('/api/intake', { kind: 'note', type: 'help', text: T('helpQuestionText', { q: q.ask }), context: { packId: P.id, packTitle: P.title, ask: q.ask } })
-        .then(function () { help.sending = false; help.sent = true; helpBtn.textContent = N.ui.helpAsked; helpBtn.disabled = true; helpNote.textContent = ''; })
+        .then(function (result) { help.sending = false; help.sent = true; help.noteId = result.id; helpBtn.textContent = N.ui.helpAsked; helpBtn.disabled = true; DESK.watchHelp(help.noteId, helpNote); })
         .catch(function (e) { help.sending = false; help.error = why(e); helpBtn.disabled = false; helpNote.textContent = help.error; });
     } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
     body.append(h('div', { class: 'foot q-help-line' }, customBtn || null, helpBtn, helpNote));
+    if (help.sent && help.noteId) setTimeout(function () { DESK.watchHelp(help.noteId, helpNote); }, 0);
     c.append(body);
     return c;
   }
@@ -1181,6 +1187,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('span', { class: 'eyebrow' }, N.ui.track),
       h('h3', null, state === 'done' ? N.ui.trackDone : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
+    if (state === 'running') card.append(h('p', { class: 'small muted' }, N.ui.answerExpected, ' ', h('span', { 'data-since': r && r.startedAt || S.sent.at, 'aria-hidden': 'true' })));
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') {
       var appliedFailed = (r.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; });
@@ -1344,6 +1351,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('span', { class: 'eyebrow' }, N.ui.track),
       h('h3', null, state === 'done' ? N.ui.companyReady : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
+    if (state === 'running') card.append(h('p', { class: 'small muted' }, N.ui.intakeExpected, r && r.startedAt ? [' ', h('span', { 'data-since': r.startedAt, 'aria-hidden': 'true' })] : null));
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
       h('button', { type: 'button', class: 'btn primary', id: 'intake-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); IN.watching = true; setTimeout(showIntake, 800); }, retryCatch); } }, N.ui.retry),

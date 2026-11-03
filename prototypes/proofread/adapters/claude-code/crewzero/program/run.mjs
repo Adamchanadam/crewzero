@@ -13,7 +13,7 @@ import { folderHash } from './folder-hash.mjs';
 import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeRewriteJSON, mergeRewriteMd, deCodeInfo, deCodeJSONInfo, folderAssumptions, displayDir, displayPath, displayIndex } from './plain-lib.mjs';
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
 import { fileURLToPath } from 'node:url';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply } from './ask-lib.mjs';
+import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard } from './dash-lib.mjs';
@@ -346,6 +346,17 @@ function markRequest(run, raw, packs) {
     if (run.noteType === 'help') {
       p.help = { noteId: run.ref, ...(run.helpForPackId ? { packId: run.helpForPackId } : {}) };
       if (run.helpRetries) p.helpRetries = run.helpRetries;
+      // 求助回覆的建議只可提出下一步，不能把創辦人尚未確認的事情寫成既成事實。
+      for (const q of p.questions || []) {
+        const options = Array.isArray(q.options) ? q.options : [];
+        const rec = options.find(o => o && o.rec);
+        if (!rec || !/^(?:我已|已經|已與|已有)/.test(String(rec.text || '').trim())) continue;
+        const safe = options.find(o => o && !/^(?:我已|已經|已與|已有)/.test(String(o.text || '').trim()) && String(o.text || '') !== U.helpStill)
+          || options.find(o => o && String(o.text || '') === U.helpStill);
+        if (!safe) continue;
+        for (const o of options) o.rec = o === safe;
+        q.value = safe.text;
+      }
     }
     for (const q of p.questions) for (const o of q.options || []) {
       if (!o.apply) continue;
@@ -634,20 +645,34 @@ function reviseTask(sb, card, say) {
   writeJSON(path.join(sb, 'job.json'), { type: 'revise' });
 }
 // 紅藍對打嘅「需要你決定」：外殼照裁判寫嘅選項機械出問題包（唔使 AI），放上 Founder Desk
-function handleBrainDecide(run, m) {
-  const w = (loadBrain(DIR).items.find(x => x.id === 'wargame') || {}).detail;
-  const ds = w && w.synthesis ? w.synthesis.founderDecisions : [];
-  if (!ds.length) { const why = '紅藍對打未整合好，未有要你決定的事'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
-  const raw = { format: 'startup-os.ask/0.1', title: '紅藍對打：需要你決定的事', context: '裁判整合紅藍對打之後，有以下事情要你拍板；紅隊結果不算證據。', afterConfirm: '答案會記入決定紀錄。',
+function placeFounderDecisions(key, ds) {
+  if (!key || !ds || !ds.length) return { ok: false, reason: U.debateDecisionMissing };
+  const file = path.join(DIR.ledger, 'brain-decisions.json'), map = readJSON(file, {}) || {};
+  if (map[key]) return { ok: true, placed: [], packId: map[key], existing: true };
+  const raw = { format: 'startup-os.ask/0.1', title: U.debateDecisionTitle, context: U.debateDecisionContext, afterConfirm: U.debateDecisionAfter,
     questions: ds.slice(0, 3).map((d, i) => { const opts = (d.options || []).slice(0, 3).map(o => String(o)); const rec = opts.find(o => o === d.recommend || o.startsWith(String(d.recommend || '') + ' ')) || opts[0];
-      return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || '裁判建議'), ...(String(d.risk || '').trim() ? { risk: clip(String(d.risk), 120) } : {}), ...(String(d.conflict || '').trim() ? { conflict: clip(String(d.conflict), 120) } : {}) }; }) };
+      return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || U.debateDecisionWhy), ...(String(d.risk || '').trim() ? { risk: clip(String(d.risk), 120) } : {}), ...(String(d.conflict || '').trim() ? { conflict: clip(String(d.conflict), 120) } : {}) }; }) };
   const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: null, strictTitle: false, system: true });
-  if (!prep.ok || !prep.packs.length) { const why = prep.ok ? '這幾條先前已經回答' : '裁判提供的選項格式不正確，未能放上 Founder Desk'; step(run, 'applied', U.stepReqRegistered, prep.ok ? 'done' : 'failed', why); if (prep.ok) { run.result = { summary: why, artifacts: [], founderNext: [] }; return finish(run, 'done'); } return finish(run, 'failed', why); }
+  if (!prep.ok || !prep.packs.length) return { ok: false, reason: prep.ok ? U.debateDecisionAnswered : U.debateDecisionInvalid };
   for (const p of prep.packs) { p.todoType = 'decision'; p.brainItem = 'wargame'; }
   const placed = placePacks(DIR, prep.packs);
-  const map = readJSON(path.join(DIR.ledger, 'brain-decisions.json'), {}) || {}; map[m.cardId] = placed[0].id; writeJSON(path.join(DIR.ledger, 'brain-decisions.json'), map);
-  step(run, 'applied', U.stepReqRegistered, 'done', '已放上 Founder Desk');
-  run.result = { summary: '已放上 Founder Desk：' + placed[0].title, artifacts: [], founderNext: [], asks: placed };
+  map[key] = placed[0].id;
+  writeJSON(file, map);
+  return { ok: true, placed, packId: placed[0].id, existing: false };
+}
+function handleBrainDecide(run, m) {
+  const view = /^[\w-]{1,40}$/.test(String(m.matchId || '')) && readMatch(m.matchId) ? viewOf(m.matchId) : null;
+  const w = view || (loadBrain(DIR).items.find(x => x.id === 'wargame') || {}).detail;
+  const result = placeFounderDecisions(view ? m.matchId : m.cardId, w && w.synthesis ? w.synthesis.founderDecisions : []);
+  if (!result.ok && result.reason === U.debateDecisionAnswered) {
+    step(run, 'applied', U.stepReqRegistered, 'done', result.reason);
+    run.result = { summary: result.reason, artifacts: [], founderNext: [] };
+    return finish(run, 'done');
+  }
+  if (!result.ok) { step(run, 'applied', U.stepReqRegistered, 'failed', result.reason); return finish(run, 'failed', result.reason); }
+  const said = result.existing ? U.debateDecisionAlready : U.debateDecisionPlaced;
+  step(run, 'applied', U.stepReqRegistered, 'done', said);
+  run.result = { summary: said, artifacts: [], founderNext: [], ...(result.placed.length ? { asks: result.placed } : {}) };
   return finish(run, 'done');
 }
 /* ---------- 情景演練：準備場景（AI 由準備文件同你嘅行動擬人物卡）、會後紀錄（AI 擬跟進問題） ---------- */
@@ -721,11 +746,23 @@ function writeHelpState(sb, firstWeek = '') {
   const checked = certified(ROOT, DIR.ledger);
   const card = guideCard(firstWeek, dashboardState(DIR, { cert: checked && checked.host ? checked : null })) || {};
   const runs = readJSON(STATUS, { runs: [] }).runs || [];
-  const failed = runs.find(r => r.state === 'failed');
-  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', checked && checked.host ? '已設定。' : '未設定。'].join('\n') + '\n');
+  const timeOf = r => new Date(r.endedAt || r.startedAt || 0).getTime() || 0;
+  const newest = runs.slice().sort((a, b) => timeOf(b) - timeOf(a));
+  const failed = newest.find(r => r.state === 'failed' && (r === newest[0] || !newest.some(s => s.state === 'done' && s.ref && s.ref === r.ref && timeOf(s) > timeOf(r))));
+  const waiting = listPacks(DIR).filter(p => p.open).slice(0, 8).map(p => `- ${clip(p.title, 80)}（尚有 ${p.open} 條未答）`);
+  const state = loadState();
+  const events = (state.events || []).slice(-5).reverse().map(e => '- ' + clip(e.title, 80));
+  const answers = readLog(DIR, 500).filter(e => e && e.question && e.answer).slice(0, 5).map(e => `- 題目：${clip(e.question, 80)}；答案：${clip(e.answer, 80)}`);
+  fs.writeFileSync(path.join(sb, 'state.md'), ['# 目前狀態', '', '## 目前階段', '', card.today || '目前沒有可顯示的安排。', '', '## 待決事項', '', waiting.length ? waiting.join('\n') : '沒有。', '', '## 最近紀錄', '', '### 事件', '', events.length ? events.join('\n') : '沒有。', '', '### 已記錄答案', '', answers.length ? answers.join('\n') : '沒有。', '', '## 最近一次未完成的原因', '', failed && failed.error ? failed.error : '沒有。', '', '## AI 是否已設定', '', checked && checked.host ? '已設定。' : '未設定。'].join('\n') + '\n');
 }
 function helpNoteTask(sb, text, context = {}) {
-  const extra = context && typeof context === 'object' ? [context.page ? '- 目前頁面：' + context.page : '', context.packTitle ? '- 題目包：' + context.packTitle : '', context.ask ? '- 題目：' + context.ask : ''].filter(Boolean) : [];
+  const extra = context && typeof context === 'object' ? [context.page ? '- 目前頁面：' + context.page : '', context.packTitle ? '- 題目包：' + context.packTitle : ''].filter(Boolean) : [];
+  const pack = context && /^[\w-]{1,80}$/.test(String(context.packId || '')) ? loadPack(DIR, context.packId) : null;
+  const q = pack && (pack.questions || []).find(x => x.id === context.ask || x.ask === context.ask);
+  if (q) {
+    extra.push('- 題目：' + q.ask, '- 原因：' + (q.why || '沒有。'), '- 風險：' + (q.risk || '沒有。'));
+    for (const o of q.options || []) extra.push('- 選項：' + o.text);
+  } else if (context && context.ask) extra.push('- 題目：' + context.ask);
   fs.writeFileSync(path.join(sb, 'note.md'), '# 創辦人的求助\n\n' + text + '\n' + (extra.length ? '\n## 頁面或題目資料\n\n' + extra.join('\n') + '\n' : ''));
   writeJSON(path.join(sb, 'route.json'), currentRoute());
   writeConfirmedPage(sb);
@@ -1664,7 +1701,11 @@ async function runDebatePass(run, m) {
     m.endedAt = localIso();
     const placed = placeDebatePacks([responsePack(viewOf(m.id))]);
     m.packs.response = placed[0] ? placed[0].id : '';
-    run.result = { summary: '辯論完結：等待你回應三個關鍵時刻', artifacts: [], founderNext: [], asks: placed, matchId: m.id };
+    const synth = (viewOf(m.id) || {}).synthesis;
+    const decisions = placeFounderDecisions(m.id, synth ? synth.founderDecisions : []);
+    if (decisions.ok && decisions.packId) m.packs.decisions = decisions.packId;
+    const asks = placed.concat(decisions.ok ? decisions.placed : []);
+    run.result = { summary: '辯論完結：等待你回應三個關鍵時刻', artifacts: [], founderNext: [], asks, matchId: m.id };
     addEvent({ actor: 'ai', type: 'run', title: '辯論完結：' + clip(m.topic.title, 30) + '，等待你回應', relatedIds: [m.id, run.id], moduleIds: ['ai-week', 'decisions'] });
     summary = '辯論完結，已放上 Founder Desk';
   } else if (pass === 'reattack-judge' && (m.round || 1) === 1) {
@@ -2526,7 +2567,8 @@ async function main() {
       // 公司概覽要先有，所以交資料排先
       await handleIntake(run, intakes[0]);
     } else if (notes.length && !replies.length) {
-      await handleNote(run, notes[0]);
+      // 辯論每一步之間，創辦人剛提出的求助先處理；其餘收件次序不變。
+      await handleNote(run, notes.find(f => /-note-help\.md$/.test(f)) || notes[0]);
     } else if (replies.length) {
       // 按時間先後：最早嗰份屬公司概覽就一次過處理晒公司概覽嘅回覆（以最新為準）；屬問題包就淨處理嗰份
       const kindOf = f => parseReply(fs.readFileSync(path.join(DIR.replies, f), 'utf8')).head.kind;

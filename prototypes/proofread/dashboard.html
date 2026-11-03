@@ -2228,15 +2228,15 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function stageSynthesis(x, d) {
     var s = d.synthesis;
     if (!s) return null;
-    var dec = (V.data.brain.decided || {}).decide;
+    var decided = V.data.brain.decided || {}, dec = decided[d.id] || decided.decide;
     return h('details', { class: 'sec', id: 'risks', open: true }, h('summary', null, D.topRisks + ' · ' + D.founderDecide, h('small', null, s.topRisks.length + ' 個風險 · ' + s.founderDecisions.length + ' 條要你決定')),
       h('div', { class: 'risks', 'data-k': 's', 'data-act': 'judge' }, s.topRisks.map(function (r) {
         return h('div', { class: 'rcard', 'data-row': 'risk' + r.rank }, h('h4', null, r.rank + '. ' + r.risk, tag('AI 解讀', 'src-read')), h('dl', null, h('dt', null, D.cheapestTest), h('dd', null, r.cheapestTest, ' ', testByTag(r.testBy)), h('dt', null, D.stopCondition), h('dd', null, r.stop)), aiCheckedBox('ar-' + d.id + '-' + r.rank, r.aiChecked, r.testBy), fbBar(x.id, 'risk-' + r.rank));
       })),
       s.founderDecisions.length ? h('div', { class: 'decide', id: 'wg-decide', 'data-act': 'judge' }, h('h4', null, D.founderDecide + '（' + s.founderDecisions.length + '）'),
-        h('ul', { class: 'm-sum' }, s.founderDecisions.map(function (q) { return h('li', null, q.question, h('small', { class: 'muted', style: 'display:block' }, '★ 裁判建議：' + q.recommend + ' · ' + q.why)); })),
+        h('ul', { class: 'm-sum' }, s.founderDecisions.map(function (q) { return h('li', null, q.question, h('small', { class: 'muted', style: 'display:block' }, '★ 裁判建議：' + q.recommend + ' · ' + q.why + (q.risk ? ' · ' + D.decisionRisk + '：' + q.risk : ''))); })),
         h('p', { style: 'margin:8px 0 0' }, dec ? h('a', { class: 'btn primary', href: '/#/ask/' + dec.packId, id: 'wg-decide-go' }, dec.open ? '★ ' + D.toDeskAsk : '已答 · ' + D.view)
-          : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; postJSON('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide' }).then(function () { toast('正在放上 Founder Desk……'); setTimeout(load, 1500); }).catch(function (er) { e.target.disabled = false; toast('未能放上 Founder Desk：' + why(er)); }); } }, '★ ' + D.putOnDesk))) : null,
+          : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; postJSON('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide', matchId: d.id }).then(function () { toast('正在放上 Founder Desk……'); setTimeout(load, 1500); }).catch(function (er) { e.target.disabled = false; toast('未能放上 Founder Desk：' + why(er)); }); } }, '★ ' + D.putOnDesk))) : null,
       s.assumptionChanges.length ? h('p', { class: 'small', style: 'margin:10px 0 0', 'data-act': 'judge' }, h('b', null, D.assumptionChanges + '：'), s.assumptionChanges.map(function (a) { return [a.change, ' ', tag(a.label || 'AI 建議 · 未確認', 'src-ai'), '；']; })) : null);
   }
   function halfDebate(x, d) {
@@ -2451,14 +2451,14 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     // 舊深連 /dashboard/brain#b-<項目> 轉去分頁網址
     var ob = tab === 'brain' && !sub && /^#b-([a-z]+)$/.exec(location.hash);
     if (ob && ITEMS.indexOf(ob[1]) >= 0) { location.replace(brainHref(ob[1]) + location.search); return; }
-    document.title = (sub ? D['brain_' + sub] + ' · ' : '') + D[tab] + ' · ' + D.shell + (x.company.name ? ' · ' + x.company.name : '');
+    DESK.title(tab, sub ? D['brain_' + sub] : '');
     document.body.classList.toggle('paused', !!V.paused);
     document.body.classList.toggle('has-work', !!(x.work && x.work.meta.workingSessions));
     var shell = $('#shell');
     // 頁頭同導航只畫一次；之後由共用殼就地更新指標、徽章同連線狀態
     if (!V.built) {
       V.built = true;
-      shell.replaceChildren(DESK.shell({ tab: tab, sub: sub ? D['brain_' + sub] : null, company: x.company, metrics: x.metrics, pending: (x.todo || []).length, sample: x.sample, sim: x.sim ? { clock: md(x.sim.clock) + ' ' + hm(x.sim.clock) } : null, since: tab === 'overview' ? sinceLine() : null }), h('main', { id: 'app' }));
+      shell.replaceChildren(DESK.shell({ tab: tab, sub: sub ? D['brain_' + sub] : null, company: x.company, metrics: x.metrics, pending: (x.todo || []).length, work: x.workStatus, sample: x.sample, sim: x.sim ? { clock: md(x.sim.clock) + ' ' + hm(x.sim.clock) } : null, since: tab === 'overview' ? sinceLine() : null }), h('main', { id: 'app' }));
     }
     var sb = $('#sim-badge'); if (sb && x.sim) { var st = N.ui.simBadge + ' · ' + N.ui.simClock + ' ' + md(x.sim.clock) + ' ' + hm(x.sim.clock); if (sb.textContent !== st) sb.textContent = st; }
     if (V.stale && !$('.stalebar')) $('#desk-head').append(h('div', { class: 'track off stalebar' }, h('b', null, '伺服器已重新啟動：'), '請重新載入。 ', h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, '重新載入')));
