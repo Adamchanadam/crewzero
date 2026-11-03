@@ -29,6 +29,8 @@ const spent = () => ((readJ(path.join(T, 'data', 'ledger', 'status.json')) || { 
 let pid = 0, c = null, B = '';
 const N = createRequire(import.meta.url)(path.join(PROG, 'names.js'));
 const { openChrome } = await import(pathToFileURL(path.join(HERE, '..', 'lib', 'cdp-lib.mjs')).href);
+const { installPass, usePass } = await import(pathToFileURL(path.join(HERE, '..', 'lib', 'testkit.mjs')).href);
+let dropPass = null;
 async function openDesk() {
   const r = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env: envSrv, timeout: 60000, cwd: PROJ });
   B = ((r.stdout || '').match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0] || '';
@@ -63,8 +65,12 @@ try {
   const od = await openDesk();
   ok('ask.mjs --desk 開到頁', !!B, od.stdout + od.stderr);
   c = await openChrome(CHROME, path.join(OUT, 'profile'), PORT + 50);
+  // 正實例冇測試鉤：扮已配對嘅瀏覽器（同安裝測試一樣），試走完撤走
+  const ORIGIN = B.slice(0, -1), health = await (await fetch(B + 'api/health')).json();
+  dropPass = await installPass(health.root, ORIGIN, path.join(T, 'data'));
+  await usePass(ORIGIN, c);
   await c.go(B, 1280, 3000);
-  ok('阻塞卡「AI 未設定」附「前往設定」', (await has('#ai-block')) && (await has('#go-setup')), await text('#ai-block'));
+  ok('首次打開：先設定 AI，附「前往設定」', (await has('#intake-setup-first')) && (await has('#intake-go-setup')), await text('#app'));
   await shot('01-desk-ai-unset.png');
   await c.go(B + 'dashboard/system', 1280, 3000);
   const sys1 = await text('#sys-sched'), last1 = await text('#sys-last');
@@ -73,7 +79,7 @@ try {
 
   step('3 設定 AI');
   await c.go(B, 1280, 2500);
-  await c.click('#go-setup'); await waitFor(() => has('#certify-go'), 10000);
+  await c.click('#intake-go-setup'); await waitFor(() => has('#certify-go'), 10000);
   await c.click(`[data-host="${HOST}"]`); await c.click('#certify-go');
   const cert = await waitFor(async () => (await has('#setup-done')) || /未通過/.test(await text('#certify h3')), 5 * 60000);
   ok('認證全過', cert && (await has('#setup-done')), await text('#certify'));
@@ -130,6 +136,7 @@ try {
 } catch (e) {
   ok('試走中止', false, String(e && e.stack || e));
 } finally {
+  try { dropPass && dropPass(); } catch { }
   try { c && c.close(); } catch { } if (pid) { try { process.kill(pid); } catch { } }
   const runs = ((readJ(path.join(T, 'data', 'ledger', 'status.json')) || { runs: [] }).runs || []);
   const sum = { host: HOST, pass: steps.filter(s => s.pass).length, total: steps.length, aiRuns: runs.filter(r => r.aiCost).length, usd: Math.round(spent() * 1000) / 1000, shots: fs.existsSync(SHOTS) ? fs.readdirSync(SHOTS) : [], steps };
