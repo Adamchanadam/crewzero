@@ -1100,7 +1100,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var o = ri.os;
     if (!o) return U.schedLegacy;
     if (o.missing) return U.schedOsMissing;
-    if (o.legacy) return U.schedLegacy;
+    if (o.legacy) return o.confirmed ? U.schedLegacy : U.schedLegacyUnknown;
     if (o.stale) return N.t('schedOsStale', { c: cad(o.cadence), t: o.runTime, nc: cad(rh && rh.runCadence), nt: (rh && rh.runTime) || '21:00' });
     if (o.missing) return U.schedOsMissing;
     return [N.t('schedOs', { c: cad(o.cadence), t: o.runTime }), h('br'), h('small', { class: 'muted' }, o.startWhenAvailable ? U.schedCatchUpOn : U.schedCatchUpOff)];
@@ -1830,8 +1830,10 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var CAD = { daily: '每日', weekdays: '平日', weekly: '每星期' };
     function left(iso) { var n = Math.round((new Date(iso).getTime() - new Date(x.now).getTime()) / 60000); return n <= 1 ? '即將開始' : n < 60 ? '還有約 ' + n + ' 分鐘' : '還有約 ' + Math.floor(n / 60) + ' 小時' + (n % 60 ? ' ' + (n % 60) + ' 分鐘' : ''); }
     function runTags(r) {
+      // 程序結束唔等於工作完成
+      var unfinished = r.state === 'ended' && (r.rejected || r.ending === 'blocked');
       return [r.trigger ? tag(U['trig_' + r.trigger] || r.trigger) : null,
-        r.state === 'ended' && r.aiStarted === false ? tag(D.runRecordOnly) : tag(ST[r.state] || r.state, r.state === 'ended' ? 'mine' : r.state === 'failed' || r.state === 'skipped' ? 'eff' : ''),
+        unfinished ? tag(U.runUnfinished, 'eff') : r.state === 'ended' && r.aiStarted === false ? tag(D.runRecordOnly) : tag(ST[r.state] || r.state, r.state === 'ended' ? 'mine' : r.state === 'failed' || r.state === 'skipped' ? 'eff' : ''),
         r.state === 'ended' && r.ending && U['runEnd_' + r.ending] ? tag(U['runEnd_' + r.ending], r.ending === 'advanced' ? 'mine' : '') : null];
     }
     function simAct(body) {
@@ -1861,7 +1863,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
             : [h('dt', null, '開工'), h('dd', { class: 'muted' }, '未設定：確認公司概覽時採用預設值（每日 21:00）。')],
           h('dt', null, '排程'), h('dd', { id: 'sys-sched', 'data-state': ri.scheduler === 'os' ? (ri.os.legacy ? 'legacy' : ri.os.stale ? 'stale' : ri.os.missing ? 'missing' : 'on') : ri.scheduler }, schedLine(ri, x.rhythm)),
           h('dt', null, U.schedLast), h('dd', { id: 'sys-last' }, ri.lastScheduleAt ? [when(ri.lastScheduleAt) + ' ', ri.lastSchedule ? runTags(ri.lastSchedule) : null] : U.schedNever),
-          h('dt', null, U.schedNext), h('dd', { id: 'sys-next' }, ri.nextRunAt ? when(ri.nextRunAt) + '（' + left(ri.nextRunAt) + '）' : '未有：排程未登記，AI 只會在你提交答案或要求時開始工作')),
+          h('dt', null, U.schedNext), h('dd', { id: 'sys-next' }, ri.nextRunAt ? when(ri.nextRunAt) + '（' + left(ri.nextRunAt) + '）' : ri.scheduler === 'os' ? U.schedLegacyNoNext : '未有：排程未登記，AI 只會在你提交答案或要求時開始工作')),
         h('h4', null, D.brain),
         h('p', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? '未有資料：提交資料並確認公司概覽後，由公司紀錄供料。' : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : '找不到先前指定的參考資料夾。請在 AI 對話說「打開營運監察台」重新開啟。'),
         h('h4', null, D.sysHealth),

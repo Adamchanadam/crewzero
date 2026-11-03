@@ -72,8 +72,9 @@ try {
     const S = path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs');
     const reg = spawnSync(process.execPath, [S, '--register', '--autostart'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
     ok('登入啟動登記失敗：每日自動開工照樣保留，印中文原因同做法；英文錯誤同命令全文只去 stderr', reg.status === 0 && /登入啟動未能設定/.test(reg.stdout) && /打開一次 Founder Desk/.test(reg.stdout) && !/Access is denied|Register-ScheduledTask|PowerShell|[A-Za-z]:\\/.test(reg.stdout) && /Access is denied/.test(reg.stderr), { out: reg.stdout, err: reg.stderr.slice(0, 200) });
+    const legacyMark = path.join(P2, 'crewzero', 'data', 'ledger', 'schedule.json'); fs.writeFileSync(legacyMark, JSON.stringify({ name: 'crewzero-old', os: 'windows', runTime: '21:00' }));
     const rm = spawnSync(process.execPath, [S, '--remove'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
-    ok('排程移除失敗：同樣只印中文原因同做法', rm.status === 1 && /未能完全移除/.test(rm.stdout) && !/Access is denied|工作排程器|[A-Za-z]:\\/.test(rm.stdout), { out: rm.stdout });
+    ok('排程移除失敗：同樣只印中文原因同做法，原設定保留', rm.status === 1 && /未能完全移除/.test(rm.stdout) && fs.existsSync(legacyMark) && !/Access is denied|工作排程器|[A-Za-z]:\\/.test(rm.stdout), { out: rm.stdout });
   }
   // 安裝中途寫入失敗：喺呢個子程序入面令「改名」報檔案被佔用（唔郁任何真檔案權限）
   const P3 = path.join(OUT, 'proj-block'); fs.mkdirSync(P3, { recursive: true });

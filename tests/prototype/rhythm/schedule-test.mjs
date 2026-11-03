@@ -59,6 +59,27 @@ try {
   ok('Linux 寫 desktop autostart 檔', linux.status === 0 && fs.existsSync(desktop) && /X-GNOME-Autostart-enabled=true/.test(fs.readFileSync(desktop, 'utf8')), linux.stdout);
   ok('Linux 移除清走登入啟動與標記', run(['--remove', '--os', 'linux'], { HOME: linuxHome }).status === 0 && !fs.existsSync(desktop) && !fs.existsSync(markFile));
 
+  // 登入啟動移唔走：計時器即刻停，保留標記；重新登記先再清一次，清唔走就唔啟用
+  run(['--register', '--autostart']);
+  const stopFail = run(['--remove'], { SOS_SCHED_FAIL: '1' }), stopped = read(markFile);
+  ok('移除失敗：計時器停用但保留標記，以失敗結束', stopFail.status === 1 && stopped && stopped.mode === 'stopped' && /已停用/.test(stopFail.stdout), stopFail.stdout);
+  const stoppedStatus = run(['--status']);
+  ok('已停用狀態如實說明，冇下次時間', stoppedStatus.status === 0 && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).mode === 'stopped' && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).next === '' && /尚未完全移除/.test(stoppedStatus.stdout), stoppedStatus.stdout);
+  const reFail = run(['--register'], { SOS_SCHED_FAIL: '1' });
+  ok('重新登記先清殘留：清唔走唔啟用', reFail.status === 1 && read(markFile).mode === 'stopped', reFail.stdout);
+  const reOk = run(['--register']);
+  ok('清走之後先啟用', reOk.status === 0 && read(markFile).mode === 'server', reOk.stdout);
+  run(['--remove']);
+  // 真 PowerShell 語義：cmdlet 用替身，驗證移除腳本點分「確實冇」同「查唔到」（唔碰任何排程）
+  if (process.platform === 'win32') {
+    const src = fs.readFileSync(schedule, 'utf8'), script = (/if \(op === 'remove'\) return `([^`]*)`;/.exec(src) || [])[1].replaceAll('${q(NAME)}', 'crewzero-probe');
+    const stub = (body, name) => 'function ' + name + ' { [CmdletBinding()] param($TaskName, [switch]$Confirm) ' + body + ' }';
+    const gone = "Write-Error -Category ObjectNotFound -Message 'none'", denied = "Write-Error -Category PermissionDenied -Message 'denied'", exists = "[pscustomobject]@{ TaskName = $TaskName }", fine = '$null';
+    const ps = (un, get) => spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', stub(un, 'Unregister-ScheduledTask') + '; ' + stub(get, 'Get-ScheduledTask') + '; ' + script], { encoding: 'utf8', windowsHide: true });
+    const removed = r => r.status === 0 && /"removed":true/.test(r.stdout);
+    const cases = { 移除成功查回冇: removed(ps(fine, gone)), 本來就冇: removed(ps(gone, gone)), 移除被拒: !removed(ps(denied, gone)), 查回被拒: !removed(ps(fine, denied)), 仍然存在: !removed(ps(fine, exists)) };
+    ok('移除腳本：只有確實冇先算成功', Object.values(cases).every(Boolean), cases);
+  }
   fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '21:00' }, null, 2));
   const legacyRefused = run(['--register'], { SOS_SCHED_FAIL: '1' }), legacyStill = read(markFile);
   ok('舊排程移除失敗：不啟用新計時器，原標記保留，以失敗結束', legacyRefused.status === 1 && /未能切換/.test(legacyRefused.stdout) && legacyStill && !legacyStill.mode && legacyStill.name === 'crewzero-old', legacyRefused.stdout);
@@ -72,6 +93,13 @@ try {
   const view = dash.dashboardState(dirs, { now: new Date() });
   const html = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8'), names = fs.readFileSync(path.join(PROTO, 'names.js'), 'utf8');
   ok('舊格式不自動遷移：狀態、系統資料和待決卡都明說舊式仍運作', legacy.status === 0 && legacyJson.mode === 'os' && view.rhythmInfo.scheduler === 'os' && view.todo.some(x => x.id === 'schedule-legacy') && /schedLegacy/.test(html) && /舊式排程仍運作中/.test(names), { out: legacy.stdout, todo: view.todo });
+
+  const viewOf = st => dash.dashboardState(dirs, { now: new Date(), schedStatus: st }).rhythmInfo;
+  const live = viewOf({ ok: true, registered: true }), lost = viewOf({ ok: true, registered: false }), unknown = viewOf({ ok: false, registered: false });
+  ok('舊式工作：查到存在先有下次時間；已失效或查唔到都冇', !!live.nextRunAt && live.os.confirmed === true && lost.nextRunAt === '' && lost.os.missing === true && unknown.nextRunAt === '' && unknown.os.confirmed === false && /schedLegacyUnknown/.test(html), { live, lost, unknown });
+  fs.writeFileSync(stateFile, JSON.stringify({ runs: [{ trigger: 'schedule', slot: '2030-01-01', startedAt: '2030-01-01T21:00:00+00:00', state: 'ended', ending: 'blocked', rejected: true, rejectReason: 'adapter failed' }] }, null, 2));
+  const failedRun = viewOf(null).lastSchedule;
+  ok('工作失敗：監察台資料帶齊原因，頁面唔可以顯示完成', failedRun.rejected === true && failedRun.rejectReason === 'adapter failed' && /runUnfinished/.test(html), failedRun);
 
   const removed = run(['--remove']);
   ok('移除會清走舊格式標記及同名 Windows 工作', removed.status === 0 && !fs.existsSync(markFile) && calls().some(a => /Unregister-ScheduledTask/.test(a.at(-1))), removed.stdout);

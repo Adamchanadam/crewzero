@@ -38,7 +38,7 @@ export function workStatus(DIR, { outerAlive = false, pending = [], status = nul
 const DAY = 86400000;
 // 作業系統排程（MVP 規格第 2 節第 3 項）：登記標記 ledger/schedule.json；登記時嘅節奏同帳本而家嘅節奏唔同＝須重新登記
 export const scheduleMark = DIR => readJSON(path.join(DIR.ledger, 'schedule.json'), null);
-export const scheduleStale = (mark, r) => !!(mark && mark.mode !== 'server' && r && (mark.runTime !== r.runTime || (mark.cadence || 'daily') !== (r.runCadence || 'daily')));
+export const scheduleStale = (mark, r) => !!(mark && !mark.mode && r && (mark.runTime !== r.runTime || (mark.cadence || 'daily') !== (r.runCadence || 'daily')));
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const parseDay = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
@@ -344,15 +344,17 @@ export function dashboardState(DIR, extra = {}) {
   const rhythm = state.company && state.company.rhythm || null;
   // 排程狀態（系統頁）：邊個負責按時叫 AI 開工、上次實際觸發、下次開工；作業系統排程未安裝就冇「下次」
   const schedMark = sample ? null : scheduleMark(DIR);
-  const scheduler = sample ? 'demo' : extra.scheduler === 'sim' ? 'sim' : schedMark && schedMark.mode === 'server' ? 'server' : schedMark ? 'os' : 'none';
+  const scheduler = sample ? 'demo' : extra.scheduler === 'sim' ? 'sim' : schedMark && schedMark.mode === 'server' ? 'server' : schedMark && schedMark.mode !== 'stopped' ? 'os' : 'none';
   const lastSched = (Array.isArray(state.runs) ? state.runs : []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop() || null;
-  const nextAt = scheduler !== 'none' ? nextRunAt(rhythmOf(state), now) : null;
   const st = extra.schedStatus || null;
-  const osSched = scheduler === 'os' ? { legacy: !schedMark.mode, name: schedMark.name || '', cadence: schedMark.cadence || 'daily', runTime: schedMark.runTime || '', registeredAt: schedMark.registeredAt || '', startWhenAvailable: st && st.registered ? !!st.startWhenAvailable : !!schedMark.startWhenAvailable,
+  // 舊式工作要查到確實存在先講下次；已失效或者查唔到都唔可以承諾
+  const legacyLive = !!(st && st.ok && st.registered);
+  const nextAt = scheduler !== 'none' && (scheduler !== 'os' || legacyLive) ? nextRunAt(rhythmOf(state), now) : null;
+  const osSched = scheduler === 'os' ? { legacy: !schedMark.mode, confirmed: legacyLive, name: schedMark.name || '', cadence: schedMark.cadence || 'daily', runTime: schedMark.runTime || '', registeredAt: schedMark.registeredAt || '', startWhenAvailable: st && st.registered ? !!st.startWhenAvailable : !!schedMark.startWhenAvailable,
     stale: scheduleStale(schedMark, rhythmOf(state)), osNext: (st && st.next) || schedMark.nextRunAt || '', osLast: (st && st.last) || '', osLastResult: st && st.last ? st.lastResult : null, missing: !!(st && st.ok && !st.registered) } : null;
   // 節奏改咗但未重新登記：作業系統仍然按舊時間叫，「下次開工」照排程器讀回（或者登記時）嘅時間
   const osNextAt = osSched && osSched.stale && osSched.osNext ? new Date(osSched.osNext) : null;
-  const rhythmInfo = { scheduler, os: osSched, autostart: scheduler === 'server' ? { enabled: !!(schedMark.autostart && schedMark.autostart.enabled) && !(st && st.ok && st.autostart && !st.autostart.registered), registered: !!(st && st.autostart && st.autostart.registered) } : { enabled: false, registered: false }, nextRunAt: osNextAt && !isNaN(osNextAt) ? localIso(osNextAt) : nextAt ? localIso(nextAt) : '', lastScheduleAt: lastSched ? lastSched.startedAt : '', lastSchedule: lastSched ? { state: lastSched.state, skipReason: lastSched.skipReason || '', ending: lastSched.ending || '', label: lastSched.label || '' } : null };
+  const rhythmInfo = { scheduler, os: osSched, autostart: scheduler === 'server' ? { enabled: !!(schedMark.autostart && schedMark.autostart.enabled) && !(st && st.ok && st.autostart && !st.autostart.registered), registered: !!(st && st.autostart && st.autostart.registered) } : { enabled: false, registered: false }, nextRunAt: osNextAt && !isNaN(osNextAt) ? localIso(osNextAt) : nextAt ? localIso(nextAt) : '', lastScheduleAt: lastSched ? lastSched.startedAt : '', lastSchedule: lastSched ? { state: lastSched.state, skipReason: lastSched.skipReason || '', ending: lastSched.ending || '', rejected: !!lastSched.rejected, rejectReason: lastSched.rejectReason || '', label: lastSched.label || '' } : null };
 
   /* 未來兩星期日程 */
   const horizon = new Date(today.getTime() + 14 * DAY);
@@ -519,7 +521,7 @@ function buildTodoLists(DIR, { state, milestones, company, page, now }) {
   }
   // 排程節奏改咗（交資料第 9 題或者系統頁）：放一張「重新登記排程」提示卡，按下去系統頁（或者喺對話輸入「重新登記排程」）
   const sm = state.demo === true ? null : scheduleMark(DIR);
-  if (sm && sm.mode !== 'server' && !state.demo) add({ id: 'schedule-legacy', type: 'order', text: NAMES.ui.schedLegacyTodo, milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' });
+  if (sm && !sm.mode && !state.demo) add({ id: 'schedule-legacy', type: 'order', text: NAMES.ui.schedLegacyTodo, milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' });
   else if (scheduleStale(sm, rhythmOf(state))) { const r = rhythmOf(state); add({ id: 'schedule-stale', type: 'order', text: NAMES.t('schedStaleTodo', { t: r.runTime }), milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' }); }
   const lastSchedule = (Array.isArray(state.runs) ? state.runs : []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop();
   const certAt = (readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null) || {}).certifiedAt || '';

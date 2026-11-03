@@ -141,6 +141,14 @@ await test('試走拒絕已有未標記內容的資料夾，一個檔都唔郁',
   const out = make('walk-unmarked'), keep = path.join(out, 'profile', 'keep.txt'); write(keep, 'keep');
   const r = spawnSync(process.execPath, [path.join(HERE, '..', 'tools', 'mvp-walk.mjs'), PROTO, out, 'no-chrome', 'no-fake'], { encoding: 'utf8', timeout: 60000 });
   if (r.status !== 2 || !exists(keep) || fs.readFileSync(keep, 'utf8') !== 'keep' || exists(path.join(out, '.crewzero-walk-output'))) throw new Error('未有拒絕：' + r.status + ' ' + r.stdout);
+  const walk = dir => spawnSync(process.execPath, [path.join(HERE, '..', 'tools', 'mvp-walk.mjs'), PROTO, dir, 'no-chrome', 'no-fake'], { encoding: 'utf8', timeout: 60000 });
+  // 標記內容無效：唔算
+  const bad = make('walk-badmark'), badKeep = path.join(bad, 'proj', 'keep.txt'); write(badKeep, 'keep'); write(path.join(bad, '.crewzero-walk-output'), 'not a walk marker');
+  const r2 = walk(bad); if (r2.status !== 2 || !exists(badKeep)) throw new Error('無效標記被接受：' + r2.status);
+  // 標記係連結：唔跟，外面個檔唔可以被覆寫
+  const lnk = make('walk-linkmark'), outside = path.join(make('walk-outside'), 'personal.txt'), lnkKeep = path.join(lnk, 'proj', 'keep.txt'); write(outside, 'KEEP EXTERNAL'); write(lnkKeep, 'keep');
+  let linked = false; try { fs.symlinkSync(outside, path.join(lnk, '.crewzero-walk-output'), 'file'); linked = true; } catch { }
+  if (linked) { const r3 = walk(lnk); if (r3.status !== 2 || !exists(lnkKeep) || fs.readFileSync(outside, 'utf8') !== 'KEEP EXTERNAL') throw new Error('連結標記被跟隨：' + r3.status); }
 });
 
 const passed = results.filter(r => r.pass).length;

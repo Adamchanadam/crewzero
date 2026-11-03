@@ -20,8 +20,11 @@ const step = s => { cur = s; console.log('== ' + s); };
 const ok = (n, p, i) => { steps.push({ step: cur, name: n, pass: !!p, ...(p ? {} : { info: i }) }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + String(JSON.stringify(i)).slice(0, 400))); };
 // 清理只限自己建立嘅輸出：已有內容但冇試走標記就拒絕，唔接管
 const WALK_MARK = path.join(OUT, '.crewzero-walk-output');
-if (fs.existsSync(OUT) && (!fs.lstatSync(OUT).isDirectory() || fs.lstatSync(OUT).isSymbolicLink() || (fs.readdirSync(OUT).length && !fs.existsSync(WALK_MARK)))) { console.log('輸出資料夾已有未標記內容，唔會接管：' + OUT); process.exit(2); }
-fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(WALK_MARK, new Date().toISOString());
+const walkMarked = () => { try { const st = fs.lstatSync(WALK_MARK); if (!st.isFile() || st.isSymbolicLink()) return false; const m = JSON.parse(fs.readFileSync(WALK_MARK, 'utf8')); return m.tool === 'crewzero-mvp-walk' && String(m.out).toLowerCase() === fs.realpathSync(OUT).toLowerCase(); } catch { return false; } };
+let outStat = null; try { outStat = fs.lstatSync(OUT); } catch { }
+if (outStat && (!outStat.isDirectory() || outStat.isSymbolicLink() || (fs.readdirSync(OUT).length && !walkMarked()))) { console.log('輸出資料夾已有未標記內容，唔會接管：' + OUT); process.exit(2); }
+fs.mkdirSync(OUT, { recursive: true });
+if (!walkMarked()) fs.writeFileSync(WALK_MARK, JSON.stringify({ tool: 'crewzero-mvp-walk', out: fs.realpathSync(OUT), at: new Date().toISOString() }), { flag: 'wx' });
 const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), SHOTS = path.join(OUT, 'shots');
 if (fs.existsSync(PROJ)) {
   const removed = safeRemove(PROJ, OUT);
