@@ -293,9 +293,9 @@ export function restrictions(h) {
 }
 export function certified(root, ledger) {
   const cert = readJSON(path.join(ledger, 'adapter-cert.json'), null);
-  if (!cert) return { reason: 'AI 未設定，設定好之後會自動繼續' };
+  if (!cert) return { code: 'none', reason: 'AI 未設定，設定好之後會自動繼續' };
   const h = hosts(root).find(x => x.id === cert.host || x.file === cert.host);
-  if (!h || !restrictions(h) || hashHost(h) !== cert.argsHash || !cert.version || version(h) !== cert.version) return { reason: 'AI 工具設定已變更，須重新認證' };
+  if (!h || !restrictions(h) || hashHost(h) !== cert.argsHash || !cert.version || version(h) !== cert.version) return { code: 'changed', reason: 'AI 工具設定已變更，須重新認證' };
   return { host: h, label: cert.label || h.label || h.name || 'AI' };
 }
 export function cleanEnv() {

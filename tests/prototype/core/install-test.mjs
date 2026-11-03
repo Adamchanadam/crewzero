@@ -28,13 +28,13 @@ try {
   const firstStatus = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--status'], { encoding: 'utf8', env });
   ok('剛安裝時查狀態：指引先設定 AI，不報錯，不建立檔案', firstStatus.status === 0 && firstStatus.stdout.includes('設定 AI') && !firstStatus.stdout.includes('未能讀取') && fs.readdirSync(path.join(T, 'data')).length === 0, firstStatus.stdout + firstStatus.stderr);
   ok('全新空資料夾安裝：結束碼 0，創辦人文字只確認安裝完成，不含路徑或程式檔', r1.status === 0 && /CrewZero 已安裝完成/.test(r1.stdout) && !r1.stdout.includes(PROJ) && !r1.stdout.includes('程式檔'), { status: r1.status, out: r1.stdout, err: r1.stderr });
-  const must = ['ask.mjs', 'server.mjs', 'run.mjs', 'install.mjs', 'adapters/scheduler/install-schedule.mjs', 'adapters/hosts/claude.json', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd', 'fixtures/example-company-page-full.json'];
-  ok('結構：入口、外殼、轉接層、第一星期指引、VERSION、START-HERE.md、排程啟動檔、外殼要讀嘅虛構範本都齊', must.every(f => fs.existsSync(path.join(T, f))), must.filter(f => !fs.existsSync(path.join(T, f))));
+  const must = ['ask.mjs', 'server.mjs', 'run.mjs', 'install.mjs', 'adapters/scheduler/install-schedule.mjs', 'adapters/hosts/claude.json', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd', 'start-crewzero.cmd', 'fixtures/example-company-page-full.json'];
+  ok('結構：入口、外殼、轉接層、第一星期指引、VERSION、START-HERE.md、相容排程及登入啟動檔、外殼要讀嘅虛構範本都齊', must.every(f => fs.existsSync(path.join(T, f))), must.filter(f => !fs.existsSync(path.join(T, f))));
   ok('data/ 係空資料夾', fs.statSync(path.join(T, 'data')).isDirectory() && fs.readdirSync(path.join(T, 'data')).length === 0, fs.existsSync(path.join(T, 'data')) && fs.readdirSync(path.join(T, 'data')));
   const absent = ['demo-data', 'mockups', 'screenshots', 'PROTOTYPE-HANDOFF.md', 'adapters/claude-code/crewzero', 'adapters/claude-code/.claude-plugin', '開始.cmd', 'start-here-template.md'];
   ok('排除清單：示範、設計稿、截圖、交接筆記、插件資料夾同市集資訊、開發用啟動檔都冇帶', absent.every(f => !fs.existsSync(path.join(T, f))), absent.filter(f => fs.existsSync(path.join(T, f))));
   const want = rules.programFiles(PROTO, rules.INSTALL_SKIP);
-  const got = Object.keys(tree(T)).filter(k => !k.endsWith('/') && !['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh'].includes(k));
+  const got = Object.keys(tree(T)).filter(k => !k.endsWith('/') && !['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', 'start-crewzero.cmd', 'start-crewzero.sh'].includes(k));
   ok('程式檔同原型一致（同一排除清單，逐檔雜湊）', JSON.stringify(got.sort()) === JSON.stringify(want) && want.every(f => sha(path.join(T, f)) === sha(path.join(PROTO, f))), { extra: got.filter(f => !want.includes(f)), missing: want.filter(f => !got.includes(f)) });
   const ver = rules.pluginVersion(PROTO);
   ok('VERSION 取自插件資訊檔', /^\d+\.\d+\.\d+$/.test(ver) && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === ver, { ver, file: fs.readFileSync(path.join(T, 'VERSION'), 'utf8') });
@@ -42,6 +42,8 @@ try {
   ok('START-HERE.md：三個入口指令、data/ 不可手改、沒有本機通知要自己打開、出錯看系統頁、程式更新做法、版本', ['/crewzero:desk', '/crewzero:dashboard', '/crewzero:install', '$crewzero:desk', 'crewzero/data/', '請勿手改', '沒有本機通知', '系統', '程式更新', ver].every(k => sh.includes(k)) && !/\{version\}|\{date\}/.test(sh), sh.slice(0, 300));
   const cmd = fs.readFileSync(path.join(T, 'run-schedule.cmd'), 'utf8');
   ok('排程啟動檔：絕對路徑叫執行環境同同一資料夾嘅 run.mjs，以排程觸發，唔靠環境變數', cmd.includes('"' + process.execPath + '"') && cmd.includes('"' + path.join(T, 'run.mjs') + '"') && cmd.includes('--type auto --trigger schedule') && cmd.includes('cd /d "' + T + '"') && !/SOS_|%[A-Z_]+%/.test(cmd), cmd);
+  const start = fs.readFileSync(path.join(T, 'start-crewzero.cmd'), 'utf8');
+  ok('登入啟動檔：絕對路徑叫 ask.mjs --serve，唔會開瀏覽器亦唔靠環境變數', start.includes('"' + process.execPath + '"') && start.includes('"' + path.join(T, 'ask.mjs') + '"') && start.includes('--serve') && start.includes('cd /d "' + T + '"') && !/SOS_|%[A-Z_]+%/.test(start), start);
   ok('項目其他檔冇改', sha(path.join(PROJ, 'README.md')) === before && fs.readdirSync(PROJ).sort().join(',') === 'README.md,crewzero', fs.readdirSync(PROJ));
 
   /* 再裝一次：拒絕，一個檔都唔改 */

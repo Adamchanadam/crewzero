@@ -110,7 +110,8 @@ const TESTS = [
   ['上網', 'web/web-test.mjs', ['{proto}', '{out}', '{port}', '{web}']],
   ['經營節奏 14 日', 'rhythm/rhythm-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['經營節奏 14 日（21:00 後開始）', 'rhythm/rhythm-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '2026-10-29T21:30:00']],
-  ['排程登記', 'rhythm/schedule-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['伺服器定時', 'rhythm/server-tick-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['排程登記', 'rhythm/schedule-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}']],
   ['每週訪問', 'rhythm/interview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '{chrome}'], true]
 ];
 // 結果：最後一行「x / y」「x/y passed」「x/y 通過」；冇總數就睇有冇 FAIL 行

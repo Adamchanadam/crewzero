@@ -1,6 +1,6 @@
 // CrewZero 安裝命令（MVP 規格 2026-10-29 第 2 節第 1 項；規劃書附錄 B `sos install` 嘅最小版）
 // 用法：node install.mjs <項目根>
-// 將呢個程式資料夾複製去 <項目根>/crewzero/（排除清單見 bundle-rules.mjs），建空 data/，寫 VERSION、START-HERE.md、排程啟動檔。
+// 將呢個程式資料夾複製去 <項目根>/crewzero/（排除清單見 bundle-rules.mjs），建空 data/，寫 VERSION、START-HERE.md、相容排程啟動檔同登入啟動檔。
 // 目標已經有 crewzero/，或者有改名前裝嘅舊版 startup-os/，就拒絕，一個檔都唔改（結束碼 2）；舊版資料夾一律指去更新命令（update.mjs 會喺 startup-os/ 原位更新），唔另建 crewzero/。
 // 排程登記另外一步（adapters/scheduler/install-schedule.mjs --register），要創辦人批准。
 import fs from 'node:fs';
@@ -41,7 +41,7 @@ try {
     fs.copyFileSync(path.join(ROOT, ...f.split('/')), dst);
   }
   fs.mkdirSync(path.join(tmp, 'data'));
-  // VERSION、START-HERE.md、排程啟動檔（同更新命令共用同一個生成函數；排程啟動檔用最終位置嘅絕對路徑）
+  // VERSION、START-HERE.md、相容排程啟動檔同登入啟動檔（同更新命令共用同一個生成函數；全部用最終位置嘅絕對路徑）
   writeGenerated(tmp, target, ROOT, version);
   fs.renameSync(tmp, target);
 } catch (e) {

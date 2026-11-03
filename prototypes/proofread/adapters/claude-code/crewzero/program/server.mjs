@@ -144,6 +144,8 @@ function mintToken(page) {
 }
 // 交畀系統預設瀏覽器；測試同無畫面環境（SOS_NO_OPEN）唔開
 function launch(url) {
+  // 測試只記低「會開」：唔碰系統瀏覽器，亦唔改正式開頁行為。
+  if (TEST_INSTANCE && process.env.SOS_TEST_OPEN_LOG) { try { fs.appendFileSync(process.env.SOS_TEST_OPEN_LOG, url + '\n'); return true; } catch { return false; } }
   if (process.env.SOS_NO_OPEN) return false;
   try {
     if (process.platform === 'win32') spawn('cmd.exe', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
@@ -302,28 +304,40 @@ let child = null, again = false, timer = null;
 function schedule(ms = 1500) { clearTimeout(timer); timer = setTimeout(() => kick(), ms); }
 // args：排程 run 嘅類型同觸發（模擬計時器用）；你送出後嘅 run 唔帶參數。一次只准一個外殼程序
 function kick(args) {
-  if (child) { again = true; return; }
+  if (child) { again = true; return false; }
   say(args ? '排定時間到，交外殼做日常工作' : '有新內容，交外殼處理');
   child = spawn(process.execPath, [path.join(ROOT, 'run.mjs'), ...(args || [])], { cwd: ROOT, stdio: 'ignore', windowsHide: true });
   child.on('exit', () => {
-    child = null; simFiring = '';
+    child = null;
     const last = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }).runs[0];
     if (last) say(`處理完：${last.state === 'done' ? '完成' : last.state === 'failed' ? '失敗 - ' + (last.error || '') : last.state}`);
     if (again || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) { again = false; schedule(300); }
   });
+  return true;
 }
-// 模擬計時器：每 5 秒睇一次模擬時鐘；到咗排定時間（6 小時內）而嗰日未有排程 run 就叫外殼。你嘅回覆永遠排先
-let simFiring = '';
-function simTick() {
-  if (!SIM || child || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) return;
-  const s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, slot = dueSlot(rhythmOf(s), clockNow());
+// 排程計時器：模擬每 5 秒、真實實例每 30 秒。未經批准（冇 mode:server 標記）唔會開 AI；你嘅回覆永遠排先。
+let firedDay = null;
+function rhythmTick() {
+  if (child || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) return;
+  const s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
+  if (s.demo === true) return;
+  const mark = readJSON(path.join(DIR.ledger, 'schedule.json'), null);
+  // 模擬實例沿用原本嘅 5 秒試走；真實資料先必須有創辦人嘅 server 授權。
+  if (!SIM && (!mark || mark.mode !== 'server')) return;
+  const slot = dueSlot(rhythmOf(s), clockNow());
   if (!slot) return;
-  const day = ymd(slot);
-  if (simFiring === day || (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === day)) return;
-  simFiring = day;
-  kick(['--type', 'auto', '--trigger', 'schedule', '--slot', day]);
+  // 批准之前嘅時段唔算：21:30 先批准，唔可以即刻開工花費
+  if (!SIM && mark.approvedAt && slot < new Date(mark.approvedAt)) return;
+  const day = ymd(slot), recorded = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === day);
+  if (recorded) { if (firedDay && firedDay.day === day) firedDay = null; return; }
+  if (firedDay && firedDay.day === day) {
+    if (Date.now() - firedDay.at > 120000) firedDay = null;
+    else return;
+  }
+  if (kick(['--type', 'auto', '--trigger', 'schedule', '--slot', day])) firedDay = { day, at: Date.now() };
 }
-if (SIM) setInterval(simTick, 5000);
+const rhythmTimer = setInterval(rhythmTick, SIM ? 5000 : 30000);
+if (!SIM) rhythmTimer.unref();
 function simInfo() {
   if (!SIM) return null;
   const sim = readJSON(SIM_FILE, {}) || {}, c = readJSON(CERT_FILE, null), s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
@@ -1148,7 +1162,7 @@ const server = http.createServer(handler);
 
 // 「開始.cmd」（server.mjs --open）：自己開緊就經一次性連結開 Founder Desk；沿用緊另一個伺服器就請嗰個伺服器開（同 ask.mjs 一樣嘅叫法）
 async function openBrowser() {
-  if (!process.argv.includes('--open')) return;
+  if (!process.argv.includes('--open') || process.argv.includes('--no-open')) return;
   if (server.listening) { openPage('desk'); return; }
   try { await fetch(`${home()}api/pass/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'desk' }), signal: AbortSignal.timeout(3000) }); } catch { }
 }

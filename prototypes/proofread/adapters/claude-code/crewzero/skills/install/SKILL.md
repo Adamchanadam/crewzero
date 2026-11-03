@@ -1,6 +1,6 @@
 ---
 name: install
-description: "安裝 CrewZero（零號隊員：AI 團隊同創辦人一齊經營初創嘅工具）到創辦人嘅項目，同埋登記、重新登記或者移除每日排程。Only for CrewZero, not a general installer. Use when the founder asks to install CrewZero (e.g. /crewzero:install in Claude Code, $crewzero:install in Codex, /install in Antigravity, 「安裝 CrewZero」), or says 「安裝排程」「重新登記排程」「移除排程」「排程狀態」. Every write and every schedule registration needs the founder's explicit 「好」／「批准」 in this conversation first."
+description: "安裝 CrewZero（零號隊員：AI 團隊同創辦人一齊經營初創嘅工具）到創辦人嘅項目，同埋開啟、重新登記或者移除每日自動開工；登入啟動必須另行同意。Only for CrewZero, not a general installer. Use when the founder asks to install CrewZero (e.g. /crewzero:install in Claude Code, $crewzero:install in Codex, /install in Antigravity, 「安裝 CrewZero」), or says 「安裝排程」「重新登記排程」「移除排程」「排程狀態」. Every write, daily auto-start approval, and login auto-start registration needs the founder's explicit approval in this conversation first."
 ---
 
 <!--
@@ -8,7 +8,7 @@ CrewZero 插件入面嘅安裝指令（只係轉接層，核心係程式資料�
 同一份插件喺 Claude Code、Codex、Antigravity（agy）三種工具都用得；程式隨插件附帶，喺插件資料夾入面嘅 program/（由開發會話用 build-plugin.mjs 生成）。呢個檔唔寫任何本機絕對路徑。
 -->
 
-CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項目入面新增一個 `crewzero/` 資料夾（程式檔同一個空嘅 `data/`），唔改項目其他檔；之後創辦人批准，電腦每日按時叫 AI 開工。
+CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項目入面新增一個 `crewzero/` 資料夾（程式檔同一個空嘅 `data/`），唔改項目其他檔；之後創辦人批准，已開啟的 CrewZero 伺服器每日按時開工。
 
 ## 指令叫法（三種 AI 工具）
 
@@ -43,17 +43,18 @@ CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項�
 4. 跟住做「登記每日排程」。
 5. 最後登記觀察資料夾同打開 Founder Desk（同一條命令）：`node "<安裝>/ask.mjs" --desk --observe "<項目根>"`。話畀創辦人知已經打開，下一步是頁頂「AI 未設定」的「前往設定」。最後一定要說：「以後在 AI 對話說「打開 Founder Desk」，便可再次打開。」創辦人喺第 2 步明確講唔要觀察，就改用 `node "<安裝>/ask.mjs" --desk`。
 
-## 登記每日排程（亦處理「安裝排程」「重新登記排程」）
+## 登記每日自動開工（亦處理「安裝排程」「重新登記排程」）
 
-1. 先讀取排程說明：`node "<安裝>/adapters/scheduler/install-schedule.mjs"`。向創辦人講清 stdout 的每日時間、每次上限及電腦關機或睡眠時會在下次可用時補做，再問「批准登記？」。完整命令只可從 stderr 的技術細節取得，並且只在創辦人明確要求時才提供。然後停，等創辦人答。
-2. 創辦人答「批准」之後先執行：`node "<安裝>/adapters/scheduler/install-schedule.mjs" --register`
-   - 成功：照印出嘅下次執行時間同「錯過即補跑」設定講一句。
-   - 失敗：照印出嘅第一句（中文原因同做法）用白話講；之後印出嘅英文錯誤同命令全文只供你理解，唔好交俾創辦人，亦唔好叫佢自己執行。安裝本身照樣算完成，AI 仍會喺創辦人交答案或者提出要求時工作。
-3. 創辦人唔批准：講「系統頁的排程會寫『未登記』；之後想登記，在對話輸入『安裝排程』」。
+1. 先讀取排程說明：`node "<安裝>/adapters/scheduler/install-schedule.mjs"`。向創辦人講清每天時間、伺服器必須開着、錯過後只在 6 小時內補做一次，然後問「批准每日自動開工？」。先停，等創辦人答。
+2. 創辦人答「批准」後，**分開再問**：「要不要登入電腦時自動打開 CrewZero？」答應每日自動開工不代表答應登入啟動。
+3. 只批准每日自動開工才執行：`node "<安裝>/adapters/scheduler/install-schedule.mjs" --register`；兩項都批准才加 `--autostart`。
+   - 成功：如伺服器未開，必須如實說「打開 Founder Desk 一次後開始生效」；登入啟動只按命令實際結果說已開啟或未開啟。
+   - 登入啟動失敗：每日自動開工照樣保留；說明電腦重開後要打開一次 Founder Desk 才會恢復。
+4. 創辦人唔批准每日自動開工：講「系統頁會寫『未開啟』；之後想開啟，在對話輸入『安裝排程』」。
 
 ## 其他要求
 
-- 「移除排程」：先問一次「移除之後，電腦不會再每日叫 AI 開工，確定嗎？」，答確定先執行 `node "<安裝>/adapters/scheduler/install-schedule.mjs" --remove`。
+- 「移除排程」：先問一次「移除之後，伺服器不會再每日自動開工，登入啟動亦會移除，確定嗎？」，答確定先執行 `node "<安裝>/adapters/scheduler/install-schedule.mjs" --remove`。
 - 「排程狀態」：執行 `node "<安裝>/adapters/scheduler/install-schedule.mjs" --status`。先讀第一行 JSON 的 `ok`；如為 `false`，只說「暫時未能讀取每日排程的狀態，請稍後再試。」；如為 `true`，才用一句話講第二行內容。
 - 排程登記名：新安裝係 `crewzero-` 開頭；改名前登記嘅舊版排程係 `startup-os-` 開頭，命令會自己認得，唔使你處理。
 
@@ -63,6 +64,6 @@ CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項�
 
 ## 一定要守
 
-- 寫入項目、登記排程、移除排程，每一樣都要創辦人喺今次對話明確答應先做；答應一樣唔代表答應另一樣。
+- 寫入項目、每日自動開工、登入啟動、移除排程，每一樣都要創辦人喺今次對話明確答應先做；答應每日自動開工唔代表答應登入啟動。
 - 唔好手改 `<安裝>/data/` 入面任何檔；唔好為咗「修好」而刪除、覆寫或者改名 `<安裝>`（包括舊版嘅 `startup-os/`）。
 - 唔好叫創辦人自己執行檔案；命令由你執行。

@@ -1,17 +1,19 @@
 # 排程轉接層
 
-`install-schedule.mjs` 叫作業系統每日按時執行安裝資料夾入面嘅 `run-schedule.cmd`（排程啟動檔：以絕對路徑執行 `node run.mjs --type auto --trigger schedule`，唔靠環境變數）。創辦人可讀的結果只寫到 stdout；登記名、啟動檔和完整命令寫到 stderr，並標明只供 AI 排查。
+每日自動開工由已開啟的 CrewZero 伺服器負責：它按經營節奏檢查，錯過排定時間只會在 6 小時內補做一次。install-schedule.mjs 不再登記每日作業系統工作；它只記錄創辦人的批准，並可另行登記「登入時打開 CrewZero」。
 
-| 動作 | 命令 | 用到嘅作業系統命令（Windows） |
+| 動作 | 命令 | 結果 |
 |---|---|---|
-| 印定義（唔登記） | `node adapters/scheduler/install-schedule.mjs` | 冇 |
-| 登記（要創辦人批准） | `--register` | PowerShell：`New-ScheduledTaskAction`、`New-ScheduledTaskTrigger`（每日／平日／每星期）、`New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit -MultipleInstances IgnoreNew`、`Register-ScheduledTask -Force`；登記後即刻用 `Get-ScheduledTask`、`Get-ScheduledTaskInfo` 唯讀讀回 |
-| 讀回 | `--status` | `Get-ScheduledTask`、`Get-ScheduledTaskInfo`（下次執行、上次執行時間、結果碼、錯過即補跑設定） |
-| 移除 | `--remove` | `Unregister-ScheduledTask -Confirm:$false` |
+| 印說明 | node adapters/scheduler/install-schedule.mjs | 不寫入；先說明每日開工與獨立的登入啟動選項 |
+| 開啟每日自動開工 | --register | 寫入 data/ledger/schedule.json 的 mode: "server" 授權記錄；若伺服器未開，首次打開 Founder Desk 後才生效 |
+| 同時開登入啟動 | --register --autostart | Windows 登記登入工作；macOS 寫 LaunchAgent；Linux 寫 desktop autostart。失敗不會取消已批准的每日自動開工 |
+| 讀回 | --status | 第一行 JSON：ok、mode、登入啟動狀態、帳本的上次實際結果、下次時間 |
+| 移除 | --remove | 移除授權記錄、登入啟動及同名的舊式 Windows 每日工作 |
 
-- **登記名**：`crewzero-<安裝資料夾識別 8 個字>`，兩個安裝唔會撞名。改名前登記嘅排程叫 `startup-os-<識別>`：安裝資料夾仲叫 `startup-os/`，或者登記標記（`data/ledger/schedule.json`）寫住舊名，就沿用舊名，排程狀態、移除同重新登記都對準同一個排程。
-- **錯過即補跑**：`-StartWhenAvailable`（電腦當時關機或者睡眠，下次可用時盡快補做）。執行時限＝經營節奏每次上限加 15 分鐘；同一時間只准一次（`IgnoreNew`）。同一日已經做過排程工作，補跑嗰次唔再開 AI（外殼判斷）。
-- **未核實**：用「只在使用者登入時執行」登記時，電腦睡眠或關機後係咪真係補跑，要第一星期第一次漏跑時觀察一次（MVP 規格第 3 節）。
-- **標記**：登記成功寫 `data/ledger/schedule.json`（登記名、節奏、登記時間、下次執行、命令全文）；伺服器見到標記就喺系統頁顯示「已登記」，節奏同帳本唔同就顯示「節奏已改，須重新登記」並喺待決事項放提示卡。
-- **測試**：環境變數 `SOS_SCHED_CMD` 指向假程式（例如 `tests/prototype/lib/fake-schtasks.mjs`），只記錄參數，唔郁電腦上任何排程。
-- **其他系統**：MVP 只支援 Windows 自動登記；macOS、Linux 只說明目前不支援自動登記，原有登記定義寫到 stderr 供 AI 排查。
+- **兩項獨立同意**：答應每日自動開工，不代表答應登入電腦時自動打開 CrewZero。
+- **Windows 登入工作**：New-ScheduledTaskTrigger -AtLogOn、New-ScheduledTaskAction、IgnoreNew 及 5 分鐘上限；主線須在真機確認 Windows 工作排程器不會在啟動檔結束時終止 detached 伺服器。
+- **macOS**：~/Library/LaunchAgents/<登記名>.plist，以 launchctl bootstrap 後再 launchctl print 讀回。
+- **Linux**：~/.config/autostart/<登記名>.desktop。
+- **未經真機驗證**：macOS 與 Linux 登入啟動尚未作真機驗證。
+- **舊式遷移**：舊 schedule.json 沒有 mode: "server" 時，伺服器不會自行開工；系統頁會提示「重新登記排程」，原有 Windows 每日工作不會被更新破壞。
+- **測試**：設定 SOS_SCHED_CMD=tests/prototype/lib/fake-schtasks.mjs 只記錄命令，絕不登記真排程。

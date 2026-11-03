@@ -73,10 +73,10 @@ async function findServer() {
   }
   return null;
 }
-async function ensureServer() {
+async function ensureServer(noOpen = false) {
   let url = await findServer();
   if (url) return url;
-  spawn(process.execPath, [path.join(ROOT, 'server.mjs'), ...(si >= 0 ? ['--port', String(PORT0)] : [])], { cwd: ROOT, detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  spawn(process.execPath, [path.join(ROOT, 'server.mjs'), ...(noOpen ? ['--no-open'] : []), ...(si >= 0 ? ['--port', String(PORT0)] : [])], { cwd: ROOT, detached: true, stdio: 'ignore', windowsHide: true }).unref();
   for (let i = 0; i < 20 && !url; i++) { await sleep(500); url = await findServer(); }
   return url;
 }
@@ -91,6 +91,13 @@ async function openPage(url, page) {
     // 呢度印出嘅句會由 AI 轉述畀創辦人：只用中文原因同做法，唔印狀態碼或者英文
     return { ok: false, message: typeof body?.message === 'string' && /[一-鿿]/.test(body.message) ? body.message : 'CrewZero 未有接受這次開頁要求。請稍等十秒，再說一次。' };
   } catch { return { ok: false, message: 'CrewZero 未有回應。請稍等十秒，再說一次。' }; }
+}
+
+if (args.includes('--serve')) {
+  const url = await ensureServer(true);
+  if (!url) { console.log('未能啟動 CrewZero 伺服器，請稍後再試。'); process.exit(1); }
+  console.log('CrewZero 伺服器已開啟。');
+  process.exit(0);
 }
 
 // 生意大腦本機選項：指向一個試驗資料夾（只讀固定檔名）；--brain off 取消

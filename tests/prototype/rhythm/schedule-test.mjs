@@ -1,139 +1,75 @@
-// 排程一按批准測試（MVP 規格 2026-10-29 第 2 節第 3 項）：用假登記程式（SOS_SCHED_CMD，只記錄參數），唔郁電腦上任何排程。
-// 核對：印定義唔登記；登記參數含登記名、每日時間、啟動檔絕對路徑、錯過即補跑同執行時限；兩個安裝唔撞名；標記欄位；
-// 系統頁三態（未登記／已登記／節奏已改須重新登記）各出現一次，節奏改咗待決事項有「重新登記排程」提示卡；移除後標記消失、頁面返去未登記；
-// 直接執行排程啟動檔一次（等同排程器會跑嘅命令）有排程紀錄；同一日已做過排程工作，補跑唔再開 AI。
-// 用法：node schedule-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
+// 伺服器每日開工授權與登入啟動：全部經 SOS_SCHED_CMD 假程式，唔會登記真排程。
+// 用法：node schedule-test.mjs <chrome-unused> <輸出> <原型> <假AI> <port-unused>
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
-import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { usePass, installPass } from '../lib/testkit.mjs';
-let unpair = () => { };
-const [CHROME, OUT, PROTO, FAKE, PORT] = process.argv.slice(2);
+
+const [, OUT, PROTO, FAKE] = process.argv.slice(2);
+const results = [];
+const ok = (name, pass, info = '') => results.push({ name, pass: !!pass, info });
+const read = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
+fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+const LOG = path.join(OUT, 'schedule-calls.jsonl');
+const clean = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^SOS_/.test(key)));
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
-const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), U = N.ui;
-const { openChrome } = await import(pathToFileURL(path.join(HERE, '..', 'lib', 'cdp-lib.mjs')).href);
-const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
-const LOG = path.join(OUT, 'sched-calls.jsonl');
-const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^SOS_/.test(k))), SOS_SCHED_CMD: path.join(HERE, '..', 'lib', 'fake-schtasks.mjs'), SOS_SCHED_LOG: LOG, SOS_ADAPTER: FAKE, SOS_NO_OPEN: '1' };
-const calls = () => { try { return fs.readFileSync(LOG, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-const readJ = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
-const install = dir => { fs.mkdirSync(dir, { recursive: true }); return spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), dir], { encoding: 'utf8', env }); };
-let srv = null, c = null;
+const env = { ...clean, SOS_ADAPTER: FAKE, SOS_SCHED_CMD: path.join(HERE, '..', 'lib', 'fake-schtasks.mjs'), SOS_SCHED_LOG: LOG };
+const calls = () => { try { return fs.readFileSync(LOG, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(x => JSON.parse(x)); } catch { return []; } };
 try {
-  const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
-  ok('先安裝（全新空資料夾）', install(PROJ).status === 0);
-  const sched = (...a) => spawnSync(process.execPath, [S, ...a], { encoding: 'utf8', env, cwd: T });
-  const schedWith = (more, ...a) => spawnSync(process.execPath, [S, ...a], { encoding: 'utf8', env: { ...env, ...more }, cwd: T });
-  const MARK = path.join(T, 'data', 'ledger', 'schedule.json'), CMD = path.join(T, 'run-schedule.cmd');
+  const proj = path.join(OUT, 'project'); fs.mkdirSync(proj, { recursive: true });
+  const installed = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), proj], { encoding: 'utf8', env });
+  const root = path.join(proj, 'crewzero'), schedule = path.join(root, 'adapters', 'scheduler', 'install-schedule.mjs');
+  const markFile = path.join(root, 'data', 'ledger', 'schedule.json'), stateFile = path.join(root, 'data', 'ledger', 'state.json');
+  const run = (args, more = {}) => spawnSync(process.execPath, [schedule, ...args], { cwd: root, encoding: 'utf8', env: { ...env, ...more } });
 
-  /* 印定義：唔登記 */
-  const p0 = sched();
-  const name = (p0.stderr.match(/crewzero-[0-9a-f]{8}/) || [])[0];
-  ok('印定義：創辦人輸出只說明未登記、每日時間與補跑；登記名、啟動檔和命令全文只在技術細節；冇叫排程器、冇標記', p0.status === 0 && /未登記/.test(p0.stdout) && /每日 21:00/.test(p0.stdout) && !!name && p0.stderr.includes(CMD) && /-StartWhenAvailable/.test(p0.stderr) && !p0.stdout.includes(name) && !p0.stdout.includes(CMD) && !calls().length && !fs.existsSync(MARK), { out: p0.stdout, err: p0.stderr });
-  const mac = spawnSync(process.execPath, [S, '--os', 'mac'], { encoding: 'utf8', env });
-  ok('非 Windows：創辦人只見不支援說明，原有 launchd 定義只在技術細節', mac.status === 0 && /目前只支援在 Windows/.test(mac.stdout) && !/launchd|Label|執行環境/.test(mac.stdout) && /macOS launchd/.test(mac.stderr) && /Label/.test(mac.stderr) && /執行環境/.test(mac.stderr), { out: mac.stdout, err: mac.stderr });
-  const P2 = path.join(OUT, 'proj2'); install(P2);
-  const n2 = (spawnSync(process.execPath, [path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stderr.match(/crewzero-[0-9a-f]{8}/) || [])[0];
-  ok('登記名含安裝資料夾識別：兩個安裝唔撞名', name && n2 && name !== n2, { name, n2 });
-  // 改名前登記嘅排程叫 startup-os-<識別>：安裝資料夾仲叫 startup-os/（舊版原位更新），或者登記標記寫住舊名，就沿用舊名（排程狀態、移除、重新登記都對準同一個）
-  const P3 = path.join(OUT, 'proj3'); install(P3); fs.renameSync(path.join(P3, 'crewzero'), path.join(P3, 'startup-os'));
-  const n3 = spawnSync(process.execPath, [path.join(P3, 'startup-os', 'adapters', 'scheduler', 'install-schedule.mjs')], { encoding: 'utf8', env }).stderr;
-  ok('舊版 startup-os/ 安裝：登記名沿用 startup-os-<識別>', /startup-os-[0-9a-f]{8}/.test(n3) && !/crewzero-[0-9a-f]{8}/.test(n3), n3.slice(0, 300));
-  const P4 = path.join(OUT, 'proj4'); install(P4); const S4 = path.join(P4, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs');
-  const n4 = (spawnSync(process.execPath, [S4], { encoding: 'utf8', env }).stderr.match(/crewzero-([0-9a-f]{8})/) || [])[1];
-  fs.mkdirSync(path.join(P4, 'crewzero', 'data', 'ledger'), { recursive: true }); fs.writeFileSync(path.join(P4, 'crewzero', 'data', 'ledger', 'schedule.json'), JSON.stringify({ name: 'startup-os-' + n4 }));
-  const st4 = spawnSync(process.execPath, [S4, '--status'], { encoding: 'utf8', env: { ...env, SOS_SCHED_LOG: path.join(OUT, 'sched-calls-p4.jsonl') } }).stdout, jt4 = (() => { try { return JSON.parse(st4.split(/\r?\n/)[0]); } catch { return {}; } })();
-  ok('登記標記寫住舊名：排程狀態用返舊名 startup-os-<識別>', !!n4 && jt4.name === 'startup-os-' + n4, st4.slice(0, 300));
+  const explain = run([]);
+  ok('未批准時只印說明，不寫授權標記，並說明登入啟動要另行同意', explain.status === 0 && /尚未開啟/.test(explain.stdout) && /另一項可選設定/.test(explain.stdout) && !fs.existsSync(markFile), explain.stdout);
 
-  /* 伺服器（新安裝自己嘅 data/）：未登記 */
-  srv = spawn(process.execPath, [path.join(T, 'server.mjs'), '--port', String(PORT)], { cwd: T, env, stdio: 'ignore' });
-  const B = `http://127.0.0.1:${PORT}`;
-  // 正實例（安裝好嘅副本用自己嘅 data/）冇測試鉤：測試自己扮已配對瀏覽器（寫雜湊入用戶設定資料夾，完畢即刪）
-  unpair = await installPass(lib.rootId(path.join(T, 'data')), B, path.join(T, 'data'));
-  for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/status')).ok) break; } catch { } await sleep(250); }
-  c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
-  await usePass(B, c);
-  const sys = async () => { await c.go(B + '/dashboard/system', 1440, 2600); return c.ev(`(()=>{const d=document.querySelector('#sys-sched');return d?{state:d.dataset.state,text:d.innerText,next:(document.querySelector('#sys-next')||{}).innerText||'',last:(document.querySelector('#sys-last')||{}).innerText||''}:null})()`); };
-  const s0 = await sys();
-  ok('系統頁（公司概覽未確認都顯示排程）：未登記，下一步「在對話輸入『安裝排程』」', s0 && s0.state === 'none' && s0.text === U.schedOff && /安裝排程/.test(s0.text), s0);
-  const obsN = await c.ev(`(document.body.innerText.match(new RegExp(${JSON.stringify(N.dash.observeNoFolders)},'g'))||[]).length`);
-  ok('系統頁：「未登記觀察資料夾」只出現一次（之前重複兩行）', obsN === 1, obsN);
-  await c.shot(path.join(OUT, 'sys-none.png'));
+  const daily = run(['--register']);
+  const mark = read(markFile);
+  ok('批准每日開工只寫 server 授權標記，沒有自動登記登入工作', daily.status === 0 && mark && mark.mode === 'server' && mark.cadence === 'daily' && mark.runTime === '21:00' && mark.approvedAt && mark.autostart && mark.autostart.enabled === false && calls().some(a => /Unregister-ScheduledTask/.test(a.at(-1))) && !calls().some(a => /New-ScheduledTaskTrigger -AtLogOn/.test(a.at(-1))), { out: daily.stdout, mark, calls: calls() });
 
-  /* 登記（假登記程式） */
-  const r1 = sched('--register');
-  const reg = calls().map(a => a[a.length - 1]).find(s => /Register-ScheduledTask/.test(s) && !/Unregister/.test(s)) || '';
-  ok('登記：成功並讀回下次執行時間同補跑設定；技術命令不在創辦人輸出', r1.status === 0 && /每日排程已登記/.test(r1.stdout) && /盡快補做/.test(r1.stdout) && r1.stderr.includes(name) && r1.stderr.includes(CMD) && !r1.stdout.includes(name) && !r1.stdout.includes(CMD) && !r1.stdout.includes('程式檔'), r1.stdout + r1.stderr);
-  ok('登記參數：登記名、每日 21:00、啟動檔絕對路徑、錯過即補跑、執行時限（節奏上限加 15 分鐘）、唔准重疊；用完整排程介面（PowerShell）', reg.includes(`-TaskName '${name}'`) && /-Daily -At '21:00'/.test(reg) && reg.includes(`-Execute '${CMD}'`) && /-StartWhenAvailable/.test(reg) && /New-TimeSpan -Minutes 45/.test(reg) && /-MultipleInstances IgnoreNew/.test(reg) && calls()[0][0] === 'powershell.exe', reg.slice(0, 500));
-  const m = readJ(MARK);
-  ok('標記 ledger/schedule.json：登記名、節奏、登記時間、下次執行、命令全文、補跑', m && m.name === name && m.cadence === 'daily' && m.runTime === '21:00' && m.registeredAt && m.nextRunAt && m.startWhenAvailable === true && m.command.includes(CMD) && m.command.includes('Register-ScheduledTask'), m);
-  const st1 = sched('--status'), j1 = (() => { try { return JSON.parse(st1.stdout.split(/\r?\n/)[0]); } catch { return null; } })();
-  ok('讀回（--status）：已登記、下次執行、補跑開啟', j1 && j1.registered && j1.next && j1.startWhenAvailable && j1.name === name, st1.stdout);
-  ok('尚未首次執行：267011 明確說明尚未到首次執行時間', st1.status === 0 && /尚未到首次執行時間/.test(st1.stdout.split(/\r?\n/)[1] || ''), st1.stdout);
-  const successStatus = schedWith({ SOS_SCHED_LAST: '2026-11-01T09:00:00.000Z' }, '--status');
-  ok('上次結果為 0：只說上次已執行', successStatus.status === 0 && /上次已執行/.test(successStatus.stdout.split(/\r?\n/)[1] || ''), successStatus.stdout);
-  const failedStatus = schedWith({ SOS_SCHED_LAST: '2026-11-01T09:00:00.000Z', SOS_SCHED_LAST_RESULT: '1' }, '--status');
-  ok('上次結果非零：說明工作未能完成並指向營運監察台', failedStatus.status === 0 && /未能完成/.test(failedStatus.stdout.split(/\r?\n/)[1] || '') && /營運監察台/.test(failedStatus.stdout.split(/\r?\n/)[1] || ''), failedStatus.stdout);
-  const unreadableStatus = schedWith({ SOS_SCHED_FAIL: '1' }, '--status');
-  ok('狀態查詢失敗：保留第一行 JSON、說明暫時未能讀取，並以非零結束', unreadableStatus.status !== 0 && /^\{/.test(unreadableStatus.stdout) && /暫時未能讀取每日排程的狀態/.test(unreadableStatus.stdout), { out: unreadableStatus.stdout, err: unreadableStatus.stderr, status: unreadableStatus.status });
-  const notFoundStatus = schedWith({ SOS_SCHED_QUERY: 'not-found' }, '--status');
-  const notFoundJson = (() => { try { return JSON.parse(notFoundStatus.stdout.split(/\r?\n/)[0]); } catch { return null; } })();
-  const statusScript = calls().at(-1)?.at(-1) || '';
-  ok('查詢明確找不到排程：以 registered:false 成功回覆，並使用可辨識的 ObjectNotFound 分支', notFoundStatus.status === 0 && notFoundJson && notFoundJson.registered === false && /每日排程未登記/.test(notFoundStatus.stdout) && /Get-ScheduledTask[^;]*-ErrorAction Stop/.test(statusScript) && /CategoryInfo\.Category -eq 'ObjectNotFound'/.test(statusScript), { out: notFoundStatus.stdout, script: statusScript });
-  const deniedStatus = schedWith({ SOS_SCHED_QUERY: 'access-denied' }, '--status');
-  ok('查詢存取被拒：不會誤報未登記，保留狀態 JSON 並以非零結束', deniedStatus.status !== 0 && /^\{/.test(deniedStatus.stdout) && /暫時未能讀取每日排程的狀態/.test(deniedStatus.stdout) && !/每日排程未登記/.test(deniedStatus.stdout), { out: deniedStatus.stdout, err: deniedStatus.stderr, status: deniedStatus.status });
-  const s1 = await sys();
-  ok('系統頁：已登記 · 每日 21:00，寫明錯過即補跑，有下次開工時間', s1 && s1.state === 'on' && s1.text.includes(N.t('schedOs', { c: U.cad_daily, t: '21:00' })) && s1.text.includes(U.schedCatchUpOn) && /21:00/.test(s1.next), s1);
-  await c.shot(path.join(OUT, 'sys-on.png'));
+  const status0 = run(['--status']), json0 = JSON.parse(status0.stdout.split(/\r?\n/)[0]);
+  ok('狀態第一行有 mode、登入啟動、帳本上次結果和下次時間', status0.status === 0 && json0.ok === true && json0.mode === 'server' && json0.autostart.enabled === false && json0.lastRun === null && !!json0.next, status0.stdout);
 
-  /* 節奏改咗：須重新登記 + 待決事項提示卡 */
-  const SF = path.join(T, 'data', 'ledger', 'state.json');
-  fs.writeFileSync(SF, JSON.stringify({ schemaVersion: 1, tasks: [], events: [], runs: [], company: { rhythm: { runCadence: 'daily', runTime: '08:00', timezone: 'Europe/London', interviewWeekday: 1, runCapMinutes: 30, triggeredRunsPerHour: 6, aiStartsPerDay: 40 } } }, null, 2));
-  const s2 = await sys();
-  ok('系統頁：節奏已改須重新登記（登記時 21:00、現時 08:00，講明在對話輸入「重新登記排程」）；下次開工照實際登記嘅 21:00', s2 && s2.state === 'stale' && s2.text.includes('重新登記排程') && /21:00/.test(s2.next) && !/08:00/.test(s2.next), s2);
-  await c.shot(path.join(OUT, 'sys-stale.png'));
-  const todo = (await (await fetch(B + '/api/asks')).json()).todo || [];
-  const card = todo.find(t => t.id === 'schedule-stale');
-  ok('待決事項有「重新登記排程」提示卡，入口去系統頁', card && card.kind === 'schedule' && card.href === '/dashboard/system' && card.text === N.t('schedStaleTodo', { t: '08:00' }), todo);
-  // 未交資料時 Founder Desk 首頁係交資料頁；同一份待決清單喺公司現況「待你處理」見到（真實情況係交資料之後先會改節奏）
-  await c.go(B + '/dashboard', 1440, 4000);
-  const row = await c.ev(`(()=>{const p=document.querySelector('#needs')||document.body;const a=[...p.querySelectorAll('a')].find(x=>x.getAttribute('href')==='/dashboard/system'&&x.innerText.includes(${JSON.stringify(U.schedGoSystem)}));return a?{href:a.getAttribute('href'),text:p.innerText}:null})()`);
-  ok('公司現況「待你處理」見到提示卡，掣去系統頁', row && row.text.includes('重新登記排程'), row || await c.ev(`(document.querySelector('#needs')||{}).innerText||''`));
-  await c.shot(path.join(OUT, 'overview-stale-card.png'));
+  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+  fs.writeFileSync(stateFile, JSON.stringify({ runs: [{ trigger: 'schedule', slot: '2030-01-01', startedAt: '2030-01-01T21:00:00+00:00', state: 'skipped', skipReason: 'intakeNotComplete' }] }, null, 2));
+  const statusSkip = run(['--status']), jsonSkip = JSON.parse(statusSkip.stdout.split(/\r?\n/)[0]);
+  ok('狀態按帳本如實說明跳過原因，不用作業系統結果碼冒充已執行', jsonSkip.lastRun && jsonSkip.lastRun.skipReason === 'intakeNotComplete' && /跳過：公司概覽未問齊/.test(statusSkip.stdout.split(/\r?\n/)[1] || ''), statusSkip.stdout);
 
-  /* 移除 */
-  const r3 = sched('--remove');
-  ok('移除：成功、叫排程器刪除同一個登記名、標記消失', r3.status === 0 && fs.existsSync(MARK) === false && calls().some(a => /Unregister-ScheduledTask -TaskName '/.test(a[a.length - 1]) && a[a.length - 1].includes(name)), r3.stdout);
-  const s3 = await sys();
-  ok('移除後系統頁返去未登記', s3 && s3.state === 'none', s3);
-  ok('移除後提示卡消失', !((await (await fetch(B + '/api/asks')).json()).todo || []).some(t => t.id === 'schedule-stale'));
-  srv.kill(); srv = null; await sleep(500);
+  const startCmd = path.join(root, 'start-crewzero.cmd'), win = run(['--register', '--autostart']);
+  const winCall = calls().map(a => a.at(-1)).find(x => /New-ScheduledTaskTrigger -AtLogOn/.test(x)) || '';
+  const winMark = read(markFile);
+  ok('Windows 登入啟動用 AtLogOn、IgnoreNew、5 分鐘上限和 start-crewzero.cmd', win.status === 0 && fs.existsSync(startCmd) && winMark.autostart.enabled && /New-ScheduledTaskTrigger -AtLogOn -User/.test(winCall) && /-MultipleInstances IgnoreNew/.test(winCall) && /New-TimeSpan -Minutes 5/.test(winCall) && winCall.includes(startCmd), winCall);
 
-  /* 直接執行排程啟動檔一次：有一筆排程紀錄（未交資料，所以照規則跳過） */
-  fs.writeFileSync(SF, JSON.stringify({ schemaVersion: 1, tasks: [], events: [], runs: [] }, null, 2));
-  const run1 = process.platform === 'win32' ? spawnSync('cmd.exe', ['/d', '/c', CMD], { encoding: 'utf8', env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^SOS_/.test(k))), timeout: 60000 }) : { status: 0 };
-  const runs1 = (readJ(SF) || {}).runs || [];
-  const today = runs1.length ? runs1[runs1.length - 1].slot : '';
-  ok('直接執行排程啟動檔（等同排程器嘅命令，唔靠環境變數）：帳本有一筆排程紀錄，未交資料照規則跳過、冇開 AI', run1.status === 0 && runs1.length === 1 && runs1[0].trigger === 'schedule' && runs1[0].state === 'skipped' && runs1[0].skipReason === 'intakeNotComplete' && runs1[0].aiStarted === false, { status: run1.status, out: run1.stdout, runs1 });
+  const startSh = path.join(root, 'start-crewzero.sh');
+  fs.writeFileSync(startSh, '#!/bin/sh\n');
+  const macHome = path.join(OUT, 'mac-home'), mac = run(['--register', '--autostart', '--os', 'mac'], { HOME: macHome });
+  const macMark = read(markFile), macPlist = path.join(macHome, 'Library', 'LaunchAgents', macMark.autostart.name + '.plist');
+  ok('macOS 寫 LaunchAgent，bootstrap 後 print 讀回', mac.status === 0 && fs.existsSync(macPlist) && /RunAtLoad/.test(fs.readFileSync(macPlist, 'utf8')) && calls().some(a => a[0] === 'launchctl' && a.includes('bootstrap')) && calls().some(a => a[0] === 'launchctl' && a.includes('print')), { out: mac.stdout, calls: calls() });
+  const macRemove = run(['--remove', '--os', 'mac'], { HOME: macHome });
+  ok('macOS 移除同時移除標記及 LaunchAgent', macRemove.status === 0 && !fs.existsSync(markFile) && !fs.existsSync(macPlist), macRemove.stdout);
 
-  /* 同一日已做過排程工作：補跑唔再開 AI */
-  const s4 = readJ(SF); s4.runs.push({ id: 'R-earlier', type: 'rhythm', trigger: 'schedule', slot: today, startedAt: new Date().toISOString(), state: 'ended', aiStarted: true, ending: 'artifact' }); fs.writeFileSync(SF, JSON.stringify(s4, null, 2));
-  spawnSync(process.execPath, [path.join(T, 'run.mjs'), '--type', 'auto', '--trigger', 'schedule'], { cwd: T, encoding: 'utf8', env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^SOS_/.test(k))) });
-  const last = ((readJ(SF) || {}).runs || []).slice(-1)[0] || {};
-  ok('同一日已有排程工作做完：補跑記錄為跳過（今日已做過），唔再開 AI', last.trigger === 'schedule' && last.state === 'skipped' && last.skipReason === 'alreadyRan' && last.aiStarted === false && /已經做過/.test(last.summary || ''), last);
-  ok('頁面冇程式錯誤', !(c.errors || []).length, c.errors);
-} catch (e) {
-  ok('測試程式出錯', false, String(e && e.stack || e));
-} finally {
-  unpair();
-  try { c && c.close(); } catch { } try { srv && srv.kill(); } catch { }
-  const pass = results.filter(r => r.pass).length;
-  for (const r of results) console.log((r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : '\n      ' + String(JSON.stringify(r.info)).slice(0, 900)));
-  console.log(`\n${pass}/${results.length} passed`);
-  process.exit(pass === results.length ? 0 : 1);
+  const linuxHome = path.join(OUT, 'linux-home'), linux = run(['--register', '--autostart', '--os', 'linux'], { HOME: linuxHome });
+  const linuxMark = read(markFile), desktop = path.join(linuxHome, '.config', 'autostart', linuxMark.autostart.name + '.desktop');
+  ok('Linux 寫 desktop autostart 檔', linux.status === 0 && fs.existsSync(desktop) && /X-GNOME-Autostart-enabled=true/.test(fs.readFileSync(desktop, 'utf8')), linux.stdout);
+  ok('Linux 移除清走登入啟動與標記', run(['--remove', '--os', 'linux'], { HOME: linuxHome }).status === 0 && !fs.existsSync(desktop) && !fs.existsSync(markFile));
+
+  fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '21:00' }, null, 2));
+  const legacy = run(['--status']), legacyJson = JSON.parse(legacy.stdout.split(/\r?\n/)[0]);
+  const dash = await import(pathToFileURL(path.join(PROTO, 'dash-lib.mjs')).href + '?schedule=' + Date.now());
+  const dirs = { data: path.join(root, 'data'), ledger: path.join(root, 'data', 'ledger'), company: path.join(root, 'data', 'company'), asks: path.join(root, 'data', 'asks'), inbox: path.join(root, 'data', 'founder', 'inbox'), replies: path.join(root, 'data', 'founder', 'replies') };
+  for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true });
+  const view = dash.dashboardState(dirs, { now: new Date() });
+  const html = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8'), names = fs.readFileSync(path.join(PROTO, 'names.js'), 'utf8');
+  ok('舊格式不自動遷移：狀態、系統資料和待決卡都明說舊式仍運作', legacy.status === 0 && legacyJson.mode === 'os' && view.rhythmInfo.scheduler === 'os' && view.todo.some(x => x.id === 'schedule-legacy') && /schedLegacy/.test(html) && /舊式排程仍運作中/.test(names), { out: legacy.stdout, todo: view.todo });
+
+  const removed = run(['--remove']);
+  ok('移除會清走舊格式標記及同名 Windows 工作', removed.status === 0 && !fs.existsSync(markFile) && calls().some(a => /Unregister-ScheduledTask/.test(a.at(-1))), removed.stdout);
+} catch (error) {
+  ok('測試程式出錯', false, String(error && error.stack || error));
 }
+const passed = results.filter(x => x.pass).length;
+for (const r of results) console.log((r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : '\n      ' + JSON.stringify(r.info).slice(0, 1200)));
+console.log('\n' + passed + '/' + results.length + ' passed');
+process.exit(passed === results.length ? 0 : 1);

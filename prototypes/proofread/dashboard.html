@@ -1095,8 +1095,11 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var U = N.ui, cad = function (k) { return U['cad_' + (k || 'daily')] || U.cad_daily; };
     if (ri.scheduler === 'sim') return U.schedSim;
     if (ri.scheduler === 'demo') return '示範（虛構）';
+    if (ri.scheduler === 'server') return [N.t('schedServer', { c: cad(rh && rh.runCadence), t: (rh && rh.runTime) || '21:00' }), h('br'), h('small', { class: 'muted' }, U.schedServerRule), h('br'), h('small', { class: 'muted' }, ri.autostart && ri.autostart.enabled ? U.schedAutostartOn : U.schedAutostartOff)];
     if (ri.scheduler !== 'os') return U.schedOff;
     var o = ri.os;
+    if (!o) return U.schedLegacy;
+    if (o.legacy) return U.schedLegacy;
     if (o.stale) return N.t('schedOsStale', { c: cad(o.cadence), t: o.runTime, nc: cad(rh && rh.runCadence), nt: (rh && rh.runTime) || '21:00' });
     if (o.missing) return U.schedOsMissing;
     return [N.t('schedOs', { c: cad(o.cadence), t: o.runTime }), h('br'), h('small', { class: 'muted' }, o.startWhenAvailable ? U.schedCatchUpOn : U.schedCatchUpOff)];
@@ -1855,7 +1858,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         // 經營節奏：未確認公司概覽前未有（用預設）；排程一行三態（MVP 規格第 2 節第 3 項）：未登記／已登記／節奏已改須重新登記——公司概覽未確認都照顯示
         h('dl', { class: 'kv' }, x.rhythm ? [h('dt', null, '開工'), h('dd', null, (CAD[x.rhythm.runCadence] || '每日') + ' ' + x.rhythm.runTime + '，每次最多 ' + (x.rhythm.runCapMinutes || 30) + ' 分鐘'), h('dt', null, '訪問日'), h('dd', null, '星期' + WD[(x.rhythm.interviewWeekday || 1) % 7] + (x.interviews && x.interviews.nextOn ? '（下次 ' + md(x.interviews.nextOn) + '）' : ''))]
             : [h('dt', null, '開工'), h('dd', { class: 'muted' }, '未設定：確認公司概覽時採用預設值（每日 21:00）。')],
-          h('dt', null, '排程'), h('dd', { id: 'sys-sched', 'data-state': ri.scheduler === 'os' ? (ri.os.stale ? 'stale' : ri.os.missing ? 'missing' : 'on') : ri.scheduler }, schedLine(ri, x.rhythm)),
+          h('dt', null, '排程'), h('dd', { id: 'sys-sched', 'data-state': ri.scheduler === 'os' ? (ri.os.legacy ? 'legacy' : ri.os.stale ? 'stale' : ri.os.missing ? 'missing' : 'on') : ri.scheduler }, schedLine(ri, x.rhythm)),
           h('dt', null, U.schedLast), h('dd', { id: 'sys-last' }, ri.lastScheduleAt ? [when(ri.lastScheduleAt) + ' ', ri.lastSchedule ? runTags(ri.lastSchedule) : null] : U.schedNever),
           h('dt', null, U.schedNext), h('dd', { id: 'sys-next' }, ri.nextRunAt ? when(ri.nextRunAt) + '（' + left(ri.nextRunAt) + '）' : '未有：排程未登記，AI 只會在你提交答案或要求時開始工作')),
         h('h4', null, D.brain),

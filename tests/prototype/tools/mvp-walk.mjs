@@ -1,5 +1,5 @@
-// MVP 全新空資料夾試走（MVP 規格 2026-10-29 第 4 節 4.2、4.3）：由插件附帶嘅程式安裝 → 排程（假登記程式，唔登記真排程）→ 直接執行排程啟動檔一次
-// → 設定 AI → 交資料（虛構「從田間到餐桌」）→ 成頁確認 → 排程啟動檔再執行一次（交資料之後，真做 AI 工作）→ 關頁重開見「上次離開之後」→ 移除排程。
+// MVP 全新空資料夾試走：由插件附帶嘅程式安裝 → 批准伺服器每日開工（假系統命令，唔登記真排程）
+// → 設定 AI → 交資料（虛構「從田間到餐桌」）→ 成頁確認 → 等伺服器計時器開工 → 關頁重開見「上次離開之後」→ 移除排程。
 // 全程經真頁面；只記統計、斷言結果同截圖檔名，唔存商業內容。
 // 用法：node mvp-walk.mjs <插件 program 資料夾> <輸出資料夾> <chrome> [<假 adapter>]
 //   環境變數：WALK_HOST=test（假 AI，要假 adapter）｜claude（真 AI，按次收費）；WALK_PORT（預設 4760）；WALK_LIMIT_USD（真 AI 上限，預設 8）
@@ -60,12 +60,10 @@ try {
   step('1b 排程（假登記程式；唔登記真排程）');
   const S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
   const pr = spawnSync(process.execPath, [S], { encoding: 'utf8', env: { ...clean, ...SCHED } });
-  ok('印出排程說明（未登記）：創辦人輸出無命令，完整登記命令在技術細節', pr.status === 0 && /未登記/.test(pr.stdout) && /Register-ScheduledTask/.test(pr.stderr) && !/Register-ScheduledTask/.test(pr.stdout), (pr.stdout + pr.stderr).slice(0, 400));
+  ok('印出每日自動開工說明（未開啟）：冇系統命令，登入啟動要另行同意', pr.status === 0 && /尚未開啟/.test(pr.stdout) && /另一項可選設定/.test(pr.stdout) && !/Register-ScheduledTask/.test(pr.stdout + pr.stderr), (pr.stdout + pr.stderr).slice(0, 400));
   const rg = spawnSync(process.execPath, [S, '--register'], { encoding: 'utf8', env: { ...clean, ...SCHED } });
   const mark = readJ(path.join(T, 'data', 'ledger', 'schedule.json'));
-  ok('登記（假）：標記寫入、讀回補跑開啟', rg.status === 0 && mark && mark.startWhenAvailable === true && mark.runTime === '21:00', rg.stdout);
-  const l0 = launch(), run0 = lastRun();
-  ok('直接執行排程啟動檔一次（交資料前）：有排程紀錄，照規則跳過「未交資料」', l0.status === 0 && run0.trigger === 'schedule' && run0.state === 'skipped' && run0.skipReason === 'intakeNotComplete', { status: l0.status, run0 });
+  ok('批准（假）：寫入伺服器授權標記，登入啟動保持未開啟', rg.status === 0 && mark && mark.mode === 'server' && mark.autostart && mark.autostart.enabled === false && mark.runTime === '21:00', rg.stdout);
 
   step('2 打開 Founder Desk');
   const od = await openDesk();
@@ -80,7 +78,7 @@ try {
   await shot('01-desk-ai-unset.png');
   await c.go(B + 'dashboard/system', 1280, 3000);
   const sys1 = await text('#sys-sched'), last1 = await text('#sys-last');
-  ok('系統頁：排程已登記 · 每日 21:00；上次實際觸發有時間（剛才直接執行）', /已登記/.test(sys1) && /21:00/.test(sys1) && /已跳過|跳過|未問齊/.test(last1), { sys1, last1 });
+  ok('系統頁：每日自動開工已開啟 · 每日 21:00，並如實說明重開電腦後要先打開 Founder Desk', /已開啟/.test(sys1) && /21:00/.test(sys1) && /重開後/.test(sys1), { sys1, last1 });
   await shot('02-system-registered.png');
 
   step('3 設定 AI');
@@ -118,12 +116,14 @@ try {
   await shot('07-desk-after-confirm.png');
   if (REAL && spent() > LIMIT) throw new Error('費用已達上限 US$' + LIMIT);
 
-  step('6 排程啟動檔再執行一次（交資料之後：真做 AI 工作）');
-  try { process.kill(pid); } catch { } pid = 0; await sleep(800);
-  const l1 = launch(), run1 = lastRun();
+  step('6 伺服器計時器開工（交資料之後：真做 AI 工作）');
+  const now = new Date(Date.now() - 60000), runTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const st6 = readJ(path.join(T, 'data', 'ledger', 'state.json')); st6.company = st6.company || {}; st6.company.rhythm = { ...(st6.company.rhythm || {}), runCadence: 'daily', runTime }; fs.writeFileSync(path.join(T, 'data', 'ledger', 'state.json'), JSON.stringify(st6, null, 2));
+  const mk6 = readJ(path.join(T, 'data', 'ledger', 'schedule.json')); mk6.runTime = runTime; mk6.approvedAt = new Date(Date.now() - 10 * 60000).toISOString(); fs.writeFileSync(path.join(T, 'data', 'ledger', 'schedule.json'), JSON.stringify(mk6, null, 2));
+  const triggered = await waitFor(() => lastRun().trigger === 'schedule' && lastRun().state === 'ended', REAL ? 600000 : 60000), run1 = lastRun();
   const rc = run1.id ? readJ(path.join(T, 'data', 'work', run1.id, 'receipt.json')) : null;
-  ok('帳本 runs[] 有 trigger: schedule、已結束（做咗 AI 工作，唔係跳過）；收據存在', l1.status === 0 && run1.trigger === 'schedule' && run1.state === 'ended' && run1.aiStarted === true && !!rc, { status: l1.status, run1, rc: !!rc });
-  if (REAL) ok('排程啟動檔（冇任何環境變數）下開到 AI 工具、登入有效，費用記入紀錄', run1.aiStarted && run1.aiCost && run1.aiCost.usd > 0, run1.aiCost);
+  ok('帳本 runs[] 有 trigger: schedule、已結束（伺服器計時器做咗 AI 工作，唔係跳過）；收據存在', triggered && run1.trigger === 'schedule' && run1.state === 'ended' && run1.aiStarted === true && !!rc, { triggered, run1, rc: !!rc });
+  if (REAL) ok('伺服器定時開工（冇任何排程器環境變數）開到 AI 工具、登入有效，費用記入紀錄', run1.aiStarted && run1.aiCost && run1.aiCost.usd > 0, run1.aiCost);
 
   step('7 關頁重開');
   const od2 = await openDesk();

@@ -16,7 +16,7 @@ export function findInstall(proj, mark = 'ask.mjs') {
 }
 export const EXCLUDE_TOP = ['data', 'demo-data', 'mockups', 'screenshots', 'PROTOTYPE-HANDOFF.md', 'node_modules', '.git'];
 // 安裝時另外唔帶嘅開發用檔（安裝後由安裝命令自己生成或者用唔着）
-export const INSTALL_SKIP = ['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', '開始.cmd', 'start-here-template.md'];
+export const INSTALL_SKIP = ['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', 'start-crewzero.cmd', 'start-crewzero.sh', '開始.cmd', 'start-here-template.md'];
 
 // 列出程式檔（相對路徑，用「/」分隔，按字母排）
 export function programFiles(root, extraSkip = []) {
@@ -54,7 +54,7 @@ export function compareVersions(a, b) {
 }
 
 // 安裝／更新時由命令自己生成嘅檔（唔計入程式檔清單；更新時重新生成，保持同一套絕對路徑）
-export const GENERATED = ['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', 'MANIFEST.sha256'];
+export const GENERATED = ['VERSION', 'START-HERE.md', 'run-schedule.cmd', 'run-schedule.sh', 'start-crewzero.cmd', 'start-crewzero.sh', 'MANIFEST.sha256'];
 
 // 寫生成檔去 dir（安裝時係臨時資料夾，更新時係暫存資料夾）；target 係最終嘅安裝資料夾（crewzero/，或者舊版嘅 startup-os/）絕對路徑（排程啟動檔要寫入去；START-HERE.md 嘅 {dir} 填資料夾名）
 export function writeGenerated(dir, target, root, version) {
@@ -64,7 +64,9 @@ export function writeGenerated(dir, target, root, version) {
   // 排程啟動檔：絕對路徑叫執行環境同同一資料夾嘅 run.mjs，唔靠環境變數，避開排程器命令長度上限
   const node = process.execPath, run = path.join(target, 'run.mjs');
   fs.writeFileSync(path.join(dir, 'run-schedule.cmd'), ['@echo off', 'chcp 65001 >nul', `cd /d "${target}"`, `"${node}" "${run}" --type auto --trigger schedule`, ''].join('\r\n'));
+  fs.writeFileSync(path.join(dir, 'start-crewzero.cmd'), ['@echo off', 'chcp 65001 >nul', `cd /d "${target}"`, `"${node}" "${path.join(target, 'ask.mjs')}" --serve`, ''].join('\r\n'));
   if (process.platform !== 'win32') { fs.writeFileSync(path.join(dir, 'run-schedule.sh'), `#!/bin/sh\ncd "${target}" && exec "${node}" "${run}" --type auto --trigger schedule\n`); fs.chmodSync(path.join(dir, 'run-schedule.sh'), 0o755); }
+  if (process.platform !== 'win32') { fs.writeFileSync(path.join(dir, 'start-crewzero.sh'), `#!/bin/sh\ncd "${target}" && exec "${node}" "${path.join(target, 'ask.mjs')}" --serve\n`); fs.chmodSync(path.join(dir, 'start-crewzero.sh'), 0o755); }
 }
 
 // 檔案雜湊清單（同 build-plugin.mjs 嘅 MANIFEST.sha256 同一格式：「<sha256>  <相對路徑>」每行一個）

@@ -2619,7 +2619,8 @@ async function rhythmRun() {
   const h = { ...HEALTH0, ...(loadState().health || {}) };
   // 排程器「錯過即補跑」加正常時段，可能令同一日叫兩次：同一日已有排程工作做完，補跑嗰次照記錄但唔再開 AI
   const ranToday = RUN_TRIGGER === 'schedule' && (s0.runs || []).some(x => x.trigger === 'schedule' && x.slot === (RUN_SLOT || today) && x.state === 'ended');
-  const skip = ranToday ? 'alreadyRan' : !intakeOk ? 'intakeNotComplete' : h.pausedByFounder ? 'pausedByFounder' : h.autoStopped ? 'autoStopped' : budgetLeft() <= 0 ? 'budgetExhausted' : !certified(ROOT, DIR.ledger).host ? 'adapterNotCertified' : '';
+  const certification = certified(ROOT, DIR.ledger);
+  const skip = ranToday ? 'alreadyRan' : !intakeOk ? 'intakeNotComplete' : h.pausedByFounder ? 'pausedByFounder' : h.autoStopped ? 'autoStopped' : budgetLeft() <= 0 ? 'budgetExhausted' : !certification.host ? (certification.code === 'changed' ? 'adapterVersionChanged' : 'adapterNotCertified') : '';
   if (skip) {
     recordRun({ ...lr, state: 'skipped', skipReason: skip, endedAt: localIso(), summary: U['skip_' + skip] + (mech.length ? '；已放上 ' + mech.length + ' 項待你處理' : ''), placed: mech.map(p => p.id) });
     log(`${lr.id} 排程 run 跳過：${skip}`);

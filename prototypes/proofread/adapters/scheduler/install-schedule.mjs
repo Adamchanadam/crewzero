@@ -1,116 +1,148 @@
-// CrewZero 排程（規劃書 3.6、5.2 第 1 點；MVP 規格 2026-10-29 第 2 節第 3 項）：按公司紀錄嘅經營節奏，叫作業系統每日按時執行排程啟動檔。
-// 用法：node install-schedule.mjs                印出排程定義全文（唔登記，等創辦人睇過先批准）
-//       node install-schedule.mjs --register     登記（要創辦人批准）：帶「錯過排定時間後盡快補跑」同執行時限；登記後唯讀讀回下次執行時間，寫 data/ledger/schedule.json
-//       node install-schedule.mjs --status       唯讀讀回：第一行係 JSON（是否已登記、下次、上次執行時間同結果碼），第二行係白話
-//       node install-schedule.mjs --remove       刪除登記同標記
-//       可加 --data <資料夾>（預設：環境變數 SOS_DATA，或者程式資料夾入面嘅 data/）
-// 測試：環境變數 SOS_SCHED_CMD 指向一個假程式（node 腳本），就改為執行佢，唔郁電腦上任何排程。
-// 所用命令名稱見同一資料夾嘅 README.md。
+// CrewZero 排程：每日開工由伺服器計時，作業系統只可選擇喺登入時開返伺服器。
+// 用法：node install-schedule.mjs [--register] [--autostart] [--status] [--remove] [--data <資料夾>]
+// 測試：SOS_SCHED_CMD 指向假程式，只記錄系統命令，唔會改電腦設定。
 import fs from 'node:fs';
 import path from 'node:path';
+import osLib from 'node:os';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rhythmOf } from '../../rhythm-lib.mjs';
+import { rhythmOf, nextRunAt } from '../../rhythm-lib.mjs';
+import { rootId, BASE_PORT } from '../../ask-lib.mjs';
 
 const PROTO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const argv = process.argv.slice(2), has = k => argv.includes('--' + k);
 const arg = k => { const i = argv.indexOf('--' + k); return i >= 0 ? String(argv[i + 1] || '') : ''; };
-const os = arg('os') || (process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'mac' : 'linux');
+const platform = arg('os') || (process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'mac' : 'linux');
 const data = path.resolve(arg('data') || process.env.SOS_DATA || path.join(PROTO, 'data'));
 const MARK = path.join(data, 'ledger', 'schedule.json');
 const readJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const state = readJSON(path.join(data, 'ledger', 'state.json')) || {};
 const r = rhythmOf(state);
-const [hh, mm] = r.runTime.split(':');
-// 登記名帶安裝資料夾識別：兩個安裝唔會撞名。新登記用 crewzero-<識別>；改名前登記嘅舊名係 startup-os-<識別>：
-// 安裝資料夾仲叫 startup-os/（舊版原位更新），或者登記標記寫住舊名，就沿用舊名，令「排程狀態」「移除排程」「重新登記」都對準同一個排程，唔會變成兩個。
-export const taskName = (root, legacy = false) => (legacy ? 'startup-os-' : 'crewzero-') + crypto.createHash('sha256').update(path.resolve(root).toLowerCase()).digest('hex').slice(0, 8);
-const markNow = readJSON(MARK);
-const NAME = taskName(PROTO, path.basename(PROTO).toLowerCase() === 'startup-os' || !!(markNow && markNow.name === taskName(PROTO, true)));
-const launcher = path.join(PROTO, process.platform === 'win32' || os === 'windows' ? 'run-schedule.cmd' : 'run-schedule.sh');
 const LIMIT = (Number(r.runCapMinutes) || 30) + 15;
 const CADENCE = { daily: '每日', weekdays: '平日（星期一至五）', weekly: '每星期一次' };
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const say = s => console.log(s);
 const tech = s => console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + s);
 const q = s => String(s).replace(/'/g, "''");
+const local = d => { if (!d) return '未有'; const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+export const taskName = (root, legacy = false) => (legacy ? 'startup-os-' : 'crewzero-') + crypto.createHash('sha256').update(path.resolve(root).toLowerCase()).digest('hex').slice(0, 8);
+const markNow = readJSON(MARK);
+const oldName = markNow && (markNow.name || markNow.autostart && markNow.autostart.name);
+const NAME = taskName(PROTO, path.basename(PROTO).toLowerCase() === 'startup-os' || oldName === taskName(PROTO, true));
+const launcherFor = target => path.join(PROTO, target === 'windows' ? 'start-crewzero.cmd' : 'start-crewzero.sh');
+const launcher = launcherFor(platform);
+const home = process.env.HOME || osLib.homedir();
+const plist = path.join(home, 'Library', 'LaunchAgents', NAME + '.plist');
+const desktop = path.join(home, '.config', 'autostart', NAME + '.desktop');
 
-// Windows 工作排程器（完整介面）：觸發、補跑、執行時限、唔准重疊
+function runNative(command, args) {
+  const fake = process.env.SOS_SCHED_CMD;
+  const res = fake ? spawnSync(process.execPath, [fake, command, ...args], { encoding: 'utf8', windowsHide: true })
+    : spawnSync(command, args, { encoding: 'utf8', windowsHide: true });
+  return { ok: res.status === 0, out: String(res.stdout || '').trim(), err: String(res.stderr || res.error || '').trim().slice(0, 400) };
+}
 function winScript(op) {
-  const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { $i = Get-ScheduledTaskInfo -TaskName '${q(NAME)}' -ErrorAction Stop; [pscustomobject]@{ registered = $true; next = $(if ($i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }); last = $(if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToString('o') } else { '' }); lastResult = $i.LastTaskResult; startWhenAvailable = [bool]$x.Settings.StartWhenAvailable } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { '{"registered":false}' } else { throw } }`;
+  const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { [pscustomobject]@{ registered = $true } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { '{"registered":false}' } else { throw } }`;
   if (op === 'status') return status;
   if (op === 'remove') return `Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction SilentlyContinue; '{"removed":true}'`;
-  const at = `'${hh}:${mm}'`;
-  const trig = r.runCadence === 'weekdays' ? `New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At ${at}`
-    : r.runCadence === 'weekly' ? `New-ScheduledTaskTrigger -Weekly -DaysOfWeek ${DAYS[Number(r.interviewWeekday) % 7]} -At ${at}` : `New-ScheduledTaskTrigger -Daily -At ${at}`;
   return [`$ErrorActionPreference = 'Stop'`,
     `$a = New-ScheduledTaskAction -Execute '${q(launcher)}' -WorkingDirectory '${q(PROTO)}'`,
-    `$t = ${trig}`,
-    `$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes ${LIMIT}) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`,
-    `Register-ScheduledTask -TaskName '${q(NAME)}' -Description 'CrewZero daily work' -Action $a -Trigger $t -Settings $s -Force | Out-Null`,
-    status].join('; ');
+    `$t = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\\$env:USERNAME"`,
+    `$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)`,
+    `Register-ScheduledTask -TaskName '${q(NAME)}' -Description 'CrewZero login start' -Action $a -Trigger $t -Settings $s -Force | Out-Null`, status].join('; ');
 }
-function winArgs(op) { return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', winScript(op)]; }
-function scheduleTech(op) { return `登記名：${NAME}\n啟動檔：${launcher}\n命令：powershell.exe ${winArgs(op).join(' ')}`; }
 function runWin(op) {
-  const args = winArgs(op);
-  const fake = process.env.SOS_SCHED_CMD;
-  const res = fake ? spawnSync(process.execPath, [fake, 'powershell.exe', ...args], { encoding: 'utf8', windowsHide: true })
-    : spawnSync('powershell.exe', args, { encoding: 'utf8', windowsHide: true });
-  const out = String(res.stdout || '').trim().split(/\r?\n/).filter(Boolean);
-  let j = null; for (const l of out.slice().reverse()) { try { j = JSON.parse(l); break; } catch { } }
-  return { ok: res.status === 0 && !!j, json: j, err: String(res.stderr || res.error || '').trim().slice(0, 400), args };
+  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', winScript(op)];
+  const x = runNative('powershell.exe', args), lines = x.out.split(/\r?\n/).filter(Boolean);
+  let json = null; for (const line of lines.slice().reverse()) { try { json = JSON.parse(line); break; } catch { } }
+  return { ...x, json, args, ok: x.ok && !!json };
 }
-const local = iso => { if (!iso) return '未有'; const d = new Date(iso); if (isNaN(d)) return iso; const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
-const human = `${CADENCE[r.runCadence] || '每日'} ${r.runTime}`;
-
-if (os !== 'windows') {
-  say('目前只支援在 Windows 電腦設定每日自動開工。在這部電腦，AI 會在你交答案或提出要求時工作；你亦可每日在 AI 對話說「打開 Founder Desk」。');
-  const node = process.execPath, cmd = `"${launcher}"`;
-  if (os === 'mac') tech(`macOS launchd：每日 ${hh}:${mm} 執行 ${cmd}（Label ${NAME}）\n（執行環境：${node}）`);
-  else tech(`Linux cron（crontab 一行）：${Number(mm)} ${Number(hh)} * * ${r.runCadence === 'weekdays' ? '1-5' : r.runCadence === 'weekly' ? String(Number(r.interviewWeekday) % 7) : '*'} ${cmd}\n（執行環境：${node}）`);
-  process.exit(has('register') || has('remove') || has('status') ? 1 : 0);
+const xml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function macPlist() {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>${NAME}</string><key>ProgramArguments</key><array><string>${xml(launcher)}</string></array><key>EnvironmentVariables</key><dict><key>PATH</key><string>${xml(process.env.PATH || '')}</string></dict><key>RunAtLoad</key><true/><key>KeepAlive</key><false/></dict></plist>\n`;
+}
+function registerAutostart() {
+  if (!fs.existsSync(launcher)) return { ok: false, registered: false, err: '找不到登入啟動檔' };
+  if (platform === 'windows') { const x = runWin('register'); return { ok: x.ok && !!x.json.registered, registered: !!(x.json && x.json.registered), err: x.err, tech: `powershell.exe ${x.args.join(' ')}` }; }
+  if (platform === 'mac') {
+    fs.mkdirSync(path.dirname(plist), { recursive: true }); fs.writeFileSync(plist, macPlist());
+    const uid = String(process.getuid ? process.getuid() : process.env.UID || 0);
+    // 已載入時 bootstrap 會報錯；重新登記先撤舊嗰個
+    runNative('launchctl', ['bootout', 'gui/' + uid + '/' + NAME]);
+    const boot = runNative('launchctl', ['bootstrap', 'gui/' + uid, plist]);
+    const check = boot.ok ? runNative('launchctl', ['print', 'gui/' + uid + '/' + NAME]) : boot;
+    return { ok: boot.ok && check.ok, registered: boot.ok && check.ok, err: check.err || boot.err, tech: `launchctl bootstrap gui/${uid} ${plist}` };
+  }
+  fs.mkdirSync(path.dirname(desktop), { recursive: true });
+  fs.writeFileSync(desktop, `[Desktop Entry]\nType=Application\nName=CrewZero\nExec=env "PATH=${process.env.PATH || ''}" "${launcher}"\nX-GNOME-Autostart-enabled=true\n`);
+  return { ok: true, registered: true, tech: desktop };
+}
+function autostartStatus(mark) {
+  if (!mark || !mark.autostart || !mark.autostart.enabled) return { enabled: false, registered: false };
+  if (mark.autostart.os === 'windows') { const x = runWin('status'); return { enabled: true, registered: !!(x.ok && x.json && x.json.registered), ok: x.ok }; }
+  if (mark.autostart.os === 'mac') {
+    const uid = String(process.getuid ? process.getuid() : process.env.UID || 0), x = fs.existsSync(plist) ? runNative('launchctl', ['print', 'gui/' + uid + '/' + NAME]) : { ok: false };
+    return { enabled: true, registered: !!(fs.existsSync(plist) && x.ok), ok: x.ok };
+  }
+  return { enabled: true, registered: fs.existsSync(desktop), ok: true };
+}
+function removeAutostart() {
+  if (platform === 'windows') return runWin('remove');
+  if (platform === 'mac') { const uid = String(process.getuid ? process.getuid() : process.env.UID || 0); if (fs.existsSync(plist)) runNative('launchctl', ['bootout', 'gui/' + uid + '/' + NAME]); fs.rmSync(plist, { force: true }); return { ok: !fs.existsSync(plist) }; }
+  fs.rmSync(desktop, { force: true }); return { ok: !fs.existsSync(desktop) };
+}
+function lastRun() {
+  return (state.runs || []).filter(x => x && x.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop() || null;
+}
+function skipText(reason) {
+  return ({ intakeNotComplete: '公司概覽未問齊', pausedByFounder: '已按創辦人指示暫停', autoStopped: 'AI 已暫停', budgetExhausted: '今日 AI 次數已用完', adapterNotCertified: 'AI 未設定', adapterVersionChanged: 'AI 工具已更新，須重新認證', alreadyRan: '今日已做過' })[reason] || reason || '';
+}
+function statusLine(last) {
+  if (!last) return '未有';
+  if (last.state === 'skipped') return '跳過：' + skipText(last.skipReason);
+  return last.state === 'ended' ? '完成' : last.state || '未有';
+}
+function serverMark(autostart) {
+  return { mode: 'server', cadence: r.runCadence, runTime: r.runTime, timezone: r.timezone, interviewWeekday: r.interviewWeekday, limitMinutes: LIMIT, approvedAt: new Date().toISOString(), autostart: { enabled: !!autostart.enabled, os: platform, name: NAME } };
+}
+async function serverOpen() {
+  for (let port = BASE_PORT; port < BASE_PORT + 10; port++) { try { const response = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(300) }), body = response.ok ? await response.json() : null; if (body && body.root === rootId(data)) return true; } catch { } }
+  return false;
 }
 
 if (has('status')) {
-  const m = readJSON(MARK), x = runWin('status');
-  const j = { marked: !!m, registered: !!(x.json && x.json.registered), next: (x.json && x.json.next) || '', last: (x.json && x.json.last) || '', lastResult: x.json && x.json.lastResult != null ? x.json.lastResult : null, startWhenAvailable: !!(x.json && x.json.startWhenAvailable), name: NAME, ok: x.ok };
+  const mark = readJSON(MARK), last = lastRun(), next = nextRunAt(r, new Date());
+  if (mark && mark.mode !== 'server') {
+    const x = platform === 'windows' ? runWin('status') : { ok: true, json: { registered: false } };
+    const j = { ok: !!x.ok, mode: 'os', autostart: { enabled: false, registered: false }, lastRun: last ? { at: last.startedAt || '', state: last.state || '', skipReason: last.skipReason || '' } : null, next: next ? next.toISOString() : '' };
+    console.log(JSON.stringify(j)); say(x.ok ? '舊式排程仍運作中；請在 AI 對話說「重新登記排程」。' : '暫時未能讀取舊式排程的狀態，請稍後再試。'); process.exit(x.ok ? 0 : 1);
+  }
+  const auto = autostartStatus(mark), j = { ok: auto.ok !== false, mode: mark && mark.mode || 'none', autostart: auto, lastRun: last ? { at: last.startedAt || '', state: last.state || '', skipReason: last.skipReason || '' } : null, next: mark && mark.mode === 'server' && next ? next.toISOString() : '' };
   console.log(JSON.stringify(j));
-  if (!j.ok) say('暫時未能讀取每日排程的狀態，請稍後再試。');
-  else if (!j.registered) say(`每日排程未登記${m ? '，請在 AI 對話說「重新登記排程」。' : '。'}`);
-  else if (j.lastResult === 0) say(`每日排程已登記：下次 ${local(j.next)}；上次已執行。`);
-  else if (!j.last || j.lastResult === 267011) say(`每日排程已登記：下次 ${local(j.next)}；尚未到首次執行時間。`);
-  else say(`每日排程已登記：下次 ${local(j.next)}；上次排定的工作未能完成，請打開營運監察台查看。`);
-  tech(scheduleTech('status'));
+  if (!j.ok) say('暫時未能讀取登入啟動的狀態，請稍後再試。');
+  else if (j.mode !== 'server') say('每日自動開工未開啟。');
+  else say(`每日自動開工已開啟：下次 ${local(next)}；上次實際結果：${statusLine(last)}。${auto.enabled ? (auto.registered ? '登入啟動已開啟。' : '登入啟動尚未成功。') : '登入啟動未開啟。'}`);
   process.exit(j.ok ? 0 : 1);
 }
 if (has('remove')) {
-  const x = runWin('remove');
-  fs.rmSync(MARK, { force: true });
-  say(x.ok ? '已移除每日排程；AI 只會在你提交答案或要求時開始工作。' : '每日排程未能完全移除：電腦拒絕了這項設定，CrewZero 已停用這個排程的紀錄。請重新開機後，再說一次「移除排程」。');
-  tech(scheduleTech('remove') + (!x.ok ? '\n結果：' + (x.err || '讀回時沒有結果') : ''));
+  const x = removeAutostart(); fs.rmSync(MARK, { force: true });
+  say(x.ok ? '已移除每日自動開工及登入啟動；AI 只會在你提交答案或要求時開始工作。' : '每日自動開工已停用；登入啟動未能完全移除，請重新開機後再說一次「移除排程」。');
   process.exit(x.ok ? 0 : 1);
 }
-if (!fs.existsSync(launcher)) { say('找不到排程啟動檔。請先以安裝命令安裝 CrewZero。'); tech(scheduleTech('register')); process.exit(1); }
 if (has('register')) {
-  const x = runWin('register');
-  if (!x.ok || !x.json || !x.json.registered) {
-    // 第一句交畀創辦人（原因同做法）；英文錯誤同命令全文只寫去 stderr 供 AI 排查，唔好叫創辦人自己執行
-    say('每日排程未能登記：電腦拒絕了這項設定。安裝已完成，AI 仍會在你交答案或提出要求時工作；如要每日自動開工，請重新開機後再說「安裝排程」。');
-    tech(scheduleTech('register') + '\n結果：' + (x.err || '讀回時找不到這個排程'));
-    process.exit(1);
-  }
-  const mark = { name: NAME, os: 'windows', cadence: r.runCadence, runTime: r.runTime, timezone: r.timezone, interviewWeekday: r.interviewWeekday, limitMinutes: LIMIT,
-    registeredAt: new Date().toISOString(), nextRunAt: x.json.next || '', startWhenAvailable: !!x.json.startWhenAvailable, launcher, command: ['powershell.exe', ...x.args].join(' ') };
-  fs.mkdirSync(path.dirname(MARK), { recursive: true });
-  fs.writeFileSync(MARK, JSON.stringify(mark, null, 2));
-  say(`每日排程已登記：${human}，下次 ${local(mark.nextRunAt)}。`);
-  say(mark.startWhenAvailable ? '電腦當時關機或睡眠，會在下次可用時盡快補做；每次最多 ' + LIMIT + ' 分鐘。' : '電腦關機時錯過的工作不會補做。請在 AI 對話說「重新登記排程」。');
-  tech(scheduleTech('register'));
+  // 舊式每日工作同新登入工作共用登記名；先移走舊設定，無論有冇揀登入自啟都唔留兩套。
+  if (platform === 'windows') runWin('remove');
+  let auto = { enabled: false }, x = null;
+  if (has('autostart')) { x = registerAutostart(); auto = { enabled: !!x.ok }; }
+  const mark = serverMark(auto); fs.mkdirSync(path.dirname(MARK), { recursive: true }); fs.writeFileSync(MARK, JSON.stringify(mark, null, 2));
+  const live = await serverOpen();
+  say(live ? `每日自動開工已生效：${CADENCE[r.runCadence] || '每日'} ${r.runTime}。` : `每日自動開工已批准：打開 Founder Desk 一次後開始生效（${CADENCE[r.runCadence] || '每日'} ${r.runTime}）。`);
+  if (has('autostart')) say(x && x.ok ? '登入電腦時會自動打開 CrewZero。' : '每日自動開工已保留；登入啟動未能設定，電腦重開後請打開一次 Founder Desk 才會恢復。');
+  else say('登入啟動未開啟；電腦重開後，請打開一次 Founder Desk 才會恢復。');
+  if (x && x.tech) tech(x.tech + (x.err ? '\n結果：' + x.err : ''));
   process.exit(0);
 }
-// 預設：只印定義全文，等創辦人批准
-say('每日排程尚未登記。');
-say(`批准後，電腦會於${human}自動開工；每次最多 ${LIMIT} 分鐘。電腦當時關機或睡眠，會在下次可用時盡快補做。`);
-tech(scheduleTech('register'));
+
+say('每日自動開工尚未開啟。');
+say(`批准後，CrewZero 伺服器會於${CADENCE[r.runCadence] || '每日'} ${r.runTime}開工；伺服器必須開着，錯過後只會在 6 小時內補做一次。`);
+say('登入電腦時自動打開 CrewZero 是另一項可選設定；批准每日開工不代表批准登入啟動。');
