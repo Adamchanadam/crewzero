@@ -52,6 +52,29 @@ const snoozeDays = (s, now) => {
 };
 
 // 創辦人操作覆蓋：伺服器只追加 founder-ops.json；畫面立即套用，外殼下一次開工才合併入 state.json。
+// 外殼中斷留下的批次同樣要顯示，已寫入帳本的操作則不可重播。
+const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
+const founderOpsFiles = DIR => {
+  let batches = [];
+  try {
+    batches = fs.readdirSync(DIR.ledger).filter(file => /^\.founder-ops-\d+-\d+\.json$/.test(file))
+      .sort((a, b) => founderOpsBatchTime(a) - founderOpsBatchTime(b) || a.localeCompare(b)).map(file => path.join(DIR.ledger, file));
+  } catch { }
+  return batches.concat(path.join(DIR.ledger, 'founder-ops.json'));
+};
+const pendingFounderOps = (DIR, state) => {
+  const seen = new Set(Array.isArray(state && state.founderOpsDone) ? state.founderOpsDone : []), pending = [];
+  for (const file of founderOpsFiles(DIR)) {
+    const ops = readJSON(file, []);
+    if (!Array.isArray(ops)) continue;
+    for (const op of ops) {
+      if (!op || typeof op !== 'object' || op.id && seen.has(op.id)) continue;
+      pending.push(op);
+      if (op.id) seen.add(op.id);
+    }
+  }
+  return pending;
+};
 // 所有新欄可缺，舊資料沒有覆蓋檔時保持原有行為。
 export function applyFounderOps(state, ops = []) {
   if (!Array.isArray(ops) || !ops.length) return state || {};
@@ -161,7 +184,7 @@ export function dashboardState(DIR, extra = {}) {
   let state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   const sample = state.demo === true;
   if (sample) state = resolveTimes(state, now);
-  else state = applyFounderOps(state, readJSON(path.join(DIR.ledger, 'founder-ops.json'), []));
+  else state = applyFounderOps(state, pendingFounderOps(DIR, state));
   const page = readJSON(path.join(DIR.company, 'page.json'), null);
   const confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const status = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
@@ -513,7 +536,7 @@ export function snoozedTodo(DIR, args) {
 export function pendingTodo(DIR, now = clockNow()) {
   let state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   if (state.demo === true) state = resolveTimes(state, now);
-  else state = applyFounderOps(state, readJSON(path.join(DIR.ledger, 'founder-ops.json'), []));
+  else state = applyFounderOps(state, pendingFounderOps(DIR, state));
   const page = readJSON(path.join(DIR.company, 'page.json'), null), confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const milestones = Array.isArray(state.milestones) && state.milestones.length ? state.milestones : milestonesFromPage(page, confirmed);
   const company = { ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
@@ -522,7 +545,7 @@ export function pendingTodo(DIR, now = clockNow()) {
 export function pendingSnoozed(DIR, now = clockNow()) {
   let state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   if (state.demo === true) state = resolveTimes(state, now);
-  else state = applyFounderOps(state, readJSON(path.join(DIR.ledger, 'founder-ops.json'), []));
+  else state = applyFounderOps(state, pendingFounderOps(DIR, state));
   const page = readJSON(path.join(DIR.company, 'page.json'), null), confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const milestones = Array.isArray(state.milestones) && state.milestones.length ? state.milestones : milestonesFromPage(page, confirmed);
   const company = { ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };

@@ -710,11 +710,31 @@ const isDay = value => {
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
   return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
 };
+function founderOpsLockCanRecover() {
+  try {
+    const age = Date.now() - fs.statSync(FOUNDER_OPS_LOCK).mtimeMs;
+    const pid = Number(String(fs.readFileSync(FOUNDER_OPS_LOCK, 'utf8')).trim());
+    let ownerGone = false;
+    if (Number.isInteger(pid) && pid > 0) {
+      try { process.kill(pid, 0); } catch (error) { ownerGone = !!(error && error.code === 'ESRCH'); }
+    }
+    return ownerGone || age > 60000;
+  } catch { return false; }
+}
 function withFounderOpsLock(fn) {
   const until = Date.now() + 2000;
+  let recovered = false;
   for (;;) {
     try { fs.writeFileSync(FOUNDER_OPS_LOCK, String(process.pid), { flag: 'wx' }); break; }
-    catch { if (Date.now() >= until) return null; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 12); }
+    catch {
+      if (!recovered && founderOpsLockCanRecover()) {
+        recovered = true;
+        try { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); } catch { }
+        continue;
+      }
+      if (Date.now() >= until) return null;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 12);
+    }
   }
   try { return fn(); } finally { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); }
 }

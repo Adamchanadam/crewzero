@@ -93,11 +93,31 @@ function addEvent(e, state = null) { const s = state || loadState(); s.events = 
 // 短鎖只保護「追加」同「取批」兩個檔案動作，唔會同 AI 工作互相等待。
 function withFounderOpsLock(fn) {
   const until = Date.now() + 2000;
+  let recovered = false;
   for (;;) {
     try { fs.writeFileSync(FOUNDER_OPS_LOCK, String(process.pid), { flag: 'wx' }); break; }
-    catch { if (Date.now() >= until) return null; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 12); }
+    catch {
+      if (!recovered && founderOpsLockCanRecover()) {
+        recovered = true;
+        try { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); } catch { }
+        continue;
+      }
+      if (Date.now() >= until) return null;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 12);
+    }
   }
   try { return fn(); } finally { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); }
+}
+function founderOpsLockCanRecover() {
+  try {
+    const age = Date.now() - fs.statSync(FOUNDER_OPS_LOCK).mtimeMs;
+    const pid = Number(String(fs.readFileSync(FOUNDER_OPS_LOCK, 'utf8')).trim());
+    let ownerGone = false;
+    if (Number.isInteger(pid) && pid > 0) {
+      try { process.kill(pid, 0); } catch (error) { ownerGone = !!(error && error.code === 'ESRCH'); }
+    }
+    return ownerGone || age > 60000;
+  } catch { return false; }
 }
 function founderEventTitle(op) {
   const v = op && op.value || {};
@@ -107,8 +127,33 @@ function founderEventTitle(op) {
   if (op.op === 'snooze') return U.founderSnoozed;
   return U.founderUnsnoozed;
 }
+const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
+function founderOpsBatches() {
+  try {
+    return fs.readdirSync(DIR.ledger).filter(file => /^\.founder-ops-\d+-\d+\.json$/.test(file))
+      .sort((a, b) => founderOpsBatchTime(a) - founderOpsBatchTime(b) || a.localeCompare(b)).map(file => path.join(DIR.ledger, file));
+  } catch { return []; }
+}
+function mergeFounderOpsBatch(batch) {
+  const ops = readJSON(batch, []), before = loadState();
+  if (before.demo === true || !Array.isArray(ops)) return false;
+  const done = Array.isArray(before.founderOpsDone) ? before.founderOpsDone.filter(id => typeof id === 'string').slice(-200) : [];
+  const doneSet = new Set(done), pending = ops.filter(op => op && typeof op === 'object' && (!op.id || !doneSet.has(op.id)));
+  const next = applyFounderOps(before, pending);
+  next.events = Array.isArray(next.events) ? next.events : [];
+  for (const op of pending) {
+    if (!op.op) continue;
+    next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op), relatedIds: [], moduleIds: ['now', 'inputs'] });
+  }
+  next.founderOpsDone = [...new Set(done.concat(pending.map(op => typeof op.id === 'string' ? op.id : '').filter(Boolean)))].slice(-200);
+  saveState(next);
+  fs.rmSync(batch, { force: true });
+  if (pending.length) log(`已合併 ${pending.length} 個創辦人操作`);
+  return true;
+}
 function mergeFounderOps() {
-  if (!fs.existsSync(FOUNDER_OPS)) return false;
+  let merged = false;
+  for (const batch of founderOpsBatches()) { mergeFounderOpsBatch(batch); merged = true; }
   let staged = '';
   const moved = withFounderOpsLock(() => {
     if (!fs.existsSync(FOUNDER_OPS)) return false;
@@ -116,26 +161,9 @@ function mergeFounderOps() {
     fs.renameSync(FOUNDER_OPS, staged);
     return true;
   });
-  if (!moved || !staged) return false;
-  let merged = false;
-  try {
-    const ops = readJSON(staged, []);
-    const before = loadState();
-    if (before.demo === true || !Array.isArray(ops) || !ops.length) { merged = true; return false; }
-    const next = applyFounderOps(before, ops);
-    next.events = Array.isArray(next.events) ? next.events : [];
-    for (const op of ops) {
-      if (!op || !op.op) continue;
-      next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op), relatedIds: [], moduleIds: ['now', 'inputs'] });
-    }
-    saveState(next);
-    merged = true;
-    log(`已合併 ${ops.length} 個創辦人操作`);
-    return true;
-  } finally {
-    if (merged) fs.rmSync(staged, { force: true });
-    else withFounderOpsLock(() => { if (!fs.existsSync(FOUNDER_OPS) && fs.existsSync(staged)) fs.renameSync(staged, FOUNDER_OPS); });
-  }
+  if (!moved || !staged) return merged;
+  mergeFounderOpsBatch(staged);
+  return true;
 }
 
 function bizInfo(biz) { return biz && BIZ_TYPES[biz.type] ? { type: biz.type, other: typeof biz.other === 'string' ? biz.other : '', label: BIZ_TYPES[biz.type].label } : null; }
@@ -833,6 +861,18 @@ function helpNoteTask(sb, text, context = {}) {
    AI 唔可以自己改級或者標站點完成：佢只交建議（out/event.json），問題包由外殼按建議機械生成，選項帶套用內容；
    未答嘅唔套用，答咗嘅即時寫入帳本（假設級別、站點進度、該筆輸入嘅收據、事件）。事件日期由你填，唔係提交時間。 */
 const dayText = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? `${+m[2]} 月 ${+m[3]} 日` : String(d || ''); };
+function replySubmittedAt(run, answer) {
+  const files = [].concat(run && Array.isArray(run.replyFiles) ? run.replyFiles : [], answer && answer.reply ? [answer.reply] : []);
+  for (const file of files) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})-/.exec(String(file || ''));
+    if (m) return localIso(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])));
+  }
+  return String((answer && answer.at) || '');
+}
+function founderUpdatedAfter(action, replyAt) {
+  const replyTime = Date.parse(String(replyAt || '')), founderTime = Date.parse(String(action && action.founderUpdatedAt || ''));
+  return Number.isFinite(replyTime) && Number.isFinite(founderTime) && replyTime < founderTime;
+}
 const EV_RANK = g => Math.max(0, NAMES.EV_KEYS.indexOf(g));
 async function handleEvent(run, raw, text, dest) {
   const mac = parseReply(raw).machine || {};
@@ -962,6 +1002,14 @@ function handleEventConfirm(run, pack, store) {
   const s = loadState(), input = (s.inputs || []).find(i => i.id === pack.realEvent.inputId);
   if (!input) { run.result = { summary: '已記錄你的答案；找不到這件事的紀錄。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
   const applied = new Set(input.appliedQids || []), date = pack.realEvent.date, said = [], doneIds = [];
+  const replyAt = replySubmittedAt(run, Object.values(store.answers || {})[0]);
+  let keptNewerFounderAction = false;
+  const keepNewerFounderAction = action => {
+    if (!founderUpdatedAfter(action, replyAt)) return false;
+    if (!keptNewerFounderAction) said.push(U.founderNewerNext);
+    keptNewerFounderAction = true;
+    return true;
+  };
   let nextSet = false;
   input.effects = input.effects || []; s.events = s.events || [];
   const ev = (type, title, relatedIds, moduleIds) => s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type, title, relatedIds, moduleIds });
@@ -991,6 +1039,7 @@ function handleEventConfirm(run, pack, store) {
       input.effects.push({ targetKind: 'decision', targetId: pack.id, change: t });
       ev('milestone', '站點完成：' + m.short + '（' + dayText(date) + '）', [m.id, input.id], ['now', 'paths', 'evidence']); said.push(t);
     } else if (ap && ap.op === 'setNextExternalAction') {
+      if (keepNewerFounderAction((s.company || {}).nextExternalAction)) { nextSet = true; continue; }
       s.company = s.company || {};
       s.company.nextExternalAction = { text: ap.text, milestoneId: ap.milestoneId || '' }; nextSet = true;
       const t = '下一個對外動作改為：' + clip(ap.text, 40);
@@ -1003,7 +1052,7 @@ function handleEventConfirm(run, pack, store) {
     ensureActive(s.milestones);
     const nea = (s.company || {}).nextExternalAction;
     const askedNext = pack.questions.some(q => q.id === 'nad' || ((q.options || []).some(o => o.apply && o.apply.op === 'setNextExternalAction') && !store.answers[q.id]));
-    if (nea && doneIds.includes(nea.milestoneId) && !nextSet && !askedNext) {
+    if (nea && doneIds.includes(nea.milestoneId) && !nextSet && !askedNext && !keepNewerFounderAction(nea)) {
       const conf = s.milestones.filter(m => m.pathStatus === 'confirmed' && m.state !== 'done').sort((a, b) => (a.order || 0) - (b.order || 0));
       const nx = conf.find(m => m.state === 'active') || conf[0], m0 = s.milestones.find(m => m.id === nea.milestoneId);
       const sug = nx ? clip(String(nx.event || nx.short).trim(), 100) : '';
@@ -2224,7 +2273,21 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   const addQ = q => { if (!has(q.id)) extra.push({ effect: 'tentative', ...q }); };
   const neaNow = () => (s.company || {}).nextExternalAction || {};
   const activeMs = () => (s.milestones || []).filter(m => m.pathStatus === 'confirmed' && m.state === 'active').sort((x, y) => (x.order || 0) - (y.order || 0))[0];
-  const setNext = (text, milestoneId, t) => { s.company = s.company || {}; s.company.nextExternalAction = { text: clip(text, 120), milestoneId: milestoneId || '' }; said.push(t || '下一個對外動作改為：' + clip(text, 40)); ev('decision', t || '下一個對外動作改為：' + clip(text, 40), [pack.id]); };
+  const replyAt = replySubmittedAt(run, Object.values(store.answers || {})[0]);
+  let keptNewerFounderAction = false;
+  const keepNewerFounderAction = action => {
+    if (!founderUpdatedAfter(action, replyAt)) return false;
+    if (!keptNewerFounderAction) said.push(U.founderNewerNext);
+    keptNewerFounderAction = true;
+    return true;
+  };
+  const setNext = (text, milestoneId, t, fields = {}) => {
+    if (keepNewerFounderAction(neaNow())) return false;
+    const title = t || '下一個對外動作改為：' + clip(text, 40);
+    s.company = s.company || {}; s.company.nextExternalAction = { text: clip(text, 120), milestoneId: milestoneId || '', ...fields };
+    said.push(title); ev('decision', title, [pack.id]);
+    return true;
+  };
   const isDay = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
   for (const q of pack.questions) {
     const a = store.answers[q.id];
@@ -2251,6 +2314,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
       if (val === U.staleHeld) addQ({ id: 'held', bind: 'held', preset: true, about: '下一個對外動作的結果', ask: NAMES.t('heldAsk', { t: clip(nea.text, 40) }), kind: 'choice', options: [{ text: U.unknownLater, rec: true }], value: U.unknownLater, why: U.heldWhy });
       else if (val === U.staleMoved) addQ({ id: 'newDate', bind: 'newDate', about: '下一個對外動作的日期', ask: NAMES.t('newDateAsk', { t: clip(nea.text, 40) }), kind: 'date', value: addDays(today, 7), why: U.newDateWhy });
       else if (val === U.staleCancelled) {
+        if (keepNewerFounderAction(nea)) continue;
         const act = activeMs(), sug = act ? clip(String(act.event || act.short).trim(), 100) : '';
         s.company.nextExternalAction = { ...nea, pendingUpdate: true };
         addQ({ id: 'next2', bind: 'next2', about: '下一個對外動作', ask: NAMES.t('next2Ask', { t: clip(nea.text, 40) }), kind: 'choice',
@@ -2260,7 +2324,10 @@ function handleInterviewAnswer(run, pack, store, fresh) {
       } else if (!opt && !unknown) texts.push(q.id);
     } else if (q.bind === 'newDate') {
       const nea = neaNow(), ad = nextActionDay(nea, today);
-      if (isDay(val) && ad) setNext(withDay(nea.text, ad, val), nea.milestoneId, '下一個對外動作改期至 ' + dayText(val));
+      if (isDay(val) && ad) {
+        const explicitDate = isDay(nea.date);
+        setNext(explicitDate ? nea.text : withDay(nea.text, ad, val), nea.milestoneId, '下一個對外動作改期至 ' + dayText(val), explicitDate ? { date: val } : {});
+      }
     } else if (q.bind === 'next2') {
       if (unknown) continue;
       const ap = opt && opt.apply, act = activeMs();
@@ -2348,10 +2415,11 @@ function handleRetireAnswer(run, pack, store) {
   Object.assign(m, { pathStatus: 'retired', state: 'not_started', retiredReason: '你在每週訪問答「不再做」', retiredDecisionId: pack.id });
   ensureActive(s.milestones);
   const nea = (s.company || {}).nextExternalAction;
-  if (nea && nea.milestoneId === m.id) s.company.nextExternalAction = { ...nea, pendingUpdate: true };
+  const keptNewerFounderAction = nea && nea.milestoneId === m.id && founderUpdatedAfter(nea, replySubmittedAt(run, a));
+  if (nea && nea.milestoneId === m.id && !keptNewerFounderAction) s.company.nextExternalAction = { ...nea, pendingUpdate: true };
   s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type: 'path', title: '撤回一站：' + m.short, relatedIds: [m.id, pack.id], moduleIds: ['paths', 'now'] });
   saveState(s);
-  run.result = { summary: '已撤回「' + m.short + '」；路線由下一站接上。', artifacts: [], founderNext: [] };
+  run.result = { summary: '已撤回「' + m.short + '」；路線由下一站接上' + (keptNewerFounderAction ? '；' + U.founderNewerNext : '') + '。', artifacts: [], founderNext: [] };
   return finish(run, 'done');
 }
 // 訪問紀錄（3.9 (3)）：問、答、因此改了甚麼、仍等你回覆的事；每次送出都重寫，以最新為準

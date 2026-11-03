@@ -512,6 +512,7 @@
     founderOpInvalid: '這項操作已不適用，請重新讀取頁面。',
     founderOpBusy: '正在記錄另一項操作，請稍後再試。',
     founderOpSaved: '已記錄，會立即更新。',
+    founderNewerNext: '你其後已在首頁更新，這項改動沒有套用',
     founderRescheduled: '創辦人已把下一個對外動作改期至 {d}',
     founderCancelled: '創辦人已取消下一個對外動作',
     founderSetNext: '創辦人已設定下一個對外動作：{t}',

@@ -356,8 +356,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var back = sc.back ? h('div', { class: 'since small', id: 'back-after' }, T('backAfterDays', { n: sc.awayDays, t: sc.back.text }), sc.back.href ? h('a', { class: 'btn small', href: sc.back.href }, sc.back.button || N.ui.goAnswer) : null) : null;
     return h('div', null, back, h('p', { class: 'since small', id: 'since' }, h('b', null, N.dash.since + '（' + dayOf(sc.at) + ' ' + hm(sc.at) + '）：'), parts.length ? parts.join(' · ') : N.dash.sinceNone));
   }
-  function founderOp(op, target, value) {
-    return post('/api/founder-op', { op: op, target: target, value: value || {} }).then(function (result) { toast(op === 'snooze' ? N.ui.snoozeEffect : result.message || N.ui.founderOpSaved); showHub(); }).catch(function (e) { toast(why(e)); });
+  function founderOp(op, target, value, saved) {
+    return post('/api/founder-op', { op: op, target: target, value: value || {} }).then(function (result) { if (saved) saved(); toast(op === 'snooze' ? N.ui.snoozeEffect : result.message || N.ui.founderOpSaved); showHub(); }).catch(function (e) { toast(why(e)); });
   }
   function todoHref(t) { return t.kind === 'overview' ? '/proofread.html' : t.kind === 'schedule' ? t.href : '#/ask/' + t.id; }
   function todoRow(t, byId, snoozed, pendingHelp) {
@@ -371,26 +371,33 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   }
   function nextActionCard(next, todo, byId) {
     if (!next) return null;
+    var draft = V.nextDraft || {};
+    var saveDraft = function (key, value) { V.nextDraft = { ...V.nextDraft, [key]: value }; };
     var stale = next.missing || next.cancelledAt || next.completedLink || next.pendingUpdate;
     var ready = (todo || []).filter(function (item) { return item.forNextAction; })[0], readyPack = ready && byId[ready.id];
     var readyLine = ready ? h('p', { class: 'small muted' }, h('a', { href: todoHref(ready) }, N.t('nextActionQuestion', { t: N.fix(readyPack ? readyPack.title : ready.text) }))) : null;
     var suggested = next.suggestion;
     if (stale) {
       var text = h('input', { class: 'in', id: 'next-text', maxlength: '200', placeholder: N.ui.nextActionPlaceholder, 'aria-label': N.ui.nextActionPlaceholder }), date = h('input', { class: 'in', id: 'next-date', type: 'date', 'aria-label': N.ui.nextActionDateL });
+      text.value = draft.text || ''; date.value = draft.date || '';
+      text.addEventListener('input', function () { saveDraft('text', text.value); });
+      date.addEventListener('input', function () { saveDraft('date', date.value); });
       var setNext = function (use) {
         var value = use || { text: text.value.trim(), date: date.value, milestoneId: suggested ? suggested.milestoneId : '' };
         if (!value.text) { toast(N.ui.nextActionNeedText); text.focus(); return; }
         if (!value.date) delete value.date;
-        founderOp('setNext', 'nextAction', value);
+        founderOp('setNext', 'nextAction', value, function () { V.nextDraft = null; });
       };
       return h('section', { class: 'layer accent', id: 'next-action', 'data-state': 'waiting' }, h('span', { class: 'eyebrow' }, N.ui.nextActionTitle), h('h2', { class: 'layer-title' }, N.ui.nextActionWaiting),
         suggested ? h('p', { class: 'guide' }, N.ui.nextActionSuggest + N.fix(suggested.text)) : null,
         suggested ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'next-adopt', onclick: function () { setNext({ text: suggested.text, milestoneId: suggested.milestoneId }); } }, N.ui.adoptSuggestion)) : null,
         readyLine, h('div', { class: 'foot' }, text, date, h('button', { type: 'button', class: 'btn', id: 'next-set', onclick: function () { setNext(); } }, N.ui.setNextAction)));
     }
-    var reschedule = h('input', { class: 'in', id: 'next-new-date', type: 'date', hidden: true, 'aria-label': N.ui.actionReschedule, value: next.date || '' });
-    var saveDate = h('button', { type: 'button', class: 'btn', id: 'next-save-date', hidden: true, onclick: function () { if (!reschedule.value) { reschedule.focus(); return; } founderOp('reschedule', 'nextAction', { date: reschedule.value }); } }, N.ui.actionSaveDate);
-    var openDate = h('button', { type: 'button', class: 'btn', id: 'next-reschedule', onclick: function () { reschedule.hidden = false; saveDate.hidden = false; openDate.hidden = true; reschedule.focus(); } }, N.ui.actionReschedule);
+    var reschedule = h('input', { class: 'in', id: 'next-new-date', type: 'date', hidden: !draft.rescheduleOpen, 'aria-label': N.ui.actionReschedule, value: draft.newDate || next.date || '' });
+    reschedule.value = draft.newDate || next.date || '';
+    reschedule.addEventListener('input', function () { saveDraft('newDate', reschedule.value); });
+    var saveDate = h('button', { type: 'button', class: 'btn', id: 'next-save-date', hidden: !draft.rescheduleOpen, onclick: function () { if (!reschedule.value) { reschedule.focus(); return; } founderOp('reschedule', 'nextAction', { date: reschedule.value }, function () { V.nextDraft = null; }); } }, N.ui.actionSaveDate);
+    var openDate = h('button', { type: 'button', class: 'btn', id: 'next-reschedule', hidden: !!draft.rescheduleOpen, onclick: function () { saveDraft('rescheduleOpen', true); reschedule.hidden = false; saveDate.hidden = false; openDate.hidden = true; reschedule.focus(); } }, N.ui.actionReschedule);
     return h('section', { class: 'layer accent', id: 'next-action', 'data-state': next.staleDate ? 'overdue' : 'open' }, h('span', { class: 'eyebrow' }, N.ui.nextActionTitle), h('h2', { class: 'layer-title' }, N.fix(next.text)),
       h('p', { class: 'small muted' }, [next.milestone, next.date ? N.t('nextActionDate', { d: dayOf(next.date) }) : '', next.staleDate ? N.t('nextActionOverdue', { d: dayOf(next.date) }) : ''].filter(Boolean).join(' · ')), readyLine,
       h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'next-done', onclick: function () { try { sessionStorage.setItem('crewzero-event-prefill', JSON.stringify({ text: next.text, date: isoDay(new Date()) })); } catch (e) { } location.hash = '#/request/event'; } }, N.ui.actionDone),
@@ -412,8 +419,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var sentKind = kind, picked = kind === 'event' ? Array.prototype.slice.call(files.files || []) : [];
       Promise.all(picked.map(function (file) { return new Promise(function (ok, no) { var reader = new FileReader(); reader.onload = function () { ok({ name: file.name, data: String(reader.result).replace(/^data:[^,]*,/, '') }); }; reader.onerror = no; reader.readAsDataURL(file); }); })).then(function (attachments) { return post('/api/intake', sentKind === 'event' ? { kind: 'note', type: sentKind, text: value, date: date.value, files: attachments } : sentKind === 'help' ? { kind: 'note', type: sentKind, text: value, context: { page: 'pending' } } : { kind: 'note', type: sentKind, text: value }); }).then(function (result) {
         text.value = ''; files.value = ''; V.quickText = ''; V.quickKind = ''; V.hubDirty = false; kind = ''; choose(''); send.disabled = false;
-        // 送出後保留等待狀態，直到完成才容許重畫
-        V.hubWatching = true;
+        // 送出後短暫保留等待提示，之後首頁照常更新，回覆會列在「AI 的解釋」或待決事項
+        V.hubWatching = Date.now() + (sentKind === 'help' ? 90000 : 20000);
         if (sentKind === 'help') { if (V.status && V.status.ai && V.status.ai.ready === false) note.textContent = N.ui.helpSentNoAI; else DESK.watchHelp(result.id, note); }
         else note.replaceChildren(N.ui.quickReceived, ' ', h('a', { class: 'btn link', href: '#/request/' + sentKind, onclick: function () { RQ.sent = { type: sentKind, id: result.id }; } }, N.ui.quickTrack));
       }).catch(function (e) { send.disabled = false; note.textContent = why(e); });
@@ -423,8 +430,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   // 輪詢重畫前先檢查：輸入中、有未送出內容或等待回覆時不重畫，否則會清走正在輸入的字及等待狀態
   function hubPoll() {
     var a = document.activeElement;
-    if (V.hubDirty || V.hubWatching && !/回覆已到|已收到|未能/.test(($('#quick-note') || {}).textContent || '') || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) { V.pollTimer = setTimeout(hubPoll, 3000); return; }
-    if (V.hubWatching && $('#quick-note') && $('#quick-note').textContent) { V.pollTimer = setTimeout(hubPoll, 8000); return; }
+    var draft = V.nextDraft || {}, hasNextDraft = !!(String(draft.text || '').trim() || String(draft.date || '').trim() || String(draft.newDate || '').trim() || draft.rescheduleOpen);
+    if (V.hubDirty || hasNextDraft || V.hubWatching && Date.now() < V.hubWatching || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) { V.pollTimer = setTimeout(hubPoll, 3000); return; }
     showHub();
   }
   function showHub() {

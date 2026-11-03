@@ -47,6 +47,8 @@ try {
   await c.click('#quick-send');
   const sent = await waitFor(() => fs.readdirSync(path.join(DATA, 'founder', 'inbox')).concat(fs.existsSync(path.join(DATA, 'archive')) ? fs.readdirSync(path.join(DATA, 'archive')) : []).find(f => /-note-event\.md$/.test(f)));
   ok('送出後產生真實事件要求，並清空輸入', !!sent && (await c.ev(`document.querySelector('#quick-text').value`)) === '', sent);
+  await c.ev(`document.activeElement.blur()`);
+  ok('送出後首頁會恢復更新，不會永遠停在等待提示', !!(await waitFor(async () => (await c.ev(`(document.querySelector('#quick-note')||{}).textContent`)) === '', 40000)), await c.ev(`(document.querySelector('#quick-note')||{}).textContent`));
 
   // 改期、暫緩、取消此動作：即時生效
   await c.send('Page.reload'); await waitFor(() => c.ev(`!!document.querySelector('#next-reschedule')`));
@@ -60,8 +62,16 @@ try {
   ok('暫緩：項目移入「已暫緩」', !!(await waitFor(() => c.ev(`!!document.querySelector('#snoozed')&&document.querySelector('#next-list [data-todo]').dataset.todo!==${JSON.stringify(beforeSnooze)}`))), beforeSnooze);
   await c.click('#next-cancel');
   ok('取消此動作：卡變「待你定」並附建議', !!(await waitFor(async () => { const t = await text('#next-action'); return t.includes('待你定') && t.includes('第一位客戶書面答覆') ? t : null; })), await text('#next-action'));
+  await c.click('#next-text'); await c.send('Input.insertText', { text: '未送出的客戶會面安排' });
+  await c.ev(`(()=>{const d=document.querySelector('#next-date');d.value='2099-02-07';d.dispatchEvent(new Event('input',{bubbles:true}));document.activeElement.blur()})()`);
+  await sleep(9500);
+  ok('待你定草稿失焦後不會被輪詢清走', await c.ev(`document.querySelector('#next-text').value==='未送出的客戶會面安排'&&document.querySelector('#next-date').value==='2099-02-07'`), await c.ev(`({text:document.querySelector('#next-text').value,date:document.querySelector('#next-date').value})`));
   await c.click('#next-adopt');
   ok('採用建議：成為新的下一個對外動作', !!(await waitFor(async () => (await text('#next-action h2')).includes('第一位客戶書面答覆'))), await text('#next-action'));
+  await c.click('#next-reschedule');
+  await c.ev(`(()=>{const d=document.querySelector('#next-new-date');d.value='2099-02-08';d.dispatchEvent(new Event('input',{bubbles:true}));document.activeElement.blur()})()`);
+  await sleep(9500);
+  ok('改期欄草稿及已打開狀態失焦後不會被輪詢清走', await c.ev(`document.querySelector('#next-new-date').value==='2099-02-08'&&!document.querySelector('#next-new-date').hidden&&!document.querySelector('#next-save-date').hidden&&document.querySelector('#next-reschedule').hidden`), await c.ev(`({date:document.querySelector('#next-new-date').value,open:!document.querySelector('#next-new-date').hidden})`));
 
   // 手機
   await c.go(BASE + '/?m=1#/', 390, 2000); await c.send('Page.reload');
