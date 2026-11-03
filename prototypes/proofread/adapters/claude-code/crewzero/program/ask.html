@@ -861,7 +861,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         m.score ? h('p', { style: 'margin:12px 0 0' }, '記分：' + DD.vStand + ' ' + m.score.standing + ' · ' + DD.vHurt + ' ' + m.score.wounded + ' · ' + DD.vFall + ' ' + m.score.fallen + (m.score.redHitRate != null ? ' · ' + DD.redHitRate + ' ' + Math.round(m.score.redHitRate * 100) + '%' : ''), h('small', { style: 'display:block;margin-top:4px' }, DD.scoreRules + ' ' + attackStats(m))) : null,
         km.length ? h('ul', { class: 'm-sum', id: 'dm-moments' }, km.map(function (k) { return h('li', null, tag(DD['km_' + ({ '一擊倒下': 'fall', '最傷': 'top', '盲點': 'blind', '反轉': 'flip', '漏咗嘅路': 'missed' }[k.kind])] || k.kind), ' ', k.text); })) : null,
         s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · AI 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · AI 未查' : ''); })) : null,
-        running ? h('p', { class: 'guide' }, 'AI 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
+        running && !debateEta ? h('p', { class: 'guide' }, 'AI 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
         h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, act, h('a', { class: 'btn', href: stageHref(id), id: 'dm-stage' }, N.ui.debateStage + ' ↗'), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll))));
       // 做緊嘢就密啲更新；等你嘅時候都更新（例如喺另一頁答咗問題）
       DM.timer = setTimeout(function () { if (location.hash === '#/debate/' + id) showDebateMatch(id); }, running || sent ? 2500 : 5000);
@@ -1005,11 +1005,11 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (help.sent || help.sending) return;
       help.sending = true; help.error = ''; helpBtn.disabled = true; helpNote.textContent = N.ui.sending;
       post('/api/intake', { kind: 'note', type: 'help', text: T('helpQuestionText', { q: q.ask }), context: { packId: P.id, packTitle: P.title, ask: q.ask } })
-        .then(function (result) { help.sending = false; help.sent = true; help.noteId = result.id; helpBtn.textContent = N.ui.helpAsked; helpBtn.disabled = true; DESK.watchHelp(help.noteId, helpNote); })
+        .then(function (result) { help.sending = false; help.sent = true; help.noteId = result.id; helpBtn.textContent = N.ui.helpAsked; helpBtn.disabled = true; helpBtn.hidden = true; DESK.watchHelp(help.noteId, helpNote); })
         .catch(function (e) { help.sending = false; help.error = why(e); helpBtn.disabled = false; helpNote.textContent = help.error; });
     } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
     body.append(h('div', { class: 'foot q-help-line' }, customBtn || null, helpBtn, helpNote));
-    if (help.sent && help.noteId) setTimeout(function () { DESK.watchHelp(help.noteId, helpNote); }, 0);
+    if (help.sent && help.noteId) { helpBtn.hidden = true; setTimeout(function () { DESK.watchHelp(help.noteId, helpNote); }, 0); }
     c.append(body);
     return c;
   }

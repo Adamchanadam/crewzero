@@ -147,7 +147,7 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
 .phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
 .help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
-.help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
+.help-modal [hidden],.q-help[hidden]{display:none!important}.help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
 .tool-more{position:relative}.tool-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center}.tool-more>summary::-webkit-details-marker{display:none}
 .tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:128px;padding:8px;background:#14161c;border:1px solid var(--line);border-radius:10px}.tool-menu .btn{width:100%;justify-content:center}
 .btn.link.q-help{color:var(--muted);text-decoration:none;font-size:var(--fs-label);font-weight:400;margin-left:auto}.dq-foot .q-help-line{margin-left:auto;display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap}.dq-foot .q-help-line .q-help{margin-left:0}.btn.link.q-help:hover:not(:disabled){color:var(--text,#e8e6e3);text-decoration:underline}
@@ -514,7 +514,7 @@ body.paused .bg *{animation:none!important}
     function retry(run) {
       return function () {
         send('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: run.id }) }).then(function () {
-          born = Date.now(); target.textContent = U.helpQueued; timer = setTimeout(read, 500);
+          born = Date.now(); target.textContent = U.helpStarting; timer = setTimeout(read, 500);
         }, function (e) { target.textContent = why(e); });
       };
     }
@@ -532,9 +532,9 @@ body.paused .bg *{animation:none!important}
         var since = Date.parse(started) || born;
         if (Date.now() - since >= 180000) { target.removeAttribute('aria-busy'); target.textContent = U.helpLong; return; }
         if (work.running && work.running.ref === noteId) target.textContent = U.helpWorking.replace('{time}', elapsedSeconds(work.running.startedAt));
-        else target.textContent = U.helpQueued;
+        else target.textContent = work.running ? U.helpQueued : U.helpStarting;
         timer = setTimeout(read, 3000);
-      }, function () { target.textContent = U.helpQueued; timer = setTimeout(read, 3000); });
+      }, function () { target.textContent = U.helpStarting; timer = setTimeout(read, 3000); });
     }
     read();
     return function () { clearTimeout(timer); };

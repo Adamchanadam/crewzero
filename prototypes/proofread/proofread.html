@@ -805,11 +805,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       if (help.sent || help.sending) return;
       help.sending = true; btn.disabled = true; btn.textContent = N.ui.sending; note.textContent = N.ui.sending;
       DESK.send('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: T('helpQuestionText', { q: ask }), context: { page: 'overview', ask: ask } }) })
-        .then(function (result) { help.sent = true; help.noteId = result.id; btn.textContent = N.ui.helpAsked; DESK.watchHelp(help.noteId, note); })
+        .then(function (result) { help.sent = true; help.noteId = result.id; btn.textContent = N.ui.helpAsked; btn.hidden = true; DESK.watchHelp(help.noteId, note); })
         .catch(function () { btn.disabled = false; btn.textContent = N.ui.helpNotClear; note.textContent = ''; announce('未能交出，請再試一次。'); })
         .then(function () { help.sending = false; });
     } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
-    if (help.sent && help.noteId) setTimeout(function () { DESK.watchHelp(help.noteId, note); }, 0);
+    if (help.sent && help.noteId) { btn.hidden = true; setTimeout(function () { DESK.watchHelp(help.noteId, note); }, 0); }
     return h('span', { class: 'q-help-line' }, btn, note);
   }
   function statusCard(i) {

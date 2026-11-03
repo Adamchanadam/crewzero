@@ -479,6 +479,7 @@
     helpNoStep: '目前沒有需要立即處理的事項。',
     helpSent: '已交給 AI。回覆會出現在待決事項。',
     helpSentNoAI: '已收到。AI 設定完成後會立即回覆你。',
+    helpStarting: '已交給 AI，即將開始。',
     helpQueued: '排隊中：AI 正在處理另一項工作，完成後會回覆你。',
     helpWorking: 'AI 正在回覆，通常少於 1 分鐘（已用 {time}）',
     helpReady: '回覆已到，查看回覆',

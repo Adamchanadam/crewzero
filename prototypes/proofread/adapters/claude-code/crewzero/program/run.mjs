@@ -598,6 +598,7 @@ async function handleNote(run, file) {
   run.helpForRunRef = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).runRef || '')) ? String(machine.context.runRef) : '';
   step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc }[run.noteType]);
   const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
+  const said = text.replace(/\x60\x60\x60json[\s\S]*$/, '').replace(/\s+/g, ' ').trim();
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
   fs.mkdirSync(dest, { recursive: true });
   fs.renameSync(path.join(DIR.inbox, file), path.join(dest, file));
@@ -611,9 +612,9 @@ async function handleNote(run, file) {
   if (run.noteType !== 'help' && !loadPage()) { const why = '未有公司概覽，請先交資料'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
   if (run.noteType === 'adhoc') {
     upsertTask({ id: 'a-' + run.ref, title: clip(text.replace(/\s+/g, ' '), 30), adhoc: true, status: 'planned', waitingFor: 'AI 正在擬定範圍', noteId: run.ref });
-    addEvent({ actor: 'founder', type: 'input', title: '提交臨時工作：' + clip(text.replace(/\s+/g, ' '), 30), relatedIds: ['a-' + run.ref], moduleIds: ['inputs', 'decisions'] });
-  } else if (run.noteType === 'help') addEvent({ actor: 'founder', type: 'input', title: '提出求助：' + clip(text.replace(/\s+/g, ' '), 30), moduleIds: ['inputs'] });
-  else addEvent({ actor: 'founder', type: 'input', title: '要求改路線：' + clip(text.replace(/\s+/g, ' '), 30), relatedIds: [], moduleIds: ['inputs', 'paths'] });
+    addEvent({ actor: 'founder', type: 'input', title: '提交臨時工作：' + clip(said, 30), relatedIds: ['a-' + run.ref], moduleIds: ['inputs', 'decisions'] });
+  } else if (run.noteType === 'help') addEvent({ actor: 'founder', type: 'input', title: '提出求助：' + clip(said, 30), moduleIds: ['inputs'] });
+  else addEvent({ actor: 'founder', type: 'input', title: '要求改路線：' + clip(said, 30), relatedIds: [], moduleIds: ['inputs', 'paths'] });
   step(run, 'applied', U.stepReqRegistered, 'done', '');
   const sb = newSandbox(run);
   if (run.noteType === 'help') helpNoteTask(sb, text.replace(/\x60\x60\x60json[\s\S]*$/, '').trim(), machine.context || {});
