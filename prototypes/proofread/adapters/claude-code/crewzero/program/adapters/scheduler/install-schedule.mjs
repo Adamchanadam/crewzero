@@ -44,7 +44,7 @@ function runNative(command, args) {
 function winScript(op) {
   const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { [pscustomobject]@{ registered = $true } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { '{"registered":false}' } else { throw } }`;
   if (op === 'status') return status;
-  if (op === 'remove') return `Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction SilentlyContinue; '{"removed":true}'`;
+  if (op === 'remove') return `$ErrorActionPreference = 'Stop'; try { Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction Stop } catch { if ($_.CategoryInfo.Category -ne 'ObjectNotFound') { throw } }; if (Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction SilentlyContinue) { throw 'still registered' }; '{"removed":true}'`;
   return [`$ErrorActionPreference = 'Stop'`,
     `$a = New-ScheduledTaskAction -Execute '${q(launcher)}' -WorkingDirectory '${q(PROTO)}'`,
     `$t = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\\$env:USERNAME"`,
@@ -94,13 +94,15 @@ function removeAutostart() {
 function lastRun() {
   return (state.runs || []).filter(x => x && x.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop() || null;
 }
+const lastJson = last => last ? { at: last.startedAt || '', state: last.state || '', skipReason: last.skipReason || '', ending: last.ending || '', rejected: !!last.rejected } : null;
 function skipText(reason) {
   return ({ intakeNotComplete: '公司概覽未問齊', pausedByFounder: '已按創辦人指示暫停', autoStopped: 'AI 已暫停', budgetExhausted: '今日 AI 次數已用完', adapterNotCertified: 'AI 未設定', adapterVersionChanged: 'AI 工具已更新，須重新認證', alreadyRan: '今日已做過' })[reason] || reason || '';
 }
 function statusLine(last) {
   if (!last) return '未有';
   if (last.state === 'skipped') return '跳過：' + skipText(last.skipReason);
-  return last.state === 'ended' ? '完成' : last.state || '未有';
+  if (last.state === 'ended') return last.rejected || last.ending === 'blocked' ? '未完成，請打開 Founder Desk 查看' : '完成';
+  return last.state === 'running' ? '進行中' : last.state || '未有';
 }
 function serverMark(autostart) {
   return { mode: 'server', cadence: r.runCadence, runTime: r.runTime, timezone: r.timezone, interviewWeekday: r.interviewWeekday, limitMinutes: LIMIT, approvedAt: new Date().toISOString(), autostart: { enabled: !!autostart.enabled, os: platform, name: NAME } };
@@ -114,10 +116,10 @@ if (has('status')) {
   const mark = readJSON(MARK), last = lastRun(), next = nextRunAt(r, new Date());
   if (mark && mark.mode !== 'server') {
     const x = platform === 'windows' ? runWin('status') : { ok: true, json: { registered: false } };
-    const j = { ok: !!x.ok, mode: 'os', autostart: { enabled: false, registered: false }, lastRun: last ? { at: last.startedAt || '', state: last.state || '', skipReason: last.skipReason || '' } : null, next: next ? next.toISOString() : '' };
-    console.log(JSON.stringify(j)); say(x.ok ? '舊式排程仍運作中；請在 AI 對話說「重新登記排程」。' : '暫時未能讀取舊式排程的狀態，請稍後再試。'); process.exit(x.ok ? 0 : 1);
+    const j = { ok: !!x.ok, mode: 'os', registered: !!(x.json && x.json.registered), autostart: { enabled: false, registered: false }, lastRun: lastJson(last), next: next ? next.toISOString() : '' };
+    console.log(JSON.stringify(j)); say(!x.ok ? '暫時未能讀取舊式排程的狀態，請稍後再試。' : j.registered ? '舊式排程仍運作中；請在 AI 對話說「重新登記排程」。' : '舊式排程已失效，電腦上找不到這項設定；請在 AI 對話說「重新登記排程」。'); process.exit(x.ok ? 0 : 1);
   }
-  const auto = autostartStatus(mark), j = { ok: auto.ok !== false, mode: mark && mark.mode || 'none', autostart: auto, lastRun: last ? { at: last.startedAt || '', state: last.state || '', skipReason: last.skipReason || '' } : null, next: mark && mark.mode === 'server' && next ? next.toISOString() : '' };
+  const auto = autostartStatus(mark), j = { ok: auto.ok !== false, mode: mark && mark.mode || 'none', autostart: auto, lastRun: lastJson(last), next: mark && mark.mode === 'server' && next ? next.toISOString() : '' };
   console.log(JSON.stringify(j));
   if (!j.ok) say('暫時未能讀取登入啟動的狀態，請稍後再試。');
   else if (j.mode !== 'server') say('每日自動開工未開啟。');
@@ -130,8 +132,15 @@ if (has('remove')) {
   process.exit(x.ok ? 0 : 1);
 }
 if (has('register')) {
-  // 舊式每日工作同新登入工作共用登記名；先移走舊設定，無論有冇揀登入自啟都唔留兩套。
-  if (platform === 'windows') runWin('remove');
+  // 舊式每日工作同登入工作共用登記名：要先確認移走；移唔走就保留原設定，唔留兩套同時開工。全新安裝唔使碰系統。
+  if (markNow && (markNow.mode !== 'server' || (markNow.autostart && markNow.autostart.enabled))) {
+    const old = removeAutostart();
+    if (!old.ok) {
+      say('未能切換每日自動開工：原有設定仍然保留，沒有改動。請重新開機後，再說「重新登記排程」。');
+      if (old.err) tech('結果：' + old.err);
+      process.exit(1);
+    }
+  }
   let auto = { enabled: false }, x = null;
   if (has('autostart')) { x = registerAutostart(); auto = { enabled: !!x.ok }; }
   const mark = serverMark(auto); fs.mkdirSync(path.dirname(MARK), { recursive: true }); fs.writeFileSync(MARK, JSON.stringify(mark, null, 2));

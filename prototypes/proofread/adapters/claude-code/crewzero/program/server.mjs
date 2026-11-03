@@ -325,7 +325,9 @@ function openDemo() {
   delete env.SOS_DATA; delete env.SOS_SIM; delete env.SOS_PORT;
   try {
     demoOpeningAt = Date.now();
-    spawn(process.execPath, [path.join(ROOT, 'ask.mjs'), '--dashboard', '--demo'], { cwd: ROOT, env, detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    const c = spawn(process.execPath, [path.join(ROOT, 'ask.mjs'), '--dashboard', '--demo'], { cwd: ROOT, env, detached: true, stdio: 'ignore', windowsHide: true });
+    c.on('error', () => { demoOpeningAt = 0; say('未能打開示範'); });
+    c.unref();
     return [202, { ok: true }];
   } catch { return [500, { error: 'open' }]; }
 }
@@ -338,12 +340,17 @@ function kick(args) {
   if (child) { again = true; return false; }
   say(args ? '排定時間到，交外殼做日常工作' : '有新內容，交外殼處理');
   child = spawn(process.execPath, [path.join(ROOT, 'run.mjs'), ...(args || [])], { cwd: ROOT, stdio: 'ignore', windowsHide: true });
-  child.on('exit', () => {
+  // 開唔到外殼會出 error 而唔係 exit：同樣清走 child，計時器先可以重試；冇 listener 成個伺服器會死
+  let ended = false;
+  child.on('error', () => { say('未能啟動外殼，稍後再試'); onEnd(); });
+  child.on('exit', onEnd);
+  function onEnd() {
+    if (ended) return; ended = true;
     child = null;
     const last = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }).runs[0];
     if (last) say(`處理完：${last.state === 'done' ? '完成' : last.state === 'failed' ? '失敗 - ' + (last.error || '') : last.state}`);
     if (again || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) { again = false; schedule(300); }
-  });
+  }
   return true;
 }
 // 排程計時器：模擬每 5 秒、真實實例每 30 秒。未經批准（冇 mode:server 標記）唔會開 AI；你嘅回覆永遠排先。

@@ -27,12 +27,16 @@ try {
 
   const daily = run(['--register']);
   const mark = read(markFile);
-  ok('批准每日開工只寫 server 授權標記，沒有自動登記登入工作', daily.status === 0 && mark && mark.mode === 'server' && mark.cadence === 'daily' && mark.runTime === '21:00' && mark.approvedAt && mark.autostart && mark.autostart.enabled === false && calls().some(a => /Unregister-ScheduledTask/.test(a.at(-1))) && !calls().some(a => /New-ScheduledTaskTrigger -AtLogOn/.test(a.at(-1))), { out: daily.stdout, mark, calls: calls() });
+  ok('批准每日開工只寫 server 授權標記，全新安裝完全不碰系統排程', daily.status === 0 && mark && mark.mode === 'server' && mark.cadence === 'daily' && mark.runTime === '21:00' && mark.approvedAt && mark.autostart && mark.autostart.enabled === false && calls().some(a => /Unregister-ScheduledTask/.test(a.at(-1))) && calls().length === 0, { out: daily.stdout, mark, calls: calls() });
 
   const status0 = run(['--status']), json0 = JSON.parse(status0.stdout.split(/\r?\n/)[0]);
   ok('狀態第一行有 mode、登入啟動、帳本上次結果和下次時間', status0.status === 0 && json0.ok === true && json0.mode === 'server' && json0.autostart.enabled === false && json0.lastRun === null && !!json0.next, status0.stdout);
 
   fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+  fs.writeFileSync(stateFile, JSON.stringify({ runs: [{ trigger: 'schedule', slot: '2030-01-01', startedAt: '2030-01-01T21:00:00+00:00', state: 'skipped', skipReason: 'intakeNotComplete' }] }, null, 2));
+  const ranBlocked = () => { fs.writeFileSync(stateFile, JSON.stringify({ runs: [{ trigger: 'schedule', slot: '2030-01-01', startedAt: '2030-01-01T21:00:00+00:00', state: 'ended', ending: 'blocked', rejected: true }] }, null, 2)); return run(['--status']); };
+  const blocked = ranBlocked();
+  ok('工作未完成：不可說完成，JSON 保留原因欄位', /未完成/.test(blocked.stdout) && !/實際結果：完成/.test(blocked.stdout) && JSON.parse(blocked.stdout.split(/\r?\n/)[0]).lastRun.rejected === true, blocked.stdout);
   fs.writeFileSync(stateFile, JSON.stringify({ runs: [{ trigger: 'schedule', slot: '2030-01-01', startedAt: '2030-01-01T21:00:00+00:00', state: 'skipped', skipReason: 'intakeNotComplete' }] }, null, 2));
   const statusSkip = run(['--status']), jsonSkip = JSON.parse(statusSkip.stdout.split(/\r?\n/)[0]);
   ok('狀態按帳本如實說明跳過原因，不用作業系統結果碼冒充已執行', jsonSkip.lastRun && jsonSkip.lastRun.skipReason === 'intakeNotComplete' && /跳過：公司概覽未問齊/.test(statusSkip.stdout.split(/\r?\n/)[1] || ''), statusSkip.stdout);
@@ -56,6 +60,11 @@ try {
   ok('Linux 移除清走登入啟動與標記', run(['--remove', '--os', 'linux'], { HOME: linuxHome }).status === 0 && !fs.existsSync(desktop) && !fs.existsSync(markFile));
 
   fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '21:00' }, null, 2));
+  const legacyRefused = run(['--register'], { SOS_SCHED_FAIL: '1' }), legacyStill = read(markFile);
+  ok('舊排程移除失敗：不啟用新計時器，原標記保留，以失敗結束', legacyRefused.status === 1 && /未能切換/.test(legacyRefused.stdout) && legacyStill && !legacyStill.mode && legacyStill.name === 'crewzero-old', legacyRefused.stdout);
+  const gone = run(['--status'], { SOS_SCHED_QUERY: 'not-found' }), goneJson = JSON.parse(gone.stdout.split(/\r?\n/)[0]);
+  ok('舊工作已不存在：如實說已失效，不說仍運作', gone.status === 0 && goneJson.registered === false && /已失效/.test(gone.stdout) && !/仍運作/.test(gone.stdout), gone.stdout);
+  fs.writeFileSync(LOG + '.state', JSON.stringify({ registered: true }));
   const legacy = run(['--status']), legacyJson = JSON.parse(legacy.stdout.split(/\r?\n/)[0]);
   const dash = await import(pathToFileURL(path.join(PROTO, 'dash-lib.mjs')).href + '?schedule=' + Date.now());
   const dirs = { data: path.join(root, 'data'), ledger: path.join(root, 'data', 'ledger'), company: path.join(root, 'data', 'company'), asks: path.join(root, 'data', 'asks'), inbox: path.join(root, 'data', 'founder', 'inbox'), replies: path.join(root, 'data', 'founder', 'replies') };

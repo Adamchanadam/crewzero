@@ -137,6 +137,12 @@ await test('端到端：成功與失敗都留紀錄而唔留 runs', () => {
   if (second.status === 0 || !badSummary || !badSummary.finished || !exists(path.join(bad, 'logs')) || exists(path.join(bad, 'runs'))) throw new Error((second.stdout || '') + (second.stderr || ''));
 });
 
+await test('試走拒絕已有未標記內容的資料夾，一個檔都唔郁', () => {
+  const out = make('walk-unmarked'), keep = path.join(out, 'profile', 'keep.txt'); write(keep, 'keep');
+  const r = spawnSync(process.execPath, [path.join(HERE, '..', 'tools', 'mvp-walk.mjs'), PROTO, out, 'no-chrome', 'no-fake'], { encoding: 'utf8', timeout: 60000 });
+  if (r.status !== 2 || !exists(keep) || fs.readFileSync(keep, 'utf8') !== 'keep' || exists(path.join(out, '.crewzero-walk-output'))) throw new Error('未有拒絕：' + r.status + ' ' + r.stdout);
+});
+
 const passed = results.filter(r => r.pass).length;
 console.log(`${passed}/${results.length} passed`);
 process.exit(passed === results.length ? 0 : 1);

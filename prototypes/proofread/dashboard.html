@@ -1099,6 +1099,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     if (ri.scheduler !== 'os') return U.schedOff;
     var o = ri.os;
     if (!o) return U.schedLegacy;
+    if (o.missing) return U.schedOsMissing;
     if (o.legacy) return U.schedLegacy;
     if (o.stale) return N.t('schedOsStale', { c: cad(o.cadence), t: o.runTime, nc: cad(rh && rh.runCadence), nt: (rh && rh.runTime) || '21:00' });
     if (o.missing) return U.schedOsMissing;

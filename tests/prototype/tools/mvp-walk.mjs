@@ -18,7 +18,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const steps = []; let cur = '';
 const step = s => { cur = s; console.log('== ' + s); };
 const ok = (n, p, i) => { steps.push({ step: cur, name: n, pass: !!p, ...(p ? {} : { info: i }) }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + String(JSON.stringify(i)).slice(0, 400))); };
-fs.mkdirSync(OUT, { recursive: true });
+// 清理只限自己建立嘅輸出：已有內容但冇試走標記就拒絕，唔接管
+const WALK_MARK = path.join(OUT, '.crewzero-walk-output');
+if (fs.existsSync(OUT) && (!fs.lstatSync(OUT).isDirectory() || fs.lstatSync(OUT).isSymbolicLink() || (fs.readdirSync(OUT).length && !fs.existsSync(WALK_MARK)))) { console.log('輸出資料夾已有未標記內容，唔會接管：' + OUT); process.exit(2); }
+fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(WALK_MARK, new Date().toISOString());
 const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), SHOTS = path.join(OUT, 'shots');
 if (fs.existsSync(PROJ)) {
   const removed = safeRemove(PROJ, OUT);

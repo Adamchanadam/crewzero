@@ -185,7 +185,7 @@
     nextAfterDoneWhy: '小旗原本掛在已完成的一站；AI 按下一站的真事建議，你確認後小旗才移動。',
     schedSim: '模擬計時器（按模擬時鐘）', schedOff: '未開啟：在對話輸入「安裝排程」，批准後 AI 每日按時開工',
     schedServer: '已開啟 · {c} {t}', schedServerRule: '電腦開着並已打開 CrewZero 時會按時開工；錯過後 6 小時內補做一次', schedAutostartOn: '登入電腦時會自動打開 CrewZero', schedAutostartOff: '電腦重開後，要打開一次 Founder Desk 才會恢復',
-    schedLegacy: '舊式排程仍運作中', schedLegacyTodo: '舊式排程仍運作中：請在 AI 對話說「重新登記排程」', schedRecertifyTodo: 'AI 工具已更新：請重新認證', schedRecertify: '重新認證',
+    schedLegacy: '舊式排程仍運作中', schedLegacyTodo: '舊式排程要更新：請在 AI 對話說「重新登記排程」', schedRecertifyTodo: 'AI 工具已更新：請重新認證', schedRecertify: '重新認證',
     schedOs: '已登記 · {c} {t}', schedOsStale: '每日安排已改變，請在 AI 對話說「重新登記排程」。',
     schedOsMissing: '每日排程已失效，電腦上找不到這項設定。請在 AI 對話說「重新登記排程」。',
     schedCatchUpOn: '錯過後只會在 6 小時內補做一次', schedCatchUpOff: '未能確認補做設定；請在 AI 對話說「重新登記排程」。',
