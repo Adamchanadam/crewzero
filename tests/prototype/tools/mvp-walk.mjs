@@ -9,7 +9,9 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-const [PROG, OUT, CHROME, FAKE] = process.argv.slice(2);
+import { safeRemove } from '../lib/test-output.mjs';
+const KEEP_PROFILE = process.argv.includes('--keep-profile') || process.env.WALK_KEEP === '1';
+const [PROG, OUT, CHROME, FAKE] = process.argv.slice(2).filter(a => a !== '--keep-profile');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HOST = process.env.WALK_HOST || 'test', REAL = HOST !== 'test', PORT = Number(process.env.WALK_PORT || 4760), LIMIT = Number(process.env.WALK_LIMIT_USD || 8), SLOW = REAL ? 10 : 1;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -18,7 +20,11 @@ const step = s => { cur = s; console.log('== ' + s); };
 const ok = (n, p, i) => { steps.push({ step: cur, name: n, pass: !!p, ...(p ? {} : { info: i }) }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + String(JSON.stringify(i)).slice(0, 400))); };
 fs.mkdirSync(OUT, { recursive: true });
 const PROJ = path.join(OUT, 'proj'), T = path.join(PROJ, 'crewzero'), SHOTS = path.join(OUT, 'shots');
-fs.rmSync(PROJ, { recursive: true, force: true }); fs.mkdirSync(PROJ, { recursive: true }); fs.mkdirSync(SHOTS, { recursive: true });
+if (fs.existsSync(PROJ)) {
+  const removed = safeRemove(PROJ, OUT);
+  if (!removed.removed) throw new Error('舊試走資料夾清唔走：' + removed.left.join('、'));
+}
+fs.mkdirSync(PROJ, { recursive: true }); fs.mkdirSync(SHOTS, { recursive: true });
 const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|BEARER|OAUTH/i.test(k) && !/^CLAUDE/i.test(k) && !/^CODEX_THREAD_ID$/i.test(k) && !/^SOS_/.test(k)));
 const SCHED = { SOS_SCHED_CMD: path.join(HERE, '..', 'lib', 'fake-schtasks.mjs'), SOS_SCHED_LOG: path.join(OUT, 'sched-calls.jsonl') };
 const envSrv = { ...clean, ...SCHED, SOS_PORT: String(PORT), SOS_NO_OPEN: '1', ...(REAL ? {} : { SOS_ADAPTER: FAKE }) };
@@ -141,6 +147,17 @@ try {
   const runs = ((readJ(path.join(T, 'data', 'ledger', 'status.json')) || { runs: [] }).runs || []);
   const sum = { host: HOST, pass: steps.filter(s => s.pass).length, total: steps.length, aiRuns: runs.filter(r => r.aiCost).length, usd: Math.round(spent() * 1000) / 1000, shots: fs.existsSync(SHOTS) ? fs.readdirSync(SHOTS) : [], steps };
   fs.writeFileSync(path.join(OUT, 'walk-result.json'), JSON.stringify(sum, null, 1));
+  const left = [];
+  if (!KEEP_PROFILE && fs.existsSync(path.join(OUT, 'profile'))) {
+    const removed = safeRemove(path.join(OUT, 'profile'), OUT);
+    if (!removed.removed) left.push(...removed.left);
+  }
+  if (fs.existsSync(T)) for (const name of fs.readdirSync(T)) {
+    if (name === 'data') continue;
+    const removed = safeRemove(path.join(T, name), T);
+    if (!removed.removed) left.push(...removed.left);
+  }
+  if (left.length) console.log('暫存仲有鎖住檔案，下次再清：' + left.join('、'));
   console.log(`\n${sum.pass}/${sum.total} passed；AI 工作 ${sum.aiRuns} 次；費用 US$${sum.usd}`);
   process.exit(sum.pass === sum.total ? 0 : 1);
 }

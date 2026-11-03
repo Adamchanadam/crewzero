@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { writeAdapters } from './lib/adapters.mjs';
+import { claimOutput, collectFailureEvidence, dirSize, FAILURE_GROUP_MAX_BYTES, FAILURE_RUN_MAX_BYTES, pruneOutputs, safeRemove, sweepInterrupted, updateOutputMarker } from './lib/test-output.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -18,9 +19,23 @@ const OUT = path.resolve(opt('out', 'SOS_TEST_OUT') || path.join(os.tmpdir(), 'c
 const PORT = Number(opt('port', 'SOS_TEST_PORT') || 4700);
 const ONLY = (opt('only', 'SOS_TEST_ONLY') || '').split(',').map(s => s.trim()).filter(Boolean);
 const NO_BROWSER = argv.includes('--no-browser');
+const KEEP_RUNS = argv.includes('--keep-runs');
 // 唔准喺原型自己嘅 data/ 或者專案入面跑
 if (!fs.existsSync(path.join(PROTO, 'server.mjs'))) { console.log('搵唔到原型（server.mjs）：' + PROTO); process.exit(2); }
 if (OUT.startsWith(path.resolve(PROTO))) { console.log('輸出資料夾唔可以喺原型資料夾入面：' + OUT); process.exit(2); }
+const DEFAULT_OUTPUT_ROOT = path.join(os.tmpdir(), 'crewzero-tests');
+const OUTPUT_ROOTS = [...new Map([path.dirname(OUT), DEFAULT_OUTPUT_ROOT].map(p => [process.platform === 'win32' ? path.resolve(p).toLocaleLowerCase('en-US') : path.resolve(p), path.resolve(p)])).values()];
+try {
+  claimOutput(OUT);
+} catch (e) {
+  console.log('輸出資料夾唔安全，唔會開始：' + (e && e.message || e));
+  process.exit(2);
+}
+// 清理出事唔可以改變測試結果：只記低，留畀下次
+const cleanupErrors = [];
+const quietly = (fn, fallback = null) => { try { return fn(); } catch (e) { cleanupErrors.push(String(e && e.message || e)); return fallback; } };
+quietly(() => sweepInterrupted(OUTPUT_ROOTS));
+quietly(() => pruneOutputs(OUTPUT_ROOTS, OUT));
 // 不可用嘅埠（其他服務、真實實例、模擬實例）；每項測試佔 10 個埠
 // 另加 Fetch 標準封鎖嘅埠（Node fetch 同 Chrome 都拒絕連，例如 6000 會報 bad port，伺服器起咗都連唔到）
 // 5040：Windows 系統服務長期佔用（綁唔到，伺服器會自動跳去下一個埠，測試就連錯埠）
@@ -65,6 +80,7 @@ const TESTS = [
   ['舊分頁', 'core/stale.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['並發', 'core/race.mjs', ['{proto}', '{out}', '{port}']],
   ['名稱表', 'core/names-check.mjs', ['{proto}', '{out}']],
+  ['測試輸出清理', 'core/test-output-test.mjs', ['{proto}', '{out}']],
   ['真實事件', 'core/event-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['示範保護', 'core/event-demo-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['待決排序', 'core/todo-test.mjs', ['{proto}', '{out}', '{port}']],
@@ -118,13 +134,24 @@ function run(file, args) {
   });
 }
 const results = [];
+let evidenceBytes = 0;
+function writeSummary(finished, output) {
+  const summary = { at: new Date().toISOString(), proto: PROTO, chrome: CHROME, results, finished };
+  if (output) summary.output = output;
+  fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
+}
 let port = PORT;
 console.log(`原型：${PROTO}\n輸出：${OUT}\nChrome：${CHROME || '（冇；要瀏覽器嘅測試唔會跑）'}\n`);
 for (const [i, [name, file, params, browser]] of TESTS.entries()) {
   if (ONLY.length && !ONLY.some(o => name.includes(o) || file.includes(o))) continue;
   while (RESERVED.some(r => r >= port && r < port + 10)) port += 10;
   const out = path.join(OUT, 'runs', pad(i + 1) + '-' + path.basename(file, '.mjs'));
-  if (browser && !CHROME) { results.push({ name, file, pass: false, score: '未跑', note: '冇 Chrome' }); console.log(`－ ${name}：未跑（冇 Chrome）`); continue; }
+  if (browser && !CHROME) {
+    results.push({ name, file, pass: false, score: '未跑', note: '冇 Chrome', evidence: null, leftBytes: 0 });
+    writeSummary(false);
+    console.log(`－ ${name}：未跑（冇 Chrome）`); continue;
+  }
+  quietly(() => updateOutputMarker(OUT, { heartbeatAt: new Date().toISOString() }));
   const map = { '{proto}': PROTO, '{out}': out, '{port}': String(port), '{fake}': AD.fake, '{web}': AD.web, '{missing}': AD.missing, '{chrome}': CHROME };
   const list = params.map(p => map[p] ?? p);
   const t0 = Date.now(), log = path.join(OUT, 'logs', pad(i + 1) + '-' + path.basename(file, '.mjs') + '.txt');
@@ -138,11 +165,25 @@ for (const [i, [name, file, params, browser]] of TESTS.entries()) {
     fs.writeFileSync(log.replace(/\.txt$/, '-retry.txt'), text);
     v = verdict(text, code);
   }
-  results.push({ name, file, port, ...v, ...(first ? { retried: true, firstScore: first } : {}), seconds: Math.round((Date.now() - t0) / 1000) });
+  let evidence = null;
+  if (!v.pass) {
+    evidence = quietly(() => collectFailureEvidence(out, path.join(OUT, 'failed', path.basename(out)), { maxBytes: Math.min(FAILURE_GROUP_MAX_BYTES, Math.max(0, FAILURE_RUN_MAX_BYTES - evidenceBytes)) }));
+    evidenceBytes += evidence ? evidence.bytes : 0;
+  }
+  let cleared = { removed: false, left: [] };
+  if (!KEEP_RUNS && fs.existsSync(out)) cleared = quietly(() => safeRemove(out, OUT), cleared);
+  const leftBytes = dirSize(out);
+  results.push({ name, file, port, ...v, ...(first ? { retried: true, firstScore: first } : {}), seconds: Math.round((Date.now() - t0) / 1000), evidence, leftBytes, ...(cleared.left.length ? { cleanupLeft: cleared.left } : {}) });
+  writeSummary(false);
   console.log(`${v.pass ? '✓' : '✗'} ${name}：${v.score}${first ? (v.pass ? '（重試後通過；第一次 ' + first + '）' : '（重試都唔通過；第一次 ' + first + '）') : ''}（${Math.round((Date.now() - t0) / 1000)} 秒）`);
   port += 10;
 }
 const failed = results.filter(r => !r.pass), retriedOk = results.filter(r => r.pass && r.retried);
-fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify({ at: new Date().toISOString(), proto: PROTO, chrome: CHROME, results }, null, 2));
+if (!KEEP_RUNS && fs.existsSync(path.join(OUT, 'runs'))) quietly(() => safeRemove(path.join(OUT, 'runs'), OUT));
+quietly(() => updateOutputMarker(OUT, { state: 'finished', heartbeatAt: new Date().toISOString() }));
+const pruned = quietly(() => pruneOutputs(OUTPUT_ROOTS, OUT), { removed: [] });
+const output = { bytes: dirSize(OUT), removedOld: pruned.removed, ...(cleanupErrors.length ? { cleanupErrors } : {}) };
+writeSummary(true, output);
 console.log(`\n${results.length - failed.length}／${results.length} 項通過${retriedOk.length ? '（其中 ' + retriedOk.length + ' 項重試後通過：' + retriedOk.map(r => r.name).join('、') + '）' : ''}${failed.length ? '；唔通過：' + failed.map(r => r.name).join('、') + '（逐項紀錄：' + path.join(OUT, 'logs') + '）' : ''}`);
+console.log('輸出保留 ' + (output.bytes / 1024 / 1024).toFixed(1) + ' MB');
 process.exit(failed.length ? 1 : 0);
