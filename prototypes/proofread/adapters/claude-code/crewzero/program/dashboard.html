@@ -1096,6 +1096,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     if (ri.scheduler === 'sim') return U.schedSim;
     if (ri.scheduler === 'demo') return '示範（虛構）';
     if (ri.scheduler === 'server') return [N.t('schedServer', { c: cad(rh && rh.runCadence), t: (rh && rh.runTime) || '21:00' }), h('br'), h('small', { class: 'muted' }, U.schedServerRule), h('br'), h('small', { class: 'muted' }, ri.autostart && ri.autostart.enabled ? U.schedAutostartOn : U.schedAutostartOff)];
+    if (ri.cleanupPending) return U.schedCleanupPending;
     if (ri.scheduler !== 'os') return U.schedOff;
     var o = ri.os;
     if (!o) return U.schedLegacy;
@@ -1863,7 +1864,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
             : [h('dt', null, '開工'), h('dd', { class: 'muted' }, '未設定：確認公司概覽時採用預設值（每日 21:00）。')],
           h('dt', null, '排程'), h('dd', { id: 'sys-sched', 'data-state': ri.scheduler === 'os' ? (ri.os.legacy ? 'legacy' : ri.os.stale ? 'stale' : ri.os.missing ? 'missing' : 'on') : ri.scheduler }, schedLine(ri, x.rhythm)),
           h('dt', null, U.schedLast), h('dd', { id: 'sys-last' }, ri.lastScheduleAt ? [when(ri.lastScheduleAt) + ' ', ri.lastSchedule ? runTags(ri.lastSchedule) : null] : U.schedNever),
-          h('dt', null, U.schedNext), h('dd', { id: 'sys-next' }, ri.nextRunAt ? when(ri.nextRunAt) + '（' + left(ri.nextRunAt) + '）' : ri.scheduler === 'os' ? U.schedLegacyNoNext : '未有：排程未登記，AI 只會在你提交答案或要求時開始工作')),
+          h('dt', null, U.schedNext), h('dd', { id: 'sys-next' }, ri.nextRunAt ? when(ri.nextRunAt) + '（' + left(ri.nextRunAt) + '）' : ri.scheduler === 'os' ? U.schedLegacyNoNext : ri.cleanupPending ? U.schedCleanupNoNext : '未有：排程未登記，AI 只會在你提交答案或要求時開始工作')),
         h('h4', null, D.brain),
         h('p', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? '未有資料：提交資料並確認公司概覽後，由公司紀錄供料。' : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : '找不到先前指定的參考資料夾。請在 AI 對話說「打開營運監察台」重新開啟。'),
         h('h4', null, D.sysHealth),

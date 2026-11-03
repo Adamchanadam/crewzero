@@ -64,7 +64,7 @@ try {
   const stopFail = run(['--remove'], { SOS_SCHED_FAIL: '1' }), stopped = read(markFile);
   ok('移除失敗：計時器停用但保留標記，以失敗結束', stopFail.status === 1 && stopped && stopped.mode === 'stopped' && /已停用/.test(stopFail.stdout), stopFail.stdout);
   const stoppedStatus = run(['--status']);
-  ok('已停用狀態如實說明，冇下次時間', stoppedStatus.status === 0 && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).mode === 'stopped' && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).next === '' && /尚未完全移除/.test(stoppedStatus.stdout), stoppedStatus.stdout);
+  ok('已停用狀態如實說明，冇下次時間', stoppedStatus.status === 0 && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).mode === 'stopped' && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).next === '' && JSON.parse(stoppedStatus.stdout.split(/\r?\n/)[0]).cleanupPending === true && /尚未完全移除/.test(stoppedStatus.stdout), stoppedStatus.stdout);
   const reFail = run(['--register'], { SOS_SCHED_FAIL: '1' });
   ok('重新登記先清殘留：清唔走唔啟用', reFail.status === 1 && read(markFile).mode === 'stopped', reFail.stdout);
   const reOk = run(['--register']);
@@ -77,7 +77,9 @@ try {
     const gone = "Write-Error -Category ObjectNotFound -Message 'none'", denied = "Write-Error -Category PermissionDenied -Message 'denied'", exists = "[pscustomobject]@{ TaskName = $TaskName }", fine = '$null';
     const ps = (un, get) => spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', stub(un, 'Unregister-ScheduledTask') + '; ' + stub(get, 'Get-ScheduledTask') + '; ' + script], { encoding: 'utf8', windowsHide: true });
     const removed = r => r.status === 0 && /"removed":true/.test(r.stdout);
-    const cases = { 移除成功查回冇: removed(ps(fine, gone)), 本來就冇: removed(ps(gone, gone)), 移除被拒: !removed(ps(denied, gone)), 查回被拒: !removed(ps(fine, denied)), 仍然存在: !removed(ps(fine, exists)) };
+    // 指令根本載入唔到：唔可以當工作不存在
+    const noCmd = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', "$PSModuleAutoLoadingPreference = 'None'; " + script], { encoding: 'utf8', windowsHide: true });
+    const cases = { 指令不可用: !removed(noCmd), 移除成功查回冇: removed(ps(fine, gone)), 本來就冇: removed(ps(gone, gone)), 移除被拒: !removed(ps(denied, gone)), 查回被拒: !removed(ps(fine, denied)), 仍然存在: !removed(ps(fine, exists)) };
     ok('移除腳本：只有確實冇先算成功', Object.values(cases).every(Boolean), cases);
   }
   fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '21:00' }, null, 2));
@@ -95,8 +97,14 @@ try {
   ok('舊格式不自動遷移：狀態、系統資料和待決卡都明說舊式仍運作', legacy.status === 0 && legacyJson.mode === 'os' && view.rhythmInfo.scheduler === 'os' && view.todo.some(x => x.id === 'schedule-legacy') && /schedLegacy/.test(html) && /舊式排程仍運作中/.test(names), { out: legacy.stdout, todo: view.todo });
 
   const viewOf = st => dash.dashboardState(dirs, { now: new Date(), schedStatus: st }).rhythmInfo;
-  const live = viewOf({ ok: true, registered: true }), lost = viewOf({ ok: true, registered: false }), unknown = viewOf({ ok: false, registered: false });
-  ok('舊式工作：查到存在先有下次時間；已失效或查唔到都冇', !!live.nextRunAt && live.os.confirmed === true && lost.nextRunAt === '' && lost.os.missing === true && unknown.nextRunAt === '' && unknown.os.confirmed === false && /schedLegacyUnknown/.test(html), { live, lost, unknown });
+  // 舊標記保留舊時間 nextRunAt：都唔可以繞過
+  fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '09:00', nextRunAt: '2030-01-05T09:00:00.000Z' }, null, 2));
+  const live = viewOf({ ok: true, registered: true }), lost = viewOf({ ok: true, registered: false }), unknown = viewOf({ ok: false, registered: false }), none = viewOf(null);
+  ok('舊式工作：一律唔講下次時間；查到存在、已失效、查唔到分開顯示', live.nextRunAt === '' && live.os.confirmed === true && lost.nextRunAt === '' && lost.os.missing === true && unknown.nextRunAt === '' && unknown.os.confirmed === false && none.nextRunAt === '' && none.os.confirmed === false && /schedLegacyUnknown/.test(html), { live, lost, unknown });
+  fs.writeFileSync(markFile, JSON.stringify({ mode: 'stopped', autostart: { enabled: true, os: 'windows', name: 'crewzero-old' }, stoppedAt: '2030-01-01T00:00:00.000Z' }, null, 2));
+  const stoppedView = dash.dashboardState(dirs, { now: new Date() });
+  ok('登入啟動待清理：監察台同待決卡都講，冇下次時間', stoppedView.rhythmInfo.cleanupPending === true && stoppedView.rhythmInfo.nextRunAt === '' && stoppedView.todo.some(x => x.id === 'schedule-cleanup') && /schedCleanupPending/.test(html), stoppedView.rhythmInfo);
+  fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '21:00' }, null, 2));
   fs.writeFileSync(stateFile, JSON.stringify({ runs: [{ trigger: 'schedule', slot: '2030-01-01', startedAt: '2030-01-01T21:00:00+00:00', state: 'ended', ending: 'blocked', rejected: true, rejectReason: 'adapter failed' }] }, null, 2));
   const failedRun = viewOf(null).lastSchedule;
   ok('工作失敗：監察台資料帶齊原因，頁面唔可以顯示完成', failedRun.rejected === true && failedRun.rejectReason === 'adapter failed' && /runUnfinished/.test(html), failedRun);

@@ -42,9 +42,9 @@ function runNative(command, args) {
   return { ok: res.status === 0, out: String(res.stdout || '').trim(), err: String(res.stderr || res.error || '').trim().slice(0, 400) };
 }
 function winScript(op) {
-  const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { [pscustomobject]@{ registered = $true } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { '{"registered":false}' } else { throw } }`;
+  const status = `$ErrorActionPreference = 'Stop'; try { $x = Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop; if (-not $x) { '{"registered":false}' } else { [pscustomobject]@{ registered = $true } | ConvertTo-Json -Compress } } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound' -and $_.Exception -isnot [System.Management.Automation.CommandNotFoundException]) { '{"registered":false}' } else { throw } }`;
   if (op === 'status') return status;
-  if (op === 'remove') return `$ErrorActionPreference = 'Stop'; try { Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction Stop } catch { if ($_.CategoryInfo.Category -ne 'ObjectNotFound') { throw } }; try { Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop | Out-Null; throw 'still registered' } catch { if ($_.CategoryInfo.Category -ne 'ObjectNotFound') { throw } }; '{"removed":true}'`;
+  if (op === 'remove') return `$ErrorActionPreference = 'Stop'; try { Unregister-ScheduledTask -TaskName '${q(NAME)}' -Confirm:$false -ErrorAction Stop } catch { if ($_.CategoryInfo.Category -ne 'ObjectNotFound' -or $_.Exception -is [System.Management.Automation.CommandNotFoundException]) { throw } }; try { Get-ScheduledTask -TaskName '${q(NAME)}' -ErrorAction Stop | Out-Null; throw 'still registered' } catch { if ($_.CategoryInfo.Category -ne 'ObjectNotFound' -or $_.Exception -is [System.Management.Automation.CommandNotFoundException]) { throw } }; '{"removed":true}'`;
   return [`$ErrorActionPreference = 'Stop'`,
     `$a = New-ScheduledTaskAction -Execute '${q(launcher)}' -WorkingDirectory '${q(PROTO)}'`,
     `$t = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\\$env:USERNAME"`,
@@ -115,13 +115,13 @@ async function serverOpen() {
 if (has('status')) {
   const mark = readJSON(MARK), last = lastRun(), next = nextRunAt(r, new Date());
   if (mark && mark.mode === 'stopped') {
-    console.log(JSON.stringify({ ok: true, mode: 'stopped', autostart: { enabled: false, registered: false }, lastRun: lastJson(last), next: '' }));
+    console.log(JSON.stringify({ ok: true, mode: 'stopped', cleanupPending: true, autostart: { enabled: false, registered: null }, lastRun: lastJson(last), next: '' }));
     say('每日自動開工已停用；登入啟動尚未完全移除，請再說一次「移除排程」。');
     process.exit(0);
   }
   if (mark && mark.mode !== 'server') {
     const x = platform === 'windows' ? runWin('status') : { ok: true, json: { registered: false } };
-    const j = { ok: !!x.ok, mode: 'os', registered: !!(x.json && x.json.registered), autostart: { enabled: false, registered: false }, lastRun: lastJson(last), next: x.ok && x.json && x.json.registered && next ? next.toISOString() : '' };
+    const j = { ok: !!x.ok, mode: 'os', registered: !!(x.json && x.json.registered), autostart: { enabled: false, registered: false }, lastRun: lastJson(last), next: '' };
     console.log(JSON.stringify(j)); say(!x.ok ? '暫時未能讀取舊式排程的狀態，請稍後再試。' : j.registered ? '舊式排程仍運作中；請在 AI 對話說「重新登記排程」。' : '舊式排程已失效，電腦上找不到這項設定；請在 AI 對話說「重新登記排程」。'); process.exit(x.ok ? 0 : 1);
   }
   const auto = autostartStatus(mark), j = { ok: auto.ok !== false, mode: mark && mark.mode || 'none', autostart: auto, lastRun: lastJson(last), next: mark && mark.mode === 'server' && next ? next.toISOString() : '' };

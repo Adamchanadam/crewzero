@@ -347,14 +347,12 @@ export function dashboardState(DIR, extra = {}) {
   const scheduler = sample ? 'demo' : extra.scheduler === 'sim' ? 'sim' : schedMark && schedMark.mode === 'server' ? 'server' : schedMark && schedMark.mode !== 'stopped' ? 'os' : 'none';
   const lastSched = (Array.isArray(state.runs) ? state.runs : []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop() || null;
   const st = extra.schedStatus || null;
-  // 舊式工作要查到確實存在先講下次；已失效或者查唔到都唔可以承諾
+  // 舊式工作冇讀回實際排程，唔講下次時間；存在與否只影響文字
   const legacyLive = !!(st && st.ok && st.registered);
-  const nextAt = scheduler !== 'none' && (scheduler !== 'os' || legacyLive) ? nextRunAt(rhythmOf(state), now) : null;
+  const nextAt = scheduler !== 'none' && scheduler !== 'os' ? nextRunAt(rhythmOf(state), now) : null;
   const osSched = scheduler === 'os' ? { legacy: !schedMark.mode, confirmed: legacyLive, name: schedMark.name || '', cadence: schedMark.cadence || 'daily', runTime: schedMark.runTime || '', registeredAt: schedMark.registeredAt || '', startWhenAvailable: st && st.registered ? !!st.startWhenAvailable : !!schedMark.startWhenAvailable,
     stale: scheduleStale(schedMark, rhythmOf(state)), osNext: (st && st.next) || schedMark.nextRunAt || '', osLast: (st && st.last) || '', osLastResult: st && st.last ? st.lastResult : null, missing: !!(st && st.ok && !st.registered) } : null;
-  // 節奏改咗但未重新登記：作業系統仍然按舊時間叫，「下次開工」照排程器讀回（或者登記時）嘅時間
-  const osNextAt = osSched && osSched.stale && osSched.osNext ? new Date(osSched.osNext) : null;
-  const rhythmInfo = { scheduler, os: osSched, autostart: scheduler === 'server' ? { enabled: !!(schedMark.autostart && schedMark.autostart.enabled) && !(st && st.ok && st.autostart && !st.autostart.registered), registered: !!(st && st.autostart && st.autostart.registered) } : { enabled: false, registered: false }, nextRunAt: osNextAt && !isNaN(osNextAt) ? localIso(osNextAt) : nextAt ? localIso(nextAt) : '', lastScheduleAt: lastSched ? lastSched.startedAt : '', lastSchedule: lastSched ? { state: lastSched.state, skipReason: lastSched.skipReason || '', ending: lastSched.ending || '', rejected: !!lastSched.rejected, rejectReason: lastSched.rejectReason || '', label: lastSched.label || '' } : null };
+  const rhythmInfo = { scheduler, os: osSched, autostart: scheduler === 'server' ? { enabled: !!(schedMark.autostart && schedMark.autostart.enabled) && !(st && st.ok && st.autostart && !st.autostart.registered), registered: !!(st && st.autostart && st.autostart.registered) } : { enabled: false, registered: false }, cleanupPending: !!(schedMark && schedMark.mode === 'stopped'), nextRunAt: nextAt ? localIso(nextAt) : '', lastScheduleAt: lastSched ? lastSched.startedAt : '', lastSchedule: lastSched ? { state: lastSched.state, skipReason: lastSched.skipReason || '', ending: lastSched.ending || '', rejected: !!lastSched.rejected, rejectReason: lastSched.rejectReason || '', label: lastSched.label || '' } : null };
 
   /* 未來兩星期日程 */
   const horizon = new Date(today.getTime() + 14 * DAY);
@@ -370,7 +368,7 @@ export function dashboardState(DIR, extra = {}) {
   // 你嘅現實行動（有日子嘅）
   for (const t of tasks) if (t.owner === 'founder' && t.dueAt && t.column !== 'done' && t.column !== 'review') add(t.dueAt, 'action', t.title + (/T\d{2}:\d{2}/.test(t.dueAt) ? ' ' + t.dueAt.slice(11, 16) : ''), { milestoneId: t.milestoneId });
   for (const t of todo) if (t.due) add(t.due, 'decision', '決定期限：' + t.text, { href: t.href });
-  if (rhythm && rhythm.runTime && scheduler !== 'none') {
+  if (rhythm && rhythm.runTime && scheduler !== 'none' && (scheduler !== 'os' || legacyLive)) {
     const [hh, mm] = rhythm.runTime.split(':').map(Number);
     const next = new Date(now.getTime()); next.setHours(hh, mm, 0, 0);
     if (next <= now) next.setDate(next.getDate() + 1);
@@ -523,6 +521,7 @@ function buildTodoLists(DIR, { state, milestones, company, page, now }) {
   const sm = state.demo === true ? null : scheduleMark(DIR);
   if (sm && !sm.mode && !state.demo) add({ id: 'schedule-legacy', type: 'order', text: NAMES.ui.schedLegacyTodo, milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' });
   else if (scheduleStale(sm, rhythmOf(state))) { const r = rhythmOf(state); add({ id: 'schedule-stale', type: 'order', text: NAMES.t('schedStaleTodo', { t: r.runTime }), milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' }); }
+  if (sm && sm.mode === 'stopped' && !state.demo) add({ id: 'schedule-cleanup', type: 'order', text: NAMES.ui.schedCleanupTodo, milestoneId: '', milestone: '', rec: NAMES.ui.schedRemoveAgain, due: '', askedAt: sm.stoppedAt || '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' });
   const lastSchedule = (Array.isArray(state.runs) ? state.runs : []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop();
   const certAt = (readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null) || {}).certifiedAt || '';
   if (lastSchedule && lastSchedule.skipReason === 'adapterVersionChanged' && !(certAt && new Date(certAt) > new Date(lastSchedule.startedAt))) add({ id: 'schedule-recertify', type: 'order', text: NAMES.ui.schedRecertifyTodo, milestoneId: '', milestone: '', rec: NAMES.ui.schedRecertify, due: '', askedAt: lastSchedule.startedAt || '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' });
