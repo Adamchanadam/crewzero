@@ -27,7 +27,7 @@ try {
 
   const daily = run(['--register']);
   const mark = read(markFile);
-  ok('批准每日開工只寫 server 授權標記，全新安裝完全不碰系統排程', daily.status === 0 && mark && mark.mode === 'server' && mark.cadence === 'daily' && mark.runTime === '21:00' && mark.approvedAt && mark.autostart && mark.autostart.enabled === false && calls().some(a => /Unregister-ScheduledTask/.test(a.at(-1))) && calls().length === 0, { out: daily.stdout, mark, calls: calls() });
+  ok('批准每日開工只寫 server 授權標記，全新安裝完全不碰系統排程', daily.status === 0 && mark && mark.mode === 'server' && mark.cadence === 'daily' && mark.runTime === '21:00' && mark.approvedAt && mark.autostart && mark.autostart.enabled === false && calls().length === 0, { out: daily.stdout, mark, calls: calls() });
 
   const status0 = run(['--status']), json0 = JSON.parse(status0.stdout.split(/\r?\n/)[0]);
   ok('狀態第一行有 mode、登入啟動、帳本上次結果和下次時間', status0.status === 0 && json0.ok === true && json0.mode === 'server' && json0.autostart.enabled === false && json0.lastRun === null && !!json0.next, status0.stdout);
