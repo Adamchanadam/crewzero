@@ -147,6 +147,11 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
 .phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
 .help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
+.help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
+.tool-more{position:relative}.tool-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center}.tool-more>summary::-webkit-details-marker{display:none}
+.tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:128px;padding:8px;background:#14161c;border:1px solid var(--line);border-radius:10px}.tool-menu .btn{width:100%;justify-content:center}
+.btn.link.q-help{color:var(--muted);text-decoration:none;font-size:var(--fs-label);font-weight:400;margin-left:auto}.btn.link.q-help:hover:not(:disabled){color:var(--text,#e8e6e3);text-decoration:underline}
+.tools-label{margin:20px 0 -2px;color:var(--muted);font-size:var(--fs-label);letter-spacing:.08em}
 .layer:after,.panel:after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);pointer-events:none}
 body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
 @keyframes cardin{from{transform:translateY(10px) scale(.992)}to{transform:none}}
@@ -211,9 +216,12 @@ body.paused .bg *{animation:none!important}
   h1{font-size:var(--fs-page)}
   .mark{width:44px;height:44px}
   .dtop{gap:10px}
-  .metrics{flex-direction:column;gap:6px;margin-left:0;width:100%}
-  .metric{min-width:0}
-  .tool-right{margin-left:0;flex-wrap:wrap}
+  .metrics{gap:10px;margin-left:0;width:100%}
+  .metric{min-width:0;flex:1 1 0}
+  .metric small{display:none}
+  .metric strong{font-size:var(--fs-page)}
+  .tool-right{margin-left:0;width:100%;justify-content:flex-end}
+  .tool-right .live{margin-right:auto}
   .layer{padding:14px 14px}
   .btn{height:44px}
   .btn.small{height:36px}
@@ -231,6 +239,8 @@ body.paused .bg *{animation:none!important}
   .toast{bottom:120px}
 }
 @media (max-width:600px){.pair-modal{padding:0}.pair-modal .layer{width:100%;min-height:100vh;border:0;border-radius:0;display:flex;flex-direction:column;justify-content:center}.pair-qr{width:220px;height:220px}.btn{min-height:44px}.btn.small{min-height:36px}.phone-bar .btn{width:100%;margin-left:0}}
+.help-modal{place-items:stretch end;padding:0;background:rgba(0,0,0,.3)}.help-modal>.layer{width:min(400px,100%);height:100%;margin:0;border-width:0 0 0 1px;border-radius:0;overflow:auto}
+@media (max-width:600px){.help-modal{place-items:end stretch}.help-modal>.layer{display:block;width:100%;height:auto;min-height:0;max-height:85vh;border-width:1px 0 0;border-radius:14px 14px 0 0}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 `;
   // 共用樣式放喺最前，頁面自己嘅樣式（包括手機版調整）喺後面可以覆蓋
@@ -330,18 +340,30 @@ body.paused .bg *{animation:none!important}
     return el('div', { cls: 'toolbar' }, nav(cur, counts),
       el('div', { cls: 'tool-right' }, liveBadge(),
         el('button', { type: 'button', cls: 'btn small', id: 'open-help', onclick: function () { helpDialog(cur); } }, U.helpOpen),
+        toolMore()));
+  }
+  // 輔助工具收入「更多」，頁頭只留主線入口同求助；重畫頁頭時保持開關狀態
+  function toolMore() {
+    var box = el('details', { cls: 'tool-more', id: 'tool-more' }, el('summary', { cls: 'btn small' }, U.toolMore),
+      el('div', { cls: 'tool-menu' },
         el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
         el('button', { type: 'button', cls: 'btn small', id: 'pause', 'aria-pressed': ST.paused ? 'true' : 'false', onclick: togglePause }, ST.paused ? D.resume : D.pause)));
+    box.open = !!ST.moreOpen;
+    box.addEventListener('toggle', function () { ST.moreOpen = box.open; });
+    return box;
   }
+  document.addEventListener('click', function (e) {
+    var box = document.getElementById('tool-more');
+    if (box && box.open && !box.contains(e.target)) box.open = false;
+  });
   function helpDialog(page) {
     var opener = document.getElementById('open-help');
     var modal = el('div', { cls: 'pair-modal help-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title', id: 'help-modal' });
     var close = function () { modal.remove(); if (opener) opener.focus(); };
-    var about = el('section', { cls: 'layer' }, el('h2', { id: 'help-title' }, U.helpTitle),
-      el('h3', { class: 'layer-title' }, U.helpAbout), el('p', null, U['help_' + page] || U.help_pending));
-    var next = el('section', { cls: 'layer', id: 'help-next' }, el('h3', { class: 'layer-title' }, U.helpNext));
+    var about = el('div', { cls: 'help-part' }, el('h3', { class: 'layer-title' }, U.helpAbout), el('p', null, U['help_' + page] || U.help_pending));
+    var next = el('div', { cls: 'help-part', id: 'help-next' }, el('h3', { class: 'layer-title' }, U.helpNext));
     var note = el('p', { cls: 'small help-note', id: 'help-note', 'aria-live': 'polite' });
     var input = el('textarea', { id: 'help-text', rows: '4', maxlength: '2000', placeholder: U.helpText, 'aria-label': U.helpAskAI });
     var submit = el('button', { type: 'button', cls: 'btn primary', id: 'help-send', onclick: submitHelp }, U.helpSend);
@@ -360,11 +382,15 @@ body.paused .bg *{animation:none!important}
         .then(function () { return send('/api/status', { cache: 'no-store' }).catch(function () { return null; }); })
         .then(showSent, function (e) { submit.disabled = false; note.textContent = why(e); });
     }
-    modal.append(el('section', { cls: 'layer' }, about, next, el('h3', { class: 'layer-title' }, U.helpAskAI), input, note,
-      el('div', { cls: 'pair-actions' }, submit, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
+    // 輸入欄平時收起：先講要做的一件事，真係卡住先寫
+    var askBox = el('div', { cls: 'help-part', id: 'help-ask-box' }, el('h3', { class: 'layer-title' }, U.helpAskAI), input, note, el('div', { cls: 'pair-actions' }, submit));
+    askBox.hidden = true;
+    var askOpen = el('button', { type: 'button', cls: 'btn link', id: 'help-ask', onclick: function () { askBox.hidden = false; askOpen.hidden = true; input.focus(); } }, U.helpAskOpen);
+    modal.append(el('section', { cls: 'layer' }, el('h2', { id: 'help-title' }, U.helpTitle), next, about, askOpen, askBox,
+      el('div', { cls: 'pair-actions' }, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
     modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
     modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-    document.body.append(modal); input.focus();
+    document.body.append(modal); askOpen.focus();
     send('/api/home', { cache: 'no-store' }).then(function (home) {
       var card = home && home.card;
       if (!card) { next.append(el('p', null, U.helpNoStep)); return; }

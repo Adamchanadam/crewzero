@@ -355,7 +355,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       (st.helpInFlight || []).forEach(function (h) { if (h.packId) pendingHelp[h.packId] = true; });
       V.home = home;
       todo.forEach(function (t, i) { rank[t.id] = i; });
-      open.sort(function (a, b) { return (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
+      // 創辦人主動求助的回覆排最前；其餘按待決事項次序
+      open.sort(function (a, b) { return ((b.isHelp ? 1 : 0) - (a.isHelp ? 1 : 0)) || (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
       V.status = st; checkInstance(st);
       // 第一次打開（未有公司概覽）：直接去交資料
       if ((!st.company || !st.company.ready) && !open.length) { location.replace('#/intake'); return; }
@@ -381,7 +382,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           return h('div', { class: 'row' + (t.overdueDays ? ' overdue' : ''), 'data-todo': t.id, 'data-type': t.type }, h('div', null, h('div', { class: 't' }, h('span', { class: 'ic', 'aria-hidden': 'true' }, N.TODO_ICON[t.type] || '◆'), ' ', N.fix(p ? p.title : t.text)),
             h('div', { class: 'small muted' }, [N.dash['ty_' + t.type] || '', t.milestone, p ? p.open + '／' + p.total + ' ' + N.ui.unanswered : '', when].filter(Boolean).join(' · '), t.overdueDays ? ' ' : null, t.overdueDays ? tag(N.dash.overdueDays.replace('{n}', t.overdueDays), 'eff') : null)),
             h('div', null,
-              t.kind === 'overview' ? h('a', { class: 'btn primary', href: '/proofread.html' }, N.ui.goConfirm) : t.kind === 'schedule' ? h('a', { class: 'btn primary', href: t.href }, N.ui.schedGoSystem) : h('a', { class: 'btn primary', href: '#/ask/' + t.id }, T('answerN', { n: Math.min(3, p ? p.open : 1) })),
+              t.kind === 'overview' ? h('a', { class: 'btn', href: '/proofread.html' }, N.ui.goConfirm) : t.kind === 'schedule' ? h('a', { class: 'btn', href: t.href }, N.ui.schedGoSystem) : h('a', { class: 'btn', href: '#/ask/' + t.id }, T('answerN', { n: Math.min(3, p ? p.open : 1) })),
               staleHelp(t, p, pendingHelp)));
         })) : null;
       var companyCard = h('section', { class: 'layer accent' + (c.confirmed ? ' ok' : '') },
@@ -406,7 +407,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       // 交要求：改路線、臨時工作；寫一兩句，AI 擬成問題等你確認先做
       var reqCard = h('section', { class: 'layer', id: 'req-card' }, h('span', { class: 'eyebrow' }, N.ui.reqTitle),
         h('p', { class: 'guide' }, '公司以外發生了真實的事（例如見了伙伴、對方答應或拒絕），請按「' + N.ui.reqEvent + '」；如需調整里程碑次序、新增一站，或請 AI 處理一項里程碑以外的工作，請寫下一兩句。AI 會擬成問題供你確認，確認後方會生效。'),
-        h('div', { class: 'foot', style: 'justify-content:flex-start' }, h('a', { class: 'btn primary', href: '#/request/event', id: 'req-event' }, N.ui.reqEvent), h('a', { class: 'btn', href: '#/request/order', id: 'req-order' }, N.ui.reqOrder), h('a', { class: 'btn', href: '#/request/adhoc', id: 'req-adhoc' }, N.ui.reqAdhoc)));
+        h('div', { class: 'foot', style: 'justify-content:flex-start' }, h('a', { class: 'btn' + (open.length ? '' : ' primary'), href: '#/request/event', id: 'req-event' }, N.ui.reqEvent), h('a', { class: 'btn', href: '#/request/order', id: 'req-order' }, N.ui.reqOrder), h('a', { class: 'btn', href: '#/request/adhoc', id: 'req-adhoc' }, N.ui.reqAdhoc)));
       var practiceCard = h('section', { class: 'layer', id: 'practice-card' }, h('span', { class: 'eyebrow' }, N.ui.yourActions + ' · ' + N.ui.practice),
         h('p', { class: 'guide' }, '需要親身會面？可先與 AI 模擬的對方練習一次，練習後提供覆盤及會面卡（練習不算證據）。'),
         h('div', { id: 'practice-actions' }, h('p', { class: 'empty' }, '讀取中……')), h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceAll)));
@@ -417,12 +418,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var debateCard = h('section', { class: 'layer', id: 'debate-card' }, h('span', { class: 'eyebrow' }, N.ui.debate),
         h('p', { class: 'guide' }, '請 AI 分藍方、紅方、裁判辯論你的生意、策略、定價或伙伴提案；完場後把批評轉成轉強卡，由你決定採用。辯論結果不算證據。'),
         h('div', { id: 'debate-latest' }, h('p', { class: 'empty' }, '讀取中……')),
-        h('div', { class: 'foot', style: 'justify-content:flex-start' }, h('a', { class: 'btn primary', href: '#/debate/new', id: 'hub-debate-new' }, N.ui.debateNew), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll)));
+        h('div', { class: 'foot', style: 'justify-content:flex-start' }, h('a', { class: 'btn', href: '#/debate/new', id: 'hub-debate-new' }, N.ui.debateNew), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll)));
       get('/api/debate').then(function (d) { var box = $('#debate-latest'); if (!box) return; box.replaceChildren(); var m = d.matches[d.matches.length - 1];
         if (!m) { box.append(h('p', { class: 'empty' }, '未有辯論。')); return; }
         box.append(h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.dash.matchN.replace('{n}', m.n) + ' · ' + (m.topic.title || N.dash['tp_' + m.topic.type])), h('div', { class: 'small muted' }, (N.dash['ph_' + m.phase] || m.phase) + (m.score ? ' · ' + DD.vStand + ' ' + m.score.standing + '／' + DD.vHurt + ' ' + m.score.wounded + '／' + DD.vFall + ' ' + m.score.fallen : ''))),
           h('a', { class: 'btn' + (['done', 'adopt', 'failed'].indexOf(m.phase) >= 0 ? ' primary' : ''), href: '#/debate/' + m.id, id: 'hub-debate-match' }, '查看'))); }).catch(function () { });
-      setApp(head('pending', st), sinceRow(home), aiBlock(st), todayCard(home), main, others, practiceCard, debateCard, companyCard, reqCard, aiCard,
+      // 有待決事項時，首張待決事項就是今日要做的事，不再另放一張主卡
+      var todayIsAnswer = open.length && home && home.card && home.card.key === 'daily' && !home.firstWeekDone;
+      setApp(head('pending', st), sinceRow(home), aiBlock(st), todayIsAnswer ? null : todayCard(home), main, others, h('p', { class: 'tools-label' }, N.ui.otherFeatures), practiceCard, debateCard, companyCard, reqCard, aiCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
       DESK.title('pending', open.length ? '（' + open.length + '）' : '');
       V.pollTimer = setTimeout(showHub, st.busy ? 3000 : 8000);
@@ -988,7 +991,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           h('button', { type: 'button', class: 'btn primary', onclick: function () { var t = ta.value.trim(); if (t) setAns(q, t); else ta.focus(); } }, N.ui.useCustom),
           h('button', { type: 'button', class: 'btn', onclick: function () { S.open = null; renderAsk(); } }, N.ui.collapse)));
       } else if (!P.actionConfirm) {
-        body.append(h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () { S.open = key; renderAsk({ sel: '#q-' + q.id + ' textarea' }); } }, N.ui.custom)));
+        var customBtn = h('button', { type: 'button', class: 'btn', onclick: function () { S.open = key; renderAsk({ sel: '#q-' + q.id + ' textarea' }); } }, N.ui.custom);
       }
     }
     var help = S.help[q.id] || (S.help[q.id] = {});
@@ -1000,7 +1003,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         .then(function () { help.sending = false; help.sent = true; helpBtn.textContent = N.ui.helpAsked; helpBtn.disabled = true; helpNote.textContent = ''; })
         .catch(function (e) { help.sending = false; help.error = why(e); helpBtn.disabled = false; helpNote.textContent = help.error; });
     } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
-    body.append(h('div', { class: 'foot q-help-line' }, helpBtn, helpNote));
+    body.append(h('div', { class: 'foot q-help-line' }, customBtn || null, helpBtn, helpNote));
     c.append(body);
     return c;
   }
@@ -1030,7 +1033,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         P.afterConfirm ? h('span', null, ' · ' + N.ui.afterConfirm + '：' + P.afterConfirm) : null),
       st.total ? h('div', { class: 'hero-act' },
         h('button', { type: 'button', class: 'btn primary big', id: 'go-main', onclick: openModal }, mainLabel()),
-        st.left ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null,
+        st.left && mainLabel() !== N.ui.oneByOne ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null,
         P.rhythm && P.rhythm.kind === 'interview' && P.questions.some(function (q) { return !A[q.id] && q.noChange; }) ? h('button', { type: 'button', class: 'btn', id: 'all-same', title: N.ui.interviewAllSameNote, onclick: allSame }, P.questions.some(function (q) { return !A[q.id] && !q.noChange; }) ? N.ui.interviewAllSameRest : N.ui.interviewAllSame) : null) : null);
     var list = h('section', { class: 'cards' });
     shown().forEach(function (q, i) { list.append(card(q, i)); });

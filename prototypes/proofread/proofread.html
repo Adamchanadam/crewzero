@@ -792,8 +792,23 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     } else {
       foot.append(h('button', { type: 'button', class: 'btn small', onclick: function () { S.open = key; S.focus = { sel: '#dq-' + qDom(id) + ' textarea' }; render(); } }, N.ui.custom));
     }
+    foot.append(qHelp(id, e.ask || e.label));
     card.append(foot);
     return card;
+  }
+  // 輔助入口：每題一個低調的「我不明白這題」，一按交給 AI，不用另外打字
+  function qHelp(id, ask) {
+    S.help = S.help || {};
+    var help = S.help[id] || (S.help[id] = {});
+    var btn = h('button', { type: 'button', class: 'btn link q-help', disabled: help.sent ? true : null, onclick: function () {
+      if (help.sent || help.sending) return;
+      help.sending = true; btn.disabled = true; btn.textContent = N.ui.sending;
+      fetch('/api/intake', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'note', type: 'help', text: T('helpQuestionText', { q: ask }), context: { page: 'overview', ask: ask } }) })
+        .then(function (r) { if (!r.ok) throw new Error('help'); help.sent = true; btn.textContent = N.ui.helpAsked; })
+        .catch(function () { btn.disabled = false; btn.textContent = N.ui.helpNotClear; announce('未能交出，請再試一次。'); })
+        .then(function () { help.sending = false; });
+    } }, help.sent ? N.ui.helpAsked : N.ui.helpNotClear);
+    return btn;
   }
   function statusCard(i) {
     var st = D.glance.status, items = statusItems();
@@ -813,8 +828,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           return h('button', { type: 'button', class: 'seg' + (v === g.key ? ' on' : ''), title: g.hint, onclick: function () { setVal(it.id, g.key, 'q~' + it.id); } }, g.text);
         })));
     });
-    if (!answered('@status')) card.append(h('div', { class: 'dq-foot' },
-      h('button', { type: 'button', class: 'q-ok', onclick: function () { acceptQ('@status'); } }, N.ui.allNotYet)));
+    card.append(h('div', { class: 'dq-foot' },
+      answered('@status') ? null : h('button', { type: 'button', class: 'q-ok', onclick: function () { acceptQ('@status'); } }, items.some(function (it) { return cur(it.id) !== 'none'; }) ? N.ui.allAsShown : N.ui.allNotYet),
+      qHelp('@status', st.ask || '以下事項是否已經發生？')));
     return card;
   }
   function restBlock() {

@@ -100,12 +100,10 @@ try {
   ok('其他待決事項：同伺服器次序一致', JSON.stringify(rows.map(r => r.id)) === JSON.stringify(want.slice(1)), { rows: rows.map(r => r.id), want });
   ok('每項有類型圖示同類型名稱', rows.every(r => r.ic === N.TODO_ICON[r.type] && r.t.includes(N.dash['ty_' + r.type])), rows);
   ok('試行到期：標「已逾期 2 日」', /已逾期 2 日/.test((rows.find(r => r.id === 'ask-trial') || {}).t || ''), rows.find(r => r.id === 'ask-trial'));
-  const card = await ev(`(document.querySelector('#today-card')||{}).dataset.key`);
-  ok('今日要做的事卡：已確認、未有首次訪問日期 → 等候首次訪問', card === 'waitInterview', { card, text: await text('#today-card') });
-  // 未有日期時要直接顯示「稍後」，不可留下空白。
+  // 首次訪問未到但有待決事項：今日主線是作答，首張待決事項就是主卡，不另放今日卡
   const sfB = path.join(DB, 'ledger', 'state.json');
-  const home = (await api(PB, '/api/home')).j, stIv = ((fs.existsSync(sfB) ? JSON.parse(fs.readFileSync(sfB, 'utf8')) : {}).interviews || {}).nextOn || '';
-  ok('今日要做的事卡：未有下次訪問日期時以「稍後」代替日期', home.card.date === stIv && !/（）|\{date\}/.test(await text('#today-do')) && (stIv || (await text('#today-do')).includes('稍後')), { date: home.card.date, stIv, text: await text('#today-do') });
+  const home = (await api(PB, '/api/home')).j;
+  ok('有待決事項而首次訪問未到：指引改為處理待決事項並連到首項，頁面不另放今日卡', home.card.key === 'daily' && home.card.href === '#/ask/' + want[0] && !(await ev(`!!document.querySelector('#today-card')`)), { card: home.card });
   fs.mkdirSync(path.dirname(sfB), { recursive: true }); const stateB = fs.existsSync(sfB) ? JSON.parse(fs.readFileSync(sfB, 'utf8')) : {}; stateB.interviews = { ...(stateB.interviews || {}), nextOn: '2099-01-05' }; fs.writeFileSync(sfB, JSON.stringify(stateB, null, 2));
   pack(DB, 'ask-first-interview', { todoType: 'interview', due: '2099-01-05' }, ago(1));
   await send('Page.reload'); await sleep(1800);

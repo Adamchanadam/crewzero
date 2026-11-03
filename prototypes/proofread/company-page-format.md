@@ -2,7 +2,7 @@
 
 資料必須是有效 JSON，`format` 以 `startup-os.proofread/` 開頭。`page` 包含 `id`、`kind`、`revision`、`preparedAt`，其餘可有 `nextAskOn`、`latestUntil`、`minutes`。`company` 包含 `name`、`initials`、`oneLiner`。`sources` 是來源清單，每項有 `id`、`title`，可有 `date`、`note`。如工作資料夾有 `biz.md`，按其中用字寫欄位內容。
 
-`glance.rows` 是目標及下一步清單；每項是可改項目，期限可放在 `due` 可改項目。`glance.status` 可有 `title`、`prepared`、`items`；`prepared` 係一句講創辦人已經準備好邊啲資料，例如「已準備好：商業計劃（10 月 1 日版）、農場訪問紀錄」，唔好淨係寫日子，冇就唔寫；每項是 `kind: "grade"` 的可改項目，值只能是 `none`、`said`、`did`、`paid`。`decide.items` 是首屏項目編號清單；`@status` 代表現況，預設次序為現況、G5、G1。首屏三項（現況、G5、G1 嗰兩項）一定要寫 `ask`（白話一句問題，例如「下一步對外做乜？」「今季要去到邊？」）同 `judge`（一句判斷標準）；`glance.status` 一定要寫 `judge`（例如「冇發生就唔使撳；撳咗嘅再揀去到幾盡。」）。`label` 由畫面按格式決定，唔使花心機。
+`glance.rows` 是目標及下一步清單；每項是可改項目，期限可放在 `due` 可改項目。`glance.status` 可有 `title`、`prepared`、`items`；`prepared` 係一句講創辦人已經準備好邊啲資料，例如「已準備好：商業計劃（10 月 1 日版）、農場訪問紀錄」，唔好淨係寫日子，冇就唔寫；每項是 `kind: "grade"` 的可改項目，值只能是 `none`、`said`、`did`、`paid`。`decide.items` 是首屏項目編號清單；`@status` 代表現況，預設次序為現況、G5、G1。首屏三項（現況、G5、G1 嗰兩項）一定要寫 `ask`（白話一句問題，例如「下一步對外做乜？」「今季要去到邊？」）同 `judge`（一句判斷標準；講「公司以外」時保留呢個字眼，或者寫成「你以外」，唔好將對方名字代入，否則會同建議答案矛盾）；`glance.status` 一定要寫 `judge`（例如「冇發生就唔使撳；撳咗嘅再揀去到幾盡。」）。`label` 由畫面按格式決定，唔使花心機。
 
 `path.milestones` 至少一項，每項有 `id`、`short`、`why`；可改項目 `event`、`actor`、`witness`、`proof`、`deliver`、`owner`、`target` 分別代表事件、決策者、見證人、證明、完成條件、負責人及目標日期；`depth` 可有五個可改項目，依次代表對方同意原因、決策方式和時間、前置條件、失敗原因、日期或數字依據。`watch` 是 `{label,value}` 清單。`beyondGoal` 標示目標以後的里程碑。
 

@@ -112,9 +112,13 @@ try {
   await cdp.go(BASE + '/', 1280, 2200);
   const headerHelp = await cdp.ev('(()=>{const b=document.getElementById("open-help");return b?{first:document.querySelector(".tool-right button")===b,text:b.textContent}:null})()');
   ok('Founder Desk 頁頭最前有「需要幫助」按鈕', headerHelp && headerHelp.first && headerHelp.text === N.ui.helpOpen, headerHelp);
+  const tools = await cdp.ev('(()=>({direct:[...document.querySelectorAll(".tool-right > button")].map(b=>b.id),inMore:[...document.querySelectorAll("#tool-more .tool-menu button")].map(b=>b.id),open:document.getElementById("tool-more").open}))()');
+  ok('頁頭只直接顯示求助，其餘工具收入「更多」', tools.direct.join() === 'open-help' && tools.inMore.join() === 'open-phone,refresh-now,fx,pause' && !tools.open, tools);
   await cdp.click('#open-help');
-  const dialog = await cdp.ev('(()=>{const d=document.getElementById("help-modal");return d?{text:d.innerText,focus:document.activeElement&&document.activeElement.id}:null})()');
-  ok('頁頭有「需要幫助」：對話框自動聚焦輸入欄，說明不含技術術語', dialog && dialog.focus === 'help-text' && !/PNG|MB|埠|伺服器|JSON|run|sandbox/i.test(dialog.text), dialog);
+  const dialog = await cdp.ev('(()=>{const d=document.getElementById("help-modal"),b=d&&d.querySelector(".layer").getBoundingClientRect();return d?{text:d.innerText,focus:document.activeElement&&document.activeElement.id,boxHidden:document.getElementById("help-ask-box").hidden,right:Math.round(b.right),left:Math.round(b.left)}:null})()');
+  ok('頁頭有「需要幫助」：側欄靠右不遮整頁，輸入欄先收起，說明不含技術術語', dialog && dialog.focus === 'help-ask' && dialog.boxHidden && dialog.right === 1280 && dialog.left > 800 && !/PNG|MB|埠|伺服器|JSON|run|sandbox/i.test(dialog.text), dialog);
+  await cdp.click('#help-ask');
+  ok('按「仍然卡住」才打開輸入欄並聚焦', await cdp.ev('!document.getElementById("help-ask-box").hidden&&document.activeElement.id==="help-text"'), null);
   await cdp.type('#help-text', '我不知道這一步應該怎樣開始。');
   await cdp.click('#help-send');
   const noAi = await waitFor(async () => {
@@ -135,6 +139,7 @@ try {
   await cdp.go(BASE + '/', 1280, 1300);
   await cdp.click('#open-help');
   await cdp.ev('window.__helpFetch=window.fetch;window.fetch=function(u,o){return String(u).includes("/api/intake")?Promise.resolve(new Response(JSON.stringify({error:"invalid",message:"請用一句話寫下你卡住的地方。"}),{status:400,headers:{"Content-Type":"application/json"}})):window.__helpFetch.call(this,u,o)}');
+  await cdp.click('#help-ask');
   await cdp.type('#help-text', '模擬錯誤。');
   await cdp.click('#help-send');
   const uiError = await waitFor(async () => {

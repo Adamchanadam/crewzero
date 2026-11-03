@@ -33,6 +33,7 @@ try {
   await chrome.go(BASE + '/#/setup');
   const setupText = await waitFor(() => chrome.ev(`document.body.innerText`));
   ok('設定頁說明 AI 只處理 CrewZero 的工作', String(setupText || '').includes('只處理 CrewZero 的工作'), setupText);
+  await chrome.ev(`document.querySelector('#tool-more').open=true`);
   await chrome.click('#open-phone');
   await chrome.click('.pair-modal .btn.primary.big');
   await waitFor(() => chrome.ev(`!!document.querySelector('.pair-qr')`));
@@ -73,6 +74,8 @@ try {
   ok('系統頁說明公司資料只存放在這部電腦', String(systemText || '').includes('公司資料只存放在這部電腦。其他人要使用，請在這部電腦的瀏覽器開啟。'), systemText);
 
   await chrome.go(BASE + '/#/setup');
+  await waitFor(() => chrome.ev(`!!document.querySelector('#tool-more')`));
+  await chrome.ev(`document.querySelector('#tool-more').open=true`);
   await chrome.click('#open-phone');
   await chrome.click('.pair-modal .btn.primary.big');
   const qrReady = await waitFor(() => chrome.ev(`!!document.querySelector('.pair-qr')`));

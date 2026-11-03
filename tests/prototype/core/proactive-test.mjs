@@ -169,14 +169,14 @@ try {
   }, 5000);
   await cdp.go(BASE + '/?stale=refresh#/ask/ask-stale');
   await cdp.send('Page.reload'); await sleep(1600);
-  const afterRefreshHelp = await cdp.ev('(()=>{const b=document.querySelector(".q-help-line button");return b?{text:b.textContent,disabled:b.disabled}:null})()');
+  const afterRefreshHelp = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('重新載入題目頁後，處理中的求助仍顯示已交出並不能重複送出', !!helpWaiting && afterRefreshHelp && afterRefreshHelp.text === N.ui.helpAsked && afterRefreshHelp.disabled, { helpWaiting, afterRefreshHelp });
   writeJson(statusFile, { runs: [
     { id: 'R-help-resumed', kind: 'note', noteType: 'help', state: 'resumed', helpForPackId: 'ask-stale', helpForRunRef: '', startedAt: new Date().toISOString(), steps: [] },
     { id: 'R-help-finished', kind: 'note', noteType: 'help', state: 'done', retryOf: 'R-help-resumed', helpForPackId: 'ask-stale', helpForRunRef: '', startedAt: new Date().toISOString(), steps: [] }
   ] });
   await cdp.send('Page.reload'); await sleep(1600);
-  const afterCompletionHelp = await cdp.ev('(()=>{const b=document.querySelector(".q-help-line button");return b?{text:b.textContent,disabled:b.disabled}:null})()');
+  const afterCompletionHelp = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('續做完成後，原題的求助入口會恢復可用', afterCompletionHelp && afterCompletionHelp.text === N.ui.helpNotClear && !afterCompletionHelp.disabled, afterCompletionHelp);
 
   writeJson(lastSeenFile, { at: ago(4), version: 'test' });

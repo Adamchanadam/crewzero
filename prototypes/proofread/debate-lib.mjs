@@ -439,10 +439,10 @@ export function responsePack(v) {
   const qs = kms.map((k, i) => {
     refs['v' + (i + 1)] = k.ref;
     const row = v.rows.find(r => r.claim.id === k.ref);
-    return { id: 'v' + (i + 1), priority: i + 1, ask: `【${KM_LABEL[k.kind] || k.kind}】${clip(k.text, 60)}${row && row.verdict ? `——裁判判「${row.verdict.verdict}」` : ''}。你同意裁判嗎？`, kind: 'choice',
+    return { id: 'v' + (i + 1), priority: i + 1, ask: `【${KM_LABEL[k.kind] || k.kind}】${clip(k.text, 60).replace(/[。．.]+$/, '')}${row && row.verdict ? `——裁判判「${row.verdict.verdict}」` : ''}。你同意裁判嗎？`, kind: 'choice',
       options: [{ text: '同意裁判', rec: true }, { text: '不同意' }], value: '同意裁判', why: clip(row && row.verdict ? row.verdict.reason : k.detail || '按裁判判定', 120) };
   });
-  qs.push({ id: 'ev', priority: 4, ask: `就「${clip(name, 24)}」（${when(v.startedAt)}）這場，你手上有沒有真實證據可以推翻某條攻擊？如有，請寫一句：是誰、做過甚麼。`, kind: 'text', value: '沒有', why: '只有真實客戶、伙伴或付款者的行為才算證據；你確認後才會記錄，AI 不會自行更改證據級。' });
+  qs.push({ id: 'ev', priority: 4, ask: `就「${clip(name, 24)}」（${when(v.startedAt)}）這場，你手上有沒有真實證據可以推翻某條攻擊？如有，請寫一句：是誰、做過甚麼。`, kind: 'text', value: '沒有', why: '只有公司以外的人實際做了的事才算證據；你確認後才會記錄，AI 不會自行更改證據級。' });
   qs.push({ id: 'evg', priority: 5, ask: `如果有，這個證據去到哪一級？（${when(v.startedAt)} 場）`, kind: 'choice', options: [{ text: NAMES.dash.ev_1, rec: true }, { text: NAMES.dash.ev_2 }, { text: NAMES.dash.ev_3 }], value: NAMES.dash.ev_1, why: '按實際發生的事選擇；沒有證據便無須理會。' });
   qs.push({ id: 'ch', priority: 6, ask: `你覺得裁判判錯了哪一條？為甚麼？（${when(v.startedAt)} 場；沒有就留空）`, kind: 'text', value: '沒有', why: '寫了就會請裁判重判（最多三條，一場一次）；你的原話會原文交給裁判。' });
   return { format: 'startup-os.ask/0.1', title: clip('紅藍對打回應：' + name, 60), context: '裁判已判定。請對三個關鍵時刻表態；不答就按裁判判定開始轉強。辯論結果不算證據。',
@@ -483,6 +483,6 @@ export function adoptionPacks(v) {
 }
 export function evidencePack(v, text, grade) {
   return { format: 'startup-os.ask/0.1', title: clip('確認真實證據：' + (v.topic.title || '紅藍對打'), 60), context: '你在辯論回應寫了一個真實證據。確認後記錄為現實輸入；證據級只由你確認先算。',
-    questions: [{ id: 'confirm', priority: 1, ask: `你寫的證據：「${clip(text, 80)}」（${NAMES.evName(grade)}）。確認記錄為真實證據嗎？`, kind: 'choice', effect: 'now', options: [{ text: '確認記錄', rec: true }, { text: '暫不記錄' }], value: '確認記錄', why: '只有真實客戶、伙伴或付款者的行為先算證據。' }],
+    questions: [{ id: 'confirm', priority: 1, ask: `你寫的證據：「${clip(text, 80)}」（${NAMES.evName(grade)}）。確認記錄為真實證據嗎？`, kind: 'choice', effect: 'now', options: [{ text: '確認記錄', rec: true }, { text: '暫不記錄' }], value: '確認記錄', why: '只有公司以外的人實際做了的事才算證據。' }],
     debate: { matchId: v.id, kind: 'evidence', text: clip(text, 300), grade } };
 }

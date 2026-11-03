@@ -207,6 +207,7 @@ try {
 
   /* ---------- G. 暫停動效、減少動態、特效開關 ---------- */
   await c.go(B + '/dashboard', 1440, 3500);
+  await c.ev(`document.querySelector('#tool-more').open=true`);
   await c.click('#pause'); await sleep(900);
   o = await orb();
   ok('暫停動效：body.paused、零粒子、零移動（靜態線保留）', await c.ev(`document.body.classList.contains('paused')`) && o.pts === 0 && o.moving === 0 && o.lit >= 1, o);

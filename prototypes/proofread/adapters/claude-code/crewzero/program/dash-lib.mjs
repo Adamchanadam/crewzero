@@ -440,12 +440,14 @@ export function guideCard(text, ds) {
     const m = cur && /^-\s*(今日要做的事|入口|不會自動發生)：(.+)$/.exec(line.trim());
     if (m) sec[cur][{ 今日要做的事: 'today', 入口: 'button', 不會自動發生: 'notAuto' }[m[1]]] = m[2].trim();
   }
-  const s = sec[ds.guide];
+  // 首次訪問未到但已有待決事項：今日主線係作答，唔係等訪問
+  const guide = ds.guide === 'waitInterview' && (ds.todo || []).length ? 'daily' : ds.guide;
+  const s = sec[guide];
   if (!s || !s.today) return null;
   const first = type => (ds.todo || []).find(t => t.type === type);
-  const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', waitInterview: '#/request/event', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: (ds.todo || [])[0] ? (ds.todo[0].kind === 'overview' ? '/proofread.html' : '#/ask/' + ds.todo[0].id) : '' }[ds.guide];
+  const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', waitInterview: '#/request/event', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: (ds.todo || [])[0] ? (ds.todo[0].kind === 'overview' ? '/proofread.html' : '#/ask/' + ds.todo[0].id) : '' }[guide];
   const date = (ds.interviews && ds.interviews.nextOn) || '';
-  return { key: ds.guide, today: String(s.today).replace(/\{date\}/g, /^\d{4}-\d{2}-\d{2}$/.test(date) ? Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8)) + ' 日' : '稍後'), button: s.button || '', notAuto: s.notAuto || '', href, date };
+  return { key: guide, today: String(s.today).replace(/\{date\}/g, /^\d{4}-\d{2}-\d{2}$/.test(date) ? Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8)) + ' 日' : '稍後'), button: s.button || '', notAuto: s.notAuto || '', href, date };
 }
 
 const INBOX_KINDS = ['intake', 'note', 'ask', 'proofread'];

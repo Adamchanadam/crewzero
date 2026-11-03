@@ -341,6 +341,6 @@ export function listPacks(dirs) {
     if (!p || !Array.isArray(p.questions)) return null;
     const a = loadAnswers(dirs, p.id).answers;
     const answered = p.questions.filter(q => a[q.id]).length;
-    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '' };
+    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '', isHelp: !!p.help };
   }).filter(Boolean).sort((x, y) => String(y.askedAt).localeCompare(String(x.askedAt)));
 }
