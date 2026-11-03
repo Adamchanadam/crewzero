@@ -102,7 +102,7 @@ try {
   ok('成頁確認：AI 跟進完成；帳本有里程碑' + (REAL ? '同假設清單' : '（假 AI 範本冇假設清單）'), fin && /✓ 完成/.test(await text('#track')) && nMs > 0 && (!REAL || nAs > 0), { track: (await text('#track')).slice(0, 80), milestones: nMs, assumptions: nAs });
   await shot('06-confirmed.png');
   await c.go(B, 1280, 3000);
-  ok('待決事項主卡出現問題包；今日要做的事已更新', (await has('.hero')) && !!(await text('#today-card')), { hero: await text('.hero'), today: await text('#today-card') });
+  ok('首頁最頂是下一個對外動作，「接下來」有問題包', (await has('#next-action')) && (await has('#next-list [data-todo]')), { card: await text('#next-action'), list: await text('#next-list') });
   await shot('07-desk-after-confirm.png');
   if (REAL && spent() > LIMIT) throw new Error('費用已達上限 US$' + LIMIT);
 

@@ -237,7 +237,7 @@ try {
   // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI；基準 7 次，加上必須逐題作答的點擊，零跨產品
   let clicks = 0; const tap = async sel => { await c.click(sel); clicks++; await sleep(900); };
   await c.go(B + '/', 1440, 3500);
-  await tap('.hero a.btn.primary');
+  await tap('#next-list a[href^="#/ask/"]');
   const requiredIds = await c.ev(`(()=>[...document.querySelectorAll('.dq')].filter(card=>card.querySelector('.eff,.conflict')).map(card=>card.id.replace(/^q-/,'')))()`);
   for (const id of requiredIds) await tap('#q-' + id + ' .opt');
   await tap('#go-main');

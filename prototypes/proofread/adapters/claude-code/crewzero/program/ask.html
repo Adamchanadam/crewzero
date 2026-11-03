@@ -58,6 +58,10 @@ details.iq-opt summary{cursor:pointer;font-weight:600}
 .file-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:var(--fs-sub)}
 .file-row span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}
 #intake-err{color:var(--red);margin-top:6px}
+#quick-types .btn.cur{border-color:var(--mint);color:var(--mint)}
+#next-action .foot .in{width:auto;flex:0 1 170px}
+#next-action #next-text{flex:1 1 240px}
+#brain-line{margin:6px 2px}
 .desk-foot{margin:22px 0 0;text-align:right;font-size:var(--fs-sub)}
 .desk-foot a{color:var(--muted)}
 .note-line{font-size:var(--fs-sub);color:var(--muted);margin:8px 0 0}
@@ -146,6 +150,11 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   .cbar-in > .btn{width:100%}
   .prog-top .btn{height:34px;margin-left:auto}
   .m-foot .btn{flex:1 1 40%}
+}
+@media (max-width:390px){
+  #next-action .foot,#quick-input .foot{align-items:stretch}
+  #next-action .foot>.btn,#next-action .foot>.in,#quick-input .foot>.btn,#quick-input .foot>.in{flex:1 1 100%;min-width:0}
+  #quick-input input[type=file]{max-width:100%}
 }
 </style>
 <script src="names.js"></script>
@@ -326,12 +335,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function scene(key) {
     return SCENE[key] ? h('div', { class: 'scene-bg', 'aria-hidden': 'true', style: "background-image:url('/assets/crew-scene-" + SCENE[key] + ".webp')" }) : null;
   }
-  function todayCard(home) {
+  function todayCard(home, quiet) {
     var c = home && home.card; if (!c) return null;
     var fill = function (s) { return String(s || '').replace(/\{date\}/g, c.date ? dayOf(c.date) : '稍後'); };
-    var go = c.href ? h('a', { class: 'btn primary', href: c.href, id: 'today-go' }, c.button) : h('span', { class: 'small muted', id: 'today-wait' }, c.date ? T('todayNotOpen', { d: dayOf(c.date) }) : '');
+    var go = c.href ? h('a', { class: 'btn' + (quiet ? '' : ' primary'), href: c.href, id: 'today-go' }, c.button) : h('span', { class: 'small muted', id: 'today-wait' }, c.date ? T('todayNotOpen', { d: dayOf(c.date) }) : '');
     var body = [h('span', { class: 'eyebrow' }, N.ui.todayTitle),
       h('div', { class: 'row' }, h('div', null, h('div', { class: 't', id: 'today-do' }, fill(c.today)), h('div', { class: 'small muted', id: 'today-not' }, N.ui.todayNotAuto + fill(c.notAuto))), go)];
+    if (quiet) return h('section', { class: 'layer', id: 'today-card', 'data-key': c.key }, body);
     var art = home.firstWeekDone ? null : scene(c.key);
     var card = art ? h('section', { class: 'layer accent with-scene', id: 'today-card', 'data-key': c.key }, h('div', { class: 'scene-body' }, body), art)
       : h('section', { class: 'layer accent', id: 'today-card', 'data-key': c.key }, body);
@@ -346,52 +356,103 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var back = sc.back ? h('div', { class: 'since small', id: 'back-after' }, T('backAfterDays', { n: sc.awayDays, t: sc.back.text }), sc.back.href ? h('a', { class: 'btn small', href: sc.back.href }, sc.back.button || N.ui.goAnswer) : null) : null;
     return h('div', null, back, h('p', { class: 'since small', id: 'since' }, h('b', null, N.dash.since + '（' + dayOf(sc.at) + ' ' + hm(sc.at) + '）：'), parts.length ? parts.join(' · ') : N.dash.sinceNone));
   }
+  function founderOp(op, target, value) {
+    return post('/api/founder-op', { op: op, target: target, value: value || {} }).then(function (result) { toast(op === 'snooze' ? N.ui.snoozeEffect : result.message || N.ui.founderOpSaved); showHub(); }).catch(function (e) { toast(why(e)); });
+  }
+  function todoHref(t) { return t.kind === 'overview' ? '/proofread.html' : t.kind === 'schedule' ? t.href : '#/ask/' + t.id; }
+  function todoRow(t, byId, snoozed, pendingHelp) {
+    var p = byId[t.id], when = t.overdueDays ? null : t.due ? N.dash.todoDue.replace('{d}', dayOf(t.due)) : t.waited ? N.dash.waitedDays.replace('{n}', t.waited) : '';
+    var go = h('a', { class: 'btn', href: todoHref(t) }, t.kind === 'overview' ? N.ui.goConfirm : t.kind === 'schedule' ? N.ui.schedGoSystem : T('answerN', { n: Math.min(3, p ? p.open : 1) }));
+    var pause = t.kind === 'overview' || t.kind === 'schedule' ? null : h('button', { type: 'button', class: 'btn', onclick: function () { founderOp(snoozed ? 'unsnooze' : 'snooze', t.id, snoozed ? {} : { until: isoDay(addDays(new Date(), 7)) }); } }, snoozed ? N.ui.unsnooze : N.ui.snooze);
+    return h('div', { class: 'row' + (t.overdueDays ? ' overdue' : ''), 'data-todo': t.id, 'data-type': t.type }, h('div', null,
+      h('div', { class: 't' }, h('span', { class: 'ic', 'aria-hidden': 'true' }, N.TODO_ICON[t.type] || '◆'), ' ', N.fix(p ? p.title : t.text)),
+      h('div', { class: 'small muted' }, [N.dash['ty_' + t.type] || '', t.milestone, p ? p.open + '／' + p.total + ' ' + N.ui.unanswered : '', when, snoozed && t.snoozedUntil ? N.t('snoozedUntil', { d: dayOf(t.snoozedUntil) }) : ''].filter(Boolean).join(' · '), t.overdueDays ? ' ' : null, t.overdueDays ? tag(N.dash.overdueDays.replace('{n}', t.overdueDays), 'eff') : null)),
+      h('div', { class: 'foot' }, go, pause, snoozed || t.kind !== 'ask' ? null : staleHelp(t, p, pendingHelp)));
+  }
+  function nextActionCard(next, todo, byId) {
+    if (!next) return null;
+    var stale = next.missing || next.cancelledAt || next.completedLink || next.pendingUpdate;
+    var ready = (todo || []).filter(function (item) { return item.forNextAction; })[0], readyPack = ready && byId[ready.id];
+    var readyLine = ready ? h('p', { class: 'small muted' }, h('a', { href: todoHref(ready) }, N.t('nextActionQuestion', { t: N.fix(readyPack ? readyPack.title : ready.text) }))) : null;
+    var suggested = next.suggestion;
+    if (stale) {
+      var text = h('input', { class: 'in', id: 'next-text', maxlength: '200', placeholder: N.ui.nextActionPlaceholder, 'aria-label': N.ui.nextActionPlaceholder }), date = h('input', { class: 'in', id: 'next-date', type: 'date', 'aria-label': N.ui.nextActionDateL });
+      var setNext = function (use) {
+        var value = use || { text: text.value.trim(), date: date.value, milestoneId: suggested ? suggested.milestoneId : '' };
+        if (!value.text) { toast(N.ui.nextActionNeedText); text.focus(); return; }
+        if (!value.date) delete value.date;
+        founderOp('setNext', 'nextAction', value);
+      };
+      return h('section', { class: 'layer accent', id: 'next-action', 'data-state': 'waiting' }, h('span', { class: 'eyebrow' }, N.ui.nextActionTitle), h('h2', { class: 'layer-title' }, N.ui.nextActionWaiting),
+        suggested ? h('p', { class: 'guide' }, N.ui.nextActionSuggest + N.fix(suggested.text)) : null,
+        suggested ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'next-adopt', onclick: function () { setNext({ text: suggested.text, milestoneId: suggested.milestoneId }); } }, N.ui.adoptSuggestion)) : null,
+        readyLine, h('div', { class: 'foot' }, text, date, h('button', { type: 'button', class: 'btn', id: 'next-set', onclick: function () { setNext(); } }, N.ui.setNextAction)));
+    }
+    var reschedule = h('input', { class: 'in', id: 'next-new-date', type: 'date', hidden: true, 'aria-label': N.ui.actionReschedule, value: next.date || '' });
+    var saveDate = h('button', { type: 'button', class: 'btn', id: 'next-save-date', hidden: true, onclick: function () { if (!reschedule.value) { reschedule.focus(); return; } founderOp('reschedule', 'nextAction', { date: reschedule.value }); } }, N.ui.actionSaveDate);
+    var openDate = h('button', { type: 'button', class: 'btn', id: 'next-reschedule', onclick: function () { reschedule.hidden = false; saveDate.hidden = false; openDate.hidden = true; reschedule.focus(); } }, N.ui.actionReschedule);
+    return h('section', { class: 'layer accent', id: 'next-action', 'data-state': next.staleDate ? 'overdue' : 'open' }, h('span', { class: 'eyebrow' }, N.ui.nextActionTitle), h('h2', { class: 'layer-title' }, N.fix(next.text)),
+      h('p', { class: 'small muted' }, [next.milestone, next.date ? N.t('nextActionDate', { d: dayOf(next.date) }) : '', next.staleDate ? N.t('nextActionOverdue', { d: dayOf(next.date) }) : ''].filter(Boolean).join(' · ')), readyLine,
+      h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'next-done', onclick: function () { try { sessionStorage.setItem('crewzero-event-prefill', JSON.stringify({ text: next.text, date: isoDay(new Date()) })); } catch (e) { } location.hash = '#/request/event'; } }, N.ui.actionDone),
+        openDate, reschedule, saveDate, h('button', { type: 'button', class: 'btn', id: 'next-cancel', onclick: function () { founderOp('cancelNext', 'nextAction'); } }, N.ui.actionCancel)));
+  }
+  function quickInput() {
+    var kind = V.quickKind || '', text = h('textarea', { id: 'quick-text', rows: '3', maxlength: '4000', placeholder: N.ui.quickInputPlaceholder, 'aria-label': N.ui.quickInputTitle }), note = h('p', { class: 'small muted', id: 'quick-note', 'aria-live': 'polite' }), date = h('input', { class: 'in', type: 'date', id: 'quick-date', value: isoDay(new Date()), 'aria-label': N.ui.eventDate }), files = h('input', { type: 'file', id: 'quick-files', multiple: true, 'aria-label': N.ui.eventFiles }), eventFields = h('div', { class: 'foot', id: 'quick-event-fields' }, date, files);
+    text.value = V.quickText || '';
+    var dirty = function () { V.hubDirty = !!text.value.trim() || !!(files.files && files.files.length); };
+    text.addEventListener('input', function () { V.quickText = text.value; dirty(); });
+    files.addEventListener('change', dirty);
+    var labels = { event: N.ui.quickEvent, adhoc: N.ui.quickAdhoc, order: N.ui.quickOrder, help: N.ui.quickHelp }, buttons = {};
+    function choose(next) { kind = next; V.quickKind = next; Object.keys(buttons).forEach(function (k) { buttons[k].className = 'btn' + (k === kind ? ' cur' : ''); buttons[k].setAttribute('aria-pressed', k === kind ? 'true' : 'false'); }); eventFields.hidden = kind !== 'event'; }
+    var types = Object.keys(labels).map(function (k) { buttons[k] = h('button', { type: 'button', class: 'btn', id: 'quick-' + k, 'aria-pressed': 'false', onclick: function () { choose(k); } }, labels[k]); return buttons[k]; });
+    choose(kind);
+    var send = h('button', { type: 'button', class: 'btn', id: 'quick-send', onclick: function () {
+      var value = text.value.trim(); if (!kind) { toast(N.ui.quickNeedType); return; } if (!value) { toast(N.ui.quickNeedText); text.focus(); return; }
+      send.disabled = true; note.textContent = N.ui.sending;
+      var sentKind = kind, picked = kind === 'event' ? Array.prototype.slice.call(files.files || []) : [];
+      Promise.all(picked.map(function (file) { return new Promise(function (ok, no) { var reader = new FileReader(); reader.onload = function () { ok({ name: file.name, data: String(reader.result).replace(/^data:[^,]*,/, '') }); }; reader.onerror = no; reader.readAsDataURL(file); }); })).then(function (attachments) { return post('/api/intake', sentKind === 'event' ? { kind: 'note', type: sentKind, text: value, date: date.value, files: attachments } : sentKind === 'help' ? { kind: 'note', type: sentKind, text: value, context: { page: 'pending' } } : { kind: 'note', type: sentKind, text: value }); }).then(function (result) {
+        text.value = ''; files.value = ''; V.quickText = ''; V.quickKind = ''; V.hubDirty = false; kind = ''; choose(''); send.disabled = false;
+        // 送出後保留等待狀態，直到完成才容許重畫
+        V.hubWatching = true;
+        if (sentKind === 'help') { if (V.status && V.status.ai && V.status.ai.ready === false) note.textContent = N.ui.helpSentNoAI; else DESK.watchHelp(result.id, note); }
+        else note.replaceChildren(N.ui.quickReceived, ' ', h('a', { class: 'btn link', href: '#/request/' + sentKind, onclick: function () { RQ.sent = { type: sentKind, id: result.id }; } }, N.ui.quickTrack));
+      }).catch(function (e) { send.disabled = false; note.textContent = why(e); });
+    } }, N.ui.quickSend);
+    return h('section', { class: 'layer', id: 'quick-input' }, h('h2', { class: 'layer-title' }, N.ui.quickInputTitle), h('div', { class: 'foot', id: 'quick-types' }, types), text, eventFields, h('div', { class: 'foot' }, send), note);
+  }
+  // 輪詢重畫前先檢查：輸入中、有未送出內容或等待回覆時不重畫，否則會清走正在輸入的字及等待狀態
+  function hubPoll() {
+    var a = document.activeElement;
+    if (V.hubDirty || V.hubWatching && !/回覆已到|已收到|未能/.test(($('#quick-note') || {}).textContent || '') || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) { V.pollTimer = setTimeout(hubPoll, 3000); return; }
+    if (V.hubWatching && $('#quick-note') && $('#quick-note').textContent) { V.pollTimer = setTimeout(hubPoll, 8000); return; }
+    showHub();
+  }
   function showHub() {
     // 只有頁面第一次載入待決事項先算「打開」（記低時間）；輪詢同返回唔算
     var seen = !V.homeSeen; V.homeSeen = true;
     Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; })]).then(function (r) {
-      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = asks.todo || [], rank = {}, pendingHelp = {};
+      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = (asks.todo || []).filter(function (t) { return t.kind !== 'overview'; }), snoozed = asks.snoozed || [], byId = {}, pendingHelp = {}, c = asks.company || st.company || {};
       asks.packs.forEach(function (p) { if (p.open && p.helpForPackId) pendingHelp[p.helpForPackId] = true; });
-      (st.helpInFlight || []).forEach(function (h) { if (h.packId) pendingHelp[h.packId] = true; });
-      V.home = home;
-      todo.forEach(function (t, i) { rank[t.id] = i; });
-      // 待決事項只按待決清單的次序排列；求助回覆另設固定入口。
-      open.sort(function (a, b) { return (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
-      V.status = st; checkInstance(st);
+      (st.helpInFlight || []).forEach(function (x) { if (x.packId) pendingHelp[x.packId] = true; });
+      open.forEach(function (p) { byId[p.id] = p; }); V.home = home; V.status = st; checkInstance(st);
       // 第一次打開（未有公司概覽）：直接去交資料
       if ((!st.company || !st.company.ready) && !open.length && !helpReplies.length) { location.replace('#/intake'); return; }
-      var first = open[0], c = asks.company || st.company || {}, firstTodo = first ? todo.filter(function (t) { return t.id === first.id; })[0] : null;
-      var main = first
-        ? h('section', { class: 'hero' },
-          h('span', { class: 'eyebrow' }, (firstTodo ? (N.TODO_ICON[firstTodo.type] || '◆') + ' ' + (N.dash['ty_' + firstTodo.type] || '') + ' · ' : '') + (first.askedBy === 'AI' ? N.ui.aiAsk : N.ui.yourAsk) + ' · ' + dayOf(first.askedAt), firstTodo && firstTodo.overdueDays ? ' ' : null, firstTodo && firstTodo.overdueDays ? tag(N.dash.overdueDays.replace('{n}', firstTodo.overdueDays), 'eff') : null),
-          h('h2', { class: 'hero-t' }, N.fix(first.title)),
-          h('p', { class: 'hero-p' }, '尚有 ' + first.open + '／' + first.total + ' 題未答；每次只需回答最重要的 3 題，其餘暫按 AI 建議處理。'),
-          // 首頁冇底部列，主掣要喺手機都見到（hero-act 入面嘅主掣喺手機會收埋）
-          h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/ask/' + first.id }, T('answerN', { n: Math.min(3, first.open) })), staleHelp(firstTodo, first, pendingHelp)))
-        // 一屏只放一組角色：「今日要做的事」卡有圖時，空狀態唔放圖
-        : (function (art) {
-          var body = [h('span', { class: 'eyebrow' }, N.ui.pending), h('h2', { class: 'layer-title' }, N.ui.noPending), h('p', { class: 'guide' }, 'AI 工作中遇到需要你決定的事項，會在此列出。')];
-          return art ? h('section', { class: 'layer with-scene' }, h('div', { class: 'scene-body' }, body), art) : h('section', { class: 'layer' }, body);
-        })(home && home.card && !home.firstWeekDone && SCENE[home.card.key] ? null : scene('empty'));
-      // 其他待決事項：4.3 清單全文（類型圖示、期限或逾期、入口開答題或公司概覽）
-      var rest = todo.filter(function (t) { return (!first || t.id !== first.id) && t.kind !== 'overview'; }), byId = {};
-      open.forEach(function (p) { byId[p.id] = p; });
-      var others = rest.length ? h('section', { class: 'layer', id: 'other-pending' }, h('span', { class: 'eyebrow' }, N.ui.otherPending),
-        rest.map(function (t) {
-          var p = byId[t.id], when = t.overdueDays ? null : t.due ? N.dash.todoDue.replace('{d}', dayOf(t.due)) : t.waited ? N.dash.waitedDays.replace('{n}', t.waited) : '';
-          return h('div', { class: 'row' + (t.overdueDays ? ' overdue' : ''), 'data-todo': t.id, 'data-type': t.type }, h('div', null, h('div', { class: 't' }, h('span', { class: 'ic', 'aria-hidden': 'true' }, N.TODO_ICON[t.type] || '◆'), ' ', N.fix(p ? p.title : t.text)),
-            h('div', { class: 'small muted' }, [N.dash['ty_' + t.type] || '', t.milestone, p ? p.open + '／' + p.total + ' ' + N.ui.unanswered : '', when].filter(Boolean).join(' · '), t.overdueDays ? ' ' : null, t.overdueDays ? tag(N.dash.overdueDays.replace('{n}', t.overdueDays), 'eff') : null)),
-            h('div', null,
-              t.kind === 'overview' ? h('a', { class: 'btn', href: '/proofread.html' }, N.ui.goConfirm) : t.kind === 'schedule' ? h('a', { class: 'btn', href: t.href }, N.ui.schedGoSystem) : h('a', { class: 'btn', href: '#/ask/' + t.id }, T('answerN', { n: Math.min(3, p ? p.open : 1) })),
-              staleHelp(t, p, pendingHelp)));
-        })) : null;
+      var key = home && home.card && home.card.key;
+      var main = c.confirmed ? nextActionCard(home && home.nextAction, todo, byId) : todayCard(home) || h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.pending), h('h2', { class: 'layer-title' }, N.ui.noPending));
+      // 首週其他階段（驗收、首次訪問）：安排退為「接下來」旁的一張普通卡
+      var quietToday = c.confirmed && key && key !== 'daily' && key !== 'waitInterview' ? todayCard(home, true) : null;
+      var waitLine = c.confirmed && !todo.length && key === 'waitInterview' ? h('div', { class: 'row', id: 'today-card', 'data-key': key }, h('div', null, h('div', { class: 't', id: 'today-do' }, home.card.today), h('div', { class: 'small muted', id: 'today-not' }, N.ui.todayNotAuto + home.card.notAuto)), h('a', { class: 'btn', href: home.card.href, id: 'today-go' }, home.card.button)) : null;
+      var next = todo.length || waitLine ? h('section', { class: 'layer', id: 'next-list' }, h('span', { class: 'eyebrow' }, N.ui.nextList), todo.slice(0, 3).map(function (t) { return todoRow(t, byId, false, pendingHelp); }), waitLine) : null;
+      var others = todo.length > 3 ? h('details', { class: 'layer', id: 'other-pending' }, h('summary', null, N.t('otherPendingN', { n: todo.length - 3 })), todo.slice(3).map(function (t) { return todoRow(t, byId, false, pendingHelp); })) : null;
+      var snoozedCard = snoozed.length ? h('details', { class: 'layer', id: 'snoozed' }, h('summary', null, N.t('snoozedN', { n: snoozed.length })), snoozed.map(function (t) { return todoRow(t, byId, true, pendingHelp); })) : null;
+      var brainLine = asks.brainPending ? h('p', { class: 'small muted', id: 'brain-line' }, h('a', { href: '/dashboard/brain' }, N.t('brainPendingN', { n: asks.brainPending }))) : null;
       var helpRepliesCard = helpReplies.length ? h('details', { class: 'layer', id: 'help-replies' }, h('summary', null, T('helpReplies', { n: helpReplies.length })),
         h('ul', { class: 'qa' }, helpReplies.map(function (p) { return h('li', null, h('a', { href: '#/ask/' + p.id }, N.fix(p.title))); }))) : null;
       var companyCard = h('section', { class: 'layer accent' + (c.confirmed ? ' ok' : '') },
         h('span', { class: 'eyebrow' }, N.ui.company),
         h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, c.confirmed ? N.ui.confirmed + '（' + dayOf(c.confirmedAt) + '）' : N.ui.unconfirmed),
           h('div', { class: 'small muted' }, c.confirmed ? '如有改動，可隨時再次確認。' : c.ready ? 'AI 已擬定，請你查閱。' : '請先交資料，讓 AI 建立公司概覽。')),
-          h('a', { class: 'btn' + (c.confirmed ? '' : ' primary'), href: c.ready ? '/proofread.html' : '#/intake' }, c.confirmed ? N.ui.viewEdit : c.ready ? N.ui.goConfirm : N.ui.goIntake)));
+          h('a', { class: 'btn', href: c.ready ? '/proofread.html' : '#/intake' }, c.confirmed ? N.ui.viewEdit : c.ready ? N.ui.goConfirm : N.ui.goIntake)));
       // 只列 AI 工作；舊分頁送錯、套用都未成功嗰類失敗唔係 AI 工作，唔列（同公司概覽一樣）
       var runs = st.runs.filter(function (rn) { return !(rn.state === 'failed' && (rn.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; })); }).slice(0, 3);
       var aiCard = h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.aiWork),
@@ -406,17 +467,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/log' }, N.ui.allLog)),
         // 即時微動畫：讀回心跳、下次 AI 開工倒數、今日 AI 啟動、用時、費用（共用殼每秒重算）
         DESK.aiTele());
-      // 交要求：改路線、臨時工作；寫一兩句，AI 擬成問題等你確認先做
-      var reqCard = h('section', { class: 'layer', id: 'req-card' }, h('span', { class: 'eyebrow' }, N.ui.reqTitle),
-        h('p', { class: 'guide' }, '公司以外發生了真實的事（例如見了伙伴、對方答應或拒絕），請按「' + N.ui.reqEvent + '」；如需調整里程碑次序、新增一站，或請 AI 處理一項里程碑以外的工作，請寫下一兩句。AI 會擬成問題供你確認，確認後方會生效。'),
-        h('div', { class: 'foot', style: 'justify-content:flex-start' }, h('a', { class: 'btn' + (open.length ? '' : ' primary'), href: '#/request/event', id: 'req-event' }, N.ui.reqEvent), h('a', { class: 'btn', href: '#/request/order', id: 'req-order' }, N.ui.reqOrder), h('a', { class: 'btn', href: '#/request/adhoc', id: 'req-adhoc' }, N.ui.reqAdhoc)));
       var practiceCard = h('section', { class: 'layer', id: 'practice-card' }, h('span', { class: 'eyebrow' }, N.ui.yourActions + ' · ' + N.ui.practice),
         h('p', { class: 'guide' }, '需要親身會面？可先與 AI 模擬的對方練習一次，練習後提供覆盤及會面卡（練習不算證據）。'),
         h('div', { id: 'practice-actions' }, h('p', { class: 'empty' }, '讀取中……')), h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceAll)));
       get('/api/practice').then(function (pr) { var box = $('#practice-actions'); if (!box) return; box.replaceChildren(); var acts = (pr.actions || []).slice(0, 4);
         if (!acts.length) { box.append(h('p', { class: 'empty' }, '暫無需要你親身執行的行動。')); return; }
         acts.forEach(function (a) { box.append(h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, a.title), h('div', { class: 'small muted' }, a.dueAt ? dayOf(a.dueAt) + ' ' + hm(a.dueAt) : '未定日期')),
-          h('a', { class: 'btn' + (a.scenarioId ? ' primary' : ''), href: a.scenarioId ? '#/practice/' + a.scenarioId : '#/practice/new/' + a.id, 'data-practice': a.id }, '🎭 ' + N.ui.practiceGo))); }); }).catch(function () { });
+          h('a', { class: 'btn', href: a.scenarioId ? '#/practice/' + a.scenarioId : '#/practice/new/' + a.id, 'data-practice': a.id }, '🎭 ' + N.ui.practiceGo))); }); }).catch(function () { });
       var debateCard = h('section', { class: 'layer', id: 'debate-card' }, h('span', { class: 'eyebrow' }, N.ui.debate),
         h('p', { class: 'guide' }, '請 AI 分藍方、紅方、裁判辯論你的生意、策略、定價或伙伴提案；完場後把批評轉成轉強卡，由你決定採用。辯論結果不算證據。'),
         h('div', { id: 'debate-latest' }, h('p', { class: 'empty' }, '讀取中……')),
@@ -424,13 +481,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       get('/api/debate').then(function (d) { var box = $('#debate-latest'); if (!box) return; box.replaceChildren(); var m = d.matches[d.matches.length - 1];
         if (!m) { box.append(h('p', { class: 'empty' }, '未有辯論。')); return; }
         box.append(h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.dash.matchN.replace('{n}', m.n) + ' · ' + (m.topic.title || N.dash['tp_' + m.topic.type])), h('div', { class: 'small muted' }, (N.dash['ph_' + m.phase] || m.phase) + (m.score ? ' · ' + DD.vStand + ' ' + m.score.standing + '／' + DD.vHurt + ' ' + m.score.wounded + '／' + DD.vFall + ' ' + m.score.fallen : ''))),
-          h('a', { class: 'btn' + (['done', 'adopt', 'failed'].indexOf(m.phase) >= 0 ? ' primary' : ''), href: '#/debate/' + m.id, id: 'hub-debate-match' }, '查看'))); }).catch(function () { });
-      // 有待決事項時，首張待決事項就是今日要做的事，不再另放一張主卡
-      var todayIsAnswer = open.length && home && home.card && home.card.key === 'daily' && !home.firstWeekDone;
-      setApp(head('pending', st), sinceRow(home), aiBlock(st), todayIsAnswer ? null : todayCard(home), main, others, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, reqCard, aiCard,
+          h('a', { class: 'btn', href: '#/debate/' + m.id, id: 'hub-debate-match' }, '查看'))); }).catch(function () { });
+      var intakeLink = !c.ready ? h('p', { class: 'small muted' }, h('a', { href: '#/intake' }, N.ui.goIntake)) : null;
+      var kept = [].map.call(document.querySelectorAll('#app details[id][open]'), function (d) { return d.id; });
+      V.hubDirty = !!String(V.quickText || '').trim(); V.hubWatching = false;
+      setApp(head('pending', st), aiBlock(st), main, next, quietToday, others, snoozedCard, brainLine, sinceRow(home), quickInput(), intakeLink, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, aiCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
-      DESK.title('pending', open.length ? '（' + open.length + '）' : '');
-      V.pollTimer = setTimeout(showHub, st.busy ? 3000 : 8000);
+      kept.forEach(function (id) { var d = document.getElementById(id); if (d) d.open = true; });
+      DESK.title('pending', todo.length ? '（' + todo.length + '）' : '');
+      V.pollTimer = setTimeout(hubPoll, st.busy ? 3000 : 8000);
     }).catch(function (e) { fail(e); });
   }
 
@@ -453,12 +512,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var route = (dash.milestones || []).filter(function (m) { return m.pathStatus === 'confirmed' || (m.pathStatus === 'proposed' && !m.branchFrom); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
       var routeBox = isOrder && route.length ? h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.route),
         h('ol', { class: 'm-sum', id: 'req-route' }, route.map(function (m) { return h('li', null, m.short + (m.targetDate ? '（' + dayOf(m.targetDate) + '）' : '')); }))) : null;
+      var preset = null;
+      if (isEvent) try { preset = JSON.parse(sessionStorage.getItem('crewzero-event-prefill') || 'null'); } catch (e) { }
       var ta = h('textarea', { id: 'req-text', rows: '4', maxlength: '4000', 'aria-label': title,
         placeholder: isOrder ? '例：牌照與保險須於任何送貨前辦妥；另想新增一站「廚師試食會」。' : isEvent ? '例：與甲公司的陳經理會面，對方答應介紹兩間餐廳，並約定下星期再談分帳。' : '例：請擬一張聖誕節餐廳推廣單張，下星期五前交付。' });
-      try { ta.value = localStorage.getItem('startup-os-req-' + type) || ''; } catch (e) { }
+      try { ta.value = preset && typeof preset.text === 'string' ? preset.text : localStorage.getItem('startup-os-req-' + type) || ''; } catch (e) { }
       ta.addEventListener('input', function () { try { localStorage.setItem('startup-os-req-' + type, ta.value); } catch (e) { } });
       // 真實事件：日期由你揀（預設今日），可附證明文件（對方書面回覆、會議紀錄、收據）
-      var evDate = isEvent ? h('input', { type: 'date', id: 'req-date', class: 'in', 'aria-label': N.ui.eventDate, value: st && st.today || isoDay(new Date()) }) : null;
+      var evDate = isEvent ? h('input', { type: 'date', id: 'req-date', class: 'in', 'aria-label': N.ui.eventDate, value: preset && parseDay(preset.date) ? preset.date : st && st.today || isoDay(new Date()) }) : null;
       var evFiles = isEvent ? h('input', { type: 'file', id: 'req-files', multiple: true, 'aria-label': N.ui.eventFiles }) : null;
       var form = h('section', { class: 'layer', id: 'req-form' }, h('span', { class: 'eyebrow' }, N.ui.reqTitle), h('h2', { class: 'layer-title' }, title),
         h('p', { class: 'guide' }, isOrder ? '請用一兩句說明想如何調整：哪一站提前、哪一站押後，或想新增哪一站（以及發生甚麼事才算完成）。AI 會擬成一條問題，經你確認後路線才會更改；未確認則一切不變。'
@@ -483,6 +544,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       return post('/api/intake', type === 'event' ? { kind: 'note', type: type, text: text, date: evDate.value, files: files } : { kind: 'note', type: type, text: text });
     }).then(function (j) {
       try { localStorage.removeItem('startup-os-req-' + type); } catch (e) { }
+      if (type === 'event') try { sessionStorage.removeItem('crewzero-event-prefill'); } catch (e) { }
       RQ.sent = { type: type, id: j.id }; toast(N.ui.reqSent); showRequest(type);
     }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.reqSend; toast('未能提交：' + why(e)); });
   }
@@ -782,7 +844,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           h('h3', null, mid ? '已開場：AI 正逐回合辯論' : run.state === 'failed' ? N.ui.trackFailed : '排隊中'),
           h('ol', { class: 'tr-steps' }, (run.steps || []).map(function (s) { return trRow(s.state, N.fix(s.label), s.detail); })),
           run.state === 'failed' ? h('p', null, N.ui.reason + '：' + (run.error || '')) : null,
-          mid ? h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/debate/' + mid, id: 'debate-go-match' }, '查看進度'), h('a', { class: 'btn primary big', href: stageHref(mid), id: 'debate-go-stage' }, '★ ' + N.ui.debateStage + ' ↗')) : null));
+          mid ? h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/debate/' + mid, id: 'debate-go-match' }, N.ui.quickTrack), h('a', { class: 'btn primary big', href: stageHref(mid), id: 'debate-go-stage' }, '★ ' + N.ui.debateStage + ' ↗')) : null));
         if (!mid && run.state !== 'failed') DT.timer = setTimeout(function () { if (/^#\/debate\/new/.test(location.hash)) showDebateNew(type, target); }, 2000);
         return;
       }

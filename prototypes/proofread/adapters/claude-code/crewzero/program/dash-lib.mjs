@@ -43,6 +43,38 @@ const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())
 const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const parseDay = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
 const daysBetween = (a, b) => Math.round((dayStart(b) - dayStart(a)) / DAY);
+const isDay = s => { const d = parseDay(s); return !!d && ymd(d) === String(s || ''); };
+const snoozeDays = (s, now) => {
+  if (!s || !isDay(s.until) || !s.startedAt) return 0;
+  const start = parseDay(String(s.startedAt).slice(0, 10)), end = parseDay(s.until);
+  if (!start || !end) return 0;
+  return Math.max(0, daysBetween(start, new Date(Math.min(dayStart(now).getTime(), end.getTime()))));
+};
+
+// 創辦人操作覆蓋：伺服器只追加 founder-ops.json；畫面立即套用，外殼下一次開工才合併入 state.json。
+// 所有新欄可缺，舊資料沒有覆蓋檔時保持原有行為。
+export function applyFounderOps(state, ops = []) {
+  if (!Array.isArray(ops) || !ops.length) return state || {};
+  const out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) } };
+  if (state && state.company) out.company = { ...state.company };
+  for (const item of ops) {
+    if (!item || typeof item !== 'object') continue;
+    const value = item.value && typeof item.value === 'object' ? item.value : {};
+    const current = out.company && out.company.nextExternalAction && typeof out.company.nextExternalAction === 'object' ? out.company.nextExternalAction : null;
+    if (item.op === 'reschedule' && current && isDay(value.date)) out.company.nextExternalAction = { ...current, date: value.date, pendingUpdate: false, founderUpdatedAt: item.at || localIso() };
+    else if (item.op === 'cancelNext' && current) out.company.nextExternalAction = { ...current, cancelledAt: item.at || localIso(), founderUpdatedAt: item.at || localIso() };
+    else if (item.op === 'setNext' && typeof value.text === 'string' && value.text.trim()) {
+      out.company = out.company || {}, out.company.nextExternalAction = { text: value.text.trim().slice(0, 200), milestoneId: typeof value.milestoneId === 'string' ? value.milestoneId : '', ...(isDay(value.date) ? { date: value.date } : {}), founderUpdatedAt: item.at || localIso() };
+    } else if (item.op === 'snooze' && typeof item.target === 'string' && isDay(value.until)) {
+      out.founderSnoozes[item.target] = { until: value.until, startedAt: item.at || localIso() };
+    } else if (item.op === 'unsnooze' && typeof item.target === 'string') {
+      const prior = out.founderSnoozes[item.target];
+      if (prior) out.founderSnoozeDays[item.target] = Number(out.founderSnoozeDays[item.target] || 0) + snoozeDays(prior, new Date(item.at || Date.now()));
+      delete out.founderSnoozes[item.target];
+    }
+  }
+  return out;
+}
 const WEEKDAY = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 
 /* ---------- 示範帳本：相對時間 ---------- */
@@ -129,6 +161,7 @@ export function dashboardState(DIR, extra = {}) {
   let state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   const sample = state.demo === true;
   if (sample) state = resolveTimes(state, now);
+  else state = applyFounderOps(state, readJSON(path.join(DIR.ledger, 'founder-ops.json'), []));
   const page = readJSON(path.join(DIR.company, 'page.json'), null);
   const confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const status = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
@@ -143,7 +176,7 @@ export function dashboardState(DIR, extra = {}) {
   const goalRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G1');
   const nextRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G5');
   const goals = state.goals || { quarter: goalRow ? { text: String(values[goalRow.id] ?? goalRow.value), endsOn: goalRow.due ? String(values[goalRow.due.id] ?? goalRow.due.value ?? '') : '' } : null };
-  const nextAction = (state.company && state.company.nextExternalAction) || (nextRow ? { text: String(values[nextRow.id] ?? nextRow.value), milestoneId: confirmed && confirmed.nextActionMilestone || nextRow.flagTo || '' } : null);
+  const storedNextAction = (state.company && state.company.nextExternalAction) || (nextRow ? { text: String(values[nextRow.id] ?? nextRow.value), milestoneId: confirmed && confirmed.nextActionMilestone || nextRow.flagTo || '' } : null);
 
   /* 里程碑 */
   let milestones = Array.isArray(state.milestones) && state.milestones.length ? state.milestones.map(m => ({ ...m })) : milestonesFromPage(page, confirmed);
@@ -178,11 +211,32 @@ export function dashboardState(DIR, extra = {}) {
     }
   }
 
+  // 下一個對外動作：只有明確日期才作逾期判定；舊資料沒有日期時維持原有顯示。
+  const activeMilestones = milestones.filter(m => m.pathStatus === 'confirmed' && m.state !== 'done').sort((a, b) => (a.state === 'active' ? -1 : 0) - (b.state === 'active' ? -1 : 0) || (a.order || 0) - (b.order || 0));
+  const linkedMilestone = storedNextAction && milestones.find(m => m.id === storedNextAction.milestoneId);
+  const actionText = String(storedNextAction && storedNextAction.text || '').trim();
+  const actionDate = isDay(storedNextAction && storedNextAction.date) ? storedNextAction.date : '';
+  const cancelled = !!(storedNextAction && storedNextAction.cancelledAt);
+  const missingAction = !actionText || cancelled;
+  const completedLink = !!(linkedMilestone && linkedMilestone.state === 'done');
+  const staleDate = !!(actionDate && parseDay(actionDate) < today);
+  const suggestedMilestone = activeMilestones[0] || null;
+  const suggestion = (missingAction || completedLink) && suggestedMilestone && String(suggestedMilestone.event || suggestedMilestone.short || '').trim()
+    ? { text: String(suggestedMilestone.event || suggestedMilestone.short).trim(), milestoneId: suggestedMilestone.id, milestone: suggestedMilestone.short || suggestedMilestone.title || '' } : null;
+  const nextAction = {
+    ...(storedNextAction || {}), text: actionText, date: actionDate, milestone: linkedMilestone ? linkedMilestone.short || linkedMilestone.title || '' : '',
+    stale: missingAction || !!(storedNextAction && storedNextAction.pendingUpdate) || completedLink || staleDate,
+    missing: missingAction, completedLink, staleDate, suggestion
+  };
+
   /* 問題包 → 待你處理（同 Founder Desk 待決事項同一份清單） */
   const packs = listPacks(DIR).filter(p => p.open > 0);
   const decisions = Array.isArray(state.decisions) ? state.decisions : [];
   const msTitle = id => (milestones.find(m => m.id === id) || {}).short || '';
-  const todo = buildTodo(DIR, { state, milestones, company, page, now });
+  const allTodo = buildTodo(DIR, { state, milestones, company, page, now });
+  const todo = allTodo.filter(t => t.lane !== 'brain');
+  const brainTodo = allTodo.filter(t => t.lane === 'brain');
+  const snoozed = snoozedTodo(DIR, { state, milestones, company, page, now }).filter(t => t.lane !== 'brain');
 
   /* 工作（看板） */
   const COL = { planned: 'todo', active: 'doing', waiting: 'waiting', blocked: 'blocked', review: 'review', done: 'done', cancelled: null };
@@ -243,7 +297,7 @@ export function dashboardState(DIR, extra = {}) {
   const running = runs.find(r => r.state === 'running');
 
   /* 事件 */
-  const brain = loadBrain(DIR, { now, runs: status.runs || [], packs });
+  const brain = { ...loadBrain(DIR, { now, runs: status.runs || [], packs }), pending: brainTodo.length };
   // 結果卡意見事件：標題用現時顯示版嘅卡名（帳本原文唔改；卡名改寫過都一致）
   const fbTitle = e => { const f = e.type === 'input' && /^你對「.*」的意見：/.test(String(e.title || '')) && brain && brain.feedback && brain.feedback[(e.relatedIds || [])[0]];
     return f && f.title ? { ...e, title: '你對「' + (f.itemName ? f.itemName + '：' : '') + f.title + '」的意見：' + String(e.title).replace(/^你對「.*」的意見：/, '') } : e; };
@@ -371,7 +425,7 @@ export function dashboardState(DIR, extra = {}) {
     ok: true, sample, now: localIso(now), today: ymd(today), guide, firstWeekDone: ivDone,
     company, goals, nextAction, metrics, since, pathTouched,
     ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
-    lines, orderUnconfirmed, milestones, assumptions, options, todo, schedule: sched, tasks, parallel,
+    lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, tasks, parallel,
     brain,
     teammates: teammates.map(t => ({ ...t, milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: t.lifecycle === 'planned' ? 'not_started' : tasks.some(x => x.teammate === t.name && workingTasks.has(x.id)) ? 'working' : tasks.some(x => x.teammate === t.name && x.column === 'doing') ? 'doing' : tasks.some(x => x.teammate === t.name && (x.column === 'waiting' || x.column === 'review')) ? 'waiting' : 'idle' })),
     capabilities: Array.isArray(state.capabilities) ? state.capabilities : [],
@@ -404,14 +458,27 @@ function teleOf(runs, rhythm, rhythmInfo, now) {
 const plusDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 export const TODO_RANK = { trial: 0, order: 1, autoStop: 2, path: 3, blocking: 4, acceptance: 5, inbox: 6, interview: 7, question: 8, decision: 9, action: 10 };
 const DECIDES = ['decision', 'blocking', 'path', 'autoStop'];
-export function buildTodo(DIR, { state, milestones, company, page, now }) {
+const brainLane = full => {
+  const debate = full && full.debate && full.debate.kind;
+  return debate === 'response' || debate === 'adopt' || full && full.brainItem && full.rhythm ? 'brain' : 'main';
+};
+function buildTodoLists(DIR, { state, milestones, company, page, now }) {
   const today = dayStart(now);
   // 求助回覆有固定入口，不屬待決事項，也不應影響待決數目或等候提示。
   const packs = listPacks(DIR).filter(p => p.open > 0 && !p.isHelp);
   const decisions = Array.isArray(state.decisions) ? state.decisions : [];
   const tasks = Array.isArray(state.tasks) ? state.tasks : [];
   const msTitle = id => ((milestones || []).find(m => m.id === id) || {}).short || '';
-  const todo = [];
+  const todo = [], snoozed = [];
+  const holds = state.founderSnoozes || {}, pausedBefore = state.founderSnoozeDays || {};
+  const add = item => {
+    const hold = holds[item.id] || (isDay(item.snoozedUntil) ? { until: item.snoozedUntil, startedAt: '' } : null);
+    const paused = Number(pausedBefore[item.id] || 0) + snoozeDays(hold, now);
+    item.overdueDays = Math.max(0, Number(item.overdueDays || 0) - paused);
+    item.state = item.overdueDays > 0 ? 'overdue' : 'open';
+    if (hold && isDay(hold.until) && parseDay(hold.until) > today) snoozed.push({ ...item, snoozedUntil: hold.until });
+    else todo.push(item);
+  };
   for (const p of packs) {
     const full = readJSON(path.join(DIR.asks, p.id + '.json'), {}) || {};
     const d = decisions.find(x => x.packId === p.id) || {};
@@ -423,25 +490,43 @@ export function buildTodo(DIR, { state, milestones, company, page, now }) {
     const overdueDays = due && parseDay(due) < today ? daysBetween(parseDay(due), today) : 0;
     const q0 = (full.questions || [])[0] || {};
     const rec = full.rec || (q0.options || []).find(o => o.rec)?.text || (q0.value != null && !Array.isArray(q0.value) ? String(q0.value) : '');
-    const brain = full.brainItem || (full.debate ? 'wargame' : '');
-    todo.push({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(askedAt ? { staleDays: Math.max(0, waited) } : {}), ...(brain ? { brain } : {}),
+    const lane = brainLane(full);
+    add({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(askedAt ? { staleDays: Math.max(0, waited) } : {}), lane, brain: full.brainItem || (lane === 'brain' ? 'wargame' : ''), forNextAction: full.forNextAction === true,
       state: overdueDays > 0 ? 'overdue' : 'open', count: p.open, href: '/#/ask/' + p.id, kind: 'ask' });
   }
   // 排程節奏改咗（交資料第 9 題或者系統頁）：放一張「重新登記排程」提示卡，按下去系統頁（或者喺對話輸入「重新登記排程」）
   const sm = state.demo === true ? null : scheduleMark(DIR);
-  if (scheduleStale(sm, rhythmOf(state))) { const r = rhythmOf(state); todo.push({ id: 'schedule-stale', type: 'order', text: NAMES.t('schedStaleTodo', { t: r.runTime }), milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, state: 'open', href: '/dashboard/system', kind: 'schedule' }); }
-  if (company.ready && !company.confirmed) { const at = page && page.page && page.page.preparedAt || ''; todo.push({ id: 'overview', type: 'order', text: '公司概覽及里程碑次序待確認', milestoneId: '', milestone: '', rec: '按 AI 建議次序', due: '', askedAt: at, waited: at ? daysBetween(parseDay(at) || today, today) : 0, overdueDays: 0, state: 'open', href: '/proofread.html', kind: 'overview' }); }
+  if (scheduleStale(sm, rhythmOf(state))) { const r = rhythmOf(state); add({ id: 'schedule-stale', type: 'order', text: NAMES.t('schedStaleTodo', { t: r.runTime }), milestoneId: '', milestone: '', rec: NAMES.ui.schedReRegister, due: '', askedAt: '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' }); }
+  if (company.ready && !company.confirmed) { const at = page && page.page && page.page.preparedAt || ''; add({ id: 'overview', type: 'order', text: '公司概覽及里程碑次序待確認', milestoneId: '', milestone: '', rec: '按 AI 建議次序', due: '', askedAt: at, waited: at ? daysBetween(parseDay(at) || today, today) : 0, overdueDays: 0, lane: 'main', state: 'open', href: '/proofread.html', kind: 'overview' }); }
   const at = t => { const v = new Date(t.askedAt).getTime(); return Number.isFinite(v) ? v : Infinity; };
-  return todo.sort((a, b) => (b.overdueDays - a.overdueDays) || ((TODO_RANK[a.type] ?? 9) - (TODO_RANK[b.type] ?? 9)) || (at(a) - at(b)));
+  const rankOf = t => t.forNextAction ? 7.5 : (TODO_RANK[t.type] ?? 9);
+  const sort = (a, b) => (b.overdueDays - a.overdueDays) || (rankOf(a) - rankOf(b)) || (at(a) - at(b));
+  return { todo: todo.sort(sort), snoozed: snoozed.sort(sort) };
+}
+export function buildTodo(DIR, args) {
+  return buildTodoLists(DIR, args).todo;
+}
+export function snoozedTodo(DIR, args) {
+  return buildTodoLists(DIR, args).snoozed;
 }
 // Founder Desk 待決事項用（唔使計成個監察台）
 export function pendingTodo(DIR, now = clockNow()) {
   let state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   if (state.demo === true) state = resolveTimes(state, now);
+  else state = applyFounderOps(state, readJSON(path.join(DIR.ledger, 'founder-ops.json'), []));
   const page = readJSON(path.join(DIR.company, 'page.json'), null), confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const milestones = Array.isArray(state.milestones) && state.milestones.length ? state.milestones : milestonesFromPage(page, confirmed);
   const company = { ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
-  return buildTodo(DIR, { state, milestones, company, page, now });
+  return buildTodo(DIR, { state, milestones, company, page, now }).filter(t => t.lane !== 'brain');
+}
+export function pendingSnoozed(DIR, now = clockNow()) {
+  let state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
+  if (state.demo === true) state = resolveTimes(state, now);
+  else state = applyFounderOps(state, readJSON(path.join(DIR.ledger, 'founder-ops.json'), []));
+  const page = readJSON(path.join(DIR.company, 'page.json'), null), confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
+  const milestones = Array.isArray(state.milestones) && state.milestones.length ? state.milestones : milestonesFromPage(page, confirmed);
+  const company = { ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')) };
+  return snoozedTodo(DIR, { state, milestones, company, page, now }).filter(t => t.lane !== 'brain');
 }
 
 /* ---------- 「今日要做的事」卡（規劃書 4.1）：文字全部由 FIRST-WEEK.md 供應，伺服器只揀段同入口 ---------- */
@@ -460,7 +545,9 @@ export function guideCard(text, ds) {
   const s = sec[guide];
   if (!s || !s.today) return null;
   const first = type => (ds.todo || []).find(t => t.type === type);
-  const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', waitInterview: '#/request/event', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: (ds.todo || [])[0] ? (ds.todo[0].kind === 'overview' ? '/proofread.html' : '#/ask/' + ds.todo[0].id) : '' }[guide];
+  const mainFirst = (ds.todo || [])[0];
+  const dailyHref = mainFirst ? (mainFirst.kind === 'overview' ? '/proofread.html' : mainFirst.kind === 'schedule' ? mainFirst.href : '#/ask/' + mainFirst.id) : '';
+  const href = { noAI: '#/setup', noCompany: '#/intake', proofread: '/proofread.html', accept: first('acceptance') ? '#/ask/' + first('acceptance').id : '', waitInterview: '#/request/event', firstInterview: first('interview') ? '#/ask/' + first('interview').id : '', daily: dailyHref }[guide];
   const date = (ds.interviews && ds.interviews.nextOn) || '';
   return { key: guide, today: String(s.today).replace(/\{date\}/g, /^\d{4}-\d{2}-\d{2}$/.test(date) ? Number(date.slice(5, 7)) + ' 月 ' + Number(date.slice(8)) + ' 日' : '稍後'), button: s.button || '', notAuto: s.notAuto || '', href, date };
 }

@@ -95,9 +95,10 @@ try {
   const asks = (await api(PB, '/api/asks')).j;
   const want = asks.todo.map(t => t.id);
   ok('伺服器次序：逾期決定 > 試行到期 > 其餘（逾期日數先）', want[0] === 'ask-old' && want[1] === 'ask-trial', want);
-  ok('主卡＝次序第一個問題包，標類型同逾期', /測試：old/.test(await text('.hero-t')) && (await text('.hero .eyebrow')).includes(N.dash.ty_decision) && /已逾期 3 日/.test(await text('.hero')), await text('.hero'));
-  const rows = await ev(`[...document.querySelectorAll('#other-pending [data-todo]')].map(r=>({id:r.dataset.todo,type:r.dataset.type,ic:(r.querySelector('.ic')||{}).textContent,t:r.innerText}))`);
-  ok('其他待決事項：同伺服器次序一致', JSON.stringify(rows.map(r => r.id)) === JSON.stringify(want.slice(1)), { rows: rows.map(r => r.id), want });
+  const firstRow = '#next-list [data-todo]';
+  ok('「接下來」首項＝次序第一個問題包，標類型同逾期', /測試：old/.test(await text(firstRow)) && (await text(firstRow)).includes(N.dash.ty_decision) && /已逾期 3 日/.test(await text(firstRow)), await text(firstRow));
+  const rows = await ev(`[...document.querySelectorAll('#next-list [data-todo], #other-pending [data-todo]')].map(r=>({id:r.dataset.todo,type:r.dataset.type,ic:(r.querySelector('.ic')||{}).textContent,t:r.textContent}))`);
+  ok('其他待決事項：同伺服器次序一致', JSON.stringify(rows.map(r => r.id)) === JSON.stringify(want), { rows: rows.map(r => r.id), want });
   ok('每項有類型圖示同類型名稱', rows.every(r => r.ic === N.TODO_ICON[r.type] && r.t.includes(N.dash['ty_' + r.type])), rows);
   ok('試行到期：標「已逾期 2 日」', /已逾期 2 日/.test((rows.find(r => r.id === 'ask-trial') || {}).t || ''), rows.find(r => r.id === 'ask-trial'));
   // 首次訪問未到但有待決事項：今日主線是作答，首張待決事項就是主卡，不另放今日卡
@@ -108,7 +109,7 @@ try {
   pack(DB, 'ask-first-interview', { todoType: 'interview', due: '2099-01-05' }, ago(1));
   await send('Page.reload'); await sleep(1800);
   ok('有首次訪問問題包和日期時，今日要做的事卡改為待首次訪問', (await ev(`(document.querySelector('#today-card')||{}).dataset.key`)) === 'firstInterview' && (await text('#today-do')).includes('1 月 5 日'), await text('#today-card'));
-  ok('畫面文字（卡、上次離開之後、其他待決事項）：用字檢查零命中', !(await scanText(['#today-card', '#since', '#other-pending', '.hero'])).length, await scanText(['#today-card', '#since', '#other-pending', '.hero']));
+  ok('畫面文字（卡、上次離開之後、其他待決事項）：用字檢查零命中', !(await scanText(['#today-card', '#since', '#other-pending', '#next-list', '#next-action'])).length, await scanText(['#today-card', '#since', '#other-pending', '#next-list', '#next-action']));
   await shot('b2-hub-sorted.png');
 
   /* 確認掣字眼：有 AI 跟進先寫「確認並交 AI 處理」，冇就「確認」；送出後外殼有冇開 AI 要一致 */

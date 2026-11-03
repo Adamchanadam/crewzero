@@ -2011,11 +2011,11 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       h('p', { class: 'small muted' }, b && b.source === null ? '提交資料後，AI 會由生意體檢開始；如欲先查看範例，可要求「打開營運監察台示範」。' : '找不到指定的試驗資料夾，請重新設定。'))];
     if (sub) return ({ checkup: pageCheckup, wargame: pageWargame, scenario: pageScenario, opportunities: pageOpp, routes: pageRoutes, pipeline: pagePipe })[sub](brainItem(sub));
     // 等你處理：先列待決事項入面屬生意大腦嘅問題包（同 Founder Desk 同一份清單），再列冇問題包嘅（例如等你練習）
-    var tw = (V.data.todo || []).filter(function (t) { return t.brain; }).map(function (t) { var it = brainItem(t.brain); return { id: t.brain, name: it.name, waitText: t.text, summary: it.summary, waitHref: t.href }; });
+    var tw = (V.data.brainTodo || []).filter(function (t) { return t.brain; }).map(function (t) { var it = brainItem(t.brain); return { id: t.brain, name: it.name, waitText: t.text, summary: it.summary, waitHref: t.href }; });
     var hrefs = tw.map(function (w) { return w.waitHref; });
     var waits = tw.concat(b.items.filter(function (x) { return x.status === 'waiting' && hrefs.indexOf(x.waitHref) < 0 && !/^\/#\/ask\//.test(x.waitHref || ''); })).slice(0, 3);
     var head = h('section', { class: 'panel', id: 'brain-head' },
-      h('div', { class: 'ph' }, h('h2', null, D.brain + ' · ' + D.brainOverview), h('div', { class: 'r' }, folderBadge(), h('span', { class: 'bnote' }, D.notEvidence))),
+      h('div', { class: 'ph' }, h('h2', null, D.brain + ' · ' + D.brainOverview + '（' + String((b && b.pending) || 0) + '）'), h('div', { class: 'r' }, folderBadge(), h('span', { class: 'bnote' }, D.notEvidence))),
       h('details', { class: 'legend-d', 'data-keep': 'legend' }, h('summary', null, D.legendL + '：' + D.evidenceLevel + ' · ' + D.sourceLabel),
         h('div', { class: 'blegend' }, h('span', null, D.evidenceLevel + '：'), EV.map(function (e, i) { return h('span', null, evMeter(i)); })),
         h('ul', { class: 'evlegend' }, EV.map(function (e, i) { return h('li', null, h('b', null, e), '：' + EVD[i]); })),
@@ -2092,7 +2092,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function sign(n) { return (n > 0 ? '+' : '') + n; }
   function sevTag(s) { return tag(s, s === '高' ? 'eff' : s === '中' ? 'ai' : ''); }
   function stamp(v) { return h('span', { class: 'stamp ' + (VD[v] || '') }, v); }
-  function packOpen(id) { return !!id && (V.data.todo || []).some(function (t) { return t.id === id; }); }
+  function packOpen(id) { return !!id && (V.data.todo || []).concat(V.data.brainTodo || []).some(function (t) { return t.id === id; }); }
   function wgCurrent(x) {
     var d = x.detail || {};
     if (!V.wgMatch || V.wgMatch === d.id) return d;

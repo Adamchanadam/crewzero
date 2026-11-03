@@ -50,6 +50,21 @@ try {
   let a = null; for (let i = 0; i < 240 && !a; i++) { try { a = await (await fetch(`http://127.0.0.1:${PORT}/api/asks`)).json(); } catch { await sleep(250); } }
   ok('Founder Desk（/api/asks）回傳同一份清單同次序', a && JSON.stringify(a.todo.map(t => t.id)) === JSON.stringify(WANT), a && a.todo.map(t => t.id));
   ok('每項都有類型名稱同圖示', td.every(t => lib.NAMES.dash['ty_' + t.type] && lib.NAMES.TODO_ICON[t.type]), td.filter(t => !lib.NAMES.dash['ty_' + t.type] || !lib.NAMES.TODO_ICON[t.type]).map(t => t.type));
+  const changed = dash.applyFounderOps({ company: { nextExternalAction: { text: '聯絡客戶', milestoneId: 'M1' } } }, [{ op: 'reschedule', target: 'nextAction', value: { date: day(3) }, at: ago(0) }, { op: 'snooze', target: 'ask-a', value: { until: day(7) }, at: ago(0) }]);
+  ok('創辦人改期即時覆蓋下一個動作', changed.company.nextExternalAction.date === day(3) && changed.company.nextExternalAction.pendingUpdate === false, changed.company.nextExternalAction);
+  ok('創辦人暫緩即時寫入保留欄位', changed.founderSnoozes['ask-a'] && changed.founderSnoozes['ask-a'].until === day(7), changed.founderSnoozes);
+  pack('ask-brain-response', { brainItem: 'wargame', debate: { kind: 'response' } }, ago(1));
+  pack('ask-brain-adopt', { brainItem: 'wargame', debate: { kind: 'adopt' } }, ago(1));
+  pack('ask-judge-main', { brainItem: 'wargame', debate: { kind: 'judge' }, todoType: 'decision' }, ago(1));
+  const split = dash.dashboardState(DIR, { now });
+  ok('紅藍回應與採用包只進生意大腦線', split.brainTodo.map(t => t.id).sort().join(',') === 'ask-brain-adopt,ask-brain-response', split.brainTodo.map(t => [t.id, t.lane]));
+  ok('裁判決定包保留業務主線', split.todo.some(t => t.id === 'ask-judge-main' && t.lane === 'main'), split.todo.filter(t => t.id === 'ask-judge-main'));
+  fs.writeFileSync(path.join(DIR.ledger, 'founder-ops.json'), JSON.stringify([{ op: 'snooze', target: 'ask-a', value: { until: day(2) }, at: ago(3) }]));
+  const paused = dash.pendingTodo(DIR, now), held = dash.pendingSnoozed(DIR, now);
+  ok('暫緩項目不計入主線待決，並另外讀回', !paused.some(t => t.id === 'ask-a') && held.some(t => t.id === 'ask-a'), { pending: paused.map(t => t.id), snoozed: held.map(t => t.id) });
+  ok('暫緩期間不計入逾期日數', held.find(t => t.id === 'ask-a').overdueDays === 0, held.find(t => t.id === 'ask-a'));
+  fs.writeFileSync(path.join(DIR.ledger, 'founder-ops.json'), JSON.stringify([{ op: 'snooze', target: 'ask-a', value: { until: day(2) }, at: ago(3) }, { op: 'unsnooze', target: 'ask-a', value: {}, at: ago(0) }]));
+  ok('取消暫緩即時回到主線', dash.pendingTodo(DIR, now).some(t => t.id === 'ask-a'), dash.pendingTodo(DIR, now).find(t => t.id === 'ask-a'));
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {

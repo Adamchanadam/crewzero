@@ -16,7 +16,7 @@ import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, r
 import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, guideCard, companyLogo, LOGO_EXTS, workStatus } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource } from './brain-lib.mjs';
@@ -57,6 +57,8 @@ const ROOT_ID = rootId(DIR.data);
 // 模擬實例：時間按模擬時鐘，排程由本伺服器嘅計時器按模擬時鐘觸發
 const SIM = isSim();
 const DESK_DIR = path.join(DIR.data, 'founder', 'desk');
+const FOUNDER_OPS = path.join(DIR.ledger, 'founder-ops.json');
+const FOUNDER_OPS_LOCK = path.join(DIR.ledger, '.founder-ops.lock');
 // 認證屬邊一種：模擬用假 AI（SOS_ADAPTER 指住嘅設定）係假 AI，其餘係真 AI
 const aiMode = c => c && (c.host === 'test' || (process.env.SOS_ADAPTER && path.resolve(String(c.host)) === path.resolve(process.env.SOS_ADAPTER))) ? 'fake' : 'real';
 const SIM_FILE = path.join(DESK_DIR, 'sim.json'), CLOCK_FILE = path.join(DESK_DIR, 'sim-clock.json'), CERT_FILE = path.join(DIR.ledger, 'adapter-cert.json');
@@ -667,13 +669,13 @@ function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { 
 
 function statusPayload() {
   const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
-  const packs = listPacks(DIR);
+  const todo = pendingTodo(DIR);
   const work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles(), status: st });
   const failedByRef = (st.runs || []).filter(r => r && r.state === 'failed' && r.ref).reduce((all, r) => ({ ...all, [r.ref]: (all[r.ref] || 0) + 1 }), {});
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: packs.filter(p => p.open && !p.isHelp).length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -701,6 +703,50 @@ function companyStatus() {
   const biz = readJSON(path.join(DIR.company, 'biz.json'), null);
   return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null,
     ...(biz && BIZ_TYPES[biz.type] ? { bizType: biz.type } : {}) };
+}
+const isDay = value => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
+};
+function withFounderOpsLock(fn) {
+  const until = Date.now() + 2000;
+  for (;;) {
+    try { fs.writeFileSync(FOUNDER_OPS_LOCK, String(process.pid), { flag: 'wx' }); break; }
+    catch { if (Date.now() >= until) return null; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 12); }
+  }
+  try { return fn(); } finally { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); }
+}
+function appendFounderOp(op) {
+  return withFounderOpsLock(() => {
+    const prior = readJSON(FOUNDER_OPS, []);
+    const list = Array.isArray(prior) ? prior : [];
+    list.push(op);
+    writeJSON(FOUNDER_OPS, list);
+    return true;
+  });
+}
+function founderOp(body) {
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
+  if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
+  const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [] }[body.op];
+  if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (body.op === 'reschedule') {
+    if (body.target !== 'nextAction' || !ds.nextAction?.text || ds.nextAction.cancelledAt || !isDay(value.date)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  } else if (body.op === 'cancelNext') {
+    if (body.target !== 'nextAction' || !ds.nextAction?.text || ds.nextAction.cancelledAt) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  } else if (body.op === 'setNext') {
+    if (body.target !== 'nextAction' || typeof value.text !== 'string' || !value.text.trim() || value.text.length > 200 || (value.date != null && !isDay(value.date)) || (value.milestoneId && !(ds.milestones || []).some(m => m.id === value.milestoneId))) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  } else if (body.op === 'snooze') {
+    if (!byId[body.target] || !isDay(value.until)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  } else if (body.op === 'unsnooze' && !(ds.snoozed || []).some(item => item.id === body.target)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: body.op, target: body.target, value };
+  if (!appendFounderOp(op)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+  return { ok: true, op: { id: op.id, at: op.at, op: op.op, target: op.target }, message: NAMES.ui.founderOpSaved };
 }
 /* ---------- 觀測來源（規劃書 4.12、4.9；設計稿 2026-10-28 第 3 節）：轉接層嘅唯讀觀測程式 ----------
    觀察範圍只限帳本 observe.folders[]（只存雜湊同顯示名，唔存路徑；系統頁經 /api/setup 增刪，外殼下次第一步寫入）。
@@ -958,9 +1004,9 @@ const handler = async (req, res) => {
         const fallback = (ds.todo || [])[0] || null;
         const fallbackHref = fallback ? (fallback.kind === 'overview' ? '/proofread.html' : fallback.kind === 'schedule' ? fallback.href : '#/ask/' + fallback.id) : '';
         const back = ds.since && ds.since.awayDays >= 3 ? card && card.today ? { text: card.today, href: card.href, button: card.button } : fallback ? { text: fallback.text, href: fallbackHref, button: NAMES.ui.goAnswer } : null : null;
-        return send(res, 200, { ok: true, guide: ds.guide, card, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null });
+        return send(res, 200, { ok: true, guide: ds.guide, card, nextAction: ds.nextAction || null, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null });
       }
-      if (p === '/api/asks') return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR), helpInFlight: helpInFlight() });
+      if (p === '/api/asks') { const ds = dashboardState(DIR); return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR), snoozed: pendingSnoozed(DIR), brainPending: (ds.brainTodo || []).length, helpInFlight: helpInFlight() }); }
       if (p === '/api/ask') {
         const pack = loadPack(DIR, url.searchParams.get('id'));
         return pack ? send(res, 200, { ok: true, pack, answers: loadAnswers(DIR, pack.id).answers }) : send(res, 404, { error: 'not found' });
@@ -988,7 +1034,7 @@ const handler = async (req, res) => {
       if (p === '/api/practice/session') { const s = loadSession(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, session: s, scenario: loadScenario(DIR, s.scenarioId) }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/run') { const r = runResult(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, run: r }) : send(res, 404, { error: 'not found' }); }
     }
-    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || (p === '/api/sim' && SIM))) {
+    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
       const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
@@ -999,6 +1045,7 @@ const handler = async (req, res) => {
       // 半截手機請求在讀 body 期間可被撤銷；讀完後、套用任何動作前必須以同一代手機模式重驗。
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
+      if (p === '/api/founder-op') { const result = founderOp(body); return send(res, result.ok ? 202 : result.error === 'busy' ? 409 : 400, result); }
       if (p === '/api/practice') return send(res, ...await practiceAction(body));
       if (p === '/api/logo') return send(res, ...saveLogo(body));
       if (p === '/api/sim') return send(res, ...(body.action === 'advance' ? simAdvance() : body.action === 'ai' ? simSetAI(body.mode) : [400, { error: 'invalid' }]));

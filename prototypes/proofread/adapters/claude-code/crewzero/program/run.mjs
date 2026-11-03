@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
-import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard } from './dash-lib.mjs';
+import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps } from './dash-lib.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
 
@@ -29,6 +29,8 @@ const RETRY = path.join(DIR.ledger, 'retry-requested');
 const LOG = path.join(DIR.ledger, 'runs.log');
 // 帳本（原型）：監察台讀嘅工作同事件；冇就新建（只記工作同事件，其餘欄位唔理）
 const STATE = path.join(DIR.ledger, 'state.json');
+const FOUNDER_OPS = path.join(DIR.ledger, 'founder-ops.json');
+const FOUNDER_OPS_LOCK = path.join(DIR.ledger, '.founder-ops.lock');
 
 const log = msg => fs.appendFileSync(LOG, `[${localIso()}] ${msg}\n`);
 // 公司概覽清單區段：舊資料寫成 { title, items } 都照讀（新資料由 company-page-check 規整）
@@ -86,6 +88,55 @@ function upsertTask(t) {
 }
 function getTask(id) { return (loadState().tasks || []).find(t => t.id === id) || null; }
 function addEvent(e, state = null) { const s = state || loadState(); s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), relatedIds: [], ...e }); if (!state) saveState(s); }
+
+// Founder Desk 只會追加操作；run 以 rename 取走整批，先讀回成功寫入 state 才清理。
+// 短鎖只保護「追加」同「取批」兩個檔案動作，唔會同 AI 工作互相等待。
+function withFounderOpsLock(fn) {
+  const until = Date.now() + 2000;
+  for (;;) {
+    try { fs.writeFileSync(FOUNDER_OPS_LOCK, String(process.pid), { flag: 'wx' }); break; }
+    catch { if (Date.now() >= until) return null; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 12); }
+  }
+  try { return fn(); } finally { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); }
+}
+function founderEventTitle(op) {
+  const v = op && op.value || {};
+  if (op.op === 'reschedule') return NAMES.t('founderRescheduled', { d: v.date || '' });
+  if (op.op === 'cancelNext') return U.founderCancelled;
+  if (op.op === 'setNext') return NAMES.t('founderSetNext', { t: clip(v.text, 60) });
+  if (op.op === 'snooze') return U.founderSnoozed;
+  return U.founderUnsnoozed;
+}
+function mergeFounderOps() {
+  if (!fs.existsSync(FOUNDER_OPS)) return false;
+  let staged = '';
+  const moved = withFounderOpsLock(() => {
+    if (!fs.existsSync(FOUNDER_OPS)) return false;
+    staged = path.join(DIR.ledger, `.founder-ops-${process.pid}-${Date.now()}.json`);
+    fs.renameSync(FOUNDER_OPS, staged);
+    return true;
+  });
+  if (!moved || !staged) return false;
+  let merged = false;
+  try {
+    const ops = readJSON(staged, []);
+    const before = loadState();
+    if (before.demo === true || !Array.isArray(ops) || !ops.length) { merged = true; return false; }
+    const next = applyFounderOps(before, ops);
+    next.events = Array.isArray(next.events) ? next.events : [];
+    for (const op of ops) {
+      if (!op || !op.op) continue;
+      next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op), relatedIds: [], moduleIds: ['now', 'inputs'] });
+    }
+    saveState(next);
+    merged = true;
+    log(`已合併 ${ops.length} 個創辦人操作`);
+    return true;
+  } finally {
+    if (merged) fs.rmSync(staged, { force: true });
+    else withFounderOpsLock(() => { if (!fs.existsSync(FOUNDER_OPS) && fs.existsSync(staged)) fs.renameSync(staged, FOUNDER_OPS); });
+  }
+}
 
 function bizInfo(biz) { return biz && BIZ_TYPES[biz.type] ? { type: biz.type, other: typeof biz.other === 'string' ? biz.other : '', label: BIZ_TYPES[biz.type].label } : null; }
 function businessType() { return bizInfo(readJSON(path.join(DIR.company, 'biz.json'), null)); }
@@ -168,7 +219,8 @@ function syncLedger() {
   // 下一個對外動作（G5）：公司概覽嘅值有改先同步（真實事件確認改過嘅唔會被舊值蓋走）
   const g5f = fieldsByPlan.G5, g5 = g5f ? { text: v(g5f), milestoneId: c.nextActionMilestone || g5f.flagTo || '' } : null;
   s.company = { ...(s.company || {}), assumptions: as };
-  if (g5 && JSON.stringify(g5) !== JSON.stringify(s.ledgerG5 || null)) { s.company.nextExternalAction = g5; s.ledgerG5 = g5; }
+  const founderNext = (s.company || {}).nextExternalAction;
+  if (g5 && !founderNext?.founderUpdatedAt && JSON.stringify(g5) !== JSON.stringify(s.ledgerG5 || null)) { s.company.nextExternalAction = g5; s.ledgerG5 = g5; }
   // 經營節奏（附錄 A rhythm）：開局確認時按「經營節奏」答案寫入一次，之後只經系統頁改；第一次訪問日＝之後第一個訪問星期
   let seeded = false;
   if (!s.company.rhythm) { s.company.rhythm = { ...rhythmFromText((answers.G8 || {}).value), from: 'G8' }; seeded = true; }
@@ -330,6 +382,8 @@ function takeAIQuestions(sb, run) {
   const raw = readJSON(f, null);
   const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: run.id, strictTitle: false, noDedupe: run.kind === 'note' && run.noteType === 'help' });
   if (!prep.ok) { run.result.askRejected = prep.errors.slice(0, 3); log(`${run.id} AI 問題包退回：${prep.errors.join('；')}`); return; }
+  const job = readJSON(path.join(sb, 'job.json'), null);
+  if (job && job.type === 'proofread-next') for (const pack of prep.packs) pack.forNextAction = true;
   if (isRequest(run)) markRequest(run, raw, prep.packs);
   run.result.asks = placePacks(DIR, prep.packs);
   if (run.kind === 'note' && run.noteType === 'adhoc' && run.result.asks.length) upsertTask({ id: 'a-' + run.ref, status: 'waiting', waitingFor: '等你確認交付內容及期限', packId: run.result.asks[0].id });
@@ -621,7 +675,7 @@ async function handleNote(run, file) {
   const sb = newSandbox(run);
   if (run.noteType === 'help') helpNoteTask(sb, text.replace(/\x60\x60\x60json[\s\S]*$/, '').trim(), machine.context || {});
   else noteTask(sb, run.noteType, text);
-  await runAIStep(run, sb, U.stepReqAI, true);
+  await runAIStep(run, sb, run.noteType === 'help' ? U.helpReply : U.requestFollowUp, true);
 }
 /* ---------- 生意大腦：結果卡意見（有用／沒有用照記；要修改就叫 AI 按意見改）同「要你決定」放上 Founder Desk ---------- */
 const FEEDBACK = path.join(DIR.ledger, 'brain-feedback.json');
@@ -1565,7 +1619,7 @@ function placeDebatePacks(raws) {
   for (const raw of raws) {
     const prep = preparePacks(raw, { dirs: null, askedBy: 'AI', fromRun: null, strictTitle: false, system: true });
     if (!prep.ok) { log('辯論問題包格式不正確：' + prep.errors.join('；')); continue; }
-    for (const p of prep.packs) { p.debate = raw.debate; p.todoType = 'decision'; }
+    for (const p of prep.packs) { p.debate = raw.debate; p.todoType = 'decision'; if (raw.debate && ['response', 'adopt'].includes(raw.debate.kind)) p.brainItem = 'wargame'; }
     out.push(...placePacks(DIR, prep.packs));
   }
   return out;
@@ -2081,6 +2135,10 @@ function actionDay(text, today) {
   if (day > addDays(today, 183)) day = `${y - 1}-${pad(+m[1])}-${pad(+m[2])}`;
   return { day, raw: m[0], iso: false };
 }
+function nextActionDay(action, today) {
+  if (action && /^\d{4}-\d{2}-\d{2}$/.test(String(action.date || ''))) return { day: action.date, raw: action.date, iso: true };
+  return actionDay(action && action.text, today);
+}
 const withDay = (text, ad, day) => String(text).replace(ad.raw, ad.iso ? day : dayText(day));
 const nameWords = text => String(text || '').match(/[A-Za-z][A-Za-z.&-]{2,}/g) || [];
 // AI 建議要有出處：公司紀錄喺某日之後有冇提到同一個名或者同一站嘅輸入；冇就建議稍後提供
@@ -2106,7 +2164,7 @@ function placeInterviewIfDue() {
     online: '這星期新增多少使用者或觀看？收到多少款項？',
     nonprofit: '這星期服務了多少人？取得多少資助或捐款？'
   }[(biz || {}).type] || '這星期有甚麼實際成果？（有數字請寫數字）', qs = [{ id: 'results', bind: 'results', ask: resultAsk, kind: 'text', effect: 'tentative' }], nea = (s.company || {}).nextExternalAction;
-  const ad = nea && nea.text ? actionDay(nea.text, today) : null;
+  const ad = nea && nea.text ? nextActionDay(nea, today) : null;
   if (ad && ad.day < today) {
     const hit = relatedInput(s, ad.day, nameWords(nea.text).concat(((s.milestones || []).find(m => m.id === nea.milestoneId) || {}).short || ''));
     const rec = hit ? U.staleHeld : U.unknownLater;
@@ -2201,7 +2259,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
         said.push('「' + clip(nea.text, 30) + '」取消了；下一個對外動作待你確認');
       } else if (!opt && !unknown) texts.push(q.id);
     } else if (q.bind === 'newDate') {
-      const nea = neaNow(), ad = actionDay(nea.text, today);
+      const nea = neaNow(), ad = nextActionDay(nea, today);
       if (isDay(val) && ad) setNext(withDay(nea.text, ad, val), nea.milestoneId, '下一個對外動作改期至 ' + dayText(val));
     } else if (q.bind === 'next2') {
       if (unknown) continue;
@@ -2544,6 +2602,7 @@ async function main() {
   if (!takeLock()) { log('另一個 run 做緊，今次唔做'); return; }
   let run = null, hadInput = false;
   try {
+    mergeFounderOps();
     applyObserve();
     if (process.argv.includes('--plain')) { await plainAll(); return; }
     const replies = fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')).sort();

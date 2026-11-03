@@ -130,8 +130,8 @@ try {
   // Founder Desk：頁頭去監察台；交一件臨時工作全程
   await go('');
   ok('Founder Desk 同一列導航有公司現況分頁（營運監察台）', await ev(`document.querySelector('nav.tabs a[data-tab="overview"]').getAttribute('href')==='/dashboard'`));
-  ok('Founder Desk 首頁有兩個交要求入口', await has('#req-order') && await has('#req-adhoc'));
-  await click('#req-adhoc');
+  ok('Founder Desk 首頁「寫下新情況」有改路線及要 AI 做一件事', await has('#quick-order') && await has('#quick-adhoc'));
+  await ev(`location.hash='#/request/adhoc'`); await sleep(1500);
   ok('交要求頁：有說明同文字框', await has('#req-text') && (await text('#req-form')).includes('只計產出'));
   await ev(`document.querySelector('#req-text').focus()`); await send('Input.insertText', { text: '幫我擬一張聖誕節餐廳推廣單張，下星期五前要。' });
   await click('#req-send');

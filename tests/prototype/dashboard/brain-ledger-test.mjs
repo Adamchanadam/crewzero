@@ -212,8 +212,8 @@ try {
   const bp = { format: 'startup-os.ask/0.1', id: 'ask-test-brain', title: '紅藍對打：需要你決定的事（測試）', askedBy: 'AI', askedAt: lib.localIso(), todoType: 'decision', brainItem: 'wargame', questions: [{ id: 'd1', ask: '先跟進哪一方？', kind: 'choice', options: [{ text: '綠野物流', rec: true }, { text: '食材周報' }], value: '綠野物流', effect: 'now', priority: 1, why: '測試理由' }] };
   fs.writeFileSync(path.join(DATA, 'asks', bp.id + '.json'), JSON.stringify(bp));
   const d2 = await get('/api/dashboard'), asks = await get('/api/asks');
-  const tb = d2.todo.filter(t => t.brain), ab = asks.todo.filter(t => t.brain);
-  ok('生意大腦嘅問題包（辯論回應包、裁判決定包、要你決定包）喺待決事項標明屬生意大腦，監察台同 Founder Desk 同一份', tb.length === 3 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.response) && tb.some(t => t.id === dm.packs.decisions) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
+  const tb = d2.todo.filter(t => t.brain), ab = asks.todo.filter(t => t.brain), lane = d2.brainTodo || [];
+  ok('要拍板的裁判決定包留主線；辯論回應包留生意大腦；監察台同 Founder Desk 同一份', tb.length === 2 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.decisions) && lane.some(t => t.id === dm.packs.response) && !tb.some(t => t.id === dm.packs.response) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
 
   /* 畫面 */
   await openChrome();
@@ -222,7 +222,7 @@ try {
   await go('/dashboard/brain');
   ok('生意大腦總覽：冇「試驗資料夾」來源徽章', !(await ev(`!!document.querySelector('#src-badge')`)) && !(await text('body')).includes(N.dash.sourceFolder), await text('#brain-head'));
   const waits = await ev(`[...document.querySelectorAll('#wait-strip li')].map(l=>({item:l.dataset.item,href:(l.querySelector('a')||{}).getAttribute&&l.querySelector('a').getAttribute('href'),t:l.innerText}))`);
-  ok('等你處理：同待決事項同一份、同一次序（唔重複列）', JSON.stringify(waits.map(w => w.href)) === JSON.stringify(tb.map(t => t.href)) && waits.every(w => w.item === 'wargame'), { waits, tb: tb.map(t => t.href) });
+  ok('等你處理：同待決事項同一份、同一次序（唔重複列）', JSON.stringify(waits.map(w => w.href)) === JSON.stringify(lane.map(t => t.href)) && waits.every(w => w.item === 'wargame'), { waits, lane: lane.map(t => t.href) });
   await shot('brain-overview.png');
   await go('/dashboard/brain/checkup');
   ok('生意體檢頁：顯示公司紀錄嘅弱位', (await ev(`document.querySelectorAll('.weak').length`)) === brainOf('checkup').weak.length, await ev(`document.querySelectorAll('.weak').length`));

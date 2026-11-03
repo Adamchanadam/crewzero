@@ -147,7 +147,7 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
 .phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
 .help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
-.help-modal [hidden],.q-help[hidden]{display:none!important}.help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
+[hidden]{display:none!important}.help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
 .tool-more{position:relative}.tool-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center}.tool-more>summary::-webkit-details-marker{display:none}
 .tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:128px;padding:8px;background:#14161c;border:1px solid var(--line);border-radius:10px}.tool-menu .btn{width:100%;justify-content:center}
 .btn.link.q-help{color:var(--muted);text-decoration:none;font-size:var(--fs-label);font-weight:400;margin-left:auto}.dq-foot .q-help-line{margin-left:auto;display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap}.dq-foot .q-help-line .q-help{margin-left:0}.btn.link.q-help:hover:not(:disabled){color:var(--text,#e8e6e3);text-decoration:underline}
@@ -393,7 +393,12 @@ body.paused .bg *{animation:none!important}
     modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
     document.body.append(modal); askOpen.focus();
     send('/api/home', { cache: 'no-store' }).then(function (home) {
-      var card = home && home.card;
+      var card = home && home.card, action = home && home.nextAction;
+      if (action && action.text && !action.missing && !action.cancelledAt) {
+        next.append(el('p', null, action.text));
+        next.append(el('a', { cls: 'btn primary', href: '/' }, U.helpViewHome));
+        return;
+      }
       if (!card) { next.append(el('p', null, U.helpNoStep)); return; }
       next.append(el('p', null, card.today || U.helpNoStep));
       if (card.href) next.append(el('a', { cls: 'btn primary', href: String(card.href).startsWith('#') ? '/' + card.href : card.href }, card.button || U.next));

@@ -109,7 +109,7 @@ try {
   ok('(a) 外殼冇自己開場：未有任何辯論', !(await get('/api/debate')).matches.length, (await get('/api/debate')).matches);
   const d1 = await get('/api/dashboard'), wg1 = d1.brain.items.find(x => x.id === 'wargame');
   ok('(a) 生意大腦：紅藍對打顯示等你，入口去建議包', wg1.status === 'waiting' && wg1.waitHref === '/#/ask/' + D1.id && wg1.waitText === N.dash.brainWait_wargame, { status: wg1.status, href: wg1.waitHref, t: wg1.waitText });
-  ok('(a) 待決事項有呢包，標明屬生意大腦', d1.todo.some(t => t.id === D1.id && t.brain === 'wargame' && t.type === 'decision'), d1.todo.map(t => [t.id, t.brain, t.type]));
+  ok('(a) 建議包留在生意大腦，不佔主線待決', d1.brainTodo.some(t => t.id === D1.id && t.brain === 'wargame' && t.type === 'decision') && !d1.todo.some(t => t.id === D1.id), d1.brainTodo.map(t => [t.id, t.brain, t.type]));
   const hitsD = N.styleIssues(plainOf(D1));
   ok('(a) 建議包文字：用字檢查零命中、冇內部編號', !hitsD.length && !/\bH\d+\b|weak-|ask-/.test(plainOf(D1)), hitsD);
 

@@ -76,7 +76,7 @@ try {
   ok('首頁：導航顯示 2 個待決事項', (await text('.desk-count')) === '2', await text('.desk-count'));
   await shot('h1-hub.png');
   // 第一包：答 3 條
-  await click('a.btn.primary[href^="#/ask/"]');
+  await click('#next-list a[href^="#/ask/"]');
   await sleep(800);
   ok('答題頁：只出 3 張卡', (await ev(`document.querySelectorAll('.dq').length`)) === 3);
   ok('即刻生效嘅題目排第一批', (await ev(`[...document.querySelectorAll('.dq')].some(c=>c.innerText.includes('確認後即時生效'))`)));
@@ -125,7 +125,7 @@ try {
   ok('公司一頁：AI 跟進完出咗新問題包', await waitFor(async () => (await text('#track')).includes('AI 追問'), 30000), await text('#track'));
   await go(BASE);
   // 另加：深化問題包、生意體檢之後嘅「建議開辯論」（規劃書 4.6）
-  ok('首頁：AI 出嘅問題包出現（3 個；缺口 5 後另加深化問題包、建議開辯論）', (await text('.desk-count')) === String(3 + (fs.readdirSync(path.join(DATA, 'asks')).filter(f => { try { const p = JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')); return !!p.depth || !!(p.rhythm && p.rhythm.kind === 'debate'); } catch { return false; } }).length)), await text('.desk-count'));
+  ok('首頁：AI 出嘅問題包出現（3 個；缺口 5 後另加深化問題包；建議開辯論留在生意大腦）', (await text('.desk-count')) === String(3 + (fs.readdirSync(path.join(DATA, 'asks')).filter(f => { try { const p = JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')); return !!p.depth; } catch { return false; } }).length)), await text('.desk-count'));
   // 答過唔再問：再放一個包，有一條同之前一樣
   const dup = path.join(OUT, 'dup.json');
   fs.writeFileSync(dup, JSON.stringify({ format: 'startup-os.ask/0.1', title: '重複測試', questions: [
@@ -138,7 +138,7 @@ try {
   await go(BASE);
   ok('手機首頁：冇橫向捲動', await ev(`document.documentElement.scrollWidth <= innerWidth`));
   await shot('m1-hub.png');
-  await click('a.btn.primary[href^="#/ask/"]');
+  await click('#next-list a[href^="#/ask/"]');
   await sleep(800);
   ok('手機答題：冇橫向捲動', await ev(`document.documentElement.scrollWidth <= innerWidth`));
   ok('手機答題：底部大掣夠高', (await ev(`document.querySelector('.cbar .btn.primary').getBoundingClientRect().height`)) >= 44);
