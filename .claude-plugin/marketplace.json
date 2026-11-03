@@ -1,10 +1,10 @@
 {
   "name": "crewzero",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "CrewZero（零號隊員）：在你電腦上運行的 AI 團隊，給已在用 Claude Code 的創辦人",
   "owner": { "name": "Adam Chan" },
   "renames": { "startup-os": "crewzero" },
   "plugins": [
-    { "name": "crewzero", "version": "0.8.1", "source": "./prototypes/proofread/adapters/claude-code/crewzero" }
+    { "name": "crewzero", "version": "0.8.2", "source": "./prototypes/proofread/adapters/claude-code/crewzero" }
   ]
 }
