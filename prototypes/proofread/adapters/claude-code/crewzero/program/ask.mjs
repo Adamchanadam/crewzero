@@ -40,7 +40,9 @@ if (STATUS_ONLY) {
   let card = null; try {
     const c = readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null);
     card = guideCard(firstWeek, dashboardState(DIR, { cert: c && c.host ? { host: c.host, label: c.label, certifiedAt: c.certifiedAt } : null }));
-  } catch {}
+  } catch {
+    if (!fs.existsSync(DIR.ledger)) card = guideCard(firstWeek, { guide: 'noAI', todo: [] });
+  }
   if (!card || !card.today || !card.button) {
     console.log('未能讀取目前安排：目前沒有可顯示的下一步。');
     process.exit(1);

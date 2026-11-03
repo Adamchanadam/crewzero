@@ -25,6 +25,8 @@ try {
   const protoData = fs.existsSync(path.join(PROTO, 'data')) ? Object.keys(tree(path.join(PROTO, 'data'))).length : -1;
   const r1 = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), PROJ], { encoding: 'utf8', env });
   const T = path.join(PROJ, 'crewzero');
+  const firstStatus = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--status'], { encoding: 'utf8', env });
+  ok('剛安裝時查狀態：指引先設定 AI，不報錯，不建立檔案', firstStatus.status === 0 && firstStatus.stdout.includes('設定 AI') && !firstStatus.stdout.includes('未能讀取') && fs.readdirSync(path.join(T, 'data')).length === 0, firstStatus.stdout + firstStatus.stderr);
   ok('全新空資料夾安裝：結束碼 0，創辦人文字只確認安裝完成，不含路徑或程式檔', r1.status === 0 && /CrewZero 已安裝完成/.test(r1.stdout) && !r1.stdout.includes(PROJ) && !r1.stdout.includes('程式檔'), { status: r1.status, out: r1.stdout, err: r1.stderr });
   const must = ['ask.mjs', 'server.mjs', 'run.mjs', 'install.mjs', 'adapters/scheduler/install-schedule.mjs', 'adapters/hosts/claude.json', 'FIRST-WEEK.md', 'VERSION', 'START-HERE.md', 'run-schedule.cmd', 'fixtures/example-company-page-full.json'];
   ok('結構：入口、外殼、轉接層、第一星期指引、VERSION、START-HERE.md、排程啟動檔、外殼要讀嘅虛構範本都齊', must.every(f => fs.existsSync(path.join(T, f))), must.filter(f => !fs.existsSync(path.join(T, f))));
