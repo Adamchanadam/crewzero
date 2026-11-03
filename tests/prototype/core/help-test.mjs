@@ -179,10 +179,14 @@ try {
   const retriedHelpState = retriedHelpSandbox && fs.existsSync(path.join(retriedHelpSandbox, 'state.md')) ? fs.readFileSync(path.join(retriedHelpSandbox, 'state.md'), 'utf8') : '';
   ok('重試求助後保留原題文字及頁面脈絡，state.md 有待決事項和最近紀錄結構', !!first && retriedHelpNote.includes('公司概覽尚未建立時，我仍然不知道下一步。') && retriedHelpNote.includes('這題怎樣回答？') && retriedHelpState.includes('## 待決事項') && retriedHelpState.includes('## 最近紀錄') && retriedHelpState.includes('### 事件') && retriedHelpState.includes('### 已記錄答案') && retriedHelpState.includes('已設定。'), { sandbox: retriedHelpSandbox, note: retriedHelpNote, state: retriedHelpState });
 
+  const helpOnly = { status: (await get('/api/status')).j, asks: (await get('/api/asks')).j, dashboard: (await get('/api/dashboard')).j };
+  ok('求助回覆不計入待決數目、待決清單或監察台待決指標', first && helpOnly.status.openAsks === 0 && !helpOnly.asks.todo.some(t => t.id === first.id) && helpOnly.dashboard.metrics.pending === 0, { openAsks: helpOnly.status.openAsks, todo: helpOnly.asks.todo, pending: helpOnly.dashboard.metrics.pending });
+
   await cdp.go(BASE + '/#/', 1280, 1800);
-  const firstHome = await cdp.ev('(()=>{const a=document.querySelector(".hero a.btn.primary.big");return a?{href:a.getAttribute("href"),text:a.textContent,screen:document.body.innerText}:null})()');
-  ok('未有公司概覽而已有求助回覆：首頁顯示待決事項並保留交資料入口', firstHome && firstHome.href === '#/ask/' + first.id && firstHome.screen.includes(N.ui.goIntake), firstHome);
-  await cdp.click('.hero a.btn.primary.big');
+  const firstHome = await cdp.ev('(()=>{const box=document.querySelector("#help-replies"),a=box&&box.querySelector("a"),intake=document.querySelector("a[href=\'#/intake\']");return box?{title:box.querySelector("summary").textContent,href:a&&a.getAttribute("href"),intake:!!intake,hero:!!document.querySelector(".hero")}:null})()');
+  ok('未有公司概覽而只有求助回覆：首頁保留交資料及回覆入口，不把回覆當主卡', firstHome && firstHome.title === N.ui.helpReplies.replace('{n}', '1') && firstHome.href === '#/ask/' + first.id && firstHome.intake && !firstHome.hero, firstHome);
+  await cdp.ev('document.querySelector("#help-replies").open=true');
+  await cdp.click('#help-replies a');
   const qButton = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('每條問題有「不明白」入口', qButton && qButton.text === N.ui.helpNotClear && !qButton.disabled, qButton);
   mode('note:slow');
@@ -201,8 +205,12 @@ try {
   ok('題目求助：按下後只留一句等待狀態，不重複顯示已交出', await cdp.ev('!document.querySelector(".q-help").offsetParent'), null);
   const doneToast = await waitFor(async () => { const t = await cdp.ev('(document.getElementById("toast")||{}).textContent||""'); return t.includes('AI 已完成') ? t : null; }, 15000);
   ok('AI 工作完成：彈出提示', !!doneToast, doneToast);
+  // 求助回覆不計待決，要有一項真正的待決事項才看得到標題數目
+  const titlePack = path.join(DATA, 'asks', 'ask-title-test.json');
+  fs.writeFileSync(titlePack, JSON.stringify({ format: 'startup-os.ask/0.1', id: 'ask-title-test', title: '標題測試', askedBy: 'AI', askedAt: new Date().toISOString(), questions: [{ id: 'q1', ask: '測試題目？', kind: 'choice', options: [{ text: '甲', rec: true }, { text: '乙' }], value: '甲', priority: 1, why: '測試' }] }));
   await cdp.ev('Object.defineProperty(document,"hidden",{configurable:true,get:()=>true});document.dispatchEvent(new Event("visibilitychange"))');
-  const hiddenTitle = await cdp.ev('document.title');
+  const hiddenTitle = await waitFor(async () => { const t = await cdp.ev('document.title'); return /^\(\d+\) /.test(t) ? t : null; }, 20000);
+  fs.unlinkSync(titlePack);
   await cdp.ev('delete document.hidden;document.dispatchEvent(new Event("visibilitychange"))');
   ok('分頁在背景時標題顯示待決數目，回到前景移除', /^\(\d+\) /.test(hiddenTitle) && !/^\(\d+\) /.test(await cdp.ev('document.title')), hiddenTitle);
   const contextual = await waitFor(() => allPacks().find(p => p.help && p.help.packId === first.id && p.help.noteId !== sent.j.id), 45000);

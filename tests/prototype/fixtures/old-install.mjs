@@ -4,12 +4,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export function oldInstall(DATA, PROTO, { linkStatus = false } = {}) {
+export function oldInstall(DATA, PROTO, { linkStatus = false, statusGrade = 'did' } = {}) {
   const p = JSON.parse(fs.readFileSync(path.join(PROTO, 'fixtures', 'example-company-page.json'), 'utf8'));
   delete p.page.schema;
   // 例子第二站寫「並畀回饋」（口語）；會變成畫面文字嘅值用書面語
   for (const m of p.path.milestones) if (m.event && typeof m.event.value === 'string') m.event.value = m.event.value.replace(/畀/g, '提供');
-  p.glance.status.items.push({ id: 's3', plan: 'G4', kind: 'grade', label: '農場甲已簽供應意向書', value: 'did', origin: linkStatus ? 'doc' : 'ai', ...(linkStatus ? { milestone: 'm1', src: [{ from: 'intake', at: '目前進展' }] } : {}) });
+  p.glance.status.items.push({ id: 's3', plan: 'G4', kind: 'grade', label: statusGrade === 'said' ? '農場甲表示有興趣' : '農場甲已簽供應意向書', value: statusGrade, origin: linkStatus ? 'doc' : 'ai', ...(linkStatus ? { milestone: 'm1', src: [{ from: 'intake', at: '目前進展' }] } : {}) });
   p.detail = {
     ...(p.detail || {}),
     assumptions: { title: 'AI 假設（未證實）', test: '成本最低的測試', items: [

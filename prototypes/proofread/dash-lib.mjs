@@ -406,7 +406,8 @@ export const TODO_RANK = { trial: 0, order: 1, autoStop: 2, path: 3, blocking: 4
 const DECIDES = ['decision', 'blocking', 'path', 'autoStop'];
 export function buildTodo(DIR, { state, milestones, company, page, now }) {
   const today = dayStart(now);
-  const packs = listPacks(DIR).filter(p => p.open > 0);
+  // 求助回覆有固定入口，不屬待決事項，也不應影響待決數目或等候提示。
+  const packs = listPacks(DIR).filter(p => p.open > 0 && !p.isHelp);
   const decisions = Array.isArray(state.decisions) ? state.decisions : [];
   const tasks = Array.isArray(state.tasks) ? state.tasks : [];
   const msTitle = id => ((milestones || []).find(m => m.id === id) || {}).short || '';

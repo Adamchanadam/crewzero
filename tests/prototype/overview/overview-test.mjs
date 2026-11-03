@@ -129,8 +129,19 @@ try {
   s = st();
   ok('二：補咗進展標準：嗰項首批工作轉完成', s.tasks.find(t => t.id === 'md-G3').status === 'done' && !s.intake.missing.includes('G3'));
 
-  /* ---------- 三：舊公司概覽遷移、目前進展推導站點、真實事件改下一個對外動作 ---------- */
-  ok('三：假 AI 認證', await start('three', Number(PORT0) + 2, d => {
+  /* ---------- 三：目前進展的口頭表示不可推導站點完成 ---------- */
+  ok('三：口頭表示測試 AI 認證', await start('said', Number(PORT0) + 2, d => {
+    oldInstall(d, PROTO, { linkStatus: true, statusGrade: 'said' });
+  }) === 'passed');
+  mode('event:event-next');
+  b = await seen();
+  const saidEvent = await post('/api/intake', { kind: 'note', type: 'event', text: '測試：10 月 29 日與農場丙的陳先生會面，對方表示有興趣。', date: '2026-10-29' });
+  r = await newRun(b, x => x.kind === 'note' && x.noteType === 'event', 60000);
+  let saidState = st(), saidDashboard = await get('/api/dashboard'), saidMilestone = saidState.milestones.find(m => m.id === 'm1');
+  ok('三：文件記錄的口頭表示不完成第 1 站，本季完成數為 0', r && r.state === 'done' && saidMilestone && saidMilestone.state !== 'done' && saidDashboard.metrics.quarter.done === 0, { milestone: saidMilestone, quarter: saidDashboard.metrics.quarter });
+
+  /* ---------- 四：舊公司概覽遷移、目前進展推導站點、真實事件改下一個對外動作 ---------- */
+  ok('四：假 AI 認證', await start('three', Number(PORT0) + 3, d => {
     oldInstall(d, PROTO, { linkStatus: true });
   }) === 'passed');
   mode('event:event-next');
@@ -138,28 +149,28 @@ try {
   const ev = await post('/api/intake', { kind: 'note', type: 'event', text: '測試：10 月 29 日與 農場丙的陳先生 會面，對方答應介紹兩間餐廳。', date: '2026-10-29' });
   r = await newRun(b, x => x.kind === 'note' && x.noteType === 'event', 60000);
   p = page(); s = st();
-  ok('三：舊公司概覽遷移到新格式（舊版入歷史）', p.page.schema === 2 && fs.readdirSync(path.join(DATA, 'company', 'history')).some(f => /before-migrate/.test(f)) && p.path.milestones.every(m => m.witness && m.proof && m.kind), fs.readdirSync(path.join(DATA, 'company', 'history')));
+  ok('四：舊公司概覽遷移到新格式（舊版入歷史）', p.page.schema === 2 && fs.readdirSync(path.join(DATA, 'company', 'history')).some(f => /before-migrate/.test(f)) && p.path.milestones.every(m => m.witness && m.proof && m.kind), fs.readdirSync(path.join(DATA, 'company', 'history')));
   const m1c = s.milestones.find(m => m.id === 'm1');
-  ok('三：遷移保留三格權限（自己做／做完再通知／必須先問）', (p.detail.rules || []).some(x => x.boxes && (x.boxes.askFirst || []).length), p.detail.rules);
-  ok('三：已確認嘅舊公司概覽遷移後都有一次深化問題', packs().some(x => x.depth) && s.depthPackFor === s.ledgerFrom, s.depthPackFor);
-  ok('三：目前進展「農場甲已簽供應意向書」已發生（文件寫明）→ 第 1 站起始即完成，證明係交資料封存文件', m1c.state === 'done' && m1c.doneEvidence.length === 1 && fs.existsSync(path.join(DATA, m1c.doneEvidence[0])) && s.events.some(e => /站點已完成（目前進展）/.test(e.title)), m1c);
-  ok('三：遷移後未答齊嘅欄同四格轉首批工作', s.tasks.some(t => t.id === 'md-G2') && s.tasks.some(t => t.id === 'md-m2'), s.tasks.filter(t => t.firstBatch).map(t => t.id));
+  ok('四：遷移保留三格權限（自己做／做完再通知／必須先問）', (p.detail.rules || []).some(x => x.boxes && (x.boxes.askFirst || []).length), p.detail.rules);
+  ok('四：已確認嘅舊公司概覽遷移後都有一次深化問題', packs().some(x => x.depth) && s.depthPackFor === s.ledgerFrom, s.depthPackFor);
+  ok('四：文件記錄的實際行動完成第 1 站，證明是交資料封存文件', m1c.state === 'done' && m1c.doneEvidence.length === 1 && fs.existsSync(path.join(DATA, m1c.doneEvidence[0])) && s.events.some(e => /站點已完成（目前進展）/.test(e.title)), m1c);
+  ok('四：遷移後未答齊的欄位和四格轉為首批工作', s.tasks.some(t => t.id === 'md-G2') && s.tasks.some(t => t.id === 'md-m2'), s.tasks.filter(t => t.firstBatch).map(t => t.id));
   const input = s.inputs.find(i => i.id === 'in-' + ev.j.id), EP = packs().find(x => x.id === input.packId);
   const qn = EP && EP.questions.find(q => q.options[0].apply.op === 'setNextExternalAction');
-  ok('三：真實事件確認包有「下一個對外動作改為甚麼？」（維持選項寫出現值）', qn && qn.ask === N.ui.nextActionAsk && qn.options[1] && /^維持「/.test(qn.options[1].text), EP && EP.questions.map(q => q.ask + '｜' + q.options.map(o => o.text).join('／')));
+  ok('四：真實事件確認包有「下一個對外動作改為甚麼？」（維持選項寫出現值）', qn && qn.ask === N.ui.nextActionAsk && qn.options[1] && /^維持「/.test(qn.options[1].text), EP && EP.questions.map(q => q.ask + '｜' + q.options.map(o => o.text).join('／')));
   b = await seen();
   await answer(EP);
   await newRun(b, x => x.kind === 'ask' && x.ref === EP.id);
   s = st();
-  ok('三：確認後下一個對外動作改為新一句，事件流有記錄', s.company.nextExternalAction.text === qn.options[0].apply.text && s.events.some(e => /下一個對外動作改為/.test(e.title)), s.company.nextExternalAction);
+  ok('四：確認後下一個對外動作改為新一句，事件流有記錄', s.company.nextExternalAction.text === qn.options[0].apply.text && s.events.some(e => /下一個對外動作改為/.test(e.title)), s.company.nextExternalAction);
   let d3 = await get('/api/dashboard');
-  ok('三：監察台下一個對外動作同小旗跟新一句', d3.nextAction.text === qn.options[0].apply.text && d3.nextAction.milestoneId === (qn.options[0].apply.milestoneId || ''), d3.nextAction);
+  ok('四：監察台下一個對外動作同小旗跟新一句', d3.nextAction.text === qn.options[0].apply.text && d3.nextAction.milestoneId === (qn.options[0].apply.milestoneId || ''), d3.nextAction);
   b = await seen();
   await proofread([]);
   await newRun(b, x => x.kind === 'proofread', 60000);
   d3 = await get('/api/dashboard');
-  ok('三：之後再次成頁確認（下一個對外動作冇改）唔會蓋走真實事件定嘅新一句', d3.nextAction.text === qn.options[0].apply.text, d3.nextAction);
-  ok('三：監察台第 1 站已完成，唔再標待深化', d3.milestones.find(m => m.id === 'm1').state === 'done');
+  ok('四：之後再次成頁確認（下一個對外動作冇改）唔會蓋走真實事件定嘅新一句', d3.nextAction.text === qn.options[0].apply.text, d3.nextAction);
+  ok('四：監察台第 1 站已完成，唔再標待深化', d3.milestones.find(m => m.id === 'm1').state === 'done');
 } catch (e) { ok('測試程式出錯', false, String(e && e.stack || e)); }
 finally {
   if (srv) srv.kill();

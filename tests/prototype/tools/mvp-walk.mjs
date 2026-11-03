@@ -84,6 +84,7 @@ try {
   step('4 交資料（虛構「從田間到餐桌」）');
   await c.go(B + '#/intake', 1280, 2500);
   if (await has('#intake-anyway')) await c.click('#intake-anyway');
+  await c.click('input[name="biz-type"][value="goods"]'); await sleep(100);
   const vals = ['「從田間到餐桌」把本地小農的當季蔬菜直送餐廳；客戶是注重食材來源的中小型餐廳。', '向農場按批採購，向餐廳按週收費，餐廳每週下一次或兩次單。', '已認識兩位農場主（甲、乙），口頭有興趣，未簽。餐廳未接觸。牌照保險未查。', '約第三位農場主（丙）見面。', '送貨我自己做；農場我自己談；餐廳我自己介紹；合規與保險未有人。'];
   for (let i = 0; i < 5; i++) { await c.ev(`document.querySelector('#q${i + 1}').focus()`); await c.send('Input.insertText', { text: vals[i] }); await sleep(80); }
   await shot('04-intake-filled.png');

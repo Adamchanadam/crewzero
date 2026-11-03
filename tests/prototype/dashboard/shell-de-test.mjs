@@ -241,6 +241,7 @@ try {
   const requiredIds = await c.ev(`(()=>[...document.querySelectorAll('.dq')].filter(card=>card.querySelector('.eff,.conflict')).map(card=>card.id.replace(/^q-/,'')))()`);
   for (const id of requiredIds) await tap('#q-' + id + ' .opt');
   await tap('#go-main');
+  if (!(await waitFor(() => c.ev(`!!document.querySelector('#do-confirm')`), 5000))) console.log('未見確認框', JSON.stringify(requiredIds), await c.ev(`location.hash + ' | ' + document.querySelector('#app').innerText.slice(0,1400)`));
   await tap('#do-confirm');
   await sleep(1500);
   await tap('nav.tabs a[data-tab="overview"]'); await sleep(1500);

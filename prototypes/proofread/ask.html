@@ -350,16 +350,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     // 只有頁面第一次載入待決事項先算「打開」（記低時間）；輪詢同返回唔算
     var seen = !V.homeSeen; V.homeSeen = true;
     Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; })]).then(function (r) {
-      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open; }), todo = asks.todo || [], rank = {}, pendingHelp = {};
+      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = asks.todo || [], rank = {}, pendingHelp = {};
       asks.packs.forEach(function (p) { if (p.open && p.helpForPackId) pendingHelp[p.helpForPackId] = true; });
       (st.helpInFlight || []).forEach(function (h) { if (h.packId) pendingHelp[h.packId] = true; });
       V.home = home;
       todo.forEach(function (t, i) { rank[t.id] = i; });
-      // 創辦人主動求助的回覆排最前；其餘按待決事項次序
-      open.sort(function (a, b) { return ((b.isHelp ? 1 : 0) - (a.isHelp ? 1 : 0)) || (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
+      // 待決事項只按待決清單的次序排列；求助回覆另設固定入口。
+      open.sort(function (a, b) { return (rank[a.id] == null ? 1e9 : rank[a.id]) - (rank[b.id] == null ? 1e9 : rank[b.id]); });
       V.status = st; checkInstance(st);
       // 第一次打開（未有公司概覽）：直接去交資料
-      if ((!st.company || !st.company.ready) && !open.length) { location.replace('#/intake'); return; }
+      if ((!st.company || !st.company.ready) && !open.length && !helpReplies.length) { location.replace('#/intake'); return; }
       var first = open[0], c = asks.company || st.company || {}, firstTodo = first ? todo.filter(function (t) { return t.id === first.id; })[0] : null;
       var main = first
         ? h('section', { class: 'hero' },
@@ -385,6 +385,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
               t.kind === 'overview' ? h('a', { class: 'btn', href: '/proofread.html' }, N.ui.goConfirm) : t.kind === 'schedule' ? h('a', { class: 'btn', href: t.href }, N.ui.schedGoSystem) : h('a', { class: 'btn', href: '#/ask/' + t.id }, T('answerN', { n: Math.min(3, p ? p.open : 1) })),
               staleHelp(t, p, pendingHelp)));
         })) : null;
+      var helpRepliesCard = helpReplies.length ? h('details', { class: 'layer', id: 'help-replies' }, h('summary', null, T('helpReplies', { n: helpReplies.length })),
+        h('ul', { class: 'qa' }, helpReplies.map(function (p) { return h('li', null, h('a', { href: '#/ask/' + p.id }, N.fix(p.title))); }))) : null;
       var companyCard = h('section', { class: 'layer accent' + (c.confirmed ? ' ok' : '') },
         h('span', { class: 'eyebrow' }, N.ui.company),
         h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, c.confirmed ? N.ui.confirmed + '（' + dayOf(c.confirmedAt) + '）' : N.ui.unconfirmed),
@@ -425,7 +427,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           h('a', { class: 'btn' + (['done', 'adopt', 'failed'].indexOf(m.phase) >= 0 ? ' primary' : ''), href: '#/debate/' + m.id, id: 'hub-debate-match' }, '查看'))); }).catch(function () { });
       // 有待決事項時，首張待決事項就是今日要做的事，不再另放一張主卡
       var todayIsAnswer = open.length && home && home.card && home.card.key === 'daily' && !home.firstWeekDone;
-      setApp(head('pending', st), sinceRow(home), aiBlock(st), todayIsAnswer ? null : todayCard(home), main, others, h('p', { class: 'tools-label' }, N.ui.otherFeatures), practiceCard, debateCard, companyCard, reqCard, aiCard,
+      setApp(head('pending', st), sinceRow(home), aiBlock(st), todayIsAnswer ? null : todayCard(home), main, others, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, reqCard, aiCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
       DESK.title('pending', open.length ? '（' + open.length + '）' : '');
       V.pollTimer = setTimeout(showHub, st.busy ? 3000 : 8000);

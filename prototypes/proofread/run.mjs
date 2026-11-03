@@ -34,6 +34,8 @@ const log = msg => fs.appendFileSync(LOG, `[${localIso()}] ${msg}\n`);
 // 公司概覽清單區段：舊資料寫成 { title, items } 都照讀（新資料由 company-page-check 規整）
 const listOf = x => Array.isArray(x) ? x : x && Array.isArray(x.items) ? x.items : x && typeof x === 'object' && (x.title || x.label || x.id) ? [x] : [];
 const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+// 只有外部已實際行動或已付出代價，才可由證據級推導為站點完成；口頭表示仍是進展，不是完成。
+const gradeCompletes = grade => grade === 'did' || grade === 'paid';
 
 /* ---------- 一次只准一個 run ---------- */
 function takeLock() {
@@ -132,12 +134,12 @@ function syncLedger() {
   const as = assumptionsFromPage(page).map(a => { const o = oldAs.find(x => same ? x.pageRef === a.pageRef : x.text === a.text); return !o ? a : { ...a, ...pick(o, AS_KEEP), ...(o.cheapestTestBy === 'checkup' && !String(a.cheapestTest || '').trim() ? pick(o, ['cheapestTest', 'cheapestTestBy', 'cheapestTestAt']) : {}) }; });
   const reg = registry(page), vals = c.values || {}, edited = new Set((c.edits || []).map(e => e.id));
   const v = f => String(vals[f.id] ?? f.value ?? '');
-  // 「目前去到哪裏」（G4）推導站點起始狀態：某項連住一站、已發生，而且有文件出處或者由你改過 → 嗰站完成（證明＝交資料嘅封存文件）
+  // 「目前去到哪裏」（G4）推導站點起始狀態：某項連住一站、已實際發生，而且有文件出處或者由你改過 → 嗰站完成（證明＝交資料嘅封存文件）
   s.events = s.events || [];
   const status = listOf(page.glance && page.glance.status && page.glance.status.items);
   for (const it of status) {
     const m = it.milestone && ms.find(x => x.id === it.milestone), g = v(it);
-    if (!m || m.state === 'done' || !g || g === 'none' || !(it.origin === 'doc' || edited.has(it.id))) continue;
+    if (!m || m.state === 'done' || !gradeCompletes(g) || !(it.origin === 'doc' || edited.has(it.id))) continue;
     const ev = intakeArchive(page.page.id);
     Object.assign(m, { state: 'done', doneAt: String(c.confirmedAt || localIso()).slice(0, 10), doneEvidence: ev ? [ev] : [], doneInputId: 'overview:' + (c.replyFile || '') });
     s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type: 'milestone', title: '站點已完成（目前進展）：' + m.short, relatedIds: [m.id], moduleIds: ['now', 'paths'] });
