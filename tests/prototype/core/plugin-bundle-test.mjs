@@ -29,6 +29,8 @@ try {
   const want = rules.programFiles(PROTO);
   const have = fs.existsSync(PROG) ? files(PROG).filter(f => f !== 'MANIFEST.sha256') : [];
   const diff = { missing: want.filter(f => !have.includes(f)), extra: have.filter(f => !want.includes(f)), changed: want.filter(f => have.includes(f) && sha(path.join(PROG, f)) !== sha(path.join(PROTO, f))) };
+  const attr = spawnSync('git', ['check-attr', 'text', '--', 'adapters/claude-code/crewzero/program/ask.html'], { cwd: PROTO, encoding: 'utf8' });
+  ok('插件程式下載時不可轉換換行符（校驗清單按位元組）', attr.status === 0 && /text: unset/.test(attr.stdout), attr.stdout);
   ok('插件入面嘅程式（program/）同原型逐檔一致（同一排除清單）；唔一致請重跑 build-plugin.mjs', want.length > 0 && !diff.missing.length && !diff.extra.length && !diff.changed.length, diff);
   const man = fs.existsSync(path.join(PROG, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(PROG, 'MANIFEST.sha256'), 'utf8').trim().split(/\r?\n/).map(l => l.split('  ')) : [];
   ok('MANIFEST.sha256 列齊每個程式檔同正確雜湊', man.length === want.length && man.every(([h, f]) => want.includes(f) && sha(path.join(PROG, f)) === h), man.length + ' vs ' + want.length);

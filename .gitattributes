@@ -1,0 +1,2 @@
+# 插件程式係生成物，MANIFEST.sha256 按位元組校驗；Windows 預設 core.autocrlf 會改換行符令更新被擋
+prototypes/proofread/adapters/claude-code/crewzero/program/** -text
