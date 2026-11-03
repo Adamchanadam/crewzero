@@ -27,7 +27,7 @@ if (fs.existsSync(PROJ)) {
 fs.mkdirSync(PROJ, { recursive: true }); fs.mkdirSync(SHOTS, { recursive: true });
 const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|BEARER|OAUTH/i.test(k) && !/^CLAUDE/i.test(k) && !/^CODEX_THREAD_ID$/i.test(k) && !/^SOS_/.test(k)));
 const SCHED = { SOS_SCHED_CMD: path.join(HERE, '..', 'lib', 'fake-schtasks.mjs'), SOS_SCHED_LOG: path.join(OUT, 'sched-calls.jsonl') };
-const envSrv = { ...clean, ...SCHED, SOS_PORT: String(PORT), SOS_NO_OPEN: '1', ...(REAL ? {} : { SOS_ADAPTER: FAKE }) };
+const envSrv = { ...clean, ...SCHED, SOS_PORT: String(PORT), SOS_NO_OPEN: '1', CZ_NO_WELCOME: '1', ...(REAL ? {} : { SOS_ADAPTER: FAKE }) };
 const sha = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 const tree = root => { const o = {}; (function w(d, rel) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const r = rel ? rel + '/' + e.name : e.name, p = path.join(d, e.name); if (e.isDirectory()) w(p, r); else o[r] = sha(p); } })(root, ''); return o; };
 const readJ = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
@@ -60,7 +60,7 @@ try {
   step('1b 排程（假登記程式；唔登記真排程）');
   const S = path.join(T, 'adapters', 'scheduler', 'install-schedule.mjs');
   const pr = spawnSync(process.execPath, [S], { encoding: 'utf8', env: { ...clean, ...SCHED } });
-  ok('印出每日自動開工說明（未開啟）：冇系統命令，登入啟動要另行同意', pr.status === 0 && /尚未開啟/.test(pr.stdout) && /另一項可選設定/.test(pr.stdout) && !/Register-ScheduledTask/.test(pr.stdout + pr.stderr), (pr.stdout + pr.stderr).slice(0, 400));
+  ok('印出每日自動開工說明（未開啟）：冇系統命令，登入啟動要另行同意', pr.status === 0 && /尚未開啟/.test(pr.stdout) && /目前不會設定/.test(pr.stdout) && !/Register-ScheduledTask/.test(pr.stdout + pr.stderr), (pr.stdout + pr.stderr).slice(0, 400));
   const rg = spawnSync(process.execPath, [S, '--register'], { encoding: 'utf8', env: { ...clean, ...SCHED } });
   const mark = readJ(path.join(T, 'data', 'ledger', 'schedule.json'));
   ok('批准（假）：寫入伺服器授權標記，登入啟動保持未開啟', rg.status === 0 && mark && mark.mode === 'server' && mark.autostart && mark.autostart.enabled === false && mark.runTime === '21:00', rg.stdout);

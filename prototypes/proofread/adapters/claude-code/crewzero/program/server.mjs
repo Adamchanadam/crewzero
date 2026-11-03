@@ -298,6 +298,37 @@ function hostList() {
   });
 }
 const certInfo = () => { const c = readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null); return c ? { host: c.host, label: c.label, certifiedAt: c.certifiedAt } : null; };
+const WELCOME_FILE = path.join(ROOT, 'welcome.html'), WELCOME_SEEN = path.join(DESK_DIR, 'welcome-seen.json');
+let welcomeSeenInMemory = false, demoOpeningAt = 0;
+function isDemoInstance() {
+  if (SIM || samePhysicalPath(DIR.data, path.join(ROOT, 'demo-data')) === true) return true;
+  return (readJSON(path.join(DIR.ledger, 'state.json'), null) || {}).demo === true;
+}
+function welcomeSeen() {
+  if (welcomeSeenInMemory) return true;
+  try { return fs.existsSync(WELCOME_SEEN); } catch { return false; }
+}
+function markWelcomeSeen() {
+  welcomeSeenInMemory = true;
+  try { fs.mkdirSync(DESK_DIR, { recursive: true }); writeJSON(WELCOME_SEEN, { at: localIso() }); } catch { }
+}
+function hasCompanyData() {
+  return companyStatus().ready || fs.existsSync(path.join(DIR.company, 'biz.json'));
+}
+function shouldShowWelcome() {
+  return !certInfo() && !hasCompanyData() && !welcomeSeen() && !isDemoInstance() && process.env.CZ_NO_WELCOME !== '1';
+}
+function openDemo() {
+  if (isDemoInstance()) return [409, { error: 'demo' }];
+  if (Date.now() - demoOpeningAt < 10000) return [429, { error: 'busy', message: NAMES.ui.openTooSoon }];
+  const env = cleanEnv();
+  delete env.SOS_DATA; delete env.SOS_SIM; delete env.SOS_PORT;
+  try {
+    demoOpeningAt = Date.now();
+    spawn(process.execPath, [path.join(ROOT, 'ask.mjs'), '--dashboard', '--demo'], { cwd: ROOT, env, detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    return [202, { ok: true }];
+  } catch { return [500, { error: 'open' }]; }
+}
 
 /* ---------- 排隊：去抖、一次一個、做完見仲有就再做 ---------- */
 let child = null, again = false, timer = null;
@@ -1005,6 +1036,16 @@ const handler = async (req, res) => {
       if (dashTab === 'overview' && req.method === 'GET' && passOf(req)) lastSeenPrev = touchLastSeen(DIR, SERVER_VERSION);
       return send(res, 200, fs.readFileSync(path.join(ROOT, 'dashboard.html')), TYPES['.html']);
     }
+    // 新用戶第一次由首頁入：只限已配對、未設定、未有公司資料先帶去入門頁；其他入口一律唔郁。
+    if (req.method === 'GET' && p === '/') {
+      if (passOf(req) && shouldShowWelcome()) { res.writeHead(302, { Location: '/welcome', 'Cache-Control': 'no-store' }); return res.end(); }
+      return send(res, 200, fs.readFileSync(path.join(ROOT, 'ask.html')), TYPES['.html']);
+    }
+    // 入門頁同監察台一樣先送頁殼；未配對就由頁面讀回後顯示配對指引，亦唔會留低已看紀錄。
+    if ((req.method === 'GET' || req.method === 'HEAD') && p === '/welcome') {
+      if (req.method === 'GET' && passOf(req)) markWelcomeSeen();
+      return send(res, 200, fs.readFileSync(WELCOME_FILE), TYPES['.html']);
+    }
     // 品牌角色 AI 團隊圖（品牌角色規格）：只送 assets/ 入面 crew-*.webp，冇就 404
     const am = /^\/assets\/(crew-[a-z0-9-]+\.webp)$/.exec(p);
     if ((req.method === 'GET' || req.method === 'HEAD') && am) {
@@ -1092,6 +1133,10 @@ const handler = async (req, res) => {
         if (body.action === 'phone-reject') return send(res, ...decidePhone(body.id, false));
         // 撤銷一部已配對裝置（只限已配對嘅本機瀏覽器可按；撤銷自己嗰部之後，呢個瀏覽器下一次讀回就會見到配對指引）
         if (body.action === 'revoke') return send(res, ...revokePass(body.id));
+        if (body.action === 'openDemo') {
+          if (Object.keys(body).some(k => k !== 'action')) return send(res, 400, { error: 'invalid' });
+          return send(res, ...openDemo());
+        }
         if (body.action === 'openFolder' || body.action === 'runNow') {
           if (Object.keys(body).some(k => k !== 'action')) return send(res, 400, { error: 'invalid' });
           if (body.action === 'openFolder') {

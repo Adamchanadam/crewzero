@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>30 秒看懂 CrewZero</title>
+<script src="/names.js"></script>
+<style>
+:root {
+  --bg: #060608; --stage: #0d1426; --line: rgba(255,255,255,.095);
+  --text: #f2f4f8; --muted: #a4abba; --amber: #e88d4f; --amber-soft: #ffc18e; --ember: #ffb066;
+  --ui: Inter, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui); font-size: 16px; line-height: 1.65; overflow-x: hidden; }
+img { display: block; max-width: 100%; }
+code { font-family: var(--mono); font-size: .92em; color: var(--amber-soft); background: rgba(232,141,79,.12); border: 1px solid rgba(232,141,79,.26); border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--amber-soft); outline-offset: 3px; }
+
+/* 第一屏：循環 */
+.hero { position: relative; min-height: 100vh; min-height: 100svh; display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); align-items: center; gap: 8px;
+  padding-block: 28px; padding-left: max(48px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); overflow: hidden;
+  background: radial-gradient(900px 620px at 70% 52%, #15203a 0%, rgba(13,20,38,.55) 46%, transparent 74%), var(--bg); }
+.copy { position: relative; z-index: 2; min-width: 0; }
+.eyebrow { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: .14em; color: var(--amber-soft); }
+.eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+h1 { margin: 0 0 12px; font-size: clamp(34px, 3.5vw, 50px); line-height: 1.16; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--amber-soft); }
+.lead { margin: 0 0 26px; color: var(--muted); font-size: 17px; max-width: 26em; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.steps li { display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid transparent; animation: rowOn 12s infinite; animation-delay: calc(var(--i) * 3s); }
+.num { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #1b0f06; background: var(--amber); }
+.steps b { display: block; font-size: 16.5px; line-height: 1.35; font-weight: 650; }
+.steps span.t { display: block; color: var(--muted); font-size: 14px; line-height: 1.5; margin-top: 2px; }
+@keyframes rowOn { 0%, 22% { background: rgba(232,141,79,.11); border-color: rgba(232,141,79,.3); } 27%, 100% { background: transparent; border-color: transparent; } }
+
+.stage { min-width: 0; width: 100%; max-width: calc((100vh - 24px) * 1.42); justify-self: center; }
+.stage-in { position: relative; width: 124%; margin-left: -12%; }
+.stage img { width: 100%; height: auto;
+  -webkit-mask-image: linear-gradient(90deg, transparent 2%, #000 15%, #000 85%, transparent 98%), linear-gradient(180deg, transparent 0, #000 5%, #000 95%, transparent 100%); -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, transparent 2%, #000 15%, #000 85%, transparent 98%), linear-gradient(180deg, transparent 0, #000 5%, #000 95%, transparent 100%); mask-composite: intersect; }
+.stage svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.arc { fill: none; stroke: #fff1dc; stroke-width: 7; stroke-linecap: round; opacity: 0; filter: url(#glow); animation: arcOn 12s infinite; animation-delay: calc(var(--i) * 3s); }
+@keyframes arcOn { 0%, 8% { opacity: 0; stroke-dashoffset: 1; } 12% { opacity: 1; stroke-dashoffset: 1; } 24% { opacity: 1; stroke-dashoffset: 0; } 28%, 100% { opacity: 0; stroke-dashoffset: 0; } }
+.chev { fill: none; stroke: #ffd9b0; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; filter: url(#glow); }
+.pin { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; padding: 5px 13px 5px 5px; border-radius: 999px; font-size: clamp(13px, 1.05vw, 15px); font-weight: 650;
+  background: rgba(10,12,18,.84); border: 1px solid rgba(255,193,142,.4); box-shadow: 0 6px 22px rgba(0,0,0,.5); animation: pinOn 12s infinite; animation-delay: calc(var(--i) * 3s); }
+.pin .num { width: 24px; height: 24px; font-size: 13px; }
+@keyframes pinOn { 0%, 22% { border-color: var(--amber-soft); box-shadow: 0 0 0 4px rgba(232,141,79,.2), 0 0 26px rgba(232,141,79,.55); } 27%, 100% { border-color: rgba(255,193,142,.4); box-shadow: 0 6px 22px rgba(0,0,0,.5); } }
+
+.more { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); color: var(--muted); font-size: 13px; text-decoration: none; display: inline-flex; gap: 8px; align-items: center; z-index: 3; }
+.more::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--amber-soft); border-bottom: 2px solid var(--amber-soft); transform: rotate(45deg) translateY(-2px); }
+
+/* 第二屏：四件事，一次只放一幅圖 */
+.tips { min-height: 100vh; min-height: 100svh; display: grid; grid-template-columns: minmax(340px, 470px) minmax(0, 1fr); gap: clamp(24px, 4vw, 64px); align-items: center;
+  padding-block: 56px; padding-left: max(48px, env(safe-area-inset-left, 0px)); padding-right: max(48px, env(safe-area-inset-right, 0px)); background: linear-gradient(180deg, var(--bg), #0a0e1a 40%, var(--bg)); }
+.tips h2 { margin: 0 0 20px; font-size: clamp(28px, 2.7vw, 38px); line-height: 1.2; font-weight: 700; }
+.tablist { display: grid; gap: 8px; min-width: 0; }
+.tab { position: relative; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; padding: 15px 18px 15px 20px; border-radius: 14px; background: transparent; border: 1px solid var(--line); transition: background .25s, border-color .25s; }
+.tab b { display: block; font-size: 17.5px; font-weight: 650; line-height: 1.35; }
+.tab p { margin: 5px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+.tab small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+.tab:hover { background: rgba(255,255,255,.035); }
+.tab[aria-selected="true"] { background: rgba(232,141,79,.1); border-color: rgba(232,141,79,.42); }
+.tab[aria-selected="true"]::before { content: ""; position: absolute; left: -1px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+.frame { position: relative; aspect-ratio: 3 / 2; border-radius: 20px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.6); min-width: 0; }
+.frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.025); transition: opacity .55s ease, transform 1.2s ease; }
+.frame img.on { opacity: 1; transform: none; }
+
+/* 收尾 */
+.go { padding-block: 44px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); text-align: center; border-top: 1px solid var(--line); }
+.go h2 { margin: 0 0 18px; font-size: 26px; font-weight: 700; }
+.go .btns { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.btn { display: inline-block; padding: 13px 26px; border-radius: 12px; text-decoration: none; font-weight: 650; border: 1px solid rgba(255,193,142,.4); color: var(--text); }
+.btn.primary { background: var(--amber); border-color: var(--amber); color: #1b0f06; }
+.btn[aria-disabled="true"] { opacity: .65; cursor: wait; }
+.go p { margin: 14px 0 0; color: var(--muted); font-size: 13.5px; }
+
+.card-img { display: none; }
+.hero-go { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-left: 12px; }
+.hero-go .btn { padding: 11px 20px; font-size: 15px; }
+.demo-note { display: none; margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+.demo-note:not(:empty) { display: block; }
+.no-pass { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(900px 640px at 50% 38%, #0c0e14 0%, #060608 72%); }
+.no-pass[hidden] { display: none; }
+.no-pass-card { width: min(600px, 100%); padding: 22px 26px; border: 1px solid var(--line); border-radius: 14px; background: rgba(14,15,19,.96); box-shadow: 0 18px 40px -24px rgba(0,0,0,.8); }
+.no-pass-card h2 { margin: 4px 0 10px; font-size: clamp(25px, 4vw, 30px); line-height: 1.3; }
+.no-pass-card p { margin: 0 0 10px; }
+.no-pass-card .small { color: var(--muted); font-size: 14px; }
+
+@media (max-width: 960px) {
+  .hero { grid-template-columns: minmax(0, 1fr); min-height: 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 24px; }
+  .stage { order: -1; max-width: none; margin-top: 10px; }
+  .stage-in { width: 136%; margin-left: -18%; }
+  .pin { padding: 3px; font-size: 0; gap: 0; }
+  .pin .num { width: 26px; height: 26px; font-size: 14px; }
+  h1 { font-size: 32px; }
+  .lead { margin-bottom: 14px; font-size: 16px; }
+  .hero-go { padding-left: 0; }
+  .hero-go .btn { flex: 1 1 auto; text-align: center; }
+  .more { display: none; }
+  .tips { grid-template-columns: minmax(0, 1fr); min-height: 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px; }
+  .frame { display: none; }
+  .tablist { gap: 18px; }
+  .tab { padding: 0 0 14px; cursor: default; border-radius: 16px; overflow: hidden; background: rgba(255,255,255,.025) !important; border-color: var(--line) !important; }
+  .tab::before { display: none; }
+  .tab b, .tab p, .tab small { padding-inline: 16px; }
+  .tab b { margin-top: 12px; }
+  .card-img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .steps li, .pin, .arc { animation: none; }
+  .frame img { transition: none; transform: none; }
+}
+</style>
+</head>
+<body>
+<main>
+  <section class="hero" aria-labelledby="t">
+    <div class="copy">
+      <p class="eyebrow"><i></i>30 秒看懂</p>
+      <h1 id="t">你定方向，<br><em>AI 團隊</em>推進。</h1>
+      <p class="lead">一個循環就是全部。</p>
+      <ol class="steps">
+        <li style="--i:0"><span class="num">1</span><div><b>你交資料或答題</b><span class="t">有文件就交；沒有文件，回答幾條問題也可以。</span></div></li>
+        <li style="--i:1"><span class="num">2</span><div><b>AI 團隊去做</b><span class="t">整理資料、找出弱點、擬文件。只做準備，不對外。</span></div></li>
+        <li style="--i:2"><span class="num">3</span><div><b>做好的交到你面前</b><span class="t">每項都附建議和理由。要發出去的，由你親自發。</span></div></li>
+        <li style="--i:3"><span class="num">4</span><div><b>你來決定</b><span class="t">接受、退回或改寫。你的決定，就是下一輪的方向。</span></div></li>
+      </ol>
+      <div class="hero-go"><a class="btn primary" data-welcome-setup href="/#/setup">開始設定</a><a class="btn" data-welcome-demo href="#demo">先看虛構公司示範</a></div>
+      <p class="demo-note" id="demo-note" aria-live="polite"></p>
+    </div>
+    <div class="stage" id="stage"><div class="stage-in">
+      <img src="/assets/crew-welcome-loop.webp" width="1672" height="941" alt="插圖：圓形轉盤上一圈發光的路線連起四站：門口放下一疊文件；工作枱上三位成員在工作；統籌敬禮，前面放着做好的文件和未寄的信；一份打了勾的文件放在石座上。">
+      <svg viewBox="0 0 1672 941" aria-hidden="true" id="loop">
+        <defs><filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      </svg>
+      <span class="pin" style="--i:0;left:49.8%;top:3%"><span class="num">1</span>你交資料</span>
+      <span class="pin" style="--i:1;left:72.5%;top:59%"><span class="num">2</span>AI 團隊去做</span>
+      <span class="pin" style="--i:2;left:50%;top:92.5%"><span class="num">3</span>交到你面前</span>
+      <span class="pin" style="--i:3;left:25.5%;top:59%"><span class="num">4</span>你來決定</span>
+    </div></div>
+    <a class="more" href="#tips">再看四件事</a>
+  </section>
+
+  <section class="tips" id="tips" aria-labelledby="t2">
+    <div>
+      <h2 id="t2">只要記住四件事</h2>
+      <div class="tablist" role="tablist" aria-label="四件要記住的事">
+        <button class="tab" role="tab" aria-selected="true" data-i="0"><img class="card-img" src="/assets/crew-welcome-door.webp" alt=""><b>只有一個入口</b><p>每天在 AI 對話輸入 <code>/crewzero:desk</code>，打開你做決定的頁面（Founder Desk）。</p><small>Codex 用 <code>$crewzero:desk</code>，Antigravity 用 <code>/desk</code>。</small></button>
+        <button class="tab" role="tab" aria-selected="false" data-i="1"><img class="card-img" src="/assets/crew-welcome-questions.webp" alt=""><b>每次只答最重要的 3 條</b><p>每條都附 AI 的建議和理由；其餘先照建議計住，之後隨時可改。</p></button>
+        <button class="tab" role="tab" aria-selected="false" data-i="2"><img class="card-img" src="/assets/crew-welcome-boundary.webp" alt=""><b>對外的事由你做</b><p>AI 不會發送任何內容，也不會代你答應、簽署或付款。</p></button>
+        <button class="tab" role="tab" aria-selected="false" data-i="3"><img class="card-img" src="/assets/crew-welcome-unstuck.webp" alt=""><b>卡住就按「需要幫助」</b><p>在頁頂問 AI，答案會留在紀錄。不用自己查原因。</p></button>
+      </div>
+    </div>
+    <div class="frame" id="frame" role="tabpanel" aria-live="off">
+      <img class="on" src="/assets/crew-welcome-door.webp" alt="插圖：拱門半開透出暖光，統籌站在門邊敬禮。">
+      <img src="/assets/crew-welcome-questions.webp" alt="插圖：三張卡片排成一行，兩張已打勾發亮，第三張等你回答，其餘卡片放在一旁；統籌敬禮，六位成員停手等候。">
+      <img src="/assets/crew-welcome-boundary.webp" alt="插圖：封好的信放在石座上，繩後的成員只看不碰。">
+      <img src="/assets/crew-welcome-unstuck.webp" alt="插圖：兩位成員用放大鏡和聽診器檢查一團打結的繩，繩由結中理成一條直線；統籌提着燈在後面。">
+    </div>
+  </section>
+
+  <section class="go" aria-label="開始">
+    <h2>下一步，只有一步</h2>
+    <div class="btns"><a class="btn primary" data-welcome-setup href="/#/setup">開始設定</a><a class="btn" data-welcome-demo href="#demo">先看虛構公司示範</a></div>
+    <p>這頁之後可在「需要幫助」再次打開。</p>
+  </section>
+</main>
+<div class="no-pass" id="no-pass" role="alertdialog" aria-labelledby="no-pass-title" hidden>
+  <section class="no-pass-card"><p class="eyebrow"><i></i>CrewZero</p><h2 id="no-pass-title"></h2><p id="no-pass-desk"></p><p class="small" id="no-pass-why"></p></section>
+</div>
+<script>
+(function () {
+  var C = { x: 835, y: 472, rx: 482, ry: 277 };
+  var ARCS = [[-72, -22], [24, 72], [108, 156], [202, 252]];
+  var svg = document.getElementById('loop'), NS = 'http://www.w3.org/2000/svg';
+  var pt = function (d) { var a = d * Math.PI / 180; return [C.x + C.rx * Math.cos(a), C.y + C.ry * Math.sin(a)]; };
+  ARCS.forEach(function (arc, i) {
+    var a = pt(arc[0]), b = pt(arc[1]);
+    var p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', 'M' + a[0] + ' ' + a[1] + ' A' + C.rx + ' ' + C.ry + ' 0 0 1 ' + b[0] + ' ' + b[1]);
+    p.setAttribute('class', 'arc'); p.setAttribute('pathLength', '1'); p.style.setProperty('--i', i);
+    p.style.strokeDasharray = '.26 1'; svg.appendChild(p);
+    var mid = (arc[0] + arc[1]) / 2, m = pt(mid), n = pt(mid + 1);
+    var deg = Math.atan2(n[1] - m[1], n[0] - m[0]) * 180 / Math.PI;
+    var ch = document.createElementNS(NS, 'path');
+    ch.setAttribute('d', 'M-13 -17 L9 0 L-13 17'); ch.setAttribute('class', 'chev');
+    ch.setAttribute('transform', 'translate(' + m[0] + ' ' + m[1] + ') rotate(' + deg + ')'); svg.appendChild(ch);
+  });
+
+  var tabs = [].slice.call(document.querySelectorAll('.tab')), imgs = [].slice.call(document.querySelectorAll('#frame img'));
+  var show = function (i) { tabs.forEach(function (t, n) { t.setAttribute('aria-selected', n === i ? 'true' : 'false'); t.tabIndex = n === i ? 0 : -1; }); imgs.forEach(function (m, n) { m.classList.toggle('on', n === i); }); };
+  var timer = null, stop = function () { clearInterval(timer); timer = null; };
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { stop(); show(i); });
+    t.addEventListener('keydown', function (e) { if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return; e.preventDefault(); stop(); var n = (i + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length; show(n); tabs[n].focus(); });
+  });
+  show(0);
+  var still = matchMedia('(prefers-reduced-motion: reduce)').matches, wide = matchMedia('(min-width: 961px)').matches;
+  if (!still && wide && 'IntersectionObserver' in window) {
+    var cur = 0;
+    new IntersectionObserver(function (es) { if (es[0].isIntersecting && !timer && cur >= 0) timer = setInterval(function () { cur = (cur + 1) % tabs.length; show(cur); }, 5000); else if (!es[0].isIntersecting) stop(); }, { threshold: .5 }).observe(document.getElementById('tips'));
+    tabs.forEach(function (t) { t.addEventListener('click', function () { cur = -1; }); });
+  }
+
+  var setupLinks = [].slice.call(document.querySelectorAll('[data-welcome-setup]'));
+  var demoLinks = [].slice.call(document.querySelectorAll('[data-welcome-demo]'));
+  var note = document.getElementById('demo-note');
+  function setSetup(ready) {
+    setupLinks.forEach(function (link) { link.textContent = ready ? '回到 Founder Desk' : '開始設定'; link.href = ready ? '/' : '/#/setup'; });
+  }
+  function showPair() {
+    var U = (window.SOS_NAMES || {}).ui || {}, box = document.getElementById('no-pass');
+    document.getElementById('no-pass-title').textContent = U.noPassTitle || '未能確認配對狀態。';
+    document.getElementById('no-pass-desk').textContent = U.noPassDesk || '';
+    document.getElementById('no-pass-why').textContent = U.noPassWhy || '';
+    box.hidden = false;
+  }
+  fetch('/api/setup', { cache: 'no-store' }).then(function (r) {
+    if (r.status === 403) { showPair(); return null; }
+    if (!r.ok) return null;
+    return r.json();
+  }).then(function (setup) { if (setup) setSetup(!!setup.cert); }, function () { });
+  function openDemo(e) {
+    e.preventDefault();
+    if (demoLinks[0] && demoLinks[0].getAttribute('aria-disabled') === 'true') return;
+    demoLinks.forEach(function (link) { link.setAttribute('aria-disabled', 'true'); link.textContent = '正在打開示範…'; });
+    note.textContent = '';
+    fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'openDemo' }) })
+      .then(function (r) { if (!r.ok) throw new Error('open'); return r.json(); })
+      .then(function () { note.textContent = '示範會在新分頁打開。'; setTimeout(function () { note.textContent = ''; reset(); }, 10000); }, function () { note.textContent = '暫時未能打開示範，請稍後再試。'; reset(); });
+    function reset() { demoLinks.forEach(function (link) { link.removeAttribute('aria-disabled'); link.textContent = '先看虛構公司示範'; }); }
+  }
+  demoLinks.forEach(function (link) { link.addEventListener('click', openDemo); });
+})();
+</script>
+</body>
+</html>

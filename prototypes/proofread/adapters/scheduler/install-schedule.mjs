@@ -145,4 +145,4 @@ if (has('register')) {
 
 say('每日自動開工尚未開啟。');
 say(`批准後，CrewZero 伺服器會於${CADENCE[r.runCadence] || '每日'} ${r.runTime}開工；伺服器必須開着，錯過後只會在 6 小時內補做一次。`);
-say('登入電腦時自動打開 CrewZero 是另一項可選設定；批准每日開工不代表批准登入啟動。');
+say('電腦重開後，要打開一次 Founder Desk 才會恢復；登入時自動打開的選項仍在驗證，目前不會設定。');

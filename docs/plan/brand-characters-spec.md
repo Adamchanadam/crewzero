@@ -127,6 +127,7 @@ startup-os 由一隊啞光陶土 3D 小公仔代表：**一位統籌成員**按�
 | `brand-characters/v2-helper-turnaround.png` | 生意大腦成員共用身形轉身圖（胸章位置留白），旁有統籌成員對比高度 | v2 首版（已由 v2.2 取代） |
 | `brand-characters/v2-helpers-lineup.png` | 六位成員並排：聽診器青、紅藍旗長春花藍、面具淡紫、放大鏡金、地圖青檸、小梯玫瑰；右邊統籌成員對比 | v2 首版（已由 v2.2 取代） |
 | `brand-characters/v2-imagegen-brief.md` | v2 四張的生圖指示全文（以 v1 交付場景與排列圖作參考） | 參考 |
+| `prototypes/proofread/assets/crew-welcome-*.webp`（`loop`、`door`、`questions`、`boundary`、`unstuck`） | 入門頁「30 秒看懂」：四站循環轉盤；門口與敬禮；逐條回答的卡片；繩後未寄的信；解開繩結（創辦人 2026-11-03 批准；v3 造型） | 產品入門頁（一屏一組）；生圖指示見 `brand-characters/welcome-2026-11-03-briefs.md` |
 | `brand-characters/v2-2-lead-turnaround.png` | 統籌成員轉身圖（粗糙陶土） | v2.2 正式參考（正側面手形為已知偏差） |
 | `brand-characters/v2-2-lead-poses.png` | 統籌成員四個標準動作（粗糙陶土；第三個是舉手） | 已由 v2.3 取代（舉手會被讀成「停」） |
 | `brand-characters/v2-3-lead-poses.png` | 統籌成員四個標準動作：工作、雙手遞交、敬禮等候（旁有未寄的信）、坐下等候 | **v2.3 正式參考** |

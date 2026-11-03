@@ -469,6 +469,7 @@
     reqSent: '已交 AI',
     reqNoCompany: '未有公司概覽',
     helpOpen: '需要幫助',
+    welcomeLink: '30 秒看懂',
     helpTitle: '需要幫助',
     helpAbout: '這一頁做甚麼',
     helpNext: '你現在要做的一件事',

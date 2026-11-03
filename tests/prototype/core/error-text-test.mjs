@@ -60,7 +60,7 @@ try {
   const noRule = ['desk', 'dashboard', 'install', 'update'].filter(n => !/## 命令出錯時點講/.test(skill(n)) || !/唔好照抄/.test(skill(n)));
   ok('四份 SKILL.md：都有「命令出錯時點講」（英文、路徑、命令唔照抄，用白話講原因同下一步）', !noRule.length, noRule);
   ok('desk、dashboard SKILL.md：有「打開失敗」分支（照印出嘅中文句講原因同點做，唔好自己試其他方法）', ['desk', 'dashboard'].every(n => /## 打開失敗/.test(skill(n)) && /唔好自己再試其他方法/.test(skill(n))));
-  ok('install SKILL.md：登記排程失敗唔再叫創辦人自己執行命令', !/交俾創辦人決定要唔要自己執行/.test(skill('install')) && /唔好叫佢自己執行/.test(skill('install')));
+  ok('install SKILL.md：登記排程失敗唔再叫創辦人自己執行命令', !/交俾創辦人決定要唔要自己執行/.test(skill('install')) && /唔好叫創辦人自己執行檔案/.test(skill('install')));
   /* ---- 命令：安裝、排程失敗（只用暫存資料夾同假排程器；唔開伺服器、唔郁電腦排程） ---- */
   const cliEnv = { ...process.env }; delete cliEnv.SOS_DATA;
   const P2 = path.join(OUT, 'proj-ok'); fs.mkdirSync(P2, { recursive: true });
@@ -70,8 +70,8 @@ try {
     const fake = path.join(OUT, 'fake-ps.mjs');
     fs.writeFileSync(fake, "console.error('Register-ScheduledTask : Access is denied. C:\\\\Windows\\\\System32'); process.exit(1);\n");
     const S = path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs');
-    const reg = spawnSync(process.execPath, [S, '--register'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
-    ok('排程登記失敗：印中文原因同做法；英文錯誤同命令全文唔喺創辦人會聽到嘅輸出（只去 stderr）', reg.status === 1 && /每日排程未能登記/.test(reg.stdout) && /安裝已完成/.test(reg.stdout) && !/Access is denied|Register-ScheduledTask|PowerShell|[A-Za-z]:\\/.test(reg.stdout) && /Access is denied/.test(reg.stderr), { out: reg.stdout, err: reg.stderr.slice(0, 200) });
+    const reg = spawnSync(process.execPath, [S, '--register', '--autostart'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
+    ok('登入啟動登記失敗：每日自動開工照樣保留，印中文原因同做法；英文錯誤同命令全文只去 stderr', reg.status === 0 && /登入啟動未能設定/.test(reg.stdout) && /打開一次 Founder Desk/.test(reg.stdout) && !/Access is denied|Register-ScheduledTask|PowerShell|[A-Za-z]:\\/.test(reg.stdout) && /Access is denied/.test(reg.stderr), { out: reg.stdout, err: reg.stderr.slice(0, 200) });
     const rm = spawnSync(process.execPath, [S, '--remove'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
     ok('排程移除失敗：同樣只印中文原因同做法', rm.status === 1 && /未能完全移除/.test(rm.stdout) && !/Access is denied|工作排程器|[A-Za-z]:\\/.test(rm.stdout), { out: rm.stdout });
   }

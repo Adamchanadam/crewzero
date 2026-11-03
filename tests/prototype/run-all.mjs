@@ -89,6 +89,7 @@ const TESTS = [
   ['由文件預填頁面', 'core/cdp-prefill.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['生意類別', 'core/biztype-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['新手收尾', 'core/novice-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['入門頁', 'core/welcome-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['首頁業務主線頁面', 'core/main-line-page-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['階段 B 頁面', 'core/cdp-desk-b.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['公司概覽', 'overview/overview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
@@ -126,7 +127,7 @@ function verdict(text, code) {
 function run(file, args) {
   return new Promise(resolve => {
     // SOS_NO_OPEN：伺服器唔會開系統瀏覽器（裝置通行證嘅一次性連結由測試自己兌換）
-    const env = { ...process.env, SOS_TEST_OUT: args.out, SOS_NO_OPEN: '1', SOS_CODEX_AUTH: path.join(args.out, 'no-real-codex-auth.json') };
+    const env = { ...process.env, SOS_TEST_OUT: args.out, SOS_NO_OPEN: '1', CZ_NO_WELCOME: '1', SOS_CODEX_AUTH: path.join(args.out, 'no-real-codex-auth.json') };
     for (const k of ['SOS_DATA', 'SOS_SIM', 'SOS_ADAPTER', 'SOS_FAKE_PAGE']) delete env[k];
     const child = spawn(process.execPath, [path.join(HERE, file), ...args.list], { cwd: path.dirname(path.join(HERE, file)), env, stdio: ['ignore', 'pipe', 'pipe'] });
     let text = ''; child.stdout.on('data', d => { text += d; }); child.stderr.on('data', d => { text += d; });

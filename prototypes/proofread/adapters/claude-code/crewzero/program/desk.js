@@ -346,6 +346,7 @@ body.paused .bg *{animation:none!important}
   function toolMore() {
     var box = el('details', { cls: 'tool-more', id: 'tool-more' }, el('summary', { cls: 'btn small' }, U.toolMore),
       el('div', { cls: 'tool-menu' },
+        el('a', { cls: 'btn small', href: '/welcome' }, U.welcomeLink),
         el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
@@ -362,7 +363,7 @@ body.paused .bg *{animation:none!important}
     var opener = document.getElementById('open-help');
     var modal = el('div', { cls: 'pair-modal help-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title', id: 'help-modal' });
     var close = function () { modal.remove(); if (opener) opener.focus(); };
-    var about = el('div', { cls: 'help-part' }, el('h3', { class: 'layer-title' }, U.helpAbout), el('p', null, U['help_' + page] || U.help_pending));
+    var about = el('div', { cls: 'help-part' }, el('h3', { class: 'layer-title' }, U.helpAbout), el('p', null, U['help_' + page] || U.help_pending), el('a', { cls: 'btn link', href: '/welcome' }, U.welcomeLink));
     var next = el('div', { cls: 'help-part', id: 'help-next' }, el('h3', { class: 'layer-title' }, U.helpNext));
     var note = el('p', { cls: 'small help-note', id: 'help-note', 'aria-live': 'polite' });
     var input = el('textarea', { id: 'help-text', rows: '4', maxlength: '2000', placeholder: U.helpText, 'aria-label': U.helpAskAI });

@@ -23,7 +23,7 @@ try {
   const run = (args, more = {}) => spawnSync(process.execPath, [schedule, ...args], { cwd: root, encoding: 'utf8', env: { ...env, ...more } });
 
   const explain = run([]);
-  ok('未批准時只印說明，不寫授權標記，並說明登入啟動要另行同意', explain.status === 0 && /尚未開啟/.test(explain.stdout) && /另一項可選設定/.test(explain.stdout) && !fs.existsSync(markFile), explain.stdout);
+  ok('未批准時只印說明，不寫授權標記，並說明登入啟動要另行同意', explain.status === 0 && /尚未開啟/.test(explain.stdout) && /目前不會設定/.test(explain.stdout) && !fs.existsSync(markFile), explain.stdout);
 
   const daily = run(['--register']);
   const mark = read(markFile);

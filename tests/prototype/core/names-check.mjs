@@ -12,7 +12,7 @@ const bad = [...Object.entries(N.ui), ...Object.entries(N.field)].filter(([, v])
 ok('名稱表全部書面語', bad.length === 0, bad);
 
 // 頁面入面唔可以有名稱表已有嘅名（4 字或以上，避免撞短字）以字串形式寫死
-for (const f of ['ask.html', 'proofread.html', 'desk.js']) {
+for (const f of ['ask.html', 'proofread.html', 'desk.js', 'welcome.html']) {
   const t = fs.readFileSync(path.join(PROTO, f), 'utf8');
   const dup = Object.values(N.ui).filter(v => v.length >= 4 && !/\{/.test(v) && t.includes(`'${v}'`));
   ok(`${f}：冇自己寫名稱表已有嘅名`, dup.length === 0, dup);
@@ -20,7 +20,7 @@ for (const f of ['ask.html', 'proofread.html', 'desk.js']) {
 }
 
 // 頁面同外殼嘅固定文字（有中文嘅字串）唔可以有內部術語
-for (const f of ['ask.html', 'proofread.html', 'run.mjs', 'server.mjs', 'certify.mjs', 'host-lib.mjs', 'company-page-check.mjs']) {
+for (const f of ['ask.html', 'proofread.html', 'welcome.html', 'run.mjs', 'server.mjs', 'certify.mjs', 'host-lib.mjs', 'company-page-check.mjs']) {
   const shown = /\.html$/.test(f) ? () => true : l => /step\(|finish\(|reason:|why = |message:|item\(|fix|detail|names = |summary:|warnings\.push|errors\.push|fail\(/.test(l);
   const t = fs.readFileSync(path.join(PROTO, f), 'utf8').split(/\r?\n/).filter(l => !/^\s*(\/\/|\/\*|\*)/.test(l) && shown(l)).join('\n');
   const hits = [];
