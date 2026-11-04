@@ -9,7 +9,10 @@ export const rhythmOf = s => ({ ...RHYTHM_DEFAULT, ...((s && s.company && s.comp
 export const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const jsDay = wd => (Number(wd) || 1) % 7;
 const noon = day => new Date(day + 'T12:00:00');
-export const addDays = (day, n) => ymd(new Date(noon(day).getTime() + n * 86400000));
+export const addDays = (day, n) => {
+  const d = noon(day);
+  return ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n));
+};
 
 export function isRunDay(r, d) {
   const g = d.getDay();
@@ -21,11 +24,12 @@ export function slotOf(r, d) {
   t.setHours(h || 0, m || 0, 0, 0);
   return t;
 }
-// 下一次排程開工（嚴格喺 now 之後）
-export function nextRunAt(r, now) {
+// 下一次排程開工（嚴格喺 now 之後）；同日已實際排程過就唔會因為改時間再開一次。
+export function nextRunAt(r, now, { ranToday = false } = {}) {
   for (let i = 0; i < 9; i++) {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
     if (!isRunDay(r, d)) continue;
+    if (i === 0 && ranToday) continue;
     const t = slotOf(r, d);
     if (t > now) return t;
   }
@@ -41,9 +45,24 @@ export function dueSlot(r, now) {
   }
   return null;
 }
+// 排程同面板共用：只回傳真正可開工嘅時段；補做另要 AI 已設定及未暫停。
+export function scheduleEligibility(r, now, { approvedAt = '', updatedAt = '', recorded = () => false, enabled = true, sample = false, aiReady = true, paused = false } = {}) {
+  const slot = dueSlot(r, now);
+  if (!slot || !enabled || sample || recorded(ymd(slot))) return { slot: null, catchUp: false };
+  const approved = approvedAt ? new Date(approvedAt) : null;
+  const updated = updatedAt ? new Date(updatedAt) : null;
+  if (approved && Number.isFinite(approved.getTime()) && slot < approved) return { slot: null, catchUp: false };
+  // 時間只記到秒；相同一秒仍屬改動前，不能倒灌開工。
+  if (updated && Number.isFinite(updated.getTime()) && slot <= updated) return { slot: null, catchUp: false };
+  const late = slot < now && now.getTime() - slot.getTime() <= 6 * 3600000;
+  const approvedEarly = !approved || !Number.isFinite(approved.getTime()) || approved < slot;
+  const updatedEarly = !updated || !Number.isFinite(updated.getTime()) || updated < slot;
+  return { slot, catchUp: !!(late && approvedEarly && updatedEarly && aiReady && !paused) };
+}
 // 某日之後（不含當日）嘅下一個訪問日
 export function nextWeekday(day, weekday) {
-  for (let i = 1; i <= 7; i++) { const x = new Date(noon(day).getTime() + i * 86400000); if (x.getDay() === jsDay(weekday)) return ymd(x); }
+  const start = noon(day);
+  for (let i = 1; i <= 7; i++) { const x = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i); if (x.getDay() === jsDay(weekday)) return ymd(x); }
   return null;
 }
 export const isWeekday = (day, weekday) => noon(day).getDay() === jsDay(weekday);

@@ -80,6 +80,14 @@ try {
   const repeatedRecovery = runShell(), repeatedState = readState();
   ok('已合併批次不會重複套用或重複記錄', repeatedRecovery.status === 0 && repeatedState.company.nextExternalAction.text === '批次後的新安排' && repeatedState.events.length === eventsAfterRecovery + 1 && repeatedState.founderOpsDone.includes(later.id), { status: repeatedRecovery.status, events: repeatedState.events.slice(-3), done: repeatedState.founderOpsDone });
 
+  // 201 個操作先寫帳本、後刪批次時若中斷，重試不可因為只保留最後 200 個而倒退。
+  const retryBatch = Array.from({ length: 201 }, (_, i) => ({ id: 'fo-batch-' + i, at: '2030-02-10T10:' + String(i % 60).padStart(2, '0') + ':00+00:00', op: 'reschedule', target: 'nextAction', value: { date: '2030-03-' + String((i % 28) + 1).padStart(2, '0') } }));
+  write(path.join(DIR.ledger, '.founder-ops-202-3000.json'), retryBatch);
+  const batchFirst = runShell(), afterBatch = readState(), batchDate = afterBatch.company.nextExternalAction.date, batchEvents = afterBatch.events.length;
+  write(path.join(DIR.ledger, '.founder-ops-203-3001.json'), retryBatch);
+  const batchRetry = runShell(), afterRetry = readState();
+  ok('201 個批次保存後重試不倒退，所有本批 id 都留在完成紀錄', batchFirst.status === 0 && batchRetry.status === 0 && afterRetry.company.nextExternalAction.date === batchDate && afterRetry.events.length === batchEvents && retryBatch.every(op => afterRetry.founderOpsDone.includes(op.id)), { batchDate, done: afterRetry.founderOpsDone.length, events: afterRetry.events.length });
+
   // 兩個入口均須回收失效鎖，但不得奪走仍由本程序持有的有效鎖。
   const founderLock = path.join(DIR.ledger, '.founder-ops.lock');
   const runnerStale = { id: 'fo-runner-stale-lock', at: '2030-02-09T10:02:00+00:00', op: 'setNext', target: 'nextAction', value: { text: '外殼鎖恢復後的安排', milestoneId: 'M1' } };
@@ -118,6 +126,38 @@ try {
   writeInterviewReply(dateInterview, [{ id: 'newDate', value: '2026-11-10', changed: true }], '2026-11-03-100000-ask-answer-iv-date.md');
   const dateReplyRun = runShell(), dateReplyState = readState();
   ok('每週訪問改期會保留獨立日期及既有欄位', dateReplyRun.status === 0 && dateReplyState.company.nextExternalAction.text === '約見客戶' && dateReplyState.company.nextExternalAction.date === '2026-11-10' && dateReplyState.company.nextExternalAction.milestoneId === 'M1', { status: dateReplyRun.status, next: dateReplyState.company.nextExternalAction });
+
+  // 已提交但較舊的 odDate 回覆不可蓋過其後在首頁改過的目標日。
+  fs.rmSync(DATA, { recursive: true, force: true }); ask.dataDirs(PROTO);
+  write(stateFile, { company: { rhythm: { runCadence: 'daily', runTime: '21:00', interviewWeekday: 1 } }, intake: { state: 'complete', confirmedAt: '2026-11-03T09:00:00+00:00' }, ledgerFrom: 'legacy', interviews: { applied: {} }, targetOverride: { M1: '2026-12-18' }, targetOverrideBase: { M1: '2026-12-01' }, targetOverrideAt: { M1: '2026-11-03T11:00:00+00:00' }, milestones: [{ id: 'M1', short: '首個客戶', targetDate: '2026-12-18', state: 'active', pathStatus: 'confirmed', order: 1 }], events: [] });
+  const olderTargetInterview = { id: 'iv-older-target', title: '較舊目標日回覆', rhythm: { kind: 'interview', on: '2026-11-03' }, questions: [{ id: 'odDate', bind: 'odDate', overdue: { milestoneId: 'M1' }, kind: 'date', ask: '改目標日？' }] };
+  writeInterviewReply(olderTargetInterview, [{ id: 'odDate', value: '2026-12-08', changed: true }], '2026-11-03-100000-ask-answer-iv-older-target.md');
+  const olderTargetRun = runShell(), olderTargetState = readState();
+  const olderTargetSummary = (((ask.readJSON(path.join(DIR.ledger, 'status.json'), {}) || {}).runs || [])[0] || {}).result?.summary || '';
+  ok('較舊 odDate 回覆保留較新的目標日，並寫明結果', olderTargetRun.status === 0 && olderTargetState.milestones.find(m => m.id === 'M1').targetDate === '2026-12-18' && /較新的更改保留/.test(olderTargetSummary), { status: olderTargetRun.status, target: olderTargetState.milestones.find(m => m.id === 'M1').targetDate, olderTargetSummary });
+
+  // 同一秒分唔到先後：保留已生效嘅日期。
+  fs.rmSync(DATA, { recursive: true, force: true }); ask.dataDirs(PROTO);
+  write(stateFile, { company: { rhythm: { runCadence: 'daily', runTime: '21:00', interviewWeekday: 1 } }, intake: { state: 'complete', confirmedAt: '2026-11-03T09:00:00+00:00' }, ledgerFrom: 'legacy', interviews: { applied: {} }, targetOverride: { M1: '2026-12-18' }, targetOverrideBase: { M1: '2026-12-01' }, targetOverrideAt: { M1: '2026-11-03T10:00:00' }, milestones: [{ id: 'M1', short: '首個客戶', targetDate: '2026-12-18', state: 'active', pathStatus: 'confirmed', order: 1 }], events: [] });
+  const sameSecondInterview = { id: 'iv-same-second', title: '較舊目標日回覆', rhythm: { kind: 'interview', on: '2026-11-03' }, questions: [{ id: 'odDate', bind: 'odDate', overdue: { milestoneId: 'M1' }, kind: 'date', ask: '改目標日？' }] };
+  writeInterviewReply(sameSecondInterview, [{ id: 'odDate', value: '2026-12-08', changed: true }], '2026-11-03-100000-ask-answer-iv-same-second.md');
+  const sameSecondRun = runShell(), sameSecondState = readState();
+  const sameSecondSummary = (((ask.readJSON(path.join(DIR.ledger, 'status.json'), {}) || {}).runs || [])[0] || {}).result?.summary || '';
+  ok('同一秒的 odDate 回覆不會蓋走已生效的目標日', sameSecondRun.status === 0 && sameSecondState.milestones.find(m => m.id === 'M1').targetDate === '2026-12-18' && /較新的更改保留/.test(sameSecondSummary), { status: sameSecondRun.status, target: sameSecondState.milestones.find(m => m.id === 'M1').targetDate, sameSecondSummary });
+
+  // 公司概覽本身改日子時，只有確認時間較覆蓋時間新才可以蓋回；舊確認要保留創辦人的較新日期。
+  fs.rmSync(DATA, { recursive: true, force: true }); ask.dataDirs(PROTO);
+  const overview = JSON.parse(fs.readFileSync(path.join(PROTO, 'fixtures', 'example-company-page.json'), 'utf8'));
+  overview.path.milestones[0].target = { id: 'test-target-m1', label: '目標日', value: '2026-12-08' };
+  write(path.join(DIR.company, 'page.json'), overview);
+  const confirmation = { pageId: overview.page.id, confirmedAt: '2026-11-03T10:00:00+00:00', values: {}, order: overview.path.milestones.map(m => m.id) };
+  write(path.join(DIR.ledger, 'confirmed.json'), confirmation);
+  write(stateFile, { company: {}, intake: { state: 'complete', confirmedAt: '2026-11-03T09:00:00+00:00' }, ledgerFrom: overview.page.id, milestones: [{ id: 'm1', short: overview.path.milestones[0].short, targetDate: '2026-12-18', pathStatus: 'confirmed', state: 'active' }], targetOverride: { m1: '2026-12-18' }, targetOverrideBase: { m1: '2026-12-01' }, targetOverrideAt: { m1: '2026-11-03T11:00:00+00:00' }, events: [], tasks: [] });
+  const syncShell = () => spawnSync(process.execPath, [path.join(PROTO, 'run.mjs'), '--type', 'rhythm', '--trigger', 'manual'], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA }, encoding: 'utf8', timeout: 30000 });
+  const olderConfirmed = syncShell(), keptOverride = readState();
+  confirmation.confirmedAt = '2026-11-03T12:00:00+00:00'; write(path.join(DIR.ledger, 'confirmed.json'), confirmation);
+  const newerConfirmed = syncShell(), replacedOverride = readState();
+  ok('公司概覽確認較舊時保留覆蓋、較新時才套用概覽日期', olderConfirmed.status === 0 && newerConfirmed.status === 0 && keptOverride.milestones.find(m => m.id === 'm1').targetDate === '2026-12-18' && replacedOverride.milestones.find(m => m.id === 'm1').targetDate === '2026-12-08' && !replacedOverride.targetOverride?.m1, { kept: keptOverride.milestones.find(m => m.id === 'm1').targetDate, replaced: replacedOverride.milestones.find(m => m.id === 'm1').targetDate });
 
   fs.rmSync(DATA, { recursive: true, force: true }); ask.dataDirs(PROTO);
   write(stateFile, { demo: true, company: { nextExternalAction: { text: '示範動作', milestoneId: 'M1' } }, milestones: [{ id: 'M1', short: '示範站', state: 'active', pathStatus: 'confirmed' }] });

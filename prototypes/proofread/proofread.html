@@ -1165,6 +1165,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           kv.append(h('div', { class: 'boxes' },
             boxCol('AI 自行處理', r.boxes.auto, ''), boxCol('完成後通知你', r.boxes.tellAfter, ''), boxCol('必須先詢問你', r.boxes.askFirst, 'ask')));
         }
+        if (r.plan === 'G8') kv.append(h('p', { class: 'small muted' }, N.ui.rhythmAfterOverview));
         rs.append(kv);
       });
       sec.append(rs);

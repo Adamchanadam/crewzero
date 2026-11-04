@@ -63,6 +63,7 @@
   "required": {
     "mustHave": [
       "--restricted",
+      "--safe-mode",
       "--strict-mcp-config",
       "--permission-prompts",
       "none"

@@ -83,8 +83,8 @@ try {
   ok('首次打開：先設定 AI，附「前往設定」', (await has('#intake-setup-first')) && (await has('#intake-go-setup')), await text('#app'));
   await shot('01-desk-ai-unset.png');
   await c.go(B + 'dashboard/system', 1280, 3000);
-  const sys1 = await text('#sys-sched'), last1 = await text('#sys-last');
-  ok('系統頁：每日自動開工已開啟 · 每日 21:00，並如實說明重開電腦後要先打開 Founder Desk', /已開啟/.test(sys1) && /21:00/.test(sys1) && /重開後/.test(sys1), { sys1, last1 });
+  const sys1 = await text('#sys-rhythm'), last1 = await text('#sys-last');
+  ok('系統頁：每日自動開工已開啟 · 每日 21:00，並如實說明重開電腦後要先打開 Founder Desk', /已開啟/.test(sys1) && /21:00/.test(sys1) && /重新開啟後/.test(sys1), { sys1, last1 });
   await shot('02-system-registered.png');
 
   step('3 設定 AI');

@@ -101,6 +101,8 @@ try {
   const frees = iv.questions.filter(q => q.bind === 'none');
   ok('一：文字題標「預設」（唔係 AI 推斷）、六條照問', frees.length >= 5 && frees.every(q => q.preset && q.noChange && q.value === U.interviewNone && q.why === U.interviewWhyNone), frees.map(q => q.id));
   ok('一：要你答實事嘅題唔算「沒有變化」', !qStale.noChange && !qOd.noChange);
+  // 呢份訪問包已按舊（星期一）節奏放出；答之前改成星期三，下一次必須跟新日，唔可以沿用舊包加七日。
+  setSt(s => { s.company.rhythm = { ...s.company.rhythm, interviewWeekday: 3 }; });
   await answer(iv.id, q => q.id === 'stale' ? U.staleMoved : q.id === 'od' ? U.overdueMove : undefined);
   let P = pack(iv.id);
   const qDate = P.questions.find(q => q.id === 'newDate'), qOdDate = P.questions.find(q => q.id === 'odDate');
@@ -110,9 +112,19 @@ try {
   let s = st();
   ok('一：改期 → 下一個對外動作句入面嘅日期即改', s.company.nextExternalAction.text === dayText(nd) + '約農場丙主人見面', s.company.nextExternalAction);
   ok('一：改目標日 → 該站目標日即改', s.milestones.find(m => m.id === 'm1').targetDate === od);
-  ok('一：訪問算做咗：下次訪問日更新', s.interviews.lastFor === iv.rhythm.on && s.interviews.nextOn > iv.rhythm.on, s.interviews);
+  ok('一：舊訪問包改日後作答：下次訪問改跟新星期三', s.interviews.lastFor === iv.rhythm.on && s.interviews.nextOn > iv.rhythm.on && new Date(s.interviews.nextOn + 'T12:00:00').getDay() === 3, s.interviews);
+  // 下面嘅流程按每週一次排夾具：還原節奏同下次訪問日，唔影響原有覆蓋
+  setSt(s => { s.company.rhythm = { ...s.company.rhythm, interviewWeekday: 1 }; s.interviews.nextOn = addDays(iv.rhythm.on, 7); });
   await advance();
   ok('一：之後同步帳本，改咗嘅目標日照留', st().milestones.find(m => m.id === 'm1').targetDate === od, st().milestones.find(m => m.id === 'm1').targetDate);
+  // 公司概覽其後改同一站日期：以公司概覽為準，唔可以被訪問改期靜靜蓋過
+  {
+    const newDay = addDays(od, 20), pf = path.join(DATA, 'company', 'page.json'), pg = page();
+    pg.path.milestones.find(m => m.id === 'm1').target = { id: 'm1-target-test', label: '目標日', value: newDay, origin: 'founder' }; fs.writeFileSync(pf, JSON.stringify(pg, null, 2));
+    await advance();
+    const after = st();
+    ok('一：公司概覽改同一站日期 → 以公司概覽為準，覆蓋清走', after.milestones.find(m => m.id === 'm1').targetDate === newDay && !(after.targetOverride || {}).m1, { day: after.milestones.find(m => m.id === 'm1').targetDate, newDay, override: after.targetOverride });
+  }
   // 餘下題目：全部照預設
   await answer(iv.id);
 

@@ -133,6 +133,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 .mcard .sec b{display:block;font-size:var(--fs-sub);color:var(--amber);letter-spacing:.06em;margin-bottom:4px}
 .mcard p,.mcard li{font-size:var(--fs-title);line-height:1.55;margin:4px 0}
 .mcard ul{padding-left:20px;margin:0}
+    .change-date{max-width:560px;margin:22px auto}.change-date .current{font-size:var(--fs-sub);color:var(--muted);margin:6px 0 14px}.change-date .date-row{display:grid;gap:6px;margin:12px 0}.change-date .date-row label{font-size:var(--fs-sub);font-weight:600}.change-date .result{min-height:20px;color:var(--red)}
 @media (max-width:600px){
   .pcard{grid-template-columns:1fr;gap:2px}
   .pcard dt{margin-top:8px}
@@ -251,6 +252,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     clearTimeout(V.pollTimer);
     $('#cbar').hidden = true;
     closeModal();
+    var cm = /^#\/change\/(target|task)\/([\w-]{1,80})$/.exec(location.hash);
+    if (cm) return showChangeDate(cm[1], cm[2]);
     var m = /^#\/ask\/([\w-]{1,80})$/.exec(location.hash);
     if (m) return showAsk(m[1]);
     if (location.hash === '#/log') return showLog();
@@ -277,6 +280,36 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('span', { class: 'eyebrow' }, kind === 'net' ? N.ui.failNetTitle : kind === 'missing' ? N.ui.failMissingTitle : N.ui.failInternalTitle),
       h('p', null, kind === 'net' ? N.ui.failNet : kind === 'missing' ? (missing || N.ui.err_notFound) : N.ui.failInternal),
       h('div', { class: 'foot' }, kind === 'missing' ? [back, reload] : [reload, back])));
+  }
+
+  // 月曆改日期：只暫存回程位置；實際資料仍由 /api/founder-op 驗證及寫入。
+  function changeReturn() {
+    var href = '/dashboard/path';
+    try {
+      var saved = JSON.parse(sessionStorage.getItem('crewzero-calendar-return') || 'null');
+      if (saved && typeof saved.href === 'string' && /^\/dashboard\/path(?:\?|$)/.test(saved.href)) href = saved.href;
+      sessionStorage.removeItem('crewzero-calendar-return');
+    } catch (e) { }
+    location.replace(href);
+  }
+  function showChangeDate(kind, id) {
+    Promise.all([get('/api/status'), get('/api/dashboard')]).then(function (pair) {
+      var st = pair[0], dash = pair[1], isTarget = kind === 'target', item = isTarget ? (dash.milestones || []).filter(function (m) { return m.id === id; })[0] : (dash.tasks || []).filter(function (t) { return t.id === id; })[0];
+      V.status = st; checkInstance(st);
+      var gone = !item || (isTarget ? item.state === 'done' || item.pathStatus === 'retired' : item.owner !== 'founder' || item.column === 'done' || item.column === 'cancelled' || item.status === 'done' || item.status === 'cancelled');
+      if (gone) {
+        setApp(head('pending', st), h('section', { class: 'layer change-date', id: 'change-missing' }, h('span', { class: 'eyebrow' }, N.ui.changeDateTitle), h('h2', { class: 'layer-title' }, N.ui.changeGone), h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: changeReturn }, N.ui.changeBackPath))));
+        return;
+      }
+      var today = isoDay(new Date()), current = isTarget ? item.targetDate : String(item.dueAt || '').slice(0, 10), title = isTarget ? item.short || item.title : item.title, input = h('input', { type: 'date', id: 'change-date', min: today, value: current || today, 'aria-label': N.ui.changePickDate }), note = h('p', { class: 'result', id: 'change-result', role: 'alert' });
+      var save = h('button', { type: 'button', class: 'btn primary', id: 'change-save', onclick: function () {
+        if (!input.value || input.value < today) { note.textContent = N.ui.founderOpInvalid; input.focus(); return; }
+        save.disabled = true; cancel.disabled = true; save.textContent = N.ui.changeSaving; note.textContent = '';
+        post('/api/founder-op', { op: isTarget ? 'setTarget' : 'setTaskDue', target: id, value: { date: input.value } }).then(function () { changeReturn(); }).catch(function (error) { save.disabled = false; cancel.disabled = false; save.textContent = N.ui.changeSave; note.textContent = why(error); });
+      } }, N.ui.changeSave);
+      var cancel = h('button', { type: 'button', class: 'btn', id: 'change-cancel', onclick: changeReturn }, N.ui.changeCancel);
+      setApp(head('pending', st), h('section', { class: 'layer change-date', id: 'change-date-page' }, h('span', { class: 'eyebrow' }, N.ui.changeDateTitle), h('h2', { class: 'layer-title' }, title), h('p', { class: 'current' }, N.ui.changeCurrentDate + '：' + (current ? dayOf(current) : '未設日期')), h('div', { class: 'date-row' }, h('label', { for: 'change-date' }, N.ui.changePickDate), input), h('p', { class: 'guide' }, isTarget ? N.ui.changeTargetHint : N.ui.changeTaskHint), h('div', { class: 'foot' }, save, cancel), note, h('p', { class: 'small muted' }, h('a', { href: '#/request/adhoc' }, N.ui.changeMoreLink), ' — ' + N.ui.changeMore)));
+    }).catch(function (error) { fail(error); });
   }
 
   /* ---------- AI 未設定：置頂阻塞卡（待決事項、交資料、答題都有） ---------- */
@@ -495,6 +528,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       setApp(head('pending', st), aiBlock(st), main, next, quietToday, others, snoozedCard, brainLine, sinceRow(home), quickInput(), intakeLink, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, aiCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
       kept.forEach(function (id) { var d = document.getElementById(id); if (d) d.open = true; });
+      // 由月曆跳過嚟：畫好之後捲到對應卡，只做一次，定時更新唔會再跳
+      var jump = /^#(next-action|quick-input)$/.exec(location.hash);
+      if (!jump) V.hubJumped = ''; else if (V.hubJumped !== jump[1]) { V.hubJumped = jump[1]; var jumpTo = document.getElementById(jump[1]); if (jumpTo) jumpTo.scrollIntoView({ block: 'start' }); }
       DESK.title('pending', todo.length ? '（' + todo.length + '）' : '');
       V.pollTimer = setTimeout(hubPoll, st.busy ? 3000 : 8000);
     }).catch(function (e) { fail(e); });

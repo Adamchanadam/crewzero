@@ -94,13 +94,13 @@ try {
   for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true });
   const view = dash.dashboardState(dirs, { now: new Date() });
   const html = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8'), names = fs.readFileSync(path.join(PROTO, 'names.js'), 'utf8');
-  ok('舊格式不自動遷移：狀態、系統資料和待決卡都明說舊式仍運作', legacy.status === 0 && legacyJson.mode === 'os' && view.rhythmInfo.scheduler === 'os' && view.todo.some(x => x.id === 'schedule-legacy') && /schedLegacy/.test(html) && /舊式排程仍運作中/.test(names), { out: legacy.stdout, todo: view.todo });
+  ok('舊格式不自動遷移：狀態、系統資料和待決卡都明說舊式仍運作', legacy.status === 0 && legacyJson.mode === 'os' && view.rhythmInfo.scheduler === 'os' && view.todo.some(x => x.id === 'schedule-legacy') && /rhythmLegacyLive|rhythmLegacy/.test(html) && /舊版自動開工仍在用/.test(names), { out: legacy.stdout, todo: view.todo });
 
   const viewOf = st => dash.dashboardState(dirs, { now: new Date(), schedStatus: st }).rhythmInfo;
   // 舊標記保留舊時間 nextRunAt：都唔可以繞過
   fs.writeFileSync(markFile, JSON.stringify({ name: 'crewzero-old', os: 'windows', cadence: 'daily', runTime: '09:00', nextRunAt: '2030-01-05T09:00:00.000Z' }, null, 2));
   const live = viewOf({ ok: true, registered: true }), lost = viewOf({ ok: true, registered: false }), unknown = viewOf({ ok: false, registered: false }), none = viewOf(null);
-  ok('舊式工作：一律唔講下次時間；查到存在、已失效、查唔到分開顯示', live.nextRunAt === '' && live.os.confirmed === true && lost.nextRunAt === '' && lost.os.missing === true && unknown.nextRunAt === '' && unknown.os.confirmed === false && none.nextRunAt === '' && none.os.confirmed === false && /schedLegacyUnknown/.test(html), { live, lost, unknown });
+  ok('舊式工作：一律唔講下次時間；查到存在、已失效、查唔到分開顯示', live.nextRunAt === '' && live.os.confirmed === true && lost.nextRunAt === '' && lost.os.missing === true && unknown.nextRunAt === '' && unknown.os.confirmed === false && none.nextRunAt === '' && none.os.confirmed === false && /rhythmLegacyUnknown/.test(html), { live, lost, unknown });
   fs.writeFileSync(markFile, JSON.stringify({ mode: 'stopped', autostart: { enabled: true, os: 'windows', name: 'crewzero-old' }, stoppedAt: '2030-01-01T00:00:00.000Z' }, null, 2));
   const stoppedView = dash.dashboardState(dirs, { now: new Date() });
   ok('登入啟動待清理：監察台同待決卡都講，冇下次時間', stoppedView.rhythmInfo.cleanupPending === true && stoppedView.rhythmInfo.nextRunAt === '' && stoppedView.todo.some(x => x.id === 'schedule-cleanup') && /schedCleanupPending/.test(html), stoppedView.rhythmInfo);

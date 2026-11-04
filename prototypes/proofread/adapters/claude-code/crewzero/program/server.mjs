@@ -13,10 +13,10 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
-import { rhythmOf, dueSlot, nextRunAt, ymd } from './rhythm-lib.mjs';
+import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, overviewIsCurrent } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource } from './brain-lib.mjs';
@@ -355,6 +355,7 @@ function kick(args) {
 }
 // 排程計時器：模擬每 5 秒、真實實例每 30 秒。未經批准（冇 mode:server 標記）唔會開 AI；你嘅回覆永遠排先。
 let firedDay = null;
+function overviewCurrent() { return overviewIsCurrent(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null)); }
 function rhythmTick() {
   if (child || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) return;
   const s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
@@ -362,10 +363,10 @@ function rhythmTick() {
   const mark = readJSON(path.join(DIR.ledger, 'schedule.json'), null);
   // 模擬實例沿用原本嘅 5 秒試走；真實資料先必須有創辦人嘅 server 授權。
   if (!SIM && (!mark || mark.mode !== 'server')) return;
-  const slot = dueSlot(rhythmOf(s), clockNow());
+  // 節奏剛由系統頁提交時，先叫外殼合併；唔可以用舊設定喺中間開工。
+  if (pendingFounderOps(DIR, s).some(op => op && op.op === 'setRhythm')) { kick(); return; }
+  const rhythm = rhythmOf(s), slot = scheduleEligibility(rhythm, clockNow(), { approvedAt: !SIM ? mark?.approvedAt : '', updatedAt: !SIM ? rhythm.updatedAt : '' }).slot;
   if (!slot) return;
-  // 批准之前嘅時段唔算：21:30 先批准，唔可以即刻開工花費
-  if (!SIM && mark.approvedAt && slot < new Date(mark.approvedAt)) return;
   const day = ymd(slot), recorded = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === day);
   if (recorded) { if (firedDay && firedDay.day === day) firedDay = null; return; }
   if (firedDay && firedDay.day === day) {
@@ -379,14 +380,16 @@ if (!SIM) rhythmTimer.unref();
 function simInfo() {
   if (!SIM) return null;
   const sim = readJSON(SIM_FILE, {}) || {}, c = readJSON(CERT_FILE, null), s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
-  const next = nextRunAt(rhythmOf(s), clockNow()), last = (s.runs || []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop();
+  const now = clockNow(), ranToday = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === ymd(now));
+  const next = nextRunAt(rhythmOf(s), now, { ranToday }), last = (s.runs || []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop();
   return { on: true, clock: localIso(clockNow()), offsetDays: Math.round(((readJSON(CLOCK_FILE, {}) || {}).offsetMs || 0) / 86400000 * 10) / 10,
     ai: c ? aiMode(c) : sim.ai || 'fake', aiReady: !!c, persona: sim.persona || null, nextRunAt: next ? localIso(next) : '', lastScheduleAt: last ? last.startedAt : '' };
 }
 // 推前一日：時鐘推到下一次排定開工時間後三分鐘（每日一次即剛好一日），由計時器觸發嗰次排程
 function simAdvance() {
   if (child) return [409, { error: 'busy', message: 'AI 工作進行中，完成後再推前。' }];
-  const now = clockNow(), next = nextRunAt(rhythmOf(readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}), now);
+  const now = clockNow(), s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, ranToday = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === ymd(now));
+  const next = nextRunAt(rhythmOf(s), now, { ranToday });
   if (!next) return [400, { error: 'invalid' }];
   fs.mkdirSync(DESK_DIR, { recursive: true });
   const off = Number((readJSON(CLOCK_FILE, {}) || {}).offsetMs) || 0;
@@ -802,10 +805,10 @@ function appendFounderOp(op) {
 function founderOp(body) {
   const state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
-  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
-  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [] }[body.op];
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'] }[body.op];
   if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   if (body.op === 'reschedule') {
     if (body.target !== 'nextAction' || !ds.nextAction?.text || ds.nextAction.cancelledAt || !isDay(value.date)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
@@ -816,8 +819,16 @@ function founderOp(body) {
   } else if (body.op === 'snooze') {
     if (!byId[body.target] || !isDay(value.until)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   } else if (body.op === 'unsnooze' && !(ds.snoozed || []).some(item => item.id === body.target)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  else if (body.op === 'setTarget') {
+    const m = (ds.milestones || []).find(item => item.id === body.target);
+    if (!isDay(value.date) || value.date < localIso().slice(0, 10) || !m || m.state === 'done' || m.pathStatus === 'retired') return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  } else if (body.op === 'setTaskDue') {
+    const task = (Array.isArray(state.tasks) ? state.tasks : []).find(item => item && item.id === body.target);
+    if (!isDay(value.date) || value.date < localIso().slice(0, 10) || !task || task.owner !== 'founder' || task.status === 'done' || task.status === 'cancelled' || task.column === 'done' || task.column === 'cancelled') return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  }
   const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: body.op, target: body.target, value };
   if (!appendFounderOp(op)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+  schedule(200);
   return { ok: true, op: { id: op.id, at: op.at, op: op.op, target: op.target }, message: NAMES.ui.founderOpSaved };
 }
 /* ---------- 觀測來源（規劃書 4.12、4.9；設計稿 2026-10-28 第 3 節）：轉接層嘅唯讀觀測程式 ----------
@@ -973,6 +984,52 @@ function observeSetup(body) {
   return [202, { ok: true, pending: true }];
 }
 
+// 自動開工設定：節奏只經 founder-ops 交畀外殼合併；開關才由排程安裝程式處理標記同開機時自動打開。
+function rhythmSetup(body) {
+  if (!body || typeof body !== 'object' || Object.keys(body).some(k => !['action', 'value'].includes(k))) return [400, { error: 'invalid', message: NAMES.ui.rhythmInvalid }];
+  if (isDemoInstance()) return [409, { error: 'demo', message: NAMES.ui.rhythmDemoDenied }];
+  const value = body.value;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !['runCadence', 'runTime', 'interviewWeekday'].includes(k)) || !['daily', 'weekdays', 'weekly'].includes(value.runCadence) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value.runTime || '')) || !Number.isInteger(value.interviewWeekday) || value.interviewWeekday < 1 || value.interviewWeekday > 7) return [400, { error: 'invalid', message: NAMES.ui.rhythmInvalid }];
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
+  if (!state.company || !state.company.rhythm) return [409, { error: 'overview', message: NAMES.ui.rhythmNeedOverview }];
+  const mark = readJSON(path.join(DIR.ledger, 'schedule.json'), null);
+  if (mark && !mark.mode) return [409, { error: 'legacy', message: NAMES.ui.rhythmLegacy }];
+  const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: 'setRhythm', value: { runCadence: value.runCadence, runTime: value.runTime, interviewWeekday: value.interviewWeekday } };
+  if (!appendFounderOp(op)) return [409, { error: 'busy', message: NAMES.ui.rhythmBusy }];
+  schedule(200);
+  return [202, { ok: true, message: NAMES.ui.rhythmSaved }];
+}
+
+let scheduleChild = null;
+function scheduleSetup(body) {
+  if (!body || typeof body !== 'object' || Object.keys(body).some(k => !['action', 'op'].includes(k)) || !['on', 'off'].includes(body.op)) return Promise.resolve([400, { error: 'invalid', message: NAMES.ui.rhythmInvalid }]);
+  if (isDemoInstance()) return Promise.resolve([409, { error: 'demo', message: NAMES.ui.rhythmDemoDenied }]);
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
+  if (body.op === 'on' && (!state.company || !state.company.rhythm || !overviewCurrent())) return Promise.resolve([409, { error: 'overview', message: NAMES.ui.overviewPending }]);
+  if (scheduleChild) return Promise.resolve([409, { error: 'busy', message: NAMES.ui.rhythmBusy }]);
+  const script = path.join(ROOT, 'adapters', 'scheduler', 'install-schedule.mjs');
+  if (!fs.existsSync(script)) { say(NAMES.ui.rhythmSchedulerMissing); return Promise.resolve([500, { error: 'scheduler', message: NAMES.ui.rhythmSchedulerMissing }]); }
+  return new Promise(resolve => {
+    let out = '', err = '', done = false, scheduleTimeout = null;
+    const finish = (code, failed = false) => {
+      if (done) return; done = true; if (scheduleTimeout) clearTimeout(scheduleTimeout); scheduleChild = null;
+      // 安裝程式嘅句子係寫畀 AI 對話；頁面上要叫人再按掣，唔係再講一句
+      out = out.trim().replace(/再說一次「移除排程」/g, '再按一次移除').replace(/再說「重新登記排程」/g, '再按一次「更新自動開工設定」').replace(/重新開機/g, '重新開啟電腦'); err = err.trim();
+      // 頁面只收安裝程式嘅 stdout；stderr 只留喺伺服器診斷，避免把系統細節送到瀏覽器。
+      if (failed || code !== 0) { say(NAMES.ui.rhythmScheduleFailed); return resolve([200, { ok: false, message: out || NAMES.ui.rhythmScheduleFailed }]); }
+      return resolve([200, { ok: true, message: out }]);
+    };
+    try {
+      scheduleChild = spawn(process.execPath, [script, body.op === 'on' ? '--register' : '--remove', '--data', DIR.data], { cwd: ROOT, env: cleanEnv(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      scheduleChild.stdout.on('data', d => { out += String(d); });
+      scheduleChild.stderr.on('data', d => { err += String(d); });
+      scheduleChild.on('error', () => finish(-1, true));
+      scheduleChild.on('close', code => finish(code));
+    } catch { return finish(-1, true); }
+    scheduleTimeout = setTimeout(() => { try { scheduleChild.kill(); } catch { } finish(-1, true); }, 60000);
+  });
+}
+
 // AI 做咗乜：讀 data/work/<run>/（永久保留）
 function runResult(id) {
   if (!/^R[\w-]{1,40}$/.test(String(id || ''))) return null;
@@ -1074,7 +1131,7 @@ const handler = async (req, res) => {
        if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
       if (p === '/api/status') return send(res, 200, statusPayload());
       if (p === '/api/sim' && SIM) return send(res, 200, { ok: true, sim: simInfo() });
-       if (p === '/api/dashboard') { const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), version: SERVER_VERSION, instance: INSTANCE }); }
+      if (p === '/api/dashboard') { const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), localOnly: pass.kind === 'phone', version: SERVER_VERSION, instance: INSTANCE }); }
       // Founder Desk 待決事項頁：「今日要做的事」卡同「上次離開之後」；頁面第一次載入（seen=1）先記低今次時間，輪詢唔算
       // 一個殼嘅頁頭（決定二十五）：公司、三個業務指標、生意大腦等你處理數目；唔觀測、唔寫檔（Founder Desk 畫面每 5 秒讀一次）
       if (p === '/api/shell') { const ds = dashboardState(DIR, { cert: certInfo(), sim: simInfo() }), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ok: true, company: ds.company, metrics: ds.metrics, brain: { items: ((ds.brain || {}).items || []).map(x => ({ id: x.id, status: x.status })) }, tele: ds.tele, freshness: ds.deck && ds.deck.freshness, sample: ds.sample, work, version: SERVER_VERSION, instance: INSTANCE }); }
@@ -1134,6 +1191,8 @@ const handler = async (req, res) => {
       if (p === '/api/intake') { const result = body.kind === 'note' ? receiveNote(body) : body.kind === 'prefill' ? receivePrefill(body) : receiveIntake(body); if (!result.ok) return send(res, 400, result); schedule(); return send(res, 202, result); }
       if (p === '/api/setup') {
         if (body.action === 'observe') return send(res, ...observeSetup(body));
+        if (body.action === 'rhythm') return send(res, ...rhythmSetup(body));
+        if (body.action === 'schedule') return send(res, ...await scheduleSetup(body));
         if (body.action === 'phone-open') return send(res, ...await openPhoneMode());
         if (body.action === 'phone-close') return send(res, ...await closePhoneMode());
         if (body.action === 'phone-accept') return send(res, ...decidePhone(body.id, true));

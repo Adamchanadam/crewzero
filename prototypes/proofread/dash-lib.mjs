@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NAMES, BIZ_TYPES, readJSON, listPacks, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
-import { rhythmOf, nextRunAt } from './rhythm-lib.mjs';
+import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
 
 // 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
 // v 係修改時間，頁面用嚟分辨換咗新圖；冇就 null。
@@ -62,7 +62,9 @@ const founderOpsFiles = DIR => {
   } catch { }
   return batches.concat(path.join(DIR.ledger, 'founder-ops.json'));
 };
-const pendingFounderOps = (DIR, state) => {
+// 現時公司概覽係咪已確認：重新交資料會搬走確認檔；舊確認檔冇 pageId 當有效
+export const overviewIsCurrent = (page, confirmed) => !page?.page?.id || !!(confirmed && (!confirmed.pageId || confirmed.pageId === page.page.id));
+export const pendingFounderOps = (DIR, state) => {
   const seen = new Set(Array.isArray(state && state.founderOpsDone) ? state.founderOpsDone : []), pending = [];
   for (const file of founderOpsFiles(DIR)) {
     const ops = readJSON(file, []);
@@ -78,8 +80,11 @@ const pendingFounderOps = (DIR, state) => {
 // 所有新欄可缺，舊資料沒有覆蓋檔時保持原有行為。
 export function applyFounderOps(state, ops = []) {
   if (!Array.isArray(ops) || !ops.length) return state || {};
-  const out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) } };
+  const out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) }, targetOverride: { ...((state && state.targetOverride) || {}) }, targetOverrideBase: { ...((state && state.targetOverrideBase) || {}) }, targetOverrideAt: { ...((state && state.targetOverrideAt) || {}) } };
   if (state && state.company) out.company = { ...state.company };
+  if (state && state.interviews) out.interviews = { ...state.interviews };
+  if (Array.isArray(state && state.milestones)) out.milestones = state.milestones.map(m => ({ ...m }));
+  if (Array.isArray(state && state.tasks)) out.tasks = state.tasks.map(t => ({ ...t }));
   for (const item of ops) {
     if (!item || typeof item !== 'object') continue;
     const value = item.value && typeof item.value === 'object' ? item.value : {};
@@ -94,9 +99,57 @@ export function applyFounderOps(state, ops = []) {
       const prior = out.founderSnoozes[item.target];
       if (prior) out.founderSnoozeDays[item.target] = Number(out.founderSnoozeDays[item.target] || 0) + snoozeDays(prior, new Date(item.at || Date.now()));
       delete out.founderSnoozes[item.target];
+    } else if (item.op === 'setRhythm' && ['daily', 'weekdays', 'weekly'].includes(value.runCadence) && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value.runTime || '')) && Number.isInteger(value.interviewWeekday) && value.interviewWeekday >= 1 && value.interviewWeekday <= 7) {
+      const before = (out.company && out.company.rhythm) || {};
+      const changedDay = Number(before.interviewWeekday) !== value.interviewWeekday;
+      out.company = out.company || {};
+      out.company.rhythm = { ...before, runCadence: value.runCadence, runTime: value.runTime, interviewWeekday: value.interviewWeekday, updatedAt: item.at, from: 'system' };
+      if (changedDay) {
+        const day = /^\d{4}-\d{2}-\d{2}/.test(String(item.at || '')) ? String(item.at).slice(0, 10) : ymd(new Date());
+        out.interviews = { ...(out.interviews || {}), nextOn: nextWeekday(day, value.interviewWeekday) };
+      }
+    } else if (item.op === 'setTarget' && typeof item.target === 'string' && isDay(value.date)) {
+      const milestone = (out.milestones || []).find(m => m && m.id === item.target);
+      // 同一個操作重播時，基準只可以記第一次見到嘅公司概覽日期。
+      if (!Object.prototype.hasOwnProperty.call(out.targetOverride, item.target)) {
+        if (milestone && milestone.targetDate !== undefined) out.targetOverrideBase[item.target] = isDay(milestone.targetDate) ? milestone.targetDate : '';
+        else delete out.targetOverrideBase[item.target];
+      }
+      out.targetOverride[item.target] = value.date;
+      out.targetOverrideAt[item.target] = item.at || localIso();
+      if (milestone) { milestone.targetDate = value.date; delete milestone.targetDateTentative; }
+    } else if (item.op === 'setTaskDue' && typeof item.target === 'string' && isDay(value.date)) {
+      const task = (out.tasks || []).find(t => t && t.id === item.target);
+      if (task) {
+        const time = /T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(String(task.dueAt || ''));
+        task.dueAt = value.date + (time ? time[0] : '');
+      }
     }
   }
   return out;
+}
+
+// 月曆只帶每日歸納，不能把完整帳本 runs 送到畫面。未完成比完成重，完成比跳過重。
+export function calendarRunDays(runs, from, to, today = null) {
+  const currentDay = today instanceof Date ? today : parseDay(today);
+  const byDay = {}, todayKey = currentDay ? ymd(currentDay) : '', rank = { skipped: 1, completed: 2, running: 3, unfinished: 4 };
+  for (const run of Array.isArray(runs) ? runs : []) {
+    if (!run || typeof run !== 'object') continue;
+    const scheduledSlot = String(run.slot || '').slice(0, 10);
+    const source = run.trigger === 'schedule' && isDay(scheduledSlot) ? scheduledSlot : String(run.startedAt || '').slice(0, 10);
+    const day = parseDay(source);
+    if (!day || day < from || day > to) continue;
+    const state = run.state === 'skipped' ? 'skipped'
+      : run.state === 'running' ? (ymd(day) === todayKey ? 'running' : 'unfinished')
+        : run.rejected || run.state === 'failed' || run.state === 'interrupted' || (run.state === 'ended' && run.ending === 'blocked') ? 'unfinished'
+        : run.state === 'ended' || run.state === 'done' || run.state === 'completed' ? 'completed' : null;
+    if (!state) continue;
+    const reason = state === 'skipped' ? NAMES.ui['skip_' + run.skipReason] || run.summary || NAMES.ui.runSkipped
+      : run.rejectReason || run.summary || (state === 'running' ? NAMES.ui.runWorking : state === 'unfinished' ? NAMES.ui.runUnfinished || '未完成' : '');
+    const key = ymd(day), candidate = { state, reason: String(reason || ''), runId: String(run.id || '') };
+    if (!byDay[key] || rank[candidate.state] > rank[byDay[key].state]) byDay[key] = candidate;
+  }
+  return byDay;
 }
 const WEEKDAY = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 
@@ -193,7 +246,9 @@ export function dashboardState(DIR, extra = {}) {
   /* 公司 */
   const co = { ...(page && page.company || {}), ...(state.company || {}) };
   const biz = readJSON(path.join(DIR.company, 'biz.json'), null);
-  const company = { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: !!(confirmed || (state.intake && state.intake.state === 'complete')),
+  const overviewCurrent = overviewIsCurrent(page, confirmed);
+  const overviewPending = !!page?.page?.id && !overviewCurrent;
+  const company = { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!(page || state.company), confirmed: overviewCurrent && !!(confirmed || (state.intake && state.intake.state === 'complete')),
     ...(biz && BIZ_TYPES[biz.type] ? { bizType: biz.type } : {}) };
   const values = page ? registryValues(page, confirmed) : {};
   const goalRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G1');
@@ -349,30 +404,55 @@ export function dashboardState(DIR, extra = {}) {
   const st = extra.schedStatus || null;
   // 舊式工作冇讀回實際排程，唔講下次時間；存在與否只影響文字
   const legacyLive = !!(st && st.ok && st.registered);
-  const nextAt = scheduler !== 'none' && scheduler !== 'os' ? nextRunAt(rhythmOf(state), now) : null;
+  const ranToday = (Array.isArray(state.runs) ? state.runs : []).some(r => r && r.trigger === 'schedule' && r.slot === ymd(now));
+  const nextAt = scheduler !== 'none' && scheduler !== 'os' ? nextRunAt(rhythmOf(state), now, { ranToday }) : null;
   const osSched = scheduler === 'os' ? { legacy: !schedMark.mode, confirmed: legacyLive, name: schedMark.name || '', cadence: schedMark.cadence || 'daily', runTime: schedMark.runTime || '', registeredAt: schedMark.registeredAt || '', startWhenAvailable: st && st.registered ? !!st.startWhenAvailable : !!schedMark.startWhenAvailable,
     stale: scheduleStale(schedMark, rhythmOf(state)), osNext: (st && st.next) || schedMark.nextRunAt || '', osLast: (st && st.last) || '', osLastResult: st && st.last ? st.lastResult : null, missing: !!(st && st.ok && !st.registered) } : null;
-  const rhythmInfo = { scheduler, os: osSched, autostart: scheduler === 'server' ? { enabled: !!(schedMark.autostart && schedMark.autostart.enabled) && !(st && st.ok && st.autostart && !st.autostart.registered), registered: !!(st && st.autostart && st.autostart.registered) } : { enabled: false, registered: false }, cleanupPending: !!(schedMark && schedMark.mode === 'stopped'), nextRunAt: nextAt ? localIso(nextAt) : '', lastScheduleAt: lastSched ? lastSched.startedAt : '', lastSchedule: lastSched ? { state: lastSched.state, skipReason: lastSched.skipReason || '', ending: lastSched.ending || '', rejected: !!lastSched.rejected, rejectReason: lastSched.rejectReason || '', label: lastSched.label || '' } : null };
+  const cleanupPending = !!(schedMark && schedMark.mode === 'stopped');
+  const schedulePaused = !!(state.health && (state.health.pausedByFounder || state.health.autoStopped));
+  const due = scheduleEligibility(rhythmOf(state), now, { enabled: scheduler === 'server', sample, aiReady: !!cert, paused: schedulePaused || overviewPending, recorded: day => (Array.isArray(state.runs) ? state.runs : []).some(r => r && r.trigger === 'schedule' && r.slot === day), approvedAt: scheduler === 'server' ? schedMark.approvedAt : '', updatedAt: scheduler === 'server' ? rhythm?.updatedAt : '' });
+  const rhythmInfo = { scheduler, os: osSched, autostart: scheduler === 'server' ? { enabled: !!(schedMark.autostart && schedMark.autostart.enabled) && !(st && st.ok && st.autostart && !st.autostart.registered), registered: !!(st && st.autostart && st.autostart.registered) } : { enabled: false, registered: cleanupPending ? null : false }, cleanupPending, overviewPending, ranToday, catchUp: due.catchUp, catchUpAt: due.catchUp ? localIso(due.slot) : '', nextRunAt: nextAt ? localIso(nextAt) : '', lastScheduleAt: lastSched ? lastSched.startedAt : '', lastSchedule: lastSched ? { state: lastSched.state, skipReason: lastSched.skipReason || '', ending: lastSched.ending || '', rejected: !!lastSched.rejected, rejectReason: lastSched.rejectReason || '', label: lastSched.label || '' } : null };
 
-  /* 未來兩星期日程 */
-  const horizon = new Date(today.getTime() + 14 * DAY);
-  const sched = [];
-  const add = (date, kind, text, extra2) => { const d = parseDay(date); if (!d) return; if (d > horizon) return; sched.push({ date: ymd(d), kind, text, overdue: d < today, ...(extra2 || {}) }); };
-  if (interviews && interviews.nextOn) add(interviews.nextOn, 'interview', '每週訪問', { href: todo.find(t => t.type === 'interview')?.href || '' });
-  for (const m of milestones) {
-    if (m.pathStatus === 'retired' || m.state === 'done') continue;
-    if (m.trial && m.trial.until && !m.trial.verdict) add(m.trial.until, 'trial', '試行到期：' + m.short, { milestoneId: m.id });
-    if (m.targetDate && m.pathStatus !== 'proposed') add(m.targetDate, 'target', '目標日：' + m.short + (m.targetDateTentative ? '（暫定）' : ''), { milestoneId: m.id });
-  }
-  if (goals && goals.month && goals.month.endsOn) add(goals.month.endsOn, 'target', '短期目標檢查：' + goals.month.text);
-  // 你嘅現實行動（有日子嘅）
-  for (const t of tasks) if (t.owner === 'founder' && t.dueAt && t.column !== 'done' && t.column !== 'review') add(t.dueAt, 'action', t.title + (/T\d{2}:\d{2}/.test(t.dueAt) ? ' ' + t.dueAt.slice(11, 16) : ''), { milestoneId: t.milestoneId });
-  for (const t of todo) if (t.due) add(t.due, 'decision', '決定期限：' + t.text, { href: t.href });
+  /* 日程：14 日清單與月曆共用同一個資料入口。 */
+  const actionHref = '/#next-action';
+  const rhythmHref = '/dashboard/system?editRhythm=1#sys-rhythm';
+  const pathHref = id => '/dashboard/path#' + encodeURIComponent(id);
+  const changeTargetHref = id => '/#/change/target/' + encodeURIComponent(id);
+  const changeTaskHref = id => '/#/change/task/' + encodeURIComponent(id);
+  const calendarFrom = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const calendarTo = new Date(today.getFullYear(), today.getMonth() + 3, 0);
+  const calendarItems = (from, to, includeExternal = false) => {
+    const list = [];
+    const add = (date, kind, text, extra2) => {
+      const d = parseDay(date); if (!d || d < from || d > to) return;
+      list.push({ date: ymd(d), kind, text, overdue: d < today, ...(extra2 || {}) });
+    };
+    const interviewTodo = todo.find(t => t.type === 'interview');
+    if (interviews && interviews.nextOn) {
+      add(interviews.nextOn, 'interview', NAMES.d('calInterview'), { href: interviewTodo?.href || rhythmHref, action: interviewTodo ? NAMES.d('calGoAnswer') : NAMES.d('calChangeVisit') });
+      const first = parseDay(interviews.nextOn);
+      if (first) for (let d = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 7); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7)) if (d >= from && d >= today) add(ymd(d), 'interview', NAMES.d('calInterview'), { href: rhythmHref, action: NAMES.d('calChangeVisit'), planned: true });
+    }
+    if (interviews && interviews.lastOn) add(interviews.lastOn, 'interview', NAMES.d('calInterviewDone'), { href: '/dashboard/overview', action: NAMES.d('toOverview'), completed: true });
+    for (const m of milestones) {
+      if (m.pathStatus === 'retired' || m.state === 'done') continue;
+      if (m.trial && m.trial.until && !m.trial.verdict) add(m.trial.until, 'trial', NAMES.d('calTrial', { t: m.short }), { milestoneId: m.id, href: pathHref(m.id), action: NAMES.d('calViewPath') });
+      if (m.targetDate && m.pathStatus !== 'proposed') add(m.targetDate, 'target', NAMES.d('calTarget', { t: m.short }) + (m.targetDateTentative ? '（' + NAMES.d('tentative') + '）' : ''), { milestoneId: m.id, href: changeTargetHref(m.id), action: NAMES.d('calChangeDate') });
+    }
+    if (goals && goals.month && goals.month.endsOn) add(goals.month.endsOn, 'target', NAMES.d('calMonthCheck', { t: goals.month.text }), { href: '/dashboard/overview', action: NAMES.d('toOverview') });
+    // 你嘅現實行動（有日子嘅）
+    for (const t of tasks) if (t.owner === 'founder' && t.dueAt && t.column !== 'done' && t.column !== 'review') add(t.dueAt, 'action', t.title + (/T\d{2}:\d{2}/.test(t.dueAt) ? ' ' + t.dueAt.slice(11, 16) : ''), { taskId: t.id, milestoneId: t.milestoneId, href: changeTaskHref(t.id), action: NAMES.d('calChangeDate') });
+    for (const t of todo) if (t.due) add(t.due, 'decision', NAMES.d('calDecision', { t: t.text }), { href: t.href || '/', action: NAMES.d('calGoAnswer') });
+    if (includeExternal && actionDate && !cancelled) add(actionDate, 'external', NAMES.d('calExternal', { t: actionText }), { href: actionHref, action: NAMES.d('calExternalAction') });
+    return list.sort((a, b) => (b.overdue - a.overdue) || a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+  };
+  const horizon = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14);
+  // 清單保留所有逾期項目；已作答同之後每週推算只上月曆
+  const sched = calendarItems(new Date(0), horizon).filter(item => !item.planned && !item.completed);
   if (rhythm && rhythm.runTime && scheduler !== 'none' && (scheduler !== 'os' || legacyLive)) {
-    const [hh, mm] = rhythm.runTime.split(':').map(Number);
-    const next = new Date(now.getTime()); next.setHours(hh, mm, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
-    sched.push({ date: ymd(next), kind: 'ai', text: `AI 按節奏開工 ${rhythm.runTime}`, overdue: false });
+    const shown = scheduler === 'os' ? { ...rhythmOf(state), runCadence: schedMark.cadence || 'daily', runTime: schedMark.runTime || rhythm.runTime, interviewWeekday: schedMark.interviewWeekday || rhythmOf(state).interviewWeekday } : rhythmOf(state);
+    const next = nextRunAt(shown, now, { ranToday });
+    if (next) sched.push({ date: ymd(next), kind: 'ai', text: NAMES.d('calAiWork', { t: shown.runTime }), overdue: false, href: rhythmHref, action: NAMES.d('calChangeTime'), planned: true });
   }
   sched.sort((a, b) => (b.overdue - a.overdue) || a.date.localeCompare(b.date));
 
@@ -391,6 +471,29 @@ export function dashboardState(DIR, extra = {}) {
   const health = { ...(state.health || {}), warnings: [...((state.health || {}).warnings || [])] };
   if (parallel.over) health.warnings.push('有 ' + parallel.count + ' 站同時進行，超過兩站上限。請到 Founder Desk 決定先暫停哪一站。');
   else if (!parallel.confirmed) health.warnings.push('第二站「' + second.short + '」未經你確認已經開始');
+  const pausedCalendar = !!(health.pausedByFounder || health.autoStopped);
+  const calendarRhythm = scheduler === 'os' ? { ...rhythmOf(state), runCadence: schedMark.cadence || 'daily', runTime: schedMark.runTime || rhythm?.runTime, interviewWeekday: schedMark.interviewWeekday || rhythmOf(state).interviewWeekday } : rhythmOf(state);
+  const canPlanCalendar = !!(rhythm && rhythm.runTime && scheduler !== 'none' && (scheduler !== 'os' || legacyLive));
+  const plannedRunDays = [], pausedDays = [];
+  // 過去只看帳本；未來從同一個「下次開工」判斷開始推算（包括 ranToday）。
+  const nextCalendarRun = canPlanCalendar ? nextRunAt(calendarRhythm, now, { ranToday }) : null;
+  const firstPlannedDay = nextCalendarRun ? dayStart(nextCalendarRun) : null;
+  for (let d = new Date(today.getFullYear(), today.getMonth(), today.getDate()); d <= calendarTo; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    // 今日只有未到開工時間又未開過工先算推算
+    if (d.getTime() === today.getTime() && !due.catchUp && !(firstPlannedDay && firstPlannedDay.getTime() === today.getTime())) continue;
+    if (!isRunDay(calendarRhythm, d)) continue;
+    if (pausedCalendar) pausedDays.push(ymd(d));
+    else if ((due.catchUp && d.getTime() === today.getTime()) || (firstPlannedDay && d >= firstPlannedDay)) plannedRunDays.push(ymd(d));
+  }
+  const calendar = {
+    from: ymd(calendarFrom), to: ymd(calendarTo),
+    runDays: calendarRunDays(state.runs, calendarFrom, calendarTo, today),
+    plannedRunDays, paused: pausedCalendar, pausedDays,
+    items: calendarItems(calendarFrom, calendarTo, true),
+    rhythm: rhythm ? { runCadence: calendarRhythm.runCadence, runTime: calendarRhythm.runTime, interviewWeekday: calendarRhythm.interviewWeekday, scheduler } : null,
+    quarter: goals && goals.quarter ? { text: goals.quarter.text || '', endsOn: goals.quarter.endsOn || '' } : null,
+    ready: company.ready && company.confirmed
+  };
   // 模組狀態：等待、受阻由帳本事實推導（靜態色）；工作中只由作業網入面工作中嘅會話推導
   const pick = (...c) => ['unknown', 'blocked', 'waiting', 'working'].find(s => c.includes(s)) || 'idle';
   const lit = id => hot.has(id) ? 'working' : '';
@@ -448,7 +551,7 @@ export function dashboardState(DIR, extra = {}) {
     ok: true, sample, now: localIso(now), today: ymd(today), guide, firstWeekDone: ivDone,
     company, goals, nextAction, metrics, since, pathTouched,
     ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
-    lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, tasks, parallel,
+    lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, calendar, tasks, parallel,
     brain,
     teammates: teammates.map(t => ({ ...t, milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: t.lifecycle === 'planned' ? 'not_started' : tasks.some(x => x.teammate === t.name && workingTasks.has(x.id)) ? 'working' : tasks.some(x => x.teammate === t.name && x.column === 'doing') ? 'doing' : tasks.some(x => x.teammate === t.name && (x.column === 'waiting' || x.column === 'review')) ? 'waiting' : 'idle' })),
     capabilities: Array.isArray(state.capabilities) ? state.capabilities : [],

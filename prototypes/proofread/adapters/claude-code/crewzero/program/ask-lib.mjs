@@ -90,7 +90,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.36.0';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.37.0';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 
@@ -113,7 +113,7 @@ export const INTAKE_QUESTIONS = [
   { n: 6, ask: '希望在何時之前達到甚麼成果？', hint: 'AI 將按你的文件建議一個目標，並標示為「暫定」', example: '年底前完成三次試行', required: false },
   { n: 7, ask: '這項工作有哪些必須做到的要求或特別之處？', hint: 'AI 將從文件摘錄，供你校對', example: '', required: false },
   { n: 8, ask: '有哪些事情 AI 絕不可自行處理？', hint: '預設：對外聯絡、支出、作出承諾及刪除檔案，均須先徵求你的同意', example: '', required: false },
-  { n: 9, ask: '希望 AI 多久工作一次？每星期哪一天向你了解近況？', hint: '預設：每日晚上 9 時工作一次；逢星期一了解近況；每次最多 30 分鐘', example: '', required: false },
+  { n: 9, ask: '希望 AI 多久工作一次？每星期哪一天向你了解近況？', hint: '預設：每日晚上 9 時工作一次；逢星期一了解近況', example: '', required: false },
   { n: 10, ask: '是否同時進行兩項彼此獨立的工作（對象、資金或做法均不同）？', hint: '預設：視為同一項工作處理', example: '', required: false },
   { n: 11, ask: '你最擔心甚麼？', hint: 'AI 將從文件列出估計，供你校對', example: '', required: false },
   { n: 12, ask: '現有文件清單（名稱、日期、是否最新版本）', hint: 'AI 將閱讀你提交的全部文件，以最新日期為準', example: '', required: false }

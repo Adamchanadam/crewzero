@@ -94,6 +94,7 @@ const TESTS = [
   ['階段 B 頁面', 'core/cdp-desk-b.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['公司概覽', 'overview/overview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['監察台', 'dashboard/dash-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+    ['日程月曆與改日期', 'dashboard/calendar-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['監察台頁面', 'dashboard/cdp-dash.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['生意大腦', 'dashboard/brain-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['生意大腦接帳本', 'dashboard/brain-ledger-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
@@ -113,6 +114,7 @@ const TESTS = [
   ['經營節奏 14 日（21:00 後開始）', 'rhythm/rhythm-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '2026-10-29T21:30:00']],
   ['伺服器定時', 'rhythm/server-tick-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['排程登記', 'rhythm/schedule-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}']],
+  ['自動開工設定', 'rhythm/rhythm-edit-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['每週訪問', 'rhythm/interview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '{chrome}'], true]
 ];
 // 結果：最後一行「x / y」「x/y passed」「x/y 通過」；冇總數就睇有冇 FAIL 行

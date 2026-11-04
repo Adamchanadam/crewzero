@@ -15,5 +15,5 @@
 - **macOS**：~/Library/LaunchAgents/<登記名>.plist，以 launchctl bootstrap 後再 launchctl print 讀回。
 - **Linux**：~/.config/autostart/<登記名>.desktop。
 - **未經真機驗證**：Windows 工作排程器（會否在工作結束時關掉伺服器、登入時會否閃出視窗）、macOS 與 Linux 的登入啟動都未作真機驗證。安裝流程因此不主動提出登入啟動。
-- **舊式遷移**：舊 schedule.json 沒有 mode: "server" 時，伺服器不會自行開工；系統頁會提示「重新登記排程」，原有 Windows 每日工作不會被更新破壞。
+- **舊式遷移**：舊 schedule.json 沒有 mode: "server" 時，伺服器不會自行開工；系統頁會提示「更新自動開工設定」（AI 對話說「重新登記排程」亦可），原有 Windows 每日工作不會被更新破壞。
 - **測試**：設定 SOS_SCHED_CMD=tests/prototype/lib/fake-schtasks.mjs 只記錄命令，絕不登記真排程。

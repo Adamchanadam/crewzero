@@ -113,7 +113,7 @@ async function serverOpen() {
 }
 
 if (has('status')) {
-  const mark = readJSON(MARK), last = lastRun(), next = nextRunAt(r, new Date());
+  const mark = readJSON(MARK), last = lastRun(), now = new Date(), ranToday = (state.runs || []).some(x => x && x.trigger === 'schedule' && x.slot === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`), next = nextRunAt(r, now, { ranToday });
   if (mark && mark.mode === 'stopped') {
     console.log(JSON.stringify({ ok: true, mode: 'stopped', cleanupPending: true, autostart: { enabled: false, registered: null }, lastRun: lastJson(last), next: '' }));
     say('每日自動開工已停用；登入啟動尚未完全移除，請再說一次「移除排程」。');

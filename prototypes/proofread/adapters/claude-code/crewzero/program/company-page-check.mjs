@@ -9,7 +9,7 @@ export const ROW_PLANS = ['G1', 'G2', 'G3', 'G5', 'G6', 'G9'];
 export const RULE_PLANS = ['G7', 'G8', 'G10'];
 export const CELLS = [['event', 'milestone.event'], ['actor', 'milestone.actor'], ['witness', 'milestone.witness'], ['proof', 'milestone.evidence']];
 // 用預設嘅欄（3.1 表：G8 節奏、G10 業務線預設一條、G7 三格預設）
-const DEFAULTS = { G7: '用預設：對外聯絡、花錢、作出承諾及刪除檔案，均須先問你', G8: '用預設：每日晚上 9 時工作一次；逢星期一了解近況；每次最多 30 分鐘', G10: '一條業務線' };
+const DEFAULTS = { G7: '用預設：對外聯絡、花錢、作出承諾及刪除檔案，均須先問你', G8: '用預設：每日晚上 9 時工作一次；逢星期一了解近況', G10: '一條業務線' };
 const TASKISH = /定稿|寫好|擬好|整理好|完成(?:研究|文件|草稿|簡報|計劃)/;
 function fieldsOf(page) {
   const out = [];

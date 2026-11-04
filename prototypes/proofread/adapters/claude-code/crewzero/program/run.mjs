@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
-import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps } from './dash-lib.mjs';
+import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps, overviewIsCurrent } from './dash-lib.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
 
@@ -124,7 +124,10 @@ function founderEventTitle(op) {
   if (op.op === 'reschedule') return NAMES.t('founderRescheduled', { d: v.date || '' });
   if (op.op === 'cancelNext') return U.founderCancelled;
   if (op.op === 'setNext') return NAMES.t('founderSetNext', { t: clip(v.text, 60) });
+  if (op.op === 'setTarget') return NAMES.t('founderTargetChanged', { d: v.date || '' });
+  if (op.op === 'setTaskDue') return NAMES.t('founderTaskDueChanged', { d: v.date || '' });
   if (op.op === 'snooze') return U.founderSnoozed;
+  if (op.op === 'setRhythm') return U.rhythmSaved;
   return U.founderUnsnoozed;
 }
 const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
@@ -137,7 +140,7 @@ function founderOpsBatches() {
 function mergeFounderOpsBatch(batch) {
   const ops = readJSON(batch, []), before = loadState();
   if (before.demo === true || !Array.isArray(ops)) return false;
-  const done = Array.isArray(before.founderOpsDone) ? before.founderOpsDone.filter(id => typeof id === 'string').slice(-200) : [];
+  const done = Array.isArray(before.founderOpsDone) ? before.founderOpsDone.filter(id => typeof id === 'string') : [];
   const doneSet = new Set(done), pending = ops.filter(op => op && typeof op === 'object' && (!op.id || !doneSet.has(op.id)));
   const next = applyFounderOps(before, pending);
   next.events = Array.isArray(next.events) ? next.events : [];
@@ -145,7 +148,7 @@ function mergeFounderOpsBatch(batch) {
     if (!op.op) continue;
     next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op), relatedIds: [], moduleIds: ['now', 'inputs'] });
   }
-  next.founderOpsDone = [...new Set(done.concat(pending.map(op => typeof op.id === 'string' ? op.id : '').filter(Boolean)))].slice(-200);
+  next.founderOpsDone = [...new Set(done.concat(pending.map(op => typeof op.id === 'string' ? op.id : '').filter(Boolean)))].slice(-Math.max(200, ops.length));
   saveState(next);
   fs.rmSync(batch, { force: true });
   if (pending.length) log(`已合併 ${pending.length} 個創辦人操作`);
@@ -202,12 +205,26 @@ function syncLedger() {
   const founder = {};
   for (const pm of page.path.milestones) { const o = keepOf(pm); if (o) founder[pm.id] = (o.depthAnswers || []).map(a => a && typeof a === 'object' ? { text: a.founderText || '', adopted: !!a.adopted } : { text: '' }); }
   const kinds = c.kinds || {};
-  const before = JSON.stringify([s.milestones || [], (s.company || {}).assumptions || [], s.intake || {}, s.tasks || [], (s.company || {}).nextExternalAction || null]);
+  const before = JSON.stringify([s.milestones || [], (s.company || {}).assumptions || [], s.intake || {}, s.tasks || [], (s.company || {}).nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]);
   const ms = milestonesFromPage(page, c, { founder }).map(m => { const o = keepOf(m), kind = kinds[m.id] || m.kind || 'real'; return o ? { ...m, kind, ...pick(o, MS_KEEP) } : { ...m, kind }; });
   // 經試行採用、唔喺公司概覽嘅站（3.12）：同步時照留
   for (const o of s.milestones || []) if (o.trial && !ms.some(m => m.id === o.id)) ms.push(o);
-  // 你喺訪問確認撤回嘅站、改咗嘅目標日：同步時照留
-  for (const m of ms) { const o = keepOf(m); if (o && o.pathStatus === 'retired' && o.retiredDecisionId) m.pathStatus = 'retired'; if ((s.targetOverride || {})[m.id]) m.targetDate = s.targetOverride[m.id]; }
+  // 你喺訪問確認撤回嘅站、改咗嘅目標日：同步時照留；但公司概覽其後真的改過同一日子，就以公司概覽為準。
+  s.targetOverride = { ...(s.targetOverride || {}) }; s.targetOverrideBase = { ...(s.targetOverrideBase || {}) }; s.targetOverrideAt = { ...(s.targetOverrideAt || {}) };
+  for (const m of ms) {
+    const o = keepOf(m); if (o && o.pathStatus === 'retired' && o.retiredDecisionId) m.pathStatus = 'retired';
+    if (!Object.prototype.hasOwnProperty.call(s.targetOverride, m.id)) continue;
+    if (!Object.prototype.hasOwnProperty.call(s.targetOverrideBase, m.id)) { s.targetOverrideBase[m.id] = m.targetDate || ''; m.targetDate = s.targetOverride[m.id]; continue; }
+    if ((m.targetDate || '') !== s.targetOverrideBase[m.id]) {
+      const overrideAt = s.targetOverrideAt[m.id], confirmedAt = Date.parse(String(c.confirmedAt || '')),
+        overrideTime = Date.parse(String(overrideAt || ''));
+      // 舊資料冇記覆蓋時間，沿用原有行為；只有確認真係較新先蓋回公司概覽日期。
+      if (!overrideAt || (Number.isFinite(confirmedAt) && Number.isFinite(overrideTime) && confirmedAt > overrideTime)) {
+        delete s.targetOverride[m.id]; delete s.targetOverrideBase[m.id]; delete s.targetOverrideAt[m.id]; continue;
+      }
+    }
+    m.targetDate = s.targetOverride[m.id];
+  }
   const oldAs = (s.company && s.company.assumptions) || [];
   // 生意體檢寫嘅最便宜測試：公司概覽冇寫測試就照留（公司概覽有就以公司概覽為準）
   const as = assumptionsFromPage(page).map(a => { const o = oldAs.find(x => same ? x.pageRef === a.pageRef : x.text === a.text); return !o ? a : { ...a, ...pick(o, AS_KEEP), ...(o.cheapestTestBy === 'checkup' && !String(a.cheapestTest || '').trim() ? pick(o, ['cheapestTest', 'cheapestTestBy', 'cheapestTestAt']) : {}) }; });
@@ -257,7 +274,7 @@ function syncLedger() {
   s.milestones = ms;
   s.intake = { ...(s.intake || {}), state: missing.length ? 'incomplete' : 'complete', confirmedAt: c.confirmedAt, answers, missing };
   s.ledgerFrom = page.page.id;
-  if (before === JSON.stringify([ms, as, s.intake, tasks, s.company.nextExternalAction || null]) && same && !seeded) return false;
+  if (before === JSON.stringify([ms, as, s.intake, tasks, s.company.nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]) && same && !seeded) return false;
   saveState(s);
   log(`帳本已按公司概覽同步：${ms.length} 個站、${as.length} 條假設、未答齊 ${missing.length} 欄`);
   return true;
@@ -2350,7 +2367,21 @@ function handleInterviewAnswer(run, pack, store, fresh) {
       } else if (!opt && !unknown) texts.push(q.id);
     } else if (q.bind === 'odDate') {
       const m = (s.milestones || []).find(x => x.id === q.overdue.milestoneId);
-      if (m && isDay(val)) { s.targetOverride = { ...(s.targetOverride || {}), [m.id]: val }; m.targetDate = val; said.push('「' + m.short + '」目標日改為 ' + dayText(val)); ev('path', '目標日更新：' + m.short + '（' + dayText(val) + '）', [m.id, pack.id]); }
+      if (m && isDay(val)) {
+        const replyAt = replySubmittedAt(run, a), overrideAt = (s.targetOverrideAt || {})[m.id];
+        // 時間只記到秒；同一秒分唔到先後，保留已生效嘅日期，唔可以俾舊答案蓋走
+        const replyTime = Date.parse(String(replyAt || '')), overrideTime = Date.parse(String(overrideAt || ''));
+        if (Number.isFinite(replyTime) && Number.isFinite(overrideTime) && replyTime <= overrideTime) {
+          said.push(NAMES.t('founderTargetNewer', { s: m.short, d: dayText(m.targetDate) }));
+          continue;
+        }
+        const prior = s.targetOverride || {};
+        s.targetOverride = { ...prior, [m.id]: val };
+        s.targetOverrideBase = { ...(s.targetOverrideBase || {}), ...(Object.prototype.hasOwnProperty.call(prior, m.id) ? {} : { [m.id]: m.targetDate || '' }) };
+        s.targetOverrideAt = { ...(s.targetOverrideAt || {}), [m.id]: replyAt || localIso() };
+        m.targetDate = val; delete m.targetDateTentative;
+        said.push('「' + m.short + '」目標日改為 ' + dayText(val)); ev('path', '目標日更新：' + m.short + '（' + dayText(val) + '）', [m.id, pack.id]);
+      }
     } else if (q.bind === 'assume') {
       let ap = opt ? opt.apply : null;
       if (!opt) { const k = NAMES.evKey(val.replace(/^(?:改為|維持)/, '').replace(/[「」\s]/g, '')); const id = (((q.options || [])[0] || {}).apply || {}).id; ap = k && id ? { op: 'setAssumptionGrade', id, grade: k } : null; }
@@ -2378,7 +2409,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   if (structuredSeen && !resultsPending && iv.lastFor !== pack.rhythm.on) {
     const r = rhythmOf(s);
     let next = addDays(pack.rhythm.on, 7);
-    if (next <= today) next = nextWeekday(today, r.interviewWeekday);
+    if (next <= today || !isWeekday(next, r.interviewWeekday)) next = nextWeekday(pack.rhythm.on > today ? pack.rhythm.on : today, r.interviewWeekday);
     Object.assign(iv, { lastOn: today, lastFor: pack.rhythm.on, nextOn: next, count: (iv.count || 0) + 1, lastSummary: said.length ? said.slice(0, 5) : ['沒有變化'], changed: said.join('；') });
     ev('input', '每週訪問已作答（' + dayText(pack.rhythm.on) + '）', [pack.id]);
     if (iv.count % 4 === 0) monthly = true;
@@ -2568,6 +2599,8 @@ function rhythmLedger(type) {
   const s = loadState(), today = todayIso();
   const ms = (s.milestones || []).slice().sort((a, b) => (a.order || 99) - (b.order || 99));
   const canDo = (s.tasks || []).filter(t => t.owner !== 'founder' && t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'waiting').map(t => ({ title: t.title, next: t.next || '', firstBatch: !!t.firstBatch, milestoneId: t.milestoneId || '' }));
+  // 創辦人有明確日子的行動亦是 AI 下一次安排的事實；改日期後由已合併帳本直接讀入。
+  const founderActions = (s.tasks || []).filter(t => t.owner === 'founder' && t.dueAt && t.status !== 'done' && t.status !== 'cancelled' && t.column !== 'done' && t.column !== 'cancelled').map(t => ({ title: t.title, dueAt: t.dueAt, milestoneId: t.milestoneId || '' }));
   const open = listPacks(DIR).filter(p => p.open).map(p => { const f = loadPack(DIR, p.id) || {}; return { title: p.title, questions: (f.questions || []).map(q => q.ask) }; });
   const second = ms.find(m => !secondProblem(s, m.id));
   return {
@@ -2575,7 +2608,7 @@ function rhythmLedger(type) {
     milestones: ms.filter(m => m.pathStatus !== 'retired').map(m => ({ id: m.id, short: m.short, state: m.state, pathStatus: m.pathStatus, kind: m.kind, event: m.event, depth: m.depth, targetDate: m.targetDate || '', trial: m.trial ? { until: m.trial.until, verdict: m.trial.verdict || '' } : undefined })),
     nextExternalAction: (s.company || {}).nextExternalAction || null,
     assumptions: ((s.company || {}).assumptions || []).map(a => ({ text: a.text, grade: NAMES.evName(a.grade || 'guess') })),
-    canDo, openQuestions: open, notYetKnown: openUnknowns(DIR).map(u => ({ question: u.question, until: u.until })),
+    canDo, founderActions, openQuestions: open, notYetKnown: openUnknowns(DIR).map(u => ({ question: u.question, until: u.until })),
     interviews: s.interviews ? { nextOn: s.interviews.nextOn, lastOn: s.interviews.lastOn || '', lastSummary: s.interviews.lastSummary || [] } : null,
     recentInputs: (s.inputs || []).filter(i => i.status === 'processed').slice(-5).map(i => ({ title: i.title, effects: (i.effects || []).map(e => e.change) })),
     previousRuns: (s.runs || []).filter(r => r.state === 'ended').slice(-3).map(r => ({ date: String(r.startedAt).slice(0, 10), label: r.label, ending: r.ending, blockedOn: r.blockedOn || '' })),
@@ -2613,14 +2646,18 @@ async function rhythmRun() {
   const type = RUN_TYPE === 'auto' ? (isWeekday(today, r.interviewWeekday) ? 'interview' : 'rhythm') : RUN_TYPE;
   const lr = { id: 'R' + stamp() + '-' + String(process.pid).slice(-3), type, trigger: RUN_TRIGGER, slot: RUN_SLOT || today, startedAt: localIso(), capMinutes: r.runCapMinutes, aiStarted: false, state: 'running', label: U['runType_' + type], moduleIds: ['ai-week', 'system'] };
   recordRun(lr);
-  const intakeOk = !!(s0.intake && s0.intake.confirmedAt && s0.ledgerFrom);
+  const page = loadPage(), confirmed = readJSON(CONFIRMED, null);
+  // 新交資料會換走 confirmed.json；有新頁時一定要確認同一個 pageId，舊帳本先唔可以開工。
+  const overviewCurrent = overviewIsCurrent(page, confirmed);
+  const intakeReady = !!(s0.intake && s0.intake.confirmedAt && s0.ledgerFrom);
+  const intakeOk = intakeReady && overviewCurrent;
   const mech = [];
   if (intakeOk) { mech.push(...checkTrials()); const iv = placeInterviewIfDue(); if (iv) mech.push(iv); if (s0.ledgerFrom && s0.depthPackFor !== s0.ledgerFrom) { const dp = placeDepthPack(null); if (dp) mech.push(dp); } }
   const h = { ...HEALTH0, ...(loadState().health || {}) };
   // 排程器「錯過即補跑」加正常時段，可能令同一日叫兩次：同一日已有排程工作做完，補跑嗰次照記錄但唔再開 AI
   const ranToday = RUN_TRIGGER === 'schedule' && (s0.runs || []).some(x => x.trigger === 'schedule' && x.slot === (RUN_SLOT || today) && x.state === 'ended');
   const certification = certified(ROOT, DIR.ledger);
-  const skip = ranToday ? 'alreadyRan' : !intakeOk ? 'intakeNotComplete' : h.pausedByFounder ? 'pausedByFounder' : h.autoStopped ? 'autoStopped' : budgetLeft() <= 0 ? 'budgetExhausted' : !certification.host ? (certification.code === 'changed' ? 'adapterVersionChanged' : 'adapterNotCertified') : '';
+  const skip = ranToday ? 'alreadyRan' : !intakeOk ? (!overviewCurrent && intakeReady ? 'overviewPending' : 'intakeNotComplete') : h.pausedByFounder ? 'pausedByFounder' : h.autoStopped ? 'autoStopped' : budgetLeft() <= 0 ? 'budgetExhausted' : !certification.host ? (certification.code === 'changed' ? 'adapterVersionChanged' : 'adapterNotCertified') : '';
   if (skip) {
     recordRun({ ...lr, state: 'skipped', skipReason: skip, endedAt: localIso(), summary: U['skip_' + skip] + (mech.length ? '；已放上 ' + mech.length + ' 項待你處理' : ''), placed: mech.map(p => p.id) });
     log(`${lr.id} 排程 run 跳過：${skip}`);
