@@ -50,9 +50,9 @@
     "--disable",
     "in_app_browser",
     "--model",
-    "gpt-6.1-terra",
+    "{model}",
     "-c",
-    "model_reasoning_effort=\"medium\"",
+    "model_reasoning_effort=\"{effort}\"",
     "--skip-git-repo-check",
     "--ephemeral",
     "--json",
@@ -162,11 +162,11 @@
       ],
       [
         "-c",
-        "model_reasoning_effort=\"medium\""
+        "model_reasoning_effort=\"{effort}\""
       ],
       [
         "--model",
-        "gpt-6.1-terra"
+        "{model}"
       ],
       [
         "--disable",
@@ -230,5 +230,58 @@
       "--full-auto",
       "--yolo"
     ]
+  },
+  "modelsCache": "{dataDir}/codex-home/models_cache.json",
+  "models": {
+    "note": "紅藍同級、立場分工；裁判應與藍方不同模型，做不到時顯示警告",
+    "everyday": [
+      {
+        "model": "gpt-6.1-terra",
+        "label": "GPT-6.1 Terra",
+        "effort": "medium"
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "label": "GPT-6.1 Sol",
+        "effort": "medium"
+      }
+    ],
+    "blue": [
+      {
+        "model": "gpt-6.1-sol",
+        "label": "GPT-6.1 Sol",
+        "effort": "medium"
+      },
+      {
+        "model": "gpt-6.1-terra",
+        "label": "GPT-6.1 Terra",
+        "effort": "medium"
+      }
+    ],
+    "red": [
+      {
+        "model": "gpt-6.1-sol",
+        "label": "GPT-6.1 Sol",
+        "effort": "medium"
+      },
+      {
+        "model": "gpt-6.1-terra",
+        "label": "GPT-6.1 Terra",
+        "effort": "medium"
+      }
+    ],
+    "judge": [
+      {
+        "model": "gpt-6.1-sol",
+        "label": "GPT-6.1 Sol",
+        "effort": "high"
+      },
+      {
+        "model": "gpt-6.1-terra",
+        "label": "GPT-6.1 Terra",
+        "effort": "high"
+      }
+    ],
+    "timeoutMinutes": 25
   }
 }

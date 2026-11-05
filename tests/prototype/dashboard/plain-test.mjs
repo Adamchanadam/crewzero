@@ -71,7 +71,7 @@ try {
   ok('紅藍對打檔：論點同路線換名稱，查唔到嘅攻擊編號保留並標記；來源欄唔改', /「先辦試食會」路線/.test(dblue.thesis) && /假設「餐廳願意為來源付錢」/.test(dblue.claims[0].claim) && /R7/.test(dblue.strategies[0].summary) && dblue.strategies[0].summary.endsWith(MARK) && dblue.claims[0].source === '你原話 · plan.md', dblue);
   ok('索引記錄模式同標記數', idx['source/01-生意體檢.md'].mode === 'fallback' && idx['source/01-生意體檢.md'].marked === 0 && idx['source/wargame/blue.json'].marked >= 1, idx);
   const st = JSON.parse(fs.readFileSync(path.join(DATA, 'ledger', 'state.json'), 'utf8'));
-  ok('health.warnings 有「AI 文字含內部用語：<項目名稱>」（唔用檔名）', (st.health && st.health.warnings || []).includes('AI 文字含內部用語：紅藍對打藍方') && !st.health.warnings.some(w => /生意體檢/.test(w)) && !st.health.warnings.some(w => /\.(md|json)/.test(w)), st.health);
+  ok('health.warnings 有「AI 文字含內部用語：<項目名稱>」（唔用檔名）', (st.health && st.health.warnings || []).includes(N.dash.warnCode.replace('{name}', '紅藍對打藍方')) && !st.health.warnings.some(w => /生意體檢/.test(w)) && !st.health.warnings.some(w => /\.(md|json)/.test(w)), st.health);
   const res2 = spawnSync(process.execPath, [path.join(PROTO, 'run.mjs'), '--plain'], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER }, encoding: 'utf8', timeout: 120000 });
   const st2 = JSON.parse(fs.readFileSync(path.join(DATA, 'ledger', 'state.json'), 'utf8'));
   ok('重跑：原檔冇改就略過，警告唔重複', JSON.stringify(st2.health) === JSON.stringify(st.health) && res2.status === 0, st2.health);

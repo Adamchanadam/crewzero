@@ -1,14 +1,14 @@
 # 紅藍對打檔案格式（原型用；同試驗資料夾 wargame/FORMAT.md 一致，加幾個可選欄）
 
-所有檔用 UTF-8、欄位固定、一句一欄；`|` 分隔嘅係只可以揀其中一個。檔案未出現即代表嗰一方未完成。辯論、反駁、裁判、轉強全部屬「AI 建議 · 未確認」或「AI 解讀」，唔算證據；只有真實客戶、伙伴或付款者嘅行為先可以令證據級上升。
+所有檔用 UTF-8、欄位固定、一句一欄；`|` 分隔嘅係只可以揀其中一個。檔案未出現即代表嗰一方未完成。辯論、反駁、裁判、轉強全部屬「Zero 建議 · 未確認」或「Zero 解讀」，唔算證據；只有真實客戶、伙伴或付款者嘅行為先可以令證據級上升。
 
-證據級（0–4）：0 假設、1 口頭表示、2 實際行動、3 付出成本、4 形成依賴。來源只可以寫：「你原話 <文件名> §x」「外部 [n]」「AI 解讀」。
+證據級（0–4）：0 假設、1 口頭表示、2 實際行動、3 付出成本、4 形成依賴。來源只可以寫：「你原話 <文件名> §x」「外部 [n]」「Zero 解讀」。
 
 ## blue.json（藍方：最強但誠實嘅論證）
 
 ```json
 { "thesis": "一句話主張", "whyNow": "一句",
-  "claims": [ { "id": "B1", "topic": "付款|採購|價錢|渠道|交付|競爭|時間窗|擴展|需要|其他", "claim": "一句", "evidence": 0, "source": "你原話 <文件名> §x｜外部 [n]｜AI 解讀", "assumptionIds": ["H1"] } ],
+  "claims": [ { "id": "B1", "topic": "付款|採購|價錢|渠道|交付|競爭|時間窗|擴展|需要|其他", "claim": "一句", "evidence": 0, "source": "你原話 <文件名> §x｜外部 [n]｜Zero 解讀", "assumptionIds": ["H1"] } ],
   "strategies": [ { "id": "S1", "name": "短名", "summary": "一句", "upside": "一句", "firstTest": "一句", "success": "一句", "stop": "一句" } ],
   "admittedWeaknesses": [ { "claimId": "B3", "text": "一句：藍方自己承認嘅弱點" } ],
   "sources": [ { "n": 1, "title": "…", "url": "…", "readOn": "YYYY-MM-DD" } ] }
@@ -44,7 +44,7 @@
       "aiChecked": [ { "finding": "一句", "label": "observation|fact", "sources": [ { "title": "…", "url": "…", "readOn": "YYYY-MM-DD" } ], "minutes": 9 } ] } ],
   "routes": [ { "id": "S1", "name": "短名", "recommended": true, "why": "一句", "redScore": "高|中|低", "firstTest": "一句", "stop": "一句" } ],
   "founderDecisions": [ { "question": "一句", "options": [ "A …", "B …" ], "recommend": "A", "why": "一句", "risk": "一句具體後果" } ],
-  "assumptionChanges": [ { "assumptionId": "H1", "change": "一句", "label": "AI 建議 · 未確認" } ] }
+  "assumptionChanges": [ { "assumptionId": "H1", "change": "一句", "label": "Zero 建議 · 未確認" } ] }
 ```
 
 `factChecks` 係原型多出嘅可選欄（畫面「外部事實核實」用）。最傷三點、要你決定嘅事最多三條；每項 `founderDecisions` 必須寫 `risk`，說明不作或作出該決定的具體後果。

@@ -1,10 +1,47 @@
 // 公司概覽核對同可修正嘅欄位。
 import { createRequire } from 'node:module';
+import { BIZ_TYPES } from './ask-lib.mjs';
 const NAMES = createRequire(import.meta.url)('./names.js');
 
 /* ---------- 規劃書 3.1 就緒清單同 3.3 里程碑四格（唯一定義處；外殼、校對頁統計、測試共用） ----------
    G1–G10 全部有值先可以排里程碑：「有值」包括暫定值同用預設。G4＝「目前去到哪裏」各項；G7、G8、G10 喺規則區。
    每個里程碑要填齊四格：事件、決策者（外部角色）、見證人、證明。 */
+// 只在新草稿核對時補齊；舊公司概覽遷移不加生意模式欄位。
+export const READING_FIELDS = [
+  ['biz.type', '生意類型'],
+  ['canvas.customer', '客戶'],
+  ['canvas.problem', '對方的問題'],
+  ['canvas.alternatives', '現有替代方案'],
+  ['canvas.value', '價值'],
+  ['canvas.channel', '渠道'],
+  ['canvas.relationship', '客戶關係'],
+  ['canvas.revenue', '收入'],
+  ['canvas.resources', '關鍵資源'],
+  ['canvas.activities', '關鍵活動'],
+  ['canvas.partners', '關鍵伙伴'],
+  ['canvas.cost', '成本']
+];
+export const READING_PLANS = READING_FIELDS.map(([plan]) => plan);
+function completeReading(page) {
+  const detail = page.detail = page.detail && typeof page.detail === 'object' ? page.detail : {};
+  const reading = listOf(detail.reading), ids = new Set(fieldsOf(page).map(f => f.id));
+  const uid = base => { let id = base, n = 2; while (ids.has(id)) id = base + '-' + n++; ids.add(id); return id; };
+  const labels = Object.values(BIZ_TYPES).map(x => x.label);
+  detail.reading = READING_FIELDS.map(([plan, label]) => {
+    const f = reading.find(x => x && x.plan === plan) || { plan, value: '待你補充', origin: 'missing' };
+    if (typeof f.id !== 'string' || !f.id) f.id = uid(plan.replaceAll('.', '-'));
+    f.label = label;
+    if (!String(f.value ?? '').trim()) { f.value = '待你補充'; f.origin = 'missing'; }
+    if (plan === 'biz.type') {
+      f.value = labels.includes(f.value) ? f.value : BIZ_TYPES.other.label;
+      f.kind = 'choice'; f.origin = 'ai';
+      f.options = labels.map(text => ({ text, ...(text === f.value ? { rec: true } : {}) }));
+      f.why = '只影響問題及例子的用字，可以更改。';
+      delete f.src;
+    } else if (!f.kind) f.kind = 'text';
+    return f;
+  }).concat(reading.filter(x => x && !READING_PLANS.includes(x.plan)));
+}
 export const ROW_PLANS = ['G1', 'G2', 'G3', 'G5', 'G6', 'G9'];
 export const RULE_PLANS = ['G7', 'G8', 'G10'];
 export const CELLS = [['event', 'milestone.event'], ['actor', 'milestone.actor'], ['witness', 'milestone.witness'], ['proof', 'milestone.evidence']];
@@ -84,6 +121,7 @@ export function checkCompanyPage(page, options = {}) {
     else if (x && typeof x === 'object' && (x.title || x.label || x.id)) { dt[k] = [x]; warnings.push('公司概覽有一區只有一項，已改為清單'); }
     else { delete dt[k]; warnings.push('公司概覽有一區格式無法讀取，已移除'); }
   }
+  if (options.newDraft) completeReading(page);
   function walk(o) {
     if (Array.isArray(o)) return o.forEach(walk);
     if (!o || typeof o !== 'object') return;
@@ -93,7 +131,7 @@ export function checkCompanyPage(page, options = {}) {
       if (!o.kind) o.kind = Array.isArray(o.options) ? 'choice' : 'text';
       if (!['choice','grade','date','text','multi'].includes(o.kind)) errors.push('項目類型不正確');
       if (!['doc','ai','default','missing'].includes(o.origin)) errors.push('項目來源不正確');
-      if (o.origin === 'doc' && (!Array.isArray(o.src) || !o.src.length)) { o.origin = 'ai'; warnings.push('有一項資料未註明出處，已改為 AI 建議'); }
+      if (o.origin === 'doc' && (!Array.isArray(o.src) || !o.src.length)) { o.origin = 'ai'; warnings.push('有一項資料未註明出處，已改為 Zero 建議'); }
     }
     Object.values(o).forEach(walk);
   }
@@ -109,9 +147,9 @@ export function checkCompanyPage(page, options = {}) {
   // 就緒清單同四格（3.1、3.3）：新草稿要求 AI 補齊（ready: true 時當錯誤，叫 AI 修正一次）；修正後仍缺就加空欄，等你喺校對頁補
   if (!errors.length && options.ready) {
     const r = readiness(page);
-    for (const p of r.absent) errors.push('缺少「' + (p === 'G4' ? '目前去到哪裏' : NAMES.field[p]) + '」一欄（照格式說明「一定要齊」一節補上；文件沒有寫就寫 AI 建議值並標為暫定）');
+    for (const p of r.absent) errors.push('缺少「' + (p === 'G4' ? '目前去到哪裏' : NAMES.field[p]) + '」一欄（照格式說明「一定要齊」一節補上；文件沒有寫就寫 Zero 建議值並標為暫定）');
     const ms = (page.path && page.path.milestones) || [];
-    for (const c of r.cells) { const miss = CELLS.filter((x, i) => !c.have[i]).map(x => NAMES.field[x[1]]); const m = ms.find(x => x.id === c.id); if (miss.length) errors.push('「' + ((m && m.short) || '一個里程碑') + '」缺少：' + miss.join('、') + '（文件沒有寫就寫 AI 建議值）'); }
+    for (const c of r.cells) { const miss = CELLS.filter((x, i) => !c.have[i]).map(x => NAMES.field[x[1]]); const m = ms.find(x => x.id === c.id); if (miss.length) errors.push('「' + ((m && m.short) || '一個里程碑') + '」缺少：' + miss.join('、') + '（文件沒有寫就寫 Zero 建議值）'); }
   }
   if (!errors.length) warnings.push(...normalizePage(page, options).warnings);
   return { ok: !errors.length, errors, warnings, page };

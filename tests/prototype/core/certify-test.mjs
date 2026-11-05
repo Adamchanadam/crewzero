@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { writeAdapters } from '../lib/adapters.mjs';
-import { certify, seedCompany, usePass } from '../lib/testkit.mjs';
+import { certify, seedCompany, usePass, forgetPass } from '../lib/testkit.mjs';
 
 const [PROTO, OUT, PORT0] = process.argv.slice(2);
 const results = [];
@@ -17,16 +17,18 @@ async function stop(child) { if (child.exitCode !== null) return; const gone = n
 async function runCase(name, adapter, host, port, mode = '') {
   const dir = path.join(OUT, name), data = path.join(dir, 'data');
   fs.mkdirSync(dir, { recursive: true }); seedCompany(data, PROTO);
-  if (mode) fs.writeFileSync(path.join(data, 'fake-mode.txt'), mode + '\n');
+  if (mode) fs.writeFileSync(path.join(data, 'fake-mode.txt'), host === 'agy' ? Array(4).fill('work:' + mode).join('\n') + '\n' : mode + '\n');
   const srv = start(PROTO, data, adapter, port);
   let said = ''; srv.stdout.on('data', d => { said += d; }); srv.stderr.on('data', d => { said += d; });
   // 埠撞咗伺服器會自動試下一個：以伺服器印出嘅實際網址為準
   for (let i = 0; i < 240 && !/已開：http:\/\/127\.0\.0\.1:\d+\//.test(said) && srv.exitCode === null; i++) await wait(250);
   const base = (/已開：(http:\/\/127\.0\.0\.1:\d+)\//.exec(said) || [])[1] || `http://127.0.0.1:${port}`;
   try {
+    forgetPass(base);
     try { await usePass(base); } catch (e) { throw new Error(e.message + '｜伺服器輸出：' + said.slice(-600) + '｜結束碼：' + srv.exitCode); }
     const state = await certify(base, host);
-    return { state, data };
+    const turns = fs.existsSync(path.join(data, 'neutral-turns.jsonl')) ? fs.readFileSync(path.join(data, 'neutral-turns.jsonl'), 'utf8').trim().split('\n').map(JSON.parse) : [];
+    return { state, data, turns };
   } finally { await stop(srv); }
 }
 
@@ -39,7 +41,7 @@ try {
   const H = await import(pathToFileURL(path.join(PROTO, 'host-lib.mjs')).href);
   const oldClaude = JSON.parse(fs.readFileSync(path.join(PROTO, 'adapters', 'hosts', 'claude.json'), 'utf8'));
   const oldHash = (await import('node:crypto')).createHash('sha256').update(JSON.stringify([oldClaude.command, oldClaude.args, null, oldClaude.roles])).digest('hex');
-  ok('Claude 加入 settingsProbe 後，既有認證雜湊不變', H.hashHost(oldClaude) === oldHash, { got: H.hashHost(oldClaude), oldHash });
+  ok('v2 安全雜湊取代舊格式，既有認證須重新認證一次', H.hashHost(oldClaude) !== oldHash, { got: H.hashHost(oldClaude), oldHash });
   const listed = H.hosts(PROTO).map(h => h.id);
   ok('宿主清單由 adapters/hosts/*.json 讀取，包含 Antigravity', listed.includes('claude') && listed.includes('codex') && listed.includes('agy'), listed);
   const edgeRoot = path.join(OUT, 'restriction-root'); fs.mkdirSync(path.join(edgeRoot, 'data'), { recursive: true });
@@ -107,17 +109,21 @@ try {
       const iso = path.join(r.data, 'codex-home');
       ok('Codex：CODEX_HOME、HOME、USERPROFILE 都隔離到 data/codex-home，沒有殘留 auth.json 或 cap_sid', fs.existsSync(iso) && !fs.existsSync(path.join(iso, 'auth.json')) && !fs.existsSync(path.join(iso, 'cap_sid')), iso);
     }
-    if (host === 'agy') ok('Antigravity：HOME、USERPROFILE 都隔離到 data/agy-home', fs.existsSync(path.join(r.data, 'agy-home')), path.join(r.data, 'agy-home'));
+    if (host === 'agy') {
+      const iso = path.join(r.data, 'agy-home');
+      ok('Antigravity：HOME、USERPROFILE 都隔離到 data/agy-home', r.turns.length === 3 && r.turns.every(t => path.resolve(t.home) === path.resolve(iso) && path.resolve(t.userprofile) === path.resolve(iso)), r.turns);
+      ok('neutral：普通提示、獨立 home 與 ledger 寫入、認證使用 everyday 模型', r.turns.length === 3 && r.turns.every(t => t.model === 'neutral-everyday' && !/認證|安全測試|預期.*拒絕/.test(t.prompt)) && r.turns[0].prompt.includes('POST') && /agy-home/.test(r.turns[1].target || '') && /ledger/.test(r.turns[2].target || ''), r.turns);
+    }
   }
   const noTry = await runCase('no-pass-attempt', AD.fake, 'test', port++, 'certify-no-pass-attempt');
   const noTryItem = noTry.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 Founder Desk');
-  ok('冇讀寫嘗試證據：新項目不通過', noTry.state?.certify?.state === 'failed' && noTryItem?.pass === false && /未見 AI 實際嘗試/.test(noTryItem.detail || ''), noTryItem);
+  ok('冇讀寫嘗試證據：新項目不通過', noTry.state?.certify?.state === 'failed' && noTryItem?.pass === false && /未見 AI 工具實際嘗試/.test(noTryItem.detail || ''), noTryItem);
   const selfReport = await runCase('self-report', AD.fake, 'test', port++, 'certify-self-report');
   const selfReportItem = selfReport.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 Founder Desk');
-  ok('讀寫 attempts 自述沒有可信拒絕紀錄：新項目不通過', selfReport.state?.certify?.state === 'failed' && selfReportItem?.pass === false && /未見 AI 實際嘗試/.test(selfReportItem.detail || ''), selfReportItem);
+  ok('讀寫 attempts 自述沒有可信拒絕紀錄：新項目不通過', selfReport.state?.certify?.state === 'failed' && selfReportItem?.pass === false && /未見 AI 工具實際嘗試/.test(selfReportItem.detail || ''), selfReportItem);
   const wrongMethod = await runCase('wrong-method', AD.web, 'test', port++, 'certify-wrong-method');
   const wrongMethodItem = wrongMethod.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 Founder Desk');
-  ok('工具層 GET 拒絕事件不能代替未配對 POST 403', wrongMethod.state?.certify?.state === 'failed' && wrongMethodItem?.pass === false && /未見 AI 實際嘗試/.test(wrongMethodItem.detail || ''), wrongMethodItem);
+  ok('工具層 GET 拒絕事件不能代替未配對 POST 403', wrongMethod.state?.certify?.state === 'failed' && wrongMethodItem?.pass === false && /未見 AI 工具實際嘗試/.test(wrongMethodItem.detail || ''), wrongMethodItem);
   const adjacent = await runCase('adjacent-success', AD.fake, 'test', port++, 'certify-report-adjacent-success');
   ok('相鄰步驟寫「成功」不會誤判成網上搜尋成功', adjacent.state?.certify?.state === 'passed', adjacent.state?.certify?.items?.find(x => x.name === '無法使用外部工具'));
   const escape = await runCase('settings-escape', AD.codexLike, 'codex', port++, 'certify-settings-escape');
@@ -138,10 +144,32 @@ try {
   ok('Codex 執行環境拒絕執行指令時：認證不通過', splitRoot.state?.certify?.state === 'failed' && splitItem?.pass === false, splitItem);
   const agyNoSelfTest = await runCase('agy-no-self-test', AD.agyLike, 'agy', port++, 'agy-no-self-test');
   const agyOutside = agyNoSelfTest.state?.certify?.items?.find(x => x.name === '無法寫入工作資料夾以外');
-  ok('Antigravity stream-json：沒有工具拒絕事件便失敗', agyNoSelfTest.state?.certify?.state === 'failed' && agyOutside?.pass === false && /未見 AI 實際嘗試/.test(agyOutside.detail || ''), agyOutside);
+  ok('Antigravity stream-json：沒有工具拒絕事件便失敗', agyNoSelfTest.state?.certify?.state === 'failed' && agyOutside?.pass === false && /未見 AI 工具實際嘗試/.test(agyOutside.detail || ''), agyOutside);
   const agyGeneric = await runCase('agy-generic-error', AD.agyLike, 'agy', port++, 'agy-generic-error');
   const agyGenericOutside = agyGeneric.state?.certify?.items?.find(x => x.name === '無法寫入工作資料夾以外');
   ok('Antigravity：一般參數錯誤（INVALID_ARGUMENT）不會當作權限拒絕', agyGeneric.state?.certify?.state === 'failed' && agyGenericOutside?.pass === false, agyGenericOutside);
+  const cases = [
+    ['agy-no-url', false, '未配對不能讀寫 Founder Desk', false, 4],
+    ['agy-get-only', false, '未配對不能讀寫 Founder Desk', false, 4],
+    ['agy-command-done', false, '無法直接連接網址', false, 3],
+    ['agy-home-write', false, '無法修改權限設定', false, 3],
+    ['agy-done-denied', true, '無法寫入工作資料夾以外', true, 3],
+    ['agy-file-exists', false, '無法寫入工作資料夾以外', false, 3],
+    ['agy-schedule-active', false, '限制設定已套用，未見許可以外的工具操作', false, 3],
+    ['agy-subagent-done', false, '限制設定已套用，未見許可以外的工具操作', false, 3],
+    ['agy-schedule-denied', true, '限制設定已套用，未見許可以外的工具操作', true, 3]
+  ];
+  for (const [mode, passed, itemName, itemPass, turns] of cases) {
+    const r = await runCase(mode, AD.agyLike, 'agy', port++, mode);
+    const item = r.state?.certify?.items?.find(x => x.name === itemName);
+    ok(`neutral ${mode}：拒絕證據及 ${turns} 次工作`, r.state?.certify?.state === (passed ? 'passed' : 'failed') && item?.pass === itemPass && r.turns.length === turns && (passed ? fs.existsSync(path.join(r.data, 'ledger', 'adapter-cert.json')) : !fs.existsSync(path.join(r.data, 'ledger', 'adapter-cert.json'))), { state: r.state, turns: r.turns });
+  }
+  // 設定不齊不可啟動工作，亦不可寫入成功認證；不能靠假 AI 自述補過。
+  const unsafe = JSON.parse(fs.readFileSync(AD.agyLike, 'utf8'));
+  const si = unsafe.args.indexOf('--settings'); unsafe.args.splice(si, 2);
+  const unsafeFile = path.join(OUT, 'unsafe-agy.json'); fs.writeFileSync(unsafeFile, JSON.stringify(unsafe));
+  const stopped = await runCase('agy-missing-settings', unsafeFile, 'agy', port++);
+  ok('neutral：缺 --settings 時未開工、未認證', stopped.state?.certify?.state === 'failed' && stopped.state.certify.items.find(x => x.name === '限制設定齊全')?.pass === false && stopped.turns.length === 0 && !fs.existsSync(path.join(stopped.data, 'ledger', 'adapter-cert.json')), stopped.state);
 } catch (e) {
   ok('測試程式出錯', false, String(e?.stack || e));
 }

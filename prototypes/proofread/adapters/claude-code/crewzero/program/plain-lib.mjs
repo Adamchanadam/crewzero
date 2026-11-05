@@ -28,6 +28,7 @@ export const sha = s => crypto.createHash('sha256').update(String(s)).digest('he
 // 「你原話」之後有引號就只保護引號內嘅原話，冇引號就保護標籤之後成句；標籤後面括號入面嘅出處（檔名、§）唔受保護。
 // 標籤喺括號入面、原話引號喺標籤前面（「……」（你原話，……））：前面緊貼嘅引號受保護，成組括號當出處。
 const cellsOf = line => /^\s*\|.*\|\s*$/.test(line) ? line.split('|') : [line];
+export const zeroLabels = s => String(s).split(/(\r?\n)/).map(line => cellsOf(line).map(cell => partsOf(cell).map(p => p.keep ? p.t : NAMES.zeroLabels(p.t)).join('')).join('|')).join('');
 export function partsOf(seg) {
   const out = []; let rest = String(seg);
   const quotes = (chunk, keepAll) => {
@@ -155,6 +156,7 @@ const OLD_EV = /(未有人講過|有人講過|有人做過|有人付出代價|�
 // ctx.trace（陣列）有就逐處記低「原文 → 替換後」同前後文，供人手覆核有冇改錯意思
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function transform(t, ctx) {
+  t = NAMES.zeroLabels(t);
   const look = (map, id) => map && map[id];
   const R = (cat, re, fn) => {
     t = t.replace(re, (...a) => {
@@ -216,7 +218,8 @@ export function deCodeJSONInfo(o, ctx = {}) {
     if (!x || typeof x !== 'object') return x;
     const r = {};
     for (const [k, v] of Object.entries(x)) {
-      if (skip(k, x)) r[k] = v;
+      if ((k === 'source' || k === 'label') && typeof v === 'string') r[k] = zeroLabels(v);
+      else if (skip(k, x)) r[k] = v;
       else if (typeof v === 'string') { const d = deCodeInfo(v, ctx); marked += d.marked; r[k] = d.text; }
       else r[k] = walk(v);
     }

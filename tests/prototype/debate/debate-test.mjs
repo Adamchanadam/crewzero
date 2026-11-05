@@ -3,10 +3,12 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
@@ -104,7 +106,7 @@ try {
   ok('轉強：企得住而冇人反對嘅論點唔出卡（T4 退回並記原因）', s2 && !s2.cards.some(c => c.id === 'T4') && m2.warnings.some(w => w.includes('第 4 張轉強卡') && w.includes('退回')), s2 && { c: s2.cards.map(c => c.id), w: m2.warnings });
   ok('轉強：必須先問由系統重算（改價、伙伴）', s2 && s2.cards.find(c => c.id === 'T1').askFirst === true && s2.cards.find(c => c.id === 'T3').askFirst === false);
   ok('轉強：測試日期都喺 14 日內', s2 && s2.cards.every(c => { const n = (new Date(c.test.by) - new Date(new Date().toDateString())) / 864e5; return n >= 0 && n <= 14.5; }), s2 && s2.cards.map(c => c.test.by));
-  ok('轉強：卡冇寫證據級、全部擬議同未確認', s2 && s2.cards.every(c => c.status === '擬議' && c.label === 'AI 建議 · 未確認' && !('evidence' in c)));
+  ok('轉強：卡冇寫證據級、全部擬議同未確認', s2 && s2.cards.every(c => c.status === '擬議' && c.label === N.dash.aiUnconfirmed && !('evidence' in c)));
   ok('再攻第一輪：自動做、每張卡有印章', s2 && s2.rounds === 1 && s2.cards.every(c => c.reattacks.length === 1 && c.reattacks[0].verdict) && m2.budget.aiStarts === 4 + 1 + 1 + 2, m2 && m2.budget);
   const ap2 = m2 && [].concat(m2.packs.adoption || [])[0];
   const apk = ap2 && (await A.get('/api/ask?id=' + ap2)).pack;
@@ -136,7 +138,7 @@ try {
   ok('AI 已查：外部事實冇網址就改為觀察並記警告', a3 && a3.test.aiChecked[0].label === 'observation' && m1.warnings.some(w => w.includes('改為觀察')), a3 && a3.test);
   ok('裁判最傷三點有測試由誰做，AI 做得到嘅已查', m1 && m1.synthesis.topRisks.find(r => r.rank === 3).testBy === 'ai' && m1.synthesis.topRisks.find(r => r.rank === 3).aiChecked.length === 1);
   const apq = (await A.get('/api/ask?id=' + [].concat(m1.packs.adoption)[0])).pack.questions.find(q => q.id === 'c-T1');
-  ok('採用包寫明 AI 未查', apq && apq.why.includes('AI 未查'), apq && apq.why);
+  ok('採用包寫明 AI 未查', apq && apq.why.includes(N.dash.aiNotChecked), apq && apq.why);
   ok('再攻第二輪：收到', (await A.post('/api/intake', { kind: 'note', type: 'debate-action', matchId: id1, action: 'reattack2' })).code === 202);
   m1 = await until(A, id1, m => m.strengthen.rounds === 2 && !m.next, 40000);
   const t2 = m1 && m1.strengthen.cards.find(c => c.id === 'T2');

@@ -114,7 +114,7 @@ try {
   const headerHelp = await cdp.ev('(()=>{const b=document.getElementById("open-help");return b?{first:document.querySelector(".tool-right button")===b,text:b.textContent}:null})()');
   ok('Founder Desk 頁頭最前有「需要幫助」按鈕', headerHelp && headerHelp.first && headerHelp.text === N.ui.helpOpen, headerHelp);
   const tools = await cdp.ev('(()=>({direct:[...document.querySelectorAll(".tool-right > button")].map(b=>b.id),inMore:[...document.querySelectorAll("#tool-more .tool-menu button")].map(b=>b.id),open:document.getElementById("tool-more").open}))()');
-  ok('頁頭只直接顯示求助，其餘工具收入「更多」', tools.direct.join() === 'open-help' && tools.inMore.join() === 'open-phone,refresh-now,fx,pause' && !tools.open, tools);
+  ok('頁頭只直接顯示求助，其餘工具收入「更多」', tools.direct.join() === 'open-help' && tools.inMore.join() === 'open-feedback,open-phone,refresh-now,fx,pause' && !tools.open, tools);
   await cdp.click('#open-help');
   const dialog = await cdp.ev('(()=>{const d=document.getElementById("help-modal"),b=d&&d.querySelector(".layer").getBoundingClientRect();return d?{text:d.innerText,focus:document.activeElement&&document.activeElement.id,boxHidden:document.getElementById("help-ask-box").hidden,right:Math.round(b.right),left:Math.round(b.left)}:null})()');
   ok('頁頭有「需要幫助」：側欄靠右不遮整頁，輸入欄先收起，說明不含技術術語', dialog && dialog.focus === 'help-ask' && dialog.boxHidden && dialog.right === 1280 && dialog.left > 800 && !/PNG|MB|埠|伺服器|JSON|run|sandbox/i.test(dialog.text), dialog);
@@ -198,12 +198,12 @@ try {
   ok('題目求助送出後顯示已交出並避免重複送出', qSent && qSent.text === N.ui.helpAsked && qSent.disabled, qSent);
   const qQueued = await waitFor(async () => { const v = await cdp.ev('(()=>{const e=document.querySelector(".help-status");return e&&e.innerText})()'); return v === N.ui.helpStarting ? v : null; }, 5000);
   ok('題目求助：未有其他工作時顯示即將開始，不說排隊', qQueued === N.ui.helpStarting, qQueued);
-  const qWorking = await waitFor(async () => { const v = await cdp.ev('(()=>{const e=document.querySelector(".help-status");return e&&e.innerText})()'); return v && v.includes('AI 正在回覆') ? v : null; }, 8000);
+  const qWorking = await waitFor(async () => { const v = await cdp.ev('(()=>{const e=document.querySelector(".help-status");return e&&e.innerText})()'); return v && v.includes(N.ui.helpWorking.split('，')[0]) ? v : null; }, 8000);
   ok('題目求助：AI 接手後顯示處理中與已用時間', qWorking && /已用 \d+ 秒/.test(qWorking), qWorking);
   const qReady = await waitFor(async () => await cdp.ev('(()=>{const a=document.querySelector(".help-status a");return a&&a.getAttribute("href")})()'), 12000);
   ok('題目求助：完成後提供回覆連結', qReady && /^\/#\/ask\//.test(qReady), qReady);
   ok('題目求助：按下後只留一句等待狀態，不重複顯示已交出', await cdp.ev('!document.querySelector(".q-help").offsetParent'), null);
-  const doneToast = await waitFor(async () => { const t = await cdp.ev('(document.getElementById("toast")||{}).textContent||""'); return t.includes('AI 已完成') ? t : null; }, 15000);
+  const doneToast = await waitFor(async () => { const t = await cdp.ev('(document.getElementById("toast")||{}).textContent||""'); return t.includes(N.ui.workDone.split('{label}')[0]) ? t : null; }, 15000);
   ok('AI 工作完成：彈出提示', !!doneToast, doneToast);
   // 求助回覆不計待決，要有一項真正的待決事項才看得到標題數目
   const titlePack = path.join(DATA, 'asks', 'ask-title-test.json');

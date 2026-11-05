@@ -3,9 +3,11 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, SHOTS] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
@@ -35,13 +37,13 @@ try {
   const r1 = await waitFor(async () => (await get('/api/status')).runs.find(r => r.kind === 'note' && r.ref === f1.j.id && r.state === 'done'));
   d = await get('/api/dashboard');
   ok('記錄「有用」：外殼冇開 AI', r1 && !(r1.steps || []).some(s => s.key === 'ai'), r1 && r1.steps);
-  ok('記錄「有用」：冇生成「AI 完成工作」事件', r1 && !d.events.some(e => e.id === 'ev-' + r1.id) && !d.events.some(e => /AI 完成工作/.test(e.title) && (e.relatedIds || []).includes(r1.id)));
+  ok('記錄「有用」：冇生成「AI 完成工作」事件', r1 && !d.events.some(e => e.id === 'ev-' + r1.id) && !d.events.some(e => /(?:AI|Zero) 完成工作/.test(e.title) && (e.relatedIds || []).includes(r1.id)));
   ok('記錄「有用」：照記做你的輸入', d.events.some(e => e.actor === 'founder' && e.title.includes('的意見：有用')));
   // 示範時間按今日推算（對齊到分鐘），所以唔可以比較前後；改為核對「上次 AI 工作」唔係呢個記錄型工作
   ok('記錄「有用」：產出物件唔亮工作中、上次 AI 工作唔計呢個記錄型工作', d.activity.artifacts !== 'working' && d.deck.freshness.lastRunAt !== r1.endedAt && d.runs.find(r => r.id === r1.id).aiStarted === false, { act: d.activity.artifacts, before, after: d.deck.freshness.lastRunAt, rec: r1.endedAt });
   ok('記錄型工作名稱用要求類別（生意大腦意見）', d.runs.find(r => r.id === r1.id).label === '生意大腦意見', d.runs.find(r => r.id === r1.id));
   await c.go(B + '/dashboard/system', 1440, 2000);
-  ok('系統頁：記錄型工作標「只記錄（未開 AI）」，唔標完成', await c.ev(`[...document.querySelectorAll('.row-item')].some(r=>/只記錄（未開 AI）/.test(r.textContent))`), await c.ev(`document.querySelector('main').textContent.slice(0,600)`));
+  ok('系統頁：記錄型工作標「只記錄（未開 AI）」，唔標完成', await c.ev(`[...document.querySelectorAll('.row-item')].some(r=>r.textContent.includes(${JSON.stringify(N.dash.runRecordOnly)}))`), await c.ev(`document.querySelector('main').textContent.slice(0,600)`));
   const fb1 = d.brain.feedback['weak-1'];
   ok('意見紀錄：附項目名同卡名、已處理', fb1 && fb1.itemName === '生意體檢' && fb1.title === '是否有餐廳願意為來源支付較高價錢' && !fb1.pending, fb1);
 
@@ -64,13 +66,13 @@ try {
   const card = id => `.fb[data-card="${id}"]`;
   ok('已撳嘅意見保持高亮', await c.ev(`document.querySelector('${card('weak-1')} .chipb[data-fb="useful"]').getAttribute('aria-pressed')==='true' && document.querySelector('${card('weak-1')} .chipb[data-fb="useless"]').getAttribute('aria-pressed')==='false'`));
   const said1 = await c.ev(`document.querySelector('${card('weak-1')} .said').textContent`);
-  ok('卡上：你的意見：有用 · 時間 · 已記錄（唔係已交 AI）', /^你的意見：有用 · .+ · 已記錄$/.test(said1) && !/交 AI/.test(said1), said1);
+  ok('卡上：你的意見：有用 · 時間 · 已記錄（唔係已交 AI）', /^你的意見：有用 · .+ · 已記錄$/.test(said1) && !said1.includes(N.dash.fbToAI), said1);
   const fbRow = id => `#fblog li[data-fb-card="${id}"]`;
   await c.click(`${card('weak-2')} .chipb[data-fb="useless"]`);
   const sendUseless = await c.ev(`document.querySelector('#fb-send').textContent`);
   await c.click(`${card('weak-2')} .chipb[data-fb="revise"]`);
   const sendRevise = await c.ev(`document.querySelector('#fb-send').textContent`);
-  ok('送出鍵：有用／沒有用寫「記錄」，要修改寫「交給 AI 修改」', sendUseless === '記錄' && sendRevise === '交給 AI 修改', { sendUseless, sendRevise });
+  ok('送出鍵：有用／沒有用寫「記錄」，要修改寫「交給 AI 修改」', sendUseless === N.dash.fbSend && sendRevise === N.dash.fbSendRevise, { sendUseless, sendRevise });
   await c.click(`${card('weak-2')} .chipb[data-fb="useless"]`);
   if (SHOTS) await c.shot(path.join(SHOTS, 'q02-feedback-choose-1440.png'), '#b-checkup .report');
   await c.ev(`document.querySelector('#fb-send').click()`);
@@ -89,7 +91,7 @@ try {
   await c.click(`${card('weak-3')} .chipb[data-fb="revise"]`);
   await c.type('#fb-text', '加埋保險報價');
   await c.ev(`document.querySelector('#fb-send').click()`);
-  const said3 = await waitFor(async () => { const t = await c.ev(`(document.querySelector('${card('weak-3')} .said')||{}).textContent||''`); return /已交 AI 修改/.test(t) ? t : null; }, 2000);
+  const said3 = await waitFor(async () => { const t = await c.ev(`(document.querySelector('${card('weak-3')} .said')||{}).textContent||''`); return t.includes(N.dash.fbToAI) ? t : null; }, 2000);
   ok('要修改：卡上寫「已交 AI 修改」', said3, said3);
   ok('要修改：AI 改好，卡上有修改版', await waitFor(async () => c.ev(`/修改版/.test(document.querySelector('${card('weak-3')}').textContent)`), 30000), await c.ev(`document.querySelector('${card('weak-3')}').textContent`));
   if (SHOTS) await c.shot(path.join(SHOTS, 'q04-feedback-cards-1440.png'), '#b-checkup .report');
@@ -107,7 +109,7 @@ try {
   ok('冇程式錯誤', !c.errors.length, c.errors);
   // 字眼：舊嘅「交給 AI」「已交 AI」唔再出現喺有用／沒有用
   const html = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8');
-  ok('監察台冇寫死「已交 AI：」提示', !/已交 AI：/.test(html) && !/· 已交 AI'/.test(html));
+  ok('監察台冇寫死「已交 AI：」提示', !/已交 (?:AI|Zero)：/.test(html) && !/· 已交 (?:AI|Zero)'/.test(html));
 } catch (err) {
   ok('測試冇出錯', false, String(err.stack || err));
 } finally {

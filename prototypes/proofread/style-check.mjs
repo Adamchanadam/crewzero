@@ -4,14 +4,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { NAMES, readJSON } from './ask-lib.mjs';
-import { deCodeInfo, issuesOf } from './plain-lib.mjs';
+import { deCodeInfo, issuesOf, zeroLabels } from './plain-lib.mjs';
 
 // fn(value, file, where) 回傳新值（唔改就回原值）；有改嘅檔寫返落去
 function visitOutput(out, fn) {
   const touched = new Set();
   function check(o, k, file, where) {
     if (!o || typeof o[k] !== 'string') return;
-    const v = fn(o[k], file, where);
+    const v = fn(zeroLabels(o[k]), file, where);
     if (v !== o[k]) { o[k] = v; touched.add(file); }
   }
   const receipt = readJSON(path.join(out, 'receipt.json'), null);
@@ -28,7 +28,7 @@ function visitOutput(out, fn) {
   for (const f of fs.readdirSync(out).filter(f => f.endsWith('.md'))) if (!mds[f]) mds[f] = '文件內容';
   for (const [f, where] of Object.entries(mds)) {
     let text; try { text = fs.readFileSync(path.join(out, f), 'utf8'); } catch { continue; }
-    const v = fn(text, f, where);
+    const v = fn(zeroLabels(text), f, where);
     if (v !== text) fs.writeFileSync(path.join(out, f), v);
   }
   const pack = readJSON(path.join(out, 'ask.json'), null);

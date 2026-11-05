@@ -27,7 +27,7 @@ export const SEATS = {
 export const LEVELS = { easy: '溫和', normal: '一般', hard: '嚴厲' };
 export const VERDICTS = ['企得住', '受傷', '倒下'];
 export const HANDLING = ['修正', '反轉做優勢', '先驗證', '接受並監察'];
-export const CELLS = ['客戶群', '價值主張', '渠道', '客戶關係', '收入', '關鍵資源', '關鍵活動', '關鍵伙伴', '成本', '產品要求', '外部角色'];
+export const CELLS = ['客戶群', '對方的問題', '現有替代方案', '價值主張', '渠道', '客戶關係', '收入', '關鍵資源', '關鍵活動', '關鍵伙伴', '成本', '產品要求', '外部角色'];
 export const CARD_STATUS = ['擬議', '已採用', '已改處理', '唔採用'];
 export const HARD_CAP = 11;
 const SEV = ['高', '中', '低'];
@@ -180,7 +180,7 @@ export function loadMatch(DIR, src, id, { now = new Date(), reveal = null, prev 
     id, legacy, topic: { type: TOPIC_TYPES.includes(match.topic && match.topic.type) ? match.topic.type : 'business', title: txt(match.topic && match.topic.title, 120), targetId: txt(match.topic && match.topic.targetId, 40) },
     format: match.format === '快打' ? '快打' : match.format === '全場' ? '全場' : (reb ? '全場' : '快打'), level: LEVELS[match.level] ? match.level : 'normal',
     startedAt: match.startedAt || (legacy ? mtime(path.join(dirs[dirs.length - 1], 'blue.json')) : ''), endedAt: match.endedAt || '',
-    roles: match.roles || null, warnings: arr(match.warnings).map(String).slice(0, 8), web: match.web === true, label: 'AI 建議 · 未確認',
+    roles: match.roles || null, warnings: arr(match.warnings).map(String).slice(0, 8), web: match.web === true, label: 'Zero 建議 · 未確認',
     next: match.next || '', failed: match.failed || null, budget: match.budget || null, packs: match.packs || {}, previousMatchId: match.previousMatchId || '',
     updatedAt: files.pop() || ''
   };
@@ -230,7 +230,7 @@ export function loadMatch(DIR, src, id, { now = new Date(), reveal = null, prev 
     total: claims.length + Math.max(attacks.length, claims.length) + (v.format === '全場' ? Math.max(highs, rebMap.size) : 0) + claims.length + 1 };
   // 下半場：轉強卡（狀態只由外殼按你嘅回覆改）
   if (str && arr(str.cards).length) {
-    const cards = arr(str.cards).map(c => ({ ...c, status: CARD_STATUS.includes(c.status) ? c.status : '擬議', label: c.status === '已採用' || c.status === '已改處理' ? 'AI 建議 · 你已認同' : 'AI 建議 · 未確認', reattacks: arr(c.reattacks) }));
+    const cards = arr(str.cards).map(c => ({ ...c, status: CARD_STATUS.includes(c.status) ? c.status : '擬議', label: c.status === '已採用' || c.status === '已改處理' ? 'Zero 建議 · 你已認同' : 'Zero 建議 · 未確認', reattacks: arr(c.reattacks) }));
     const st = Object.fromEntries(cards.map(c => [c.id, c.status]));
     v.strengthen = { cards, accepted: arr(str.accepted), founderQuestions: arr(str.founderQuestions), partial: !!str.partial,
       modelRevision: str.modelRevision ? { ...str.modelRevision, cells: arr(str.modelRevision.cells).map(x => ({ ...x, adopted: st[x.fromCardId] === '已採用' || st[x.fromCardId] === '已改處理', rejected: st[x.fromCardId] === '唔採用' })) } : null,
@@ -286,7 +286,7 @@ export function checkBlue(j, { maxClaims = 12 } = {}) {
   const ids = new Set();
   const data = {
     thesis: txt(j.thesis, 300), whyNow: txt(j.whyNow, 300),
-    claims: claims.slice(0, maxClaims).filter(c => !ids.has(c.id) && ids.add(c.id)).map(c => ({ id: c.id, topic: txt(c.topic, 20) || '其他', claim: txt(c.claim, 300), evidence: Math.max(0, Math.min(4, Math.round(Number(c.evidence) || 0))), source: txt(c.source, 80) || 'AI 解讀', assumptionIds: arr(c.assumptionIds).map(String).slice(0, 5) })),
+    claims: claims.slice(0, maxClaims).filter(c => !ids.has(c.id) && ids.add(c.id)).map(c => ({ id: c.id, topic: txt(c.topic, 20) || '其他', claim: txt(c.claim, 300), evidence: Math.max(0, Math.min(4, Math.round(Number(c.evidence) || 0))), source: txt(c.source, 80) || 'Zero 解讀', assumptionIds: arr(c.assumptionIds).map(String).slice(0, 5) })),
     strategies: arr(j.strategies).filter(s => s && /^S\d{1,2}$/.test(String(s.id)) && txt(s.name, 40)).slice(0, 4).map(s => ({ id: s.id, name: txt(s.name, 40), summary: txt(s.summary, 300), upside: txt(s.upside, 200), firstTest: txt(s.firstTest, 200), success: txt(s.success, 200), stop: txt(s.stop, 200) })),
     admittedWeaknesses: arr(j.admittedWeaknesses).slice(0, 6).map(x => x && typeof x === 'object' ? { claimId: String(x.claimId || ''), text: txt(x.text, 300) } : txt(x, 300)).filter(x => x && (typeof x === 'string' || x.text)),
     // 有網址冇查閱日期：用今次回合嘅日子（同日查嘅）
@@ -336,12 +336,12 @@ export function checkJudge(j, blue, red) {
     verdicts: verdicts.filter(Boolean),
     topRisks: arr(j.topRisks).filter(r => r && txt(r.risk, 300)).slice(0, 3).map((r, i) => {
       const testBy = testByOf(r.testBy, r.by), aiChecked = aiCheckedOf(r.aiChecked, w, `最傷第 ${i + 1} 位`);
-      if (testBy === 'ai' && !aiChecked.length) w.push(`最傷第 ${i + 1} 位：AI 可自行完成的測試尚未進行`);
+      if (testBy === 'ai' && !aiChecked.length) w.push(`最傷第 ${i + 1} 位：Zero 可自行完成的測試尚未進行`);
       return { rank: i + 1, risk: txt(r.risk, 300), cheapestTest: txt(r.cheapestTest, 300), stop: txt(r.stop, 300), testBy, aiChecked };
     }),
     routes: arr(j.routes).filter(r => r && txt(r.name, 40)).slice(0, 5).map((r, i) => ({ id: /^S\d{1,2}$/.test(String(r.id)) ? r.id : 'S' + (9 + i), name: txt(r.name, 40), recommended: r.recommended === true, why: txt(r.why, 300), redScore: SEV.includes(r.redScore) ? r.redScore : '中', firstTest: txt(r.firstTest, 300), stop: txt(r.stop, 300) })),
     founderDecisions: decisions.filter(d => d && txt(d.question, 200) && arr(d.options).length >= 2 && txt(d.risk, 120)).slice(0, 3).map(d => ({ question: txt(d.question, 200), options: arr(d.options).slice(0, 3).map(o => txt(String(o), 120)), recommend: txt(String(d.recommend || ''), 10), why: txt(d.why, 300), risk: txt(d.risk, 120), ...(txt(d.conflict, 120) ? { conflict: txt(d.conflict, 120) } : {}) })),
-    assumptionChanges: arr(j.assumptionChanges).filter(a => a && txt(a.change, 300)).slice(0, 12).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: txt(a.change, 300), label: 'AI 建議 · 未確認' })),
+    assumptionChanges: arr(j.assumptionChanges).filter(a => a && txt(a.change, 300)).slice(0, 12).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: txt(a.change, 300), label: 'Zero 建議 · 未確認' })),
     attackVerdicts: arr(j.attackVerdicts).filter(x => x && aids.has(x.attackId) && LAND.includes(x.landed)).map(x => ({ attackId: x.attackId, landed: x.landed, note: txt(x.note, 200) })),
     overall: txt(j.overall, 300),
     factChecks: arr(j.factChecks).filter(x => x && Number(x.n)).slice(0, 30).map(x => ({ n: Number(x.n), ok: x.ok === true, note: txt(x.note, 200) }))
@@ -394,11 +394,11 @@ export function checkStrengthen(j, v, { now = new Date(), matchId = '' } = {}) {
       assumptionChanges: arr(c.assumptionChanges).filter(a => a && txt(a.text, 300)).slice(0, 4).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: ['改寫', '新增', '拆開', '加限制', '取代'].includes(a.change) ? a.change : '改寫', text: txt(a.text, 300), cheapestTest: txt(a.cheapestTest, 300), supersedes: txt(a.supersedes, 10) })),
       routeImpact: arr(c.routeImpact).filter(r => r && txt(r.milestoneId, 20)).slice(0, 3).map(r => ({ milestoneId: txt(r.milestoneId, 20), change: ['delay', 'retarget', 'add', 'retire', 'trial', 'newLine', 'none'].includes(r.change) ? r.change : 'none', detail: txt(r.detail, 300), value: txt(String(r.value ?? ''), 120) })),
       test: { what: txt(t.what, 300), by, testBy: testByOf(t.testBy, t.by) || (txt(t.founderAction, 200) ? 'founder' : ''), success: txt(t.success, 300), stop: txt(t.stop, 300), founderAction: txt(t.founderAction, 200), costHours: Math.max(0, Math.min(40, Number(t.costHours) || 0)), aiChecked: aiCheckedOf(t.aiChecked, w, `第 ${n} 張轉強卡`) },
-      reattacks: [], status: '擬議', label: 'AI 建議 · 未確認', founderNote: ''
+      reattacks: [], status: '擬議', label: 'Zero 建議 · 未確認', founderNote: ''
     };
     // AI 自己做得到嘅測試唔交畀你做；應查而未查嘅照出卡，標「AI 未查」
-    if (card.test.testBy === 'ai' && card.test.founderAction) { w.push(`第 ${n} 張轉強卡：AI 可自行完成的測試不需由你進行，已剔除「你要做」`); card.test.founderAction = ''; }
-    if (card.test.testBy === 'ai' && !card.test.aiChecked.length) { card.test.aiNote = /時限/.test(JSON.stringify(t)) ? '時限不足' : '未查'; w.push(`第 ${n} 張轉強卡：AI 可自行完成的測試尚未進行`); }
+    if (card.test.testBy === 'ai' && card.test.founderAction) { w.push(`第 ${n} 張轉強卡：Zero 可自行完成的測試不需由你進行，已剔除「你要做」`); card.test.founderAction = ''; }
+    if (card.test.testBy === 'ai' && !card.test.aiChecked.length) { card.test.aiNote = /時限/.test(JSON.stringify(t)) ? '時限不足' : '未查'; w.push(`第 ${n} 張轉強卡：Zero 可自行完成的測試尚未進行`); }
     if (card.routeImpact.some(r => r.change !== 'none' && !r.value)) { bad('觸及里程碑但未寫可執行的數值'); continue; }
     card.askFirst = askFirstOf(card);
     ids.add(card.id); cards.push(card);
@@ -442,11 +442,11 @@ export function responsePack(v) {
     return { id: 'v' + (i + 1), priority: i + 1, ask: `【${KM_LABEL[k.kind] || k.kind}】${clip(k.text, 60).replace(/[。．.]+$/, '')}${row && row.verdict ? `——裁判判「${row.verdict.verdict}」` : ''}。你同意裁判嗎？`, kind: 'choice',
       options: [{ text: '同意裁判', rec: true }, { text: '不同意' }], value: '同意裁判', why: clip(row && row.verdict ? row.verdict.reason : k.detail || '按裁判判定', 120) };
   });
-  qs.push({ id: 'ev', priority: 4, ask: `就「${clip(name, 24)}」（${when(v.startedAt)}）這場，你手上有沒有真實證據可以推翻某條攻擊？如有，請寫一句：是誰、做過甚麼。`, kind: 'text', value: '沒有', why: '只有公司以外的人實際做了的事才算證據；你確認後才會記錄，AI 不會自行更改證據級。' });
+  qs.push({ id: 'ev', priority: 4, ask: `就「${clip(name, 24)}」（${when(v.startedAt)}）這場，你手上有沒有真實證據可以推翻某條攻擊？如有，請寫一句：是誰、做過甚麼。`, kind: 'text', value: '沒有', why: '只有公司以外的人實際做了的事才算證據；你確認後才會記錄，Zero 不會自行更改證據級。' });
   qs.push({ id: 'evg', priority: 5, ask: `如果有，這個證據去到哪一級？（${when(v.startedAt)} 場）`, kind: 'choice', options: [{ text: NAMES.dash.ev_1, rec: true }, { text: NAMES.dash.ev_2 }, { text: NAMES.dash.ev_3 }], value: NAMES.dash.ev_1, why: '按實際發生的事選擇；沒有證據便無須理會。' });
   qs.push({ id: 'ch', priority: 6, ask: `你覺得裁判判錯了哪一條？為甚麼？（${when(v.startedAt)} 場；沒有就留空）`, kind: 'text', value: '沒有', why: '寫了就會請裁判重判（最多三條，一場一次）；你的原話會原文交給裁判。' });
   return { format: 'startup-os.ask/0.1', title: clip('紅藍對打回應：' + name, 60), context: '裁判已判定。請對三個關鍵時刻表態；不答就按裁判判定開始轉強。辯論結果不算證據。',
-    afterConfirm: '按你的回應開始轉強：AI 把被找到弱點及被推翻的論點變成轉強卡，紅方再攻一輪，之後請你採用。', questions: qs, debate: { matchId: v.id, kind: 'response', refs } };
+    afterConfirm: '按你的回應開始轉強：Zero 把被找到弱點及被推翻的論點變成轉強卡，紅方再攻一輪，之後請你採用。', questions: qs, debate: { matchId: v.id, kind: 'response', refs } };
 }
 const H_SHORT = { '修正': '修正', '反轉做優勢': '反轉做優勢', '先驗證': '先驗證', '接受並監察': '接受並監察' };
 export const ADOPT_OPTS = { adopt: '採用', test: '改為先驗證', reject: '不採用' };
@@ -464,7 +464,7 @@ export function adoptionPacks(v) {
     const rec = q && q.recommend === 'C' ? ADOPT_OPTS.reject : q && q.recommend === 'B' && !fallen && c.handling !== '先驗證' ? ADOPT_OPTS.test : ADOPT_OPTS.adopt;
     opts.forEach(o => { o.rec = o.text === rec; });
     return { id: 'c-' + c.id, ask: `「${clip(c.critique, 40)}」→ ${H_SHORT[c.handling]}${ch ? `：${ch.cell}改為「${clip(ch.after, 50)}」` : `：${clip(c.test.what, 50)}`}${re ? `（再攻後${re}）` : ''}。採用嗎？`,
-      kind: 'choice', effect: now ? 'now' : 'tentative', options: opts, value: rec, why: clip((q && q.why) || c.whyThis || '按轉強規則', 120) + ((c.test.aiChecked || []).length ? `；AI 已查證 ${c.test.aiChecked.length} 項` : c.test.testBy === 'ai' ? '；AI 未查' : '') + (c.test.founderAction ? `；採用後${c.test.testBy === 'approval' ? '要你批准' : '你要做'}：${clip(c.test.founderAction, 40)}（${zhDay(c.test.by)} 前）` : '') };
+      kind: 'choice', effect: now ? 'now' : 'tentative', options: opts, value: rec, why: clip((q && q.why) || c.whyThis || '按轉強規則', 120) + ((c.test.aiChecked || []).length ? `；Zero 已查證 ${c.test.aiChecked.length} 項` : c.test.testBy === 'ai' ? '；Zero 未查' : '') + (c.test.founderAction ? `；採用後${c.test.testBy === 'approval' ? '要你批准' : '你要做'}：${clip(c.test.founderAction, 40)}（${zhDay(c.test.by)} 前）` : '') };
   };
   const first = cards.filter(c => c.askFirst), rest = cards.filter(c => !c.askFirst);
   const name = clip(v.topic.title || '紅藍對打', 30);
@@ -482,7 +482,7 @@ export function adoptionPacks(v) {
   return packs;
 }
 export function evidencePack(v, text, grade) {
-  return { format: 'startup-os.ask/0.1', title: clip('確認真實證據：' + (v.topic.title || '紅藍對打'), 60), context: '你在辯論回應寫了一個真實證據。確認後記錄為現實輸入；證據級只由你確認先算。',
+  return { format: 'startup-os.ask/0.1', title: clip('確認真實證據：' + (v.topic.title || '紅藍對打'), 60), context: '你在辯論回應寫了一個真實證據。確認後記錄為真實進展；證據級只由你確認先算。',
     questions: [{ id: 'confirm', priority: 1, ask: `你寫的證據：「${clip(text, 80)}」（${NAMES.evName(grade)}）。確認記錄為真實證據嗎？`, kind: 'choice', effect: 'now', options: [{ text: '確認記錄', rec: true }, { text: '暫不記錄' }], value: '確認記錄', why: '只有公司以外的人實際做了的事才算證據。' }],
     debate: { matchId: v.id, kind: 'evidence', text: clip(text, 300), grade } };
 }

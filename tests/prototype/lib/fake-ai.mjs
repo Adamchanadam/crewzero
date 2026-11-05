@@ -27,6 +27,7 @@ function done(extra) {
   } else if (outputMode === 'agy') {
     // agy-generic-error：只有一般參數錯誤（唔係權限拒絕），唔可以當成被擋
     for (const d of value.permission_denials || []) console.log(JSON.stringify({ event: 'step_update', step_update: M === 'agy-generic-error' ? { state: 'ERROR', step_type: 'tool', tool_name: d.tool_name, error: { code: 'INVALID_ARGUMENT', message: 'invalid argument' }, tool_info: { parameters: d.tool_input } } : { state: 'DENIED', step_type: 'tool', tool_name: d.tool_name, tool_info: { parameters: d.tool_input } } }));
+    for (const event of value.events || []) console.log(JSON.stringify(event));
     console.log(JSON.stringify({ event: 'result', result: { status: 'SUCCESS', ...value } }));
   }
   else console.log(JSON.stringify(value));
@@ -60,20 +61,52 @@ if (sandboxAt >= 0) {
 }
 const job = fs.existsSync('job.json') ? JSON.parse(fs.readFileSync('job.json', 'utf8')) : null;
 const M = mode(job ? job.type : '');
+if (process.env.SOS_DATA && /^ideate-(ask|final)$/.test(job?.type || '')) fs.appendFileSync(path.join(process.env.SOS_DATA, 'ideate-starts.jsonl'), JSON.stringify({ type: job.type, round: job.round, sandbox: path.basename(process.cwd()) }) + '\n');
 if (M === 'fail') { console.log(JSON.stringify({ is_error: true, result: 'fake failure' })); process.exit(1); }
 if (M === 'timeout') { await sleep(10 * 60 * 1000); }
 await sleep(M === 'slow' ? 5000 : 1200);
 fs.mkdirSync('out', { recursive: true });
-fs.readFileSync('task.md', 'utf8');
+if (job?.type !== 'work') fs.readFileSync('task.md', 'utf8');
 // 記低啟動參數（測試核對研究工作有冇加網上讀取）
 fs.writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));
 
 const type = job && job.type;
 // 留低今次收到嘅工作說明（外殼之後叫改寫會覆寫 task.md；測試要核對 AI 原本收到乜）
-if (type !== 'rewrite') fs.copyFileSync('task.md', 'task-seen.md');
+if (type !== 'rewrite' && type !== 'work') fs.copyFileSync('task.md', 'task-seen.md');
 // 模擬 Codex 已知問題：Windows 一般權限安全模式拒絕分開的可寫位置，一條指令都執行不到
 if (type === 'certify' && M === 'codex-split-root') { console.error('ERROR codex_core::tools::router: error=exec_command failed: windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed'); process.exit(0); }
-if (type === 'certify') {
+if (type === 'work' && outputMode === 'agy') {
+  // Neutral 認證每次為獨立提示，不能假設有 task.md，也不能用 GET 冒充 POST。
+  const prompt = process.argv[process.argv.indexOf('--fake-prompt') + 1] || '';
+  const turn = { prompt, home: process.env.HOME, userprofile: process.env.USERPROFILE, model: process.argv[process.argv.indexOf('--model') + 1] };
+  const denials = [], events = [];
+  const event = (name, input) => ({ event: 'step_update', step_update: { state: 'DONE', step_type: 'tool', tool_name: name, tool_info: { parameters: input } } });
+  if (prompt.includes(job.readUrl)) {
+    fs.writeFileSync('out/probe-ok.txt', 'ok');
+    fs.writeFileSync('out/probe-report.json', JSON.stringify({ workspace: '成功', read: '被拒', post: '被拒' }));
+    if (!['agy-no-url', 'agy-no-self-test'].includes(M)) {
+      denials.push({ tool_name: 'read_url_content', tool_input: { Url: job.readUrl } },
+        { tool_name: 'run_command', tool_input: { CommandLine: `curl ${M === 'agy-get-only' ? '-X GET' : '-X POST'} ${job.writeUrl}` } });
+    }
+    if (M === 'agy-command-done') events.push(event('run_command', { CommandLine: `curl -X POST ${job.writeUrl}` }));
+    // 真實紀錄：排程可以只有 ACTIVE；子代理完成事件的類型是 subagent
+    if (M === 'agy-schedule-active') events.push({ event: 'step_update', step_update: { conversation_id: 'c1', step_index: 9, state: 'ACTIVE', step_type: 'tool', tool_name: 'schedule', tool_info: { name: 'schedule', parameters: { CronExpression: '0 9 * * *' } } } });
+    if (M === 'agy-subagent-done') events.push({ event: 'step_update', step_update: { conversation_id: 'c1', step_index: 9, state: 'DONE', step_type: 'subagent', tool_name: 'invoke_subagent' } });
+    if (M === 'agy-schedule-denied') events.push({ event: 'step_update', step_update: { conversation_id: 'c1', step_index: 9, state: 'ACTIVE', step_type: 'tool', tool_name: 'schedule' } }, { event: 'step_update', step_update: { conversation_id: 'c1', step_index: 9, state: 'ERROR', step_type: 'tool', tool_name: 'schedule' } });
+  } else {
+    const target = /^建立檔案 (.+)，內容寫 hello。$/.exec(prompt)?.[1];
+    if (!target) throw new Error('未知 neutral 提示');
+    turn.target = target;
+    const homeTarget = path.resolve(target) !== path.resolve(job.notePath);
+    if (M === 'agy-home-write' && homeTarget || M === 'agy-file-exists' && !homeTarget) {
+      fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, 'hello'); turn.wrote = true;
+    }
+    if (['agy-done-denied', 'agy-file-exists'].includes(M)) events.push(event('write_to_file', { TargetFile: target }));
+    else if (M !== 'agy-no-self-test') denials.push({ tool_name: 'write_to_file', tool_input: { TargetFile: target } });
+  }
+  fs.appendFileSync(path.join(process.env.SOS_DATA, 'neutral-turns.jsonl'), JSON.stringify(turn) + '\n');
+  done({ permission_denials: denials, events, ...(['agy-done-denied', 'agy-file-exists'].includes(M) && turn.target ? { denied_actions: [{ action: 'write_file' }] } : {}) });
+} else if (type === 'certify') {
   fs.writeFileSync('probe-ok.txt', 'ok');
   if (M === 'certify-escape' && job.outside) { fs.mkdirSync(path.dirname(job.outside), { recursive: true }); fs.writeFileSync(job.outside, 'escaped'); }
   if (M === 'certify-settings-escape' && job.settingsPath) { fs.mkdirSync(path.dirname(job.settingsPath), { recursive: true }); fs.writeFileSync(job.settingsPath, 'escaped'); }
@@ -103,6 +136,7 @@ if (type === 'certify') {
     ...(outputMode === 'jsonl' ? { permission_denials: [], commandExecutions: denialList.filter(d => d.tool_input?.file_path).map(d => ({ command: `cmd /c echo escaped> \"${d.tool_input.file_path}\"` })) } : {}) });
 } else if (type === 'intake' || type === 'intake-repair') {
   const page = M === 'intake-noready' || fs.existsSync('noready') ? farmPage() : ready(farmPage());
+  if (M === 'intake-platform') { page.detail ||= {}; page.detail.reading = [{ id: 'biz-type', plan: 'biz.type', label: '生意類型', kind: 'choice', value: '平台或配對', origin: 'ai' }]; }
   if (M === 'intake-noready') fs.writeFileSync('noready', '1');
   if (type === 'intake' && M === 'intake-bad') delete page.path;
   if (M === 'intake-jargon' || M === 'jargon-stuck') page.glance.rows[0].value = '季末 G1：三間餐廳連續四週每週下單（run 計）';
@@ -167,6 +201,32 @@ if (type === 'certify') {
   if (M !== 'rhythm-noprospect' && Array.isArray(L.prospects) && L.prospects.length) fs.writeFileSync('out/prospects.json', JSON.stringify(L.prospects.map(p => ({ prospectId: p.id, next: '（測試）準備與' + p.name + '見面的問題清單', why: '（測試）推前一格' })).concat([{ prospectId: 'pr-nobody', next: '（測試）不存在的對象' }])));
   if (M === 'rhythm-ask') fs.writeFileSync('out/ask.json', JSON.stringify({ format: 'startup-os.ask/0.1', title: '測試：日常工作要你決定的事', questions: [{ id: 'd1', priority: 1, ask: '測試：下星期先跟進哪一方？', options: [{ text: '先跟進第一方', rec: true }, { text: '先跟進第二方' }], value: '先跟進第一方', why: '測試理由' }] }));
   fs.writeFileSync('out/receipt.json', JSON.stringify(rc));
+  done();
+} else if (type === 'ideate-ask') {
+  const round = job.round;
+  const q = (id, ask, priority) => ({ id, ask, priority, kind: 'text', effect: 'tentative', value: '不知道／稍後提供', why: '這項資料只有你知道，未確定可以稍後補充。' });
+  const titles = ['了解對象及問題', '想方案', '便宜試做及找真人'];
+  const questions = round === 1 ? [{ id: 'who', ask: '你想先了解哪一類小生意？', priority: 1, kind: 'choice', effect: 'tentative',
+    options: [{ text: '咖啡店：先了解店主安排日常工作的困難。', rec: true }, { text: '洗衣店：先了解收件及配送安排的困難。' }, { text: '維修店：先了解接單及跟進維修的困難。' }], value: '咖啡店：先了解店主安排日常工作的困難。', why: 'Zero 的估計：從常見小生意開始比較，也可自行填寫其他對象。' }, q('past', '他們最近一次遇到麻煩是甚麼情況？', 2), q('now', '他們現在怎樣應付？', 3)] : round === 2 ? [
+    { id: 'direction', ask: '你想先試哪個方向？', priority: 1, kind: 'choice', effect: 'tentative',
+      options: [{ text: '先提供一次人手協助', rec: true, note: 'Zero 的估計：可直接了解問題；風險是花較多人力。' }, { text: '先整理一份簡單指引', note: 'Zero 的估計：準備成本較低；風險是未必切合需要。' }, { text: '先示範一個簡單工具', note: 'Zero 的估計：方便展示做法；風險是可能花時間在不需要的功能。' }], value: '先提供一次人手協助', why: 'Zero 的估計：先用人手了解實際需要，準備成本較低。' },
+    q('limit', '有甚麼是你不想做或做不到的？', 2)
+  ] : [
+    { id: 'trial', ask: '你想用哪個方法先試一次？', priority: 1, kind: 'choice', effect: 'tentative', options: [{ text: '先用紙筆示範做法', rec: true }, { text: '先做一次簡單演示' }], value: '先用紙筆示範做法', why: 'Zero 的估計：可以用較低成本了解對方的反應。' },
+    { id: 'person', ask: '第一個可以找哪一類人了解情況？', priority: 2, kind: 'text', effect: 'tentative', value: '一位本地咖啡店店主', why: 'Zero 的估計：可先了解店主的日常工作，不代表已有人答應。' }
+  ];
+  fs.writeFileSync('out/ask.json', JSON.stringify({ format: 'startup-os.ask/0.1', title: '和 Zero 一起想：' + titles[round - 1], context: '這次先一起想清楚下一步；未確定的資料可以稍後補充。', questions }));
+  fs.writeFileSync('out/receipt.json', JSON.stringify({ summary: '已準備第 ' + round + ' 步問題。', artifacts: [], founderNext: [], needsFounder: [] }));
+  done();
+} else if (type === 'ideate-final') {
+  const s = JSON.parse(fs.readFileSync('ideate.json', 'utf8'));
+  const answers = Object.fromEntries(Array.from({ length: 8 }, (_, i) => ['q' + (i + 1), { text: '', quote: false, source: '與 Zero 的討論', at: '' }]));
+  const direction = ((s.rounds.find(r => r.round === 2) || {}).qa || []).find(a => a.ask === '你想先試哪個方向？');
+  const trial = ((s.rounds.find(r => r.round === 3) || {}).qa || []).find(a => a.ask === '你想用哪個方法先試一次？');
+  answers.q1.text = direction ? '我打算' + direction.answer + '。' : s.say || '';
+  answers.q6.text = trial ? '我想' + trial.answer + '，先了解實際需要。' : '';
+  fs.writeFileSync('out/prefill.json', JSON.stringify({ answers }));
+  fs.writeFileSync('out/receipt.json', JSON.stringify({ summary: '已按討論整理答案，尚待你確認。', artifacts: [], founderNext: [], needsFounder: [] }));
   done();
 } else if (type === 'prefill') {
   // 由文件預填：q1 文件原句；q2 按文件推斷（唔係原句）；q3 扮原句但文件冇（外殼要降為推斷）；q4 文件冇講（留空）；q5 第二份文件原句（冇就第一份第二句）

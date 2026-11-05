@@ -21,7 +21,7 @@ window.STARTUP_OS_PAGE = {
   ],
 
   "glance": {
-    "guide": "AI 已閱讀你的生意構思與合作建議簡報，擬定以下內容。如有不對，按一下修改；沒有問題，就到最底「成頁確認」。",
+    "guide": "Zero 已閱讀你的生意構思與合作建議簡報，擬定以下內容。如有不對，按一下修改；沒有問題，就到最底「成頁確認」。",
     "tip": {
       "headline": "下一步：約綠野物流介紹合作建議簡報",
       "why": "文件擬由綠野物流接觸餐廳並負責送貨，但對方未答應。對方是否參與，決定你之後是否要自己逐間餐廳洽談；簡報已準備好，是目前最快可以發生的真實事件。"
@@ -41,7 +41,7 @@ window.STARTUP_OS_PAGE = {
           { "text": "見齊伙伴並收到答覆即可", "note": "較保守：本季只處理伙伴" }
         ],
         "tentative": { "by": "ai", "until": "2026-11-02", "test": "11 月 2 日再問你：照用、修改，或者定下來" },
-        "due": { "id": "goal-quarter-due", "plan": "G1.endsOn", "kind": "date", "label": "本季目標期限", "value": "2026-12-31", "origin": "ai", "why": "本季最後一日。" }
+        "due": { "id": "goal-quarter-due", "plan": "G1.endsOn", "kind": "date", "label": "目前目標期限", "value": "2026-12-31", "origin": "ai", "why": "本季最後一日。" }
       },
       {
         "id": "goal-4w", "plan": "G2",
@@ -56,7 +56,7 @@ window.STARTUP_OS_PAGE = {
           { "text": "綠野物流、食材周報、何師傅三方都見過並答覆", "note": "伙伴先行，試送餐廳之後才選" }
         ],
         "tentative": { "by": "ai", "until": "2026-11-02", "test": "11 月 2 日再問你：照用、修改，或者定下來" },
-        "due": { "id": "goal-4w-due", "plan": "G2.endsOn", "kind": "date", "label": "短期目標期限", "value": "2026-11-23", "origin": "ai", "why": "今日是 10 月 26 日，本月只餘 5 日，所以 AI 以四星期後作期限，代替「本月」。" }
+        "due": { "id": "goal-4w-due", "plan": "G2.endsOn", "kind": "date", "label": "短期目標期限", "value": "2026-11-23", "origin": "ai", "why": "今日是 10 月 26 日，本月只餘 5 日，所以 Zero 以四星期後作期限，代替「本月」。" }
       },
       {
         "id": "progress", "plan": "G3",
@@ -91,12 +91,12 @@ window.STARTUP_OS_PAGE = {
     "status": {
       "title": "現在去到哪裏",
       "ask": "以下有沒有已經發生？",
-      "judge": "AI 只可以預填「未發生」。已發生的，按一下選程度。",
+      "judge": "Zero 只可以預填「未發生」。已發生的，按一下選程度。",
       "prepared": "已準備好：生意構思（10 月 25 日版）、合作建議簡報（10 月）",
       "items": [
         { "id": "st-partner", "plan": "G4", "kind": "grade", "label": "已向綠野物流介紹合作建議簡報", "value": "none", "origin": "ai", "why": "文件寫明「尚未對外傳送」。", "src": [{ "from": "doc", "at": "開頭" }] },
         { "id": "st-media", "plan": "G4", "kind": "grade", "label": "已向食材周報介紹合作建議簡報", "value": "none", "origin": "ai", "why": "文件寫明「尚未對外傳送」。", "src": [{ "from": "doc", "at": "開頭" }] },
-        { "id": "st-advisor", "plan": "G4", "kind": "grade", "label": "何師傅答應擔任廚藝顧問", "value": "none", "origin": "ai", "why": "文件有寫他的角色，但沒有寫他已答應；AI 不可以當他已答應。", "src": [{ "from": "doc", "at": "第七節" }] },
+        { "id": "st-advisor", "plan": "G4", "kind": "grade", "label": "何師傅答應擔任廚藝顧問", "value": "none", "origin": "ai", "why": "文件有寫他的角色，但沒有寫他已答應；Zero 不可以當他已答應。", "src": [{ "from": "doc", "at": "第七節" }] },
         { "id": "st-trial", "plan": "G4", "kind": "grade", "label": "已選定試送餐廳", "value": "none", "origin": "ai", "why": "文件與簡報都未提及哪一間餐廳。" },
         { "id": "st-customer", "plan": "G4", "kind": "grade", "label": "有餐廳試用過試送、或者洽談過", "value": "none", "origin": "ai", "why": "文件寫餐廳付款意願「有待實際接觸了解」。", "src": [{ "from": "doc", "at": "第十二節" }] }
       ]
@@ -104,10 +104,10 @@ window.STARTUP_OS_PAGE = {
   },
 
   "path": {
-    "guide": "這五站是 AI 建議的次序，未確認。次序不對，就按住左邊把手拖動重排；按「細節」查看每站為何這樣定。",
+    "guide": "這五站是 Zero 建議的次序，未確認。次序不對，就按住左邊把手拖動重排；按「細節」查看每站為何這樣定。",
     "tip": {
       "headline": "建議次序：綠野物流 → 何師傅 → 主廚試用 → 食材周報 → 第一間付款餐廳",
-      "why": "先問清楚擬負責送貨與接觸餐廳的伙伴是否願意，再安排試送給主廚；食材周報不影響第一間餐廳，所以排後；收款一站在本季目標之後。"
+      "why": "先問清楚擬負責送貨與接觸餐廳的伙伴是否願意，再安排試送給主廚；食材周報不影響第一間餐廳，所以排後；收款一站在目前目標之後。"
     },
     "alt": [
       {
@@ -128,14 +128,14 @@ window.STARTUP_OS_PAGE = {
         "proof": { "id": "m1-proof", "plan": "milestone.evidence", "label": "第 1 站：證明方式", "value": "對方電郵，或者經對方確認的會議紀錄", "origin": "ai" },
         "deliver": { "id": "m1-deliver", "plan": "milestone.deliveryCondition", "label": "第 1 站：完成標準", "value": "答覆寫明承接範圍（接觸餐廳、送貨、收款）與初步條件；或者明確拒絕", "origin": "ai" },
         "owner": { "id": "m1-owner", "plan": "G6", "label": "第 1 站：負責人", "value": "我自己", "origin": "doc", "src": [{ "from": "doc", "at": "第七節：創辦人主導伙伴洽談" }], "options": [{ "text": "我自己", "rec": true }, { "text": "未有" }] },
-        "target": { "id": "m1-target", "plan": "milestone.targetDate", "label": "第 1 站：目標日期", "kind": "date", "suffix": "前", "value": "2026-11-23", "origin": "ai", "why": "見面加上對方內部考慮，AI 估計約四星期。", "tentative": { "by": "ai", "until": "2026-11-02", "test": "見完綠野物流後問對方何時可以答覆" } },
+        "target": { "id": "m1-target", "plan": "milestone.targetDate", "label": "第 1 站：目標日期", "kind": "date", "suffix": "前", "value": "2026-11-23", "origin": "ai", "why": "見面加上對方內部考慮，Zero 估計約四星期。", "tentative": { "by": "ai", "until": "2026-11-02", "test": "見完綠野物流後問對方何時可以答覆" } },
         "watch": [{ "label": "綠野物流答覆", "value": "未有" }],
         "depth": [
           { "id": "m1-d1", "plan": "depth.1", "label": "第 1 站：對方為何會同意", "value": "增加回程車的載貨量，開拓新的餐廳客戶", "origin": "doc", "src": [{ "from": "doc", "at": "第七節" }] },
           { "id": "m1-d2", "plan": "depth.2", "label": "第 1 站：對方怎樣決定、需時多久", "value": "", "origin": "missing", "why": "文件沒有寫綠野物流內部由誰拍板、要經多少層。知道了才可以準備合適的人與時間表。", "hint": "例：營運經理拍板，大約一個月" },
           { "id": "m1-d3", "plan": "depth.3", "label": "第 1 站：要先具備甚麼", "value": "合作建議簡報（已有）；分帳與客戶歸屬的初步想法（文件寫待商議）", "origin": "doc", "src": [{ "from": "doc", "at": "第十二節" }] },
           { "id": "m1-d4", "plan": "depth.4", "label": "第 1 站：最常見的失敗方式", "value": "口頭有興趣，但不肯說明可以接觸多少間餐廳、怎樣分帳", "origin": "ai", "test": "會後請對方書面列出可以接觸哪類餐廳、大約多少間" },
-          { "id": "m1-d5", "plan": "depth.5", "label": "第 1 站：為何是這個日子", "value": "AI 估計：見面加上對方內部考慮，大約四星期", "origin": "ai", "test": "見面時直接問對方何時可以答覆" }
+          { "id": "m1-d5", "plan": "depth.5", "label": "第 1 站：為何是這個日子", "value": "Zero 估計：見面加上對方內部考慮，大約四星期", "origin": "ai", "test": "見面時直接問對方何時可以答覆" }
         ]
       },
       {
@@ -152,10 +152,10 @@ window.STARTUP_OS_PAGE = {
         "watch": [{ "label": "何師傅確認", "value": "未有" }, { "label": "試送餐廳", "value": "未選" }],
         "depth": [
           { "id": "m2-d1", "plan": "depth.1", "label": "第 2 站：對方為何會同意", "value": "可以把多年廚房經驗延伸成顧問服務，令試送切合餐廳實況", "origin": "doc", "src": [{ "from": "doc", "at": "第七節" }] },
-          { "id": "m2-d2", "plan": "depth.2", "label": "第 2 站：對方怎樣決定、需時多久", "value": "AI 估計：他本人決定，一次見面可以談妥", "origin": "ai", "test": "直接約他 30 分鐘" },
+          { "id": "m2-d2", "plan": "depth.2", "label": "第 2 站：對方怎樣決定、需時多久", "value": "Zero 估計：他本人決定，一次見面可以談妥", "origin": "ai", "test": "直接約他 30 分鐘" },
           { "id": "m2-d3", "plan": "depth.3", "label": "第 2 站：要先具備甚麼", "value": "顧問角色說明、可投入時間與報酬方式（文件寫待商議）", "origin": "doc", "src": [{ "from": "doc", "at": "第十二節" }] },
           { "id": "m2-d4", "plan": "depth.4", "label": "第 2 站：最常見的失敗方式", "value": "時間不足，或者報酬未談妥", "origin": "ai", "test": "見面時先問每月可以投入多少時間" },
-          { "id": "m2-d5", "plan": "depth.5", "label": "第 2 站：為何是這個日子", "value": "AI 估計：與第 1 站並行，四星期內", "origin": "ai" }
+          { "id": "m2-d5", "plan": "depth.5", "label": "第 2 站：為何是這個日子", "value": "Zero 估計：與第 1 站並行，四星期內", "origin": "ai" }
         ]
       },
       {
@@ -172,10 +172,10 @@ window.STARTUP_OS_PAGE = {
         "watch": [{ "label": "試用過試送的主廚", "value": "0／1" }],
         "depth": [
           { "id": "m3-d1", "plan": "depth.1", "label": "第 3 站：對方為何會同意", "value": "正準備換季菜單、或者標榜本地食材的餐廳，較容易把服務連到具體需要", "origin": "doc", "src": [{ "from": "doc", "at": "第三節" }] },
-          { "id": "m3-d2", "plan": "depth.2", "label": "第 3 站：對方怎樣決定、需時多久", "value": "AI 估計：試用由主廚自己決定；之後落單要經餐廳老闆同意", "origin": "ai", "test": "問何師傅：餐廳一般怎樣批核每週 HK$1,500 的訂單" },
+          { "id": "m3-d2", "plan": "depth.2", "label": "第 3 站：對方怎樣決定、需時多久", "value": "Zero 估計：試用由主廚自己決定；之後落單要經餐廳老闆同意", "origin": "ai", "test": "問何師傅：餐廳一般怎樣批核每週 HK$1,500 的訂單" },
           { "id": "m3-d3", "plan": "depth.3", "label": "第 3 站：要先具備甚麼", "value": "試送安排，與何師傅的菜式建議", "origin": "doc", "src": [{ "from": "doc", "at": "第六節" }] },
           { "id": "m3-d4", "plan": "depth.4", "label": "第 3 站：最常見的失敗方式", "value": "餐廳認為現有供應商已經足夠，或者價錢比批發市場貴", "origin": "doc", "src": [{ "from": "doc", "at": "第六節" }] },
-          { "id": "m3-d5", "plan": "depth.5", "label": "第 3 站：為何是這個日子", "value": "AI 估計：選定餐廳後大約三星期", "origin": "ai" }
+          { "id": "m3-d5", "plan": "depth.5", "label": "第 3 站：為何是這個日子", "value": "Zero 估計：選定餐廳後大約三星期", "origin": "ai" }
         ]
       },
       {
@@ -192,41 +192,41 @@ window.STARTUP_OS_PAGE = {
         "watch": [{ "label": "食材周報答覆", "value": "未有" }],
         "depth": [
           { "id": "m4-d1", "plan": "depth.1", "label": "第 4 站：對方為何會同意", "value": "以本地農場故事充實內容，吸引關心食材來源的讀者", "origin": "doc", "src": [{ "from": "doc", "at": "第七節" }] },
-          { "id": "m4-d2", "plan": "depth.2", "label": "第 4 站：對方怎樣決定、需時多久", "value": "AI 估計：要經對方內部審批，可能比綠野物流久", "origin": "ai", "test": "見面時問由誰拍板、需時多久" },
+          { "id": "m4-d2", "plan": "depth.2", "label": "第 4 站：對方怎樣決定、需時多久", "value": "Zero 估計：要經對方內部審批，可能比綠野物流久", "origin": "ai", "test": "見面時問由誰拍板、需時多久" },
           { "id": "m4-d3", "plan": "depth.3", "label": "第 4 站：要先具備甚麼", "value": "合作建議簡報（已有）", "origin": "doc", "src": [{ "from": "deck", "at": "全份" }] },
           { "id": "m4-d4", "plan": "depth.4", "label": "第 4 站：最常見的失敗方式", "value": "只肯做一次性推廣，不肯長期合作", "origin": "ai", "test": "請對方書面寫明合作範圍" },
-          { "id": "m4-d5", "plan": "depth.5", "label": "第 4 站：為何是這個日子", "value": "AI 估計：本季最後一日，配合本季目標", "origin": "ai" }
+          { "id": "m4-d5", "plan": "depth.5", "label": "第 4 站：為何是這個日子", "value": "Zero 估計：本季最後一日，配合目前目標", "origin": "ai" }
         ]
       },
       {
         "id": "m5",
         "short": "首間付款",
         "beyondGoal": true,
-        "why": "真正開始收款的一站。放在這裏是讓你看到之後怎樣去到收款；它在本季目標之後。",
+        "why": "真正開始收款的一站。放在這裏是讓你看到之後怎樣去到收款；它在目前目標之後。",
         "event": { "id": "m5-event", "plan": "milestone.event", "label": "第 5 站：真實事件", "value": "第一間餐廳確認報價、付款訂購每週當季蔬菜（每週最少 HK$1,500）", "origin": "doc", "src": [{ "from": "doc", "at": "第一節：收費基準" }] },
         "actor": { "id": "m5-actor", "plan": "milestone.actor", "label": "第 5 站：決策者", "value": "餐廳老闆 —— 付款客戶", "origin": "doc", "src": [{ "from": "doc", "at": "第三節" }] },
         "witness": { "id": "m5-witness", "plan": "milestone.witness", "label": "第 5 站：見證人", "value": "主廚或者餐廳老闆", "origin": "ai" },
         "proof": { "id": "m5-proof", "plan": "milestone.evidence", "label": "第 5 站：證明方式", "value": "確認報價，或者收款紀錄", "origin": "ai" },
         "deliver": { "id": "m5-deliver", "plan": "milestone.deliveryCondition", "label": "第 5 站：完成標準", "value": "收到餐廳第一筆款項或確認報價", "origin": "ai" },
-        "owner": { "id": "m5-owner", "plan": "G6", "label": "第 5 站：負責人", "value": "未有", "origin": "ai", "why": "文件寫擬由綠野物流跟進落單，但綠野物流未答應，所以 AI 不可以當作有人負責。", "src": [{ "from": "doc", "at": "第六節" }], "options": [{ "text": "未有", "rec": true }, { "text": "我自己" }, { "text": "綠野物流（等對方答應才算）" }] },
+        "owner": { "id": "m5-owner", "plan": "G6", "label": "第 5 站：負責人", "value": "未有", "origin": "ai", "why": "文件寫擬由綠野物流跟進落單，但綠野物流未答應，所以 Zero 不可以當作有人負責。", "src": [{ "from": "doc", "at": "第六節" }], "options": [{ "text": "未有", "rec": true }, { "text": "我自己" }, { "text": "綠野物流（等對方答應才算）" }] },
         "target": { "id": "m5-target", "plan": "milestone.targetDate", "label": "第 5 站：目標日期", "kind": "date", "suffix": "前", "value": "2027-01-31", "origin": "ai", "tentative": { "by": "ai", "until": "2026-11-02", "test": "問何師傅餐廳一般何時調整供應商" } },
         "watch": [{ "label": "付款餐廳", "value": "0／1" }],
         "depth": [
           { "id": "m5-d1", "plan": "depth.1", "label": "第 5 站：對方為何會同意", "value": "試送令主廚看到當季蔬菜的新鮮度與來源，認同值得付較高價錢", "origin": "doc", "src": [{ "from": "doc", "at": "第六節" }] },
-          { "id": "m5-d2", "plan": "depth.2", "label": "第 5 站：對方怎樣決定、需時多久", "value": "AI 估計：主廚同意後由老闆批核，大約 2–4 星期", "origin": "ai", "test": "問何師傅餐廳怎樣批核新供應商、何時調整" },
+          { "id": "m5-d2", "plan": "depth.2", "label": "第 5 站：對方怎樣決定、需時多久", "value": "Zero 估計：主廚同意後由老闆批核，大約 2–4 星期", "origin": "ai", "test": "問何師傅餐廳怎樣批核新供應商、何時調整" },
           { "id": "m5-d3", "plan": "depth.3", "label": "第 5 站：要先具備甚麼", "value": "報價組合與伙伴合作條件（分帳、客戶歸屬、收款）", "origin": "doc", "src": [{ "from": "doc", "at": "第十二節" }] },
           { "id": "m5-d4", "plan": "depth.4", "label": "第 5 站：最常見的失敗方式", "value": "認同方向但暫時不轉供應商，或者只在節日落單", "origin": "doc", "src": [{ "from": "doc", "at": "第六節" }] },
-          { "id": "m5-d5", "plan": "depth.5", "label": "第 5 站：為何是這個日子", "value": "AI 估計：主廚回覆後加上批核時間", "origin": "ai" }
+          { "id": "m5-d5", "plan": "depth.5", "label": "第 5 站：為何是這個日子", "value": "Zero 估計：主廚回覆後加上批核時間", "origin": "ai" }
         ]
       }
     ]
   },
 
   "detail": {
-    "guide": "這裏是 AI 的根據、估計與未知。「出自你的文件」是你自己寫過的；「AI 建議」是 AI 估計的，最值得你看一眼。",
+    "guide": "這裏是 Zero 的根據、估計與未知。「出自你的文件」是你自己寫過的；「Zero 建議」是 Zero 估計的，最值得你看一眼。",
     "tip": {
       "headline": "最值得你補一句：綠野物流內部由誰拍板、需時多久",
-      "why": "補了這句，第 1 站就不再「待深化」，AI 可以替你準備合適的人與時間表。"
+      "why": "補了這句，第 1 站就不再「待深化」，Zero 可以替你準備合適的人與時間表。"
     },
     "missing": [
       { "ref": "m1-d2", "title": "綠野物流內部由誰拍板、需時多久", "how": "第一次見綠野物流時問；問到就按一下補上" },
@@ -237,7 +237,7 @@ window.STARTUP_OS_PAGE = {
       },
       {
         "title": "伙伴分帳、客戶歸屬、由誰收款",
-        "how": "等對方提出條件，書面確認時帶入；AI 不會自行估計數字",
+        "how": "等對方提出條件，書面確認時帶入；Zero 不會自行估計數字",
         "edit": { "id": "md-terms", "plan": "partner.terms", "label": "伙伴合作條件", "value": "由對方提出，書面確認時帶入", "origin": "doc", "src": [{ "from": "doc", "at": "第十二節：待商議" }] }
       },
       {
@@ -249,34 +249,37 @@ window.STARTUP_OS_PAGE = {
       {
         "title": "試送餐廳選哪一間",
         "how": "與何師傅一起選",
-        "edit": { "id": "md-trial", "plan": "sample.trial", "label": "試送餐廳", "value": "未選；AI 建議選正準備換季菜單、或者標榜本地食材的餐廳", "origin": "ai", "src": [{ "from": "doc", "at": "第三節" }] }
+        "edit": { "id": "md-trial", "plan": "sample.trial", "label": "試送餐廳", "value": "未選；Zero 建議選正準備換季菜單、或者標榜本地食材的餐廳", "origin": "ai", "src": [{ "from": "doc", "at": "第三節" }] }
       }
     ],
     "reading": [
-      { "id": "bm-customer", "plan": "canvas.customer", "label": "客戶", "value": "中小型餐廳付款；主廚判斷質素，老闆批核訂單", "origin": "doc", "src": [{ "from": "doc", "at": "第三節" }] },
-      { "id": "bm-value", "plan": "canvas.value", "label": "價值", "value": "當季本地蔬菜直送，每箱註明農場來源與收成日期", "origin": "doc", "src": [{ "from": "doc", "at": "第一節" }] },
-      { "id": "bm-channel", "plan": "canvas.channel", "label": "渠道", "value": "直接接觸餐廳；擬由綠野物流接觸餐廳、食材周報推廣", "origin": "doc", "src": [{ "from": "deck", "at": "九宮格" }] },
-      { "id": "bm-relation", "plan": "canvas.relationship", "label": "客戶關係", "value": "免費試送了解需要 → 按報價每週落單 → 換季更新菜單建議", "origin": "doc", "src": [{ "from": "deck", "at": "九宮格" }] },
-      { "id": "bm-revenue", "plan": "canvas.revenue", "label": "收入", "value": "每週訂單最少 HK$1,500；節日加購另計、未定價", "origin": "doc", "src": [{ "from": "doc", "at": "第一節" }] },
-      { "id": "bm-resource", "plan": "canvas.resources", "label": "關鍵資源", "value": "農場關係、廚藝顧問、冷藏送貨安排", "origin": "doc", "src": [{ "from": "deck", "at": "九宮格" }] },
-      { "id": "bm-activity", "plan": "canvas.activities", "label": "關鍵活動", "value": "按批採購與分揀、安排送貨、與主廚確認菜式配搭", "origin": "doc", "src": [{ "from": "deck", "at": "九宮格" }] },
-      { "id": "bm-partner", "plan": "canvas.partners", "label": "關鍵伙伴", "value": "農場甲、農場乙、何師傅（廚藝顧問）；擬議綠野物流、食材周報", "origin": "doc", "src": [{ "from": "doc", "at": "第七節" }] },
-      { "id": "bm-cost", "plan": "canvas.cost", "label": "成本", "value": "免費試送與未成交跟進、採購、送貨、冷藏、包裝、伙伴費用", "origin": "doc", "src": [{ "from": "doc", "at": "第九節" }] }
+      {"id":"biz-type","plan":"biz.type","label":"生意類型","kind":"choice","value":"實體貨品","origin":"ai","options":[{"text":"服務"},{"text":"實體貨品","rec":true},{"text":"軟件、網上服務或內容"},{"text":"平台或配對"},{"text":"非牟利或社企"},{"text":"其他"}],"why":"只影響問題及例子的用字，可以更改。"},
+      {"id":"bm-customer","plan":"canvas.customer","label":"客戶","value":"中小型餐廳付款；主廚判斷質素，老闆批核訂單","origin":"doc","src":[{"from":"doc","at":"第三節"}]},
+      {"id":"canvas-problem","plan":"canvas.problem","label":"對方的問題","kind":"text","value":"餐廳需要來源清楚、供應穩定的本地當季蔬菜。","origin":"ai"},
+      {"id":"canvas-alternatives","plan":"canvas.alternatives","label":"現有替代方案","kind":"text","value":"餐廳可繼續向批發市場或現有蔬菜供應商採購。","origin":"ai"},
+      {"id":"bm-value","plan":"canvas.value","label":"價值","value":"當季本地蔬菜直送，每箱註明農場來源與收成日期","origin":"doc","src":[{"from":"doc","at":"第一節"}]},
+      {"id":"bm-channel","plan":"canvas.channel","label":"渠道","value":"直接接觸餐廳；擬由綠野物流接觸餐廳、食材周報推廣","origin":"doc","src":[{"from":"deck","at":"九宮格"}]},
+      {"id":"bm-relation","plan":"canvas.relationship","label":"客戶關係","value":"免費試送了解需要 → 按報價每週落單 → 換季更新菜單建議","origin":"doc","src":[{"from":"deck","at":"九宮格"}]},
+      {"id":"bm-revenue","plan":"canvas.revenue","label":"收入","value":"每週訂單最少 HK$1,500；節日加購另計、未定價","origin":"doc","src":[{"from":"doc","at":"第一節"}]},
+      {"id":"bm-resource","plan":"canvas.resources","label":"關鍵資源","value":"農場關係、廚藝顧問、冷藏送貨安排","origin":"doc","src":[{"from":"deck","at":"九宮格"}]},
+      {"id":"bm-activity","plan":"canvas.activities","label":"關鍵活動","value":"按批採購與分揀、安排送貨、與主廚確認菜式配搭","origin":"doc","src":[{"from":"deck","at":"九宮格"}]},
+      {"id":"bm-partner","plan":"canvas.partners","label":"關鍵伙伴","value":"農場甲、農場乙、何師傅（廚藝顧問）；擬議綠野物流、食材周報","origin":"doc","src":[{"from":"doc","at":"第七節"}]},
+      {"id":"bm-cost","plan":"canvas.cost","label":"成本","value":"免費試送與未成交跟進、採購、送貨、冷藏、包裝、伙伴費用","origin":"doc","src":[{"from":"doc","at":"第九節"}]}
     ],
     "actors": {
       "title": "公司以外的決策者",
-      "judge": "AI 只照抄文件寫的狀態；沒有寫的當作「商討中」，擬議的當作「建議」。",
+      "judge": "Zero 只照抄文件寫的狀態；沒有寫的當作「商討中」，擬議的當作「建議」。",
       "items": [
         { "id": "ac-partner", "plan": "externalActors", "kind": "choice", "label": "綠野物流 · 送貨與銷售伙伴", "value": "建議（對方未知）", "origin": "doc", "src": [{ "from": "deck", "at": "標「擬議」" }], "options": [{ "text": "已確定" }, { "text": "商討中" }, { "text": "建議（對方未知）", "rec": true }], "free": false },
         { "id": "ac-media", "plan": "externalActors", "kind": "choice", "label": "食材周報 · 推廣渠道伙伴", "value": "建議（對方未知）", "origin": "doc", "src": [{ "from": "deck", "at": "標「擬議」" }], "options": [{ "text": "已確定" }, { "text": "商討中" }, { "text": "建議（對方未知）", "rec": true }], "free": false },
-        { "id": "ac-advisor", "plan": "externalActors", "kind": "choice", "label": "何師傅 · 廚藝顧問", "value": "商討中", "origin": "ai", "why": "文件沒有標明他的狀態，只寫「伙伴參與仍屬擬議」，所以 AI 當作仍在商討。", "src": [{ "from": "doc", "at": "開頭、第七節" }], "options": [{ "text": "已確定" }, { "text": "商討中", "rec": true }, { "text": "建議（對方未知）" }], "free": false },
+        { "id": "ac-advisor", "plan": "externalActors", "kind": "choice", "label": "何師傅 · 廚藝顧問", "value": "商討中", "origin": "ai", "why": "文件沒有標明他的狀態，只寫「伙伴參與仍屬擬議」，所以 Zero 當作仍在商討。", "src": [{ "from": "doc", "at": "開頭、第七節" }], "options": [{ "text": "已確定" }, { "text": "商討中", "rec": true }, { "text": "建議（對方未知）" }], "free": false },
         { "id": "ac-customer", "plan": "externalActors", "kind": "choice", "label": "中小型餐廳 · 付款客戶", "value": "建議（對方未知）", "origin": "doc", "src": [{ "from": "doc", "at": "第十二節：有待實際接觸" }], "options": [{ "text": "已確定" }, { "text": "商討中" }, { "text": "建議（對方未知）", "rec": true }], "free": false },
         { "id": "ac-farms", "plan": "externalActors", "kind": "choice", "label": "農場甲、農場乙 · 供應農場", "value": "建議（對方未知）", "origin": "doc", "src": [{ "from": "doc", "at": "第七節" }], "options": [{ "text": "已確定" }, { "text": "商討中" }, { "text": "建議（對方未知）", "rec": true }], "free": false }
       ]
     },
     "lens": {
       "id": "lens", "plan": "company.lensIds",
-      "label": "AI 用哪幾類生意的問題清單查漏",
+      "label": "Zero 用哪幾類生意的問題清單查漏",
       "value": "食品供應 ＋ 批發分銷 ＋ 本地服務",
       "origin": "ai",
       "why": "付款的是餐廳，主廚判斷質素（食品供應）；收入是每週訂單，要處理採購、分揀、送貨（批發分銷）；客戶集中在同一區，靠見面與試送建立關係（本地服務）。網上零售是願景，本季未做，所以不用「網上零售」清單。",
@@ -297,9 +300,9 @@ window.STARTUP_OS_PAGE = {
     "rules": [
       {
         "id": "permissions", "plan": "G7", "effect": true,
-        "label": "AI 可以自己做到幾盡",
-        "ask": "哪些事 AI 毋須問你都可以做？",
-        "judge": "確認後即時生效；AI 只可以建議預設或者更窄。",
+        "label": "Zero 可自行處理的事",
+        "ask": "哪些事 Zero 毋須問你都可以做？",
+        "judge": "確認後即時生效；Zero 只可以建議預設或者更窄。",
         "value": "用預設",
         "origin": "default",
         "options": [
@@ -308,14 +311,14 @@ window.STARTUP_OS_PAGE = {
         ],
         "boxes": {
           "auto": ["閱讀與分析項目內的檔案", "不帶私人資料的網上研究", "起草內部文件與草稿（信、簡報大綱、清單）", "處理你放入的會議紀錄", "準備每週問你的問題"],
-          "tellAfter": ["因你的新資料更新對生意的理解", "同一站內增減或重排工作", "開新的 AI 崗位（未啟用）"],
-          "askFirst": ["任何對外聯絡", "花錢或者簽約", "作出承諾（價錢、日期、條件）", "啟用 AI 崗位", "改目標或者次序", "刪除或者移走你的檔案", "發布、上傳等對外或者不可以回頭的操作"]
+          "tellAfter": ["因你的新資料更新對生意的理解", "同一站內增減或重排工作", "開新的 Zero 崗位（未啟用）"],
+          "askFirst": ["任何對外聯絡", "花錢或者簽約", "作出承諾（價錢、日期、條件）", "啟用 Zero 崗位", "改目標或者次序", "刪除或者移走你的檔案", "發布、上傳等對外或者不可以回頭的操作"]
         }
       },
       {
         "id": "rhythm", "plan": "G8",
-        "label": "AI 多久工作一次",
-        "ask": "AI 多久自己工作一次、星期幾問你近況？",
+        "label": "Zero 多久工作一次",
+        "ask": "Zero 多久自己工作一次、星期幾問你近況？",
         "value": "每日晚上 9 時工作一次；星期一問你近況",
         "origin": "default",
         "options": [

@@ -49,6 +49,10 @@ try {
   // 一個殼（決定二十五）：Founder Desk 同監察台同一列導航，待決事項分頁就係去 Founder Desk 嘅入口
   ok('公司現況：導航有待決事項分頁（Founder Desk）', await ev(`document.querySelector('nav.tabs a[data-tab="pending"]').getAttribute('href')==='/'`));
   ok('示範標記顯示', (await text('#sample')).includes('示範資料'));
+  // Founder Desk 重畫頁頭時示範標記一直喺度：連續 11 秒（跨兩次讀回）頁頭高度不變，整頁唔跳
+  await go('');
+  const headRows = await ev(`new Promise(res=>{const seen=new Set();const t=setInterval(()=>{const a=document.querySelector('#desk-head');seen.add(a?(document.querySelector('#sample')?'有標記 ':'冇標記 ')+Math.round(a.getBoundingClientRect().height):'冇頁頭')},50);setTimeout(()=>{clearInterval(t);res([...seen].join(' | '))},11000)})`);
+  ok('Founder Desk 頁頭穩定：示範標記不會消失再出現', /^有標記 \d+$/.test(headRows), headRows);
   // 第三版公司現況：完整路徑圖喺業務路徑頁（方案 B），公司現況係壓縮條
   await go('dashboard/path');
   ok('路徑圖（業務路徑頁）：已確認、試行、AI 建議、已撤都有', await ev(`document.querySelectorAll('#pmap .pnode').length>=7 && !!document.querySelector('#pmap .pbadge') && !!document.querySelector('#pmap .pcap') && !!document.querySelector('#pmap .plab.retired')`));
@@ -119,14 +123,16 @@ try {
   ok('紀錄：事件清單（每頁 8 項）同搜尋', await ev(`document.querySelectorAll('#log-rows .row-item').length===8 && !!document.querySelector('input[type=search]')`));
   await go('dashboard/system');
   ok('系統：AI 工具同前往設定', await ev(`document.querySelector('#sys-setup').getAttribute('href')==='/#/setup'`));
-  // 達成特效：兩次讀回之間里程碑轉已完成先播
+  // 達成特效：只由慶祝紀錄觸發；單純讀回差異不播
   await go('dashboard');
   const st = JSON.parse(fs.readFileSync(path.join(DATA, 'ledger', 'state.json'), 'utf8'));
   st.milestones.find(m => m.id === 'm1').state = 'done';
+  st.celebrations = { kinds: {}, entries: [{ id: 'cele-dash-1', level: 3, kind: 'milestone', title: '測試站', grade: 'said', gradeName: '口頭表示', nextGradeName: '實際行動', stage: '測試站', nextStage: '', at: '2026-11-05T12:00:00' }] };
   fs.writeFileSync(path.join(DATA, 'ledger', 'state.json'), JSON.stringify(st, null, 2));
-  ok('里程碑完成：下次讀回播一次達成特效', await waitFor(() => has('.celebrate'), 9000));
+  ok('里程碑完成：慶祝紀錄到達時播一次達成特效', await waitFor(() => has('#cz-cele-stage'), 9000));
   await go('dashboard');
-  ok('重新載入唔重播', !(await has('.celebrate')));
+  ok('重新載入唔重播', !(await has('#cz-cele-stage')));
+  if (await has('#cz-cele-card button')) await ev(`document.querySelector('#cz-cele-card button').click()`);
   // Founder Desk：頁頭去監察台；交一件臨時工作全程
   await go('');
   ok('Founder Desk 同一列導航有公司現況分頁（營運監察台）', await ev(`document.querySelector('nav.tabs a[data-tab="overview"]').getAttribute('href')==='/dashboard'`));

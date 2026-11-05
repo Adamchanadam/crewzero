@@ -22,14 +22,14 @@ try {
   ok('所有工作：可以網上搜尋同讀網頁（允許清單只有呢兩樣）', tools(base) === 'Read,Write,Edit,Glob,WebSearch,WebFetch' && base[base.indexOf('--allowedTools') + 1] === 'WebSearch' && base[base.indexOf('--allowedTools') + 2] === 'WebFetch' && base[base.indexOf('--allowedTools') + 3] === '--disallowedTools', base.slice(10, 16));
   const deny = ['127.*.*.*', 'localhost', '10.*.*.*', '192.168.*.*', '169.254.*.*'].concat(Array.from({ length: 16 }, (_, i) => `172.${16 + i}.*.*`));
   ok('禁止本機同私人網段（迴環、10、172.16–31、192.168、169.254）', deny.every(d => base.includes(`WebFetch(domain:${d})`)), deny.filter(d => !base.includes(`WebFetch(domain:${d})`)));
-  ok('紅藍對打角色只換模型，網絡規則一樣', JSON.stringify(red.filter((x, i) => i !== red.indexOf('--model') + 1)) === JSON.stringify(base.filter((x, i) => i !== base.indexOf('--model') + 1)) && red[red.indexOf('--model') + 1] === 'haiku');
+  ok('紅藍對打角色只換模型，網絡規則一樣', JSON.stringify(red.filter((x, i) => i !== red.indexOf('--model') + 1)) === JSON.stringify(base.filter((x, i) => i !== base.indexOf('--model') + 1)) && red[red.indexOf('--model') + 1] === 'sonnet');
   ok('其餘限制不變（限制模式、唔讀 MCP、唔問權限、冇略過權限）', ['--restricted', '--safe-mode', '--strict-mcp-config', '--permission-prompts'].every(x => base.includes(x)) && !base.includes('--dangerously-skip-permissions'));
   ok('情景演練即時對手：照舊冇工具', h.chat.args[h.chat.args.indexOf('--tools') + 1] === '' && !h.chat.args.some(x => /Web/.test(x)));
   ok('限制設定齊全', lib.restrictions(h) && lib.readsWeb(h));
   ok('少咗私人網段禁止規則 → 唔合格', !lib.restrictions({ ...h, args: h.args.filter(x => x !== 'WebFetch(domain:192.168.*.*)') }));
   const withBash = h.args.slice(); withBash.splice(withBash.indexOf('--allowedTools') + 1, 0, 'Bash');
   ok('允許清單加其他工具（例如指令列）→ 唔合格', !lib.restrictions({ ...h, args: withBash }));
-  ok('網絡規則或者角色模型表改咗 → 認證雜湊唔同（要重新認證）', lib.hashHost(h) !== lib.hashHost({ ...h, args: h.args.filter(x => x !== 'WebFetch(domain:10.*.*.*)') }) && lib.hashHost(h) !== lib.hashHost({ ...h, roles: { ...h.roles, judge: 'sonnet' } }));
+  ok('網絡規則改咗須重新認證；只改模型表唔使', lib.hashHost(h) !== lib.hashHost({ ...h, args: h.args.filter(x => x !== 'WebFetch(domain:10.*.*.*)') }) && lib.hashHost(h) === lib.hashHost({ ...h, models: { ...h.models, judge: [{ model: 'sonnet', label: 'Sonnet 5.5' }] } }));
 
   /* ---------- B. 認證（假 AI 上網設定）：九項，網絡四項 ---------- */
   const DATA = path.join(OUT, 'data');

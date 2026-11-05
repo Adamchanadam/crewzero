@@ -173,8 +173,8 @@ try {
   ok('首次載入唔播慶祝', (await c.ev(`window.__cel.length`)) === 0);
   const s3 = readSt(), mA = s3.milestones.find(m => m.pathStatus === 'confirmed' && m.state !== 'done' && (m.watchItems || []).length === 0) || s3.milestones.find(m => m.pathStatus === 'confirmed' && m.state !== 'done');
   mA.state = 'done'; writeSt(s3);
-  const c3 = await waitFor(async () => (await c.ev(`window.__cel`)).find(x => x.startsWith('3|')), 15000);
-  ok('三級：里程碑完成 → 運作環內暗角橫幅「里程碑達成」並寫明下一站', c3 && /里程碑達成/.test(c3) && /下一站/.test(c3) && (await c.ev(`window.__fx`)).includes('o-bn3'), { c3, fx: await c.ev(`window.__fx`) });
+  const c3 = await waitFor(async () => (await c.ev(`window.__cel`)).find(x => x.startsWith('3|')), 7000);
+  ok('三級：沒有慶祝紀錄的里程碑完成，監察台不會自行播放', !c3 && !(await c.ev(`window.__fx`)).includes('o-bn3'), { c3, fx: await c.ev(`window.__fx`) });
   await sleep(1300); await shot('cele3-1440.png'); await sleep(2500);
   const s2 = readSt(), mW = s2.milestones.find(m => (m.watchItems || []).some(w => w.target != null && w.target !== '' && Number(w.value) < Number(w.target)));
   const wi = mW.watchItems.find(w => w.target != null && w.target !== '' && Number(w.value) < Number(w.target)); wi.value = wi.target; writeSt(s2);
@@ -183,7 +183,7 @@ try {
   await sleep(2600);
   const s1 = readSt(), tk = s1.tasks.find(t => t.status === 'active' && t.owner !== 'founder') || s1.tasks.find(t => t.status !== 'done' && t.owner !== 'founder');
   tk.status = 'done'; writeSt(s1);
-  ok('一級：任務交付 → 事件流多一行「任務交付」、冇橫幅', await waitFor(async () => c.ev(`!!document.querySelector('#evlist li[data-delivered="${tk.id}"]')`), 15000) && !(await c.ev(`window.__cel`)).some(x => x.startsWith('1|')));
+  ok('一級：交付確認 → 事件流多一行「交付確認」、冇橫幅', await waitFor(async () => c.ev(`!!document.querySelector('#evlist li[data-delivered="${tk.id}"]')`), 15000) && !(await c.ev(`window.__cel`)).some(x => x.startsWith('1|')));
   writeSt({ ...st0, observe: readSt().observe }); setRun(false);
 
   /* ---------- F. 「AI 團隊」標籤唔疊字、首屏、1024、390 ---------- */
@@ -233,7 +233,7 @@ try {
   ok('近 24 小時事件走勢：事件流卡底有走勢線', await c.ev(`!!document.querySelector('#ev-spark svg polyline')`));
   await c.go(B + '/', 1440, 4000);
   const cd1 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`); await sleep(1600); const cd2 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`);
-  ok('AI 近期工作：下次 AI 開工倒數每秒走、AI 今日工作／用時一行（真數據）', /^\d{2}:\d{2}:\d{2}$/.test(cd2 || '') && cd1 !== cd2 && await c.ev(`(()=>{const t=document.querySelector('[data-tele]').textContent;return t.includes('AI 今日工作')&&t.includes('次')})()`), { cd1, cd2 });
+  ok('AI 近期工作：下次 AI 開工倒數每秒走、AI 今日工作／用時一行（真數據）', /^\d{2}:\d{2}:\d{2}$/.test(cd2 || '') && cd1 !== cd2 && await c.ev(`(()=>{const t=document.querySelector('[data-tele]').textContent;return t.includes(${JSON.stringify(D.startsTodayL.split('{a}')[0])})&&t.includes('次')})()`), { cd1, cd2 });
   // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI；基準 7 次，加上必須逐題作答的點擊，零跨產品
   let clicks = 0; const tap = async sel => { await c.click(sel); clicks++; await sleep(900); };
   await c.go(B + '/', 1440, 3500);

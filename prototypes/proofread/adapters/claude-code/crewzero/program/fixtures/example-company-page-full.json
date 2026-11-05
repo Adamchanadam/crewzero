@@ -196,7 +196,7 @@
           {
             "id": "m1-d5",
             "label": "5",
-            "value": "三個農場來自本季目標",
+            "value": "三個農場來自目前目標",
             "origin": "doc",
             "src": [
               "bm"
@@ -424,6 +424,126 @@
     ]
   },
   "detail": {
+    "reading": [
+      {
+        "id": "biz-type",
+        "plan": "biz.type",
+        "label": "生意類型",
+        "kind": "choice",
+        "value": "實體貨品",
+        "origin": "ai",
+        "options": [
+          {
+            "text": "服務"
+          },
+          {
+            "text": "實體貨品",
+            "rec": true
+          },
+          {
+            "text": "軟件、網上服務或內容"
+          },
+          {
+            "text": "平台或配對"
+          },
+          {
+            "text": "非牟利或社企"
+          },
+          {
+            "text": "其他"
+          }
+        ],
+        "why": "只影響問題及例子的用字，可以更改。"
+      },
+      {
+        "id": "canvas-customer",
+        "plan": "canvas.customer",
+        "label": "客戶",
+        "kind": "text",
+        "value": "注重食材來源的中小型餐廳，由主廚判斷質素，餐廳付款。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-problem",
+        "plan": "canvas.problem",
+        "label": "對方的問題",
+        "kind": "text",
+        "value": "餐廳需要來源清楚、供應穩定的本地當季蔬菜。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-alternatives",
+        "plan": "canvas.alternatives",
+        "label": "現有替代方案",
+        "kind": "text",
+        "value": "餐廳可繼續向批發市場或現有蔬菜供應商採購。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-value",
+        "plan": "canvas.value",
+        "label": "價值",
+        "kind": "text",
+        "value": "把本地小農的當季蔬菜直送餐廳，提供可追溯的農場來源。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-channel",
+        "plan": "canvas.channel",
+        "label": "渠道",
+        "kind": "text",
+        "value": "直接接觸餐廳，先洽談及試送，再跟進訂單。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-relationship",
+        "plan": "canvas.relationship",
+        "label": "客戶關係",
+        "kind": "text",
+        "value": "透過見面、試送及每週供貨建立餐廳關係。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-revenue",
+        "plan": "canvas.revenue",
+        "label": "收入",
+        "kind": "text",
+        "value": "餐廳按每週蔬菜訂單付款。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-resources",
+        "plan": "canvas.resources",
+        "label": "關鍵資源",
+        "kind": "text",
+        "value": "本地農場的供貨關係及餐廳送貨安排。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-activities",
+        "plan": "canvas.activities",
+        "label": "關鍵活動",
+        "kind": "text",
+        "value": "與農場洽談供應、向餐廳試送及安排每週訂單送貨。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-partners",
+        "plan": "canvas.partners",
+        "label": "關鍵伙伴",
+        "kind": "text",
+        "value": "本地供貨農場及參與送貨的合作方。",
+        "origin": "ai"
+      },
+      {
+        "id": "canvas-cost",
+        "plan": "canvas.cost",
+        "label": "成本",
+        "kind": "text",
+        "value": "蔬菜採購、試送、包裝及送貨成本。",
+        "origin": "ai"
+      }
+    ],
     "missing": [
       {
         "id": "miss-1",
@@ -456,7 +576,7 @@
       {
         "id": "ru1",
         "plan": "G7",
-        "label": "AI 可自行處理的事",
+        "label": "Zero 可自行處理的事",
         "kind": "text",
         "value": "用預設",
         "origin": "default",

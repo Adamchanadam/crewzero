@@ -80,6 +80,8 @@ function patchFetch() {
     return real.call(globalThis, input, init);
   };
 }
+// 每次啟動新伺服器（新資料夾）都要重新配對
+export function forgetPass(BASE) { passes.delete(originOf(BASE)); }
 export async function usePass(BASE, cdp) {
   const origin = originOf(BASE);
   if (!passes.has(origin)) passes.set(origin, await pair(origin));

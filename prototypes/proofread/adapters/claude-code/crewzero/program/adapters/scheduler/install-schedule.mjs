@@ -96,7 +96,7 @@ function lastRun() {
 }
 const lastJson = last => last ? { at: last.startedAt || '', state: last.state || '', skipReason: last.skipReason || '', ending: last.ending || '', rejected: !!last.rejected, rejectReason: last.rejectReason || '' } : null;
 function skipText(reason) {
-  return ({ intakeNotComplete: '公司概覽未問齊', pausedByFounder: '已按創辦人指示暫停', autoStopped: 'AI 已暫停', budgetExhausted: '今日 AI 次數已用完', adapterNotCertified: 'AI 未設定', adapterVersionChanged: 'AI 工具已更新，須重新認證', alreadyRan: '今日已做過' })[reason] || reason || '';
+  return ({ intakeNotComplete: '公司概覽未問齊', pausedByFounder: '已按創辦人指示暫停', autoStopped: 'Zero 已暫停', budgetExhausted: '今日 Zero 次數已用完', adapterNotCertified: 'AI 工具未設定', adapterVersionChanged: 'AI 工具已更新，須重新認證', alreadyRan: '今日已做過' })[reason] || reason || '';
 }
 function statusLine(last) {
   if (!last) return '未有';
@@ -135,7 +135,7 @@ if (has('remove')) {
   // 只有 server 模式又冇開登入啟動先唔使碰系統；其他情況都要確認移走
   const needOs = !markNow || markNow.mode !== 'server' || (markNow.autostart && markNow.autostart.enabled);
   const x = needOs ? removeAutostart() : { ok: true };
-  if (x.ok) { fs.rmSync(MARK, { force: true }); say('已移除每日自動開工及登入啟動；AI 只會在你提交答案或要求時開始工作。'); process.exit(0); }
+  if (x.ok) { fs.rmSync(MARK, { force: true }); say('已移除每日自動開工及登入啟動；Zero 只會在你提交答案或要求時開始工作。'); process.exit(0); }
   // 移唔走：伺服器計時器即刻停，但保留標記，重新登記時先再清一次；舊式工作仍在行就唔可以話已停用
   if (markNow && markNow.mode === 'server') {
     fs.writeFileSync(MARK, JSON.stringify({ ...markNow, mode: 'stopped', stoppedAt: new Date().toISOString() }, null, 2));

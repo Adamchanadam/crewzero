@@ -75,7 +75,7 @@
         "農場主本人決定，一次會面可簽（假設）",
         "一頁簡介、採購量與付款條款草案",
         "要求獨家或供應量不穩",
-        "三個農場來自本季目標"
+        "三個農場來自目前目標"
       ],
       "watchItems": [
         {
@@ -1070,7 +1070,7 @@
       "at": "@-2d 21:24",
       "actor": "ai",
       "type": "path",
-      "title": "AI 建議新路線：先辦廚師試食會",
+      "title": "Zero 建議新路線：先辦廚師試食會",
       "relatedIds": [
         "p1",
         "m7"
@@ -1084,7 +1084,7 @@
       "at": "@-2d 21:24",
       "actor": "ai",
       "type": "run",
-      "title": "AI 完成工作：整理牌照要求查詢清單",
+      "title": "Zero 完成工作：整理牌照要求查詢清單",
       "relatedIds": [
         "R-demo-c"
       ],
@@ -1125,7 +1125,7 @@
       "at": "@-20m",
       "actor": "ai",
       "type": "run",
-      "title": "AI 完成工作：農場合作一頁簡介，待你驗收",
+      "title": "Zero 完成工作：農場合作一頁簡介，待你驗收",
       "relatedIds": [
         "R-demo-a",
         "t2"
@@ -1140,7 +1140,7 @@
       "at": "@-4m",
       "actor": "ai",
       "type": "run",
-      "title": "AI 開始工作：準備農場丙簽約前資料包",
+      "title": "Zero 開始工作：準備農場丙簽約前資料包",
       "relatedIds": [
         "R-demo-run",
         "t3"
@@ -1170,7 +1170,7 @@
     "noProgressStreak": 0,
     "lastValidatedAt": "@-4m",
     "warnings": [
-      "短期目標為 AI 暫定值，兩日後到期時會再徵詢你"
+      "短期目標為 Zero 暫定值，兩日後到期時會再徵詢你"
     ]
   }
 }

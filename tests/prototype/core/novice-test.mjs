@@ -2,11 +2,13 @@
 // 用法：node novice-test.mjs <chrome> <輸出> <原型> <假 adapter> <port>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
 import { certify, seedCompany, usePass } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT_ARG] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const PORT = Number(PORT_ARG), BASE = 'http://127.0.0.1:' + PORT, DATA = path.join(OUT, 'data');
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const waitFor = async (fn, ms = 30000) => { const until = Date.now() + ms; while (Date.now() < until) { try { const v = await fn(); if (v) return v; } catch { } await sleep(250); } return null; };
@@ -18,7 +20,7 @@ try {
   chrome = await openChrome(CHROME, path.join(OUT, 'profile'), PORT + 1); await usePass(BASE, chrome);
   await chrome.go(BASE + '/#/intake');
   const blocked = await waitFor(() => chrome.ev(`({card:!!document.querySelector('#intake-setup-first'),form:!!document.querySelector('#intake-form'),any:document.querySelector('#intake-anyway')?.textContent})`));
-  ok('未設定 AI 時交資料頁只顯示設定卡和次要入口', blocked?.card && !blocked?.form && blocked.any === '先填寫資料（設定 AI 後才會處理）', blocked);
+  ok('未設定 AI 時交資料頁只顯示設定卡和次要入口', blocked?.card && !blocked?.form && blocked.any === '先填寫資料（設定 AI 工具後才會處理）', blocked);
   await chrome.click('#intake-anyway');
   ok('按次要入口後展開交資料表格', !!await waitFor(() => chrome.ev(`!!document.querySelector('#intake-form')`)), null);
   await chrome.type('#q1', '保留中的草稿');
@@ -68,7 +70,7 @@ try {
   ok('公司概覽不顯示內部技術詞', !/(子代理|會話|亮線|粒子)/.test(String(dashboardText || '')), dashboardText);
   await chrome.go(BASE + '/#/', 1440, 3000);
   const teleText = await waitFor(() => chrome.ev(`(document.querySelector('[data-tele]')||{}).textContent||''`));
-  ok('待決事項頁的 AI 工作次數使用短句而沒有「啟動」', String(teleText || '').includes('AI 今日工作') && String(teleText || '').includes('次') && !String(teleText || '').includes('啟動'), teleText);
+  ok('待決事項頁的 AI 工作次數使用短句而沒有「啟動」', String(teleText || '').includes(N.dash.startsTodayL.split('{a}')[0]) && String(teleText || '').includes('次') && !String(teleText || '').includes('啟動'), teleText);
   await chrome.go(BASE + '/dashboard/system');
   const systemText = await waitFor(() => chrome.ev(`document.body.innerText`));
   ok('系統頁說明公司資料只存放在這部電腦', String(systemText || '').includes('公司資料只存放在這部電腦。其他人要使用，請在這部電腦的瀏覽器開啟。'), systemText);

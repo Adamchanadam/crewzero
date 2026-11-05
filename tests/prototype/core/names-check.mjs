@@ -14,7 +14,9 @@ ok('名稱表全部書面語', bad.length === 0, bad);
 // 頁面入面唔可以有名稱表已有嘅名（4 字或以上，避免撞短字）以字串形式寫死
 for (const f of ['ask.html', 'proofread.html', 'desk.js', 'welcome.html']) {
   const t = fs.readFileSync(path.join(PROTO, f), 'utf8');
-  const dup = Object.values(N.ui).filter(v => v.length >= 4 && !/\{/.test(v) && t.includes(`'${v}'`));
+  // 此處是沒有宿主名稱時的通用後備值；其他位置仍檢查重複標籤。
+  const labels = f === 'proofread.html' ? t.replace("(st.ai && st.ai.name) || 'AI 工具'", '(st.ai && st.ai.name) || hostFallback') : t;
+  const dup = Object.values(N.ui).filter(v => v.length >= 4 && !/\{/.test(v) && labels.includes(`'${v}'`));
   ok(`${f}：冇自己寫名稱表已有嘅名`, dup.length === 0, dup);
   ok(`${f}：冇舊名「公司一頁」`, !t.includes('公司一頁'));
 }
@@ -22,7 +24,9 @@ for (const f of ['ask.html', 'proofread.html', 'desk.js', 'welcome.html']) {
 // 頁面同外殼嘅固定文字（有中文嘅字串）唔可以有內部術語
 for (const f of ['ask.html', 'proofread.html', 'welcome.html', 'run.mjs', 'server.mjs', 'certify.mjs', 'host-lib.mjs', 'company-page-check.mjs']) {
   const shown = /\.html$/.test(f) ? () => true : l => /step\(|finish\(|reason:|why = |message:|item\(|fix|detail|names = |summary:|warnings\.push|errors\.push|fail\(/.test(l);
-  const t = fs.readFileSync(path.join(PROTO, f), 'utf8').split(/\r?\n/).filter(l => !/^\s*(\/\/|\/\*|\*)/.test(l) && shown(l)).join('\n');
+  const source = fs.readFileSync(path.join(PROTO, f), 'utf8').split(/\r?\n/).filter(l => !/^\s*(\/\/|\/\*|\*)/.test(l) && shown(l)).join('\n');
+  // download 屬性是檔案名稱；相鄰的連結文字仍受原有掃描約束。
+  const t = /\.html$/.test(f) ? source.replace(/\bdownload:\s*'[^'\n]*'/g, 'download: filename') : source;
   const hits = [];
   const re = /'([^'\n]*[\u4e00-\u9fff][^'\n]*)'|`([^`\n]*[\u4e00-\u9fff][^`\n]*)`/g; let m;
   while ((m = re.exec(t))) { const s = (m[1] || m[2]).replace(/\$\{[^}]*\}/g, ''); const j = N.styleIssues(s).filter(x => x.kind === 'jargon'); if (j.length) hits.push(s.slice(0, 60) + ' → ' + j.map(x => x.term).join(',')); }

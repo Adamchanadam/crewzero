@@ -39,7 +39,7 @@
     { "question": "第二間餐廳加入前，是否需要先物色後備送貨人？", "options": ["A 需要，先物色", "B 不需要，暫由自己應付"], "recommend": "A", "why": "送貨是判為「倒下」的論點，不處理的話第二間餐廳便會遲到", "risk": "如未有後備送貨人，一次缺勤便會令兩間餐廳同時收不到貨。" }
   ],
   "assumptionChanges": [
-    { "assumptionId": "H4", "change": "創辦人親自送貨只足以應付一間餐廳，不足以應付三間", "label": "AI 建議 · 未確認" },
-    { "assumptionId": "H1", "change": "是否支付較高價錢須由老闆決定，而非主廚", "label": "AI 建議 · 未確認" }
+    { "assumptionId": "H4", "change": "創辦人親自送貨只足以應付一間餐廳，不足以應付三間", "label": "Zero 建議 · 未確認" },
+    { "assumptionId": "H1", "change": "是否支付較高價錢須由老闆決定，而非主廚", "label": "Zero 建議 · 未確認" }
   ]
 }

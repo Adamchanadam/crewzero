@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { readJSON, writeJSON, localIso, stamp } from './ask-lib.mjs';
-import { cleanEnv, resolveCommand } from './host-lib.mjs';
+import { cleanEnv, resolveCommand, validModel } from './host-lib.mjs';
 
 export const LEVELS = { easy: '友善', normal: '一般', hard: '難搞' };
 export const PERSONA_KEYS = ['identity', 'background', 'stance', 'interests', 'decision', 'concerns', 'style'];
@@ -75,6 +75,7 @@ const live = new Map();
 setInterval(() => { for (const [id, e] of live) if (Date.now() - e.lastUsed > 15 * 60000) stop(id); }, 60000).unref();
 function stop(id) { const e = live.get(id); if (!e) return; live.delete(id); try { e.child.stdin.end(); } catch { } setTimeout(() => { try { e.child.kill(); } catch { } }, 2000); }
 function spawnChat(host, cwd, systemFile, model) {
+  if (![host.chat.fastModel, host.chat.reviewModel].every(m => m === undefined || validModel(m)) || !validModel(model)) throw new Error('AI 模型設定不合格');
   const args = host.chat.args.map(a => a.replaceAll('{system}', systemFile).replaceAll('{model}', model));
   const c = resolveCommand(host.command);
   const child = spawn(c.command, [...c.prefix, ...args], { cwd, env: cleanEnv(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });

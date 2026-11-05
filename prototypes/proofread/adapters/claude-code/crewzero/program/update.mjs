@@ -100,7 +100,7 @@ function takeRunLock() {
   return () => { try { if (fs.readFileSync(RUN_LOCK, 'utf8') === String(process.pid)) fs.rmSync(RUN_LOCK, { force: true }); } catch { } };
 }
 const servers = await runningServers();
-if (servers.some(s => s.busy) || runLockHeld()) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
+if (servers.some(s => s.busy) || runLockHeld()) { say('Zero 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
 if (APPLY && servers.some(s => s.pid && !ownsServerPort(s.port, s.pid))) {
   say('今次未有更新：Founder Desk 正在開着，系統未能安全關閉它。請重新開機後再更新一次。項目沒有任何改動。');
   tech('無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
@@ -132,7 +132,7 @@ if (ROLLBACK) {
     process.exit(3);
   }
   const release = takeRunLock();
-  if (!release) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
+  if (!release) { say('Zero 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
   let bad = [];
   try {
     const known = [...Object.keys(parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '')), ...GENERATED];
@@ -180,7 +180,7 @@ if (!APPLY) {
 }
 
 const release = takeRunLock();
-if (!release) { say('AI 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
+if (!release) { say('Zero 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
 // 暫存資料夾名沿用舊前綴
 const stage = path.join(proj, `.startup-os-updating-${process.pid}`);
 let touched = false, stageFiles = [];

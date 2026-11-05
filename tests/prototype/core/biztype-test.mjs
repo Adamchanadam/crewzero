@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
-import { certifyDirect, usePass, seedCompany } from '../lib/testkit.mjs';
+import { certify, certifyDirect, usePass, seedCompany } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT_ARG] = process.argv.slice(2);
 const PORT = Number(PORT_ARG), DATA = path.join(OUT, 'data'), OLD_DATA = path.join(OUT, 'old-data'), WEEK_DATA = path.join(OUT, 'week-data');
@@ -28,11 +28,9 @@ const submitAsk = async (base, pack, answers) => {
   const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: ' + lib.localIso()];
   return fetch(base + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ kind: 'ask-answer', ref: pack.id, text: head.join('\n') + '\n\n# 答案\n\n' + fence + 'json\n' + JSON.stringify(machine) + '\n' + fence + '\n' }) });
 };
-const questions = {
-  service: ['提供甚麼服務', '如何收費'], goods: ['賣甚麼貨品', '定價多少'], online: ['提供甚麼內容', '如何收費'], nonprofit: ['計劃做甚麼', '資金來自哪裏'], other: ['你提供甚麼', '如何收取款項']
-};
 const resultAsk = {
-  service: '這星期完成了多少次服務？收到多少款項？', goods: '這星期賣出多少件？收到多少款項？', online: '這星期新增多少使用者或觀看？收到多少款項？', nonprofit: '這星期服務了多少人？取得多少資助或捐款？', other: '這星期有甚麼實際成果？（有數字請寫數字）'
+  platform: '這星期撮合了多少單？收到多少款項？',
+  service: '這星期完成了多少次服務？收到多少款項？', goods: '這星期賣出多少件？收到多少款項？', online: '這星期有多少人使用？收到多少款項？', nonprofit: '這星期服務了多少人？取得多少資助或捐款？', other: '這星期有甚麼實際成果？（有數字請寫數字）'
 };
 
 fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
@@ -41,62 +39,58 @@ try {
   const base = start(DATA, PORT);
   await usePass(base);
   ok('主伺服器已啟動', !!await waitFor(async () => (await status(base)).ok));
-  const missing = await post(base, { fields: { q1: '測試' }, files: [] });
-  const invalid = await post(base, { bizType: 'invalid', fields: {}, files: [] });
-  const inherited = await post(base, { bizType: 'constructor', fields: {}, files: [] });
-  const tooLong = await post(base, { bizType: 'other', bizOther: '字'.repeat(61), fields: {}, files: [] });
-  ok('缺少、非法、繼承屬性及過長的生意類別一律拒收並說明原因', missing.code === 400 && missing.j?.message === '請先選擇你的生意類別。' && invalid.code === 400 && inherited.code === 400 && tooLong.code === 400 && /60/.test(tooLong.j?.message || ''), { missing, invalid, inherited, tooLong });
+  const invalid = await post(base, { bizType: 'invalid', fields: { q1: '測試' }, files: [] });
+  const inherited = await post(base, { bizType: 'constructor', fields: { q1: '測試' }, files: [] });
+  const tooLong = await post(base, { bizType: 'other', bizOther: '字'.repeat(61), fields: { q1: '測試' }, files: [] });
+  const required = await post(base, { fields: { q1: '   ', q2: '只有對象' }, files: [] });
+  ok('非法、繼承屬性及過長類別拒收；空白第 1 題拒收', [invalid, inherited, tooLong, required].every(x => x.code === 400) && /60/.test(tooLong.j?.message || ''), { invalid, inherited, tooLong, required });
+  const spec = await (await fetch(base + '/api/intake')).json();
+  ok('API 八題只有第 1 題必填，六類均用同一組題目', spec.questions.length === 8 && spec.questions.filter(q => q.required).map(q => q.n).join() === '1' && spec.bizTypes.length === 6 && Object.values(spec.questionsByBizType).every(q => JSON.stringify(q) === JSON.stringify(spec.questions)), spec);
 
   chrome = await openChrome(CHROME, path.join(OUT, 'profile'), PORT + 1);
   await usePass(base, chrome);
   await chrome.go(base + '/#/intake');
   if (await chrome.ev(`!!document.querySelector('#intake-anyway')`)) await chrome.click('#intake-anyway');
-  for (const type of Object.keys(questions)) {
-    await chrome.ev(`document.querySelector('input[name="biz-type"][value="${type}"]').click()`);
-    const actual = await waitFor(async () => { const q = await chrome.ev(`['label[for="q1"]','label[for="q2"]'].map(s=>document.querySelector(s).innerText)`); return q[0].includes(questions[type][0]) && q[1].includes(questions[type][1]) ? q : null; });
-    ok(`交資料頁：${type} 類別的第 1、2 題用字正確`, actual[0].includes(questions[type][0]) && actual[1].includes(questions[type][1]), actual);
-  }
-  await chrome.ev(`document.querySelector('input[name="biz-type"][value="service"]').click()`); await waitFor(async () => (await chrome.ev(`document.querySelector('label[for="q1"]').innerText`)).includes('提供甚麼服務'));
-  await chrome.type('#q1', '保留中的服務內容');
-  const beforeTypeChange = await chrome.ev(`(()=>{const details=document.querySelector('details.iq-opt');details.open=true;window.scrollTo(0,180);return {scrollY:window.scrollY,open:details.open};})()`);
-  await chrome.ev(`document.querySelector('input[name="biz-type"][value="goods"]').click()`); await waitFor(async () => (await chrome.ev(`document.querySelector('label[for="q1"]').innerText`)).includes('賣甚麼貨品'));
-  ok('切換類別不會清除已填內容', await chrome.ev(`document.querySelector('#q1').value`) === '保留中的服務內容');
-  const afterTypeChange = await chrome.ev(`(()=>{const details=document.querySelector('details.iq-opt');return {scrollY:window.scrollY,open:details.open,q1:document.querySelector('#q1').value,required:(document.querySelector('label[for="q1"] .qn')||{}).innerText||''};})()`);
-  ok('切換類別只更新題目內容，保留捲動位置、選填區、輸入內容及必填標記', beforeTypeChange.scrollY > 0 && afterTypeChange.scrollY === beforeTypeChange.scrollY && afterTypeChange.open && afterTypeChange.q1 === '保留中的服務內容' && afterTypeChange.required.includes('必填'), { beforeTypeChange, afterTypeChange });
-  const nativeRadio = await chrome.ev(`(()=>{const s=getComputedStyle(document.querySelector('input[name="biz-type"]'));return {opacity:s.opacity,width:parseFloat(s.width),height:parseFloat(s.height)};})()`);
-  ok('生意類別只顯示自訂圓點，原生圓點仍可鍵盤操作', nativeRadio.opacity === '0' || nativeRadio.width <= 1 || nativeRadio.height <= 1, nativeRadio);
+  ok('交資料頁毋須選類別，八題用字及例子來自 API', await chrome.ev(`!document.querySelector('input[name="biz-type"]')&&${JSON.stringify(spec.questions)}.every(q=>document.querySelector('label[for="q'+q.n+'"]').textContent.includes(q.ask)&&document.querySelector('#q'+q.n).placeholder===(q.example?'例：'+q.example:''))`));
+  await chrome.type('#q1', '用 AI 幫傳統小生意');
+  ok('八題直接顯示，只有一題必填標記', await chrome.ev(`document.querySelectorAll('#intake-form .iq-q').length===8&&document.querySelectorAll('#intake-form .iq-q .qn').length===1`));
+  await chrome.type('#q8', '先了解實際需要');
   await chrome.send('Page.reload'); await sleep(1600);
-  ok('重新載入後草稿保留已選類別與內容', await chrome.ev(`document.querySelector('input[name="biz-type"][value="goods"]').checked&&document.querySelector('#q1').value==='保留中的服務內容'`));
-  const genericText = await chrome.ev(`document.body.innerText`);
-  ok('通用版本已沒有舊診所預約例子', !genericText.includes('診所') && !genericText.includes('預約流程'), genericText.slice(0, 800));
-  await chrome.ev(`document.querySelector('input[name="biz-type"][value="nonprofit"]').click()`); await waitFor(async () => (await chrome.ev(`document.querySelector('label[for="q1"]').innerText`)).includes('計劃做甚麼'));
-  const nonprofitText = await chrome.ev(`document.querySelector('#intake-form').innerText`);
-  ok('非牟利版本第 1、2 題不含客戶、收入或產品', !['客戶', '收入', '產品'].some(x => nonprofitText.includes(x)), nonprofitText);
-
-  await chrome.ev(`document.querySelector('input[name="biz-type"][value="goods"]').click()`); await waitFor(async () => (await chrome.ev(`document.querySelector('label[for="q1"]').innerText`)).includes('賣甚麼貨品'));
-  const answers = ['本地果醬', '每瓶售 68 元，成本 24 元', '已有兩人預訂', '本週到市集擺檔', '我與一位工匠合作'];
-  for (let i = 0; i < answers.length; i++) await chrome.type('#q' + (i + 1), answers[i]);
+  ok('新草稿鍵保留第 1、8 題，毋須補選類別', await chrome.ev(`document.querySelector('#q1').value==='用 AI 幫傳統小生意'&&document.querySelector('#q8').value==='先了解實際需要'&&!!localStorage.getItem('startup-os-intake-draft-v2')&&!document.querySelector('input[name="biz-type"]')`));
+  // 選填全留空仍可送出；必填一題的原話不得被機械改成 Zero。
+  await chrome.type('#q8', '');
   await chrome.click('#intake-go'); await chrome.click('#intake-confirm');
-  const intake = await waitFor(async () => { const s = await status(base); return s.intake?.runId ? s.intake : null; });
-  const archived = await waitFor(() => fs.readdirSync(path.join(DATA, 'archive'), { recursive: true }).map(String).find(x => x.endsWith('-intake.md')) || null);
-  const shell = await (await fetch(base + '/api/shell')).json();
-  const biz = read(path.join(DATA, 'company', 'biz.json'));
-  ok('提交後寫入正確的 biz.json、intake.md 類別行及公司資料 bizType', biz.type === 'goods' && biz.other === '' && !!archived && fs.readFileSync(path.join(DATA, 'archive', archived), 'utf8').includes('生意類別：實體貨品') && shell.company.bizType === 'goods', { biz, archived, company: shell.company });
-  const sandbox = await waitFor(() => intake && fs.existsSync(path.join(DATA, 'sandbox', intake.runId, 'biz.md')) ? path.join(DATA, 'sandbox', intake.runId, 'biz.md') : null);
-  ok('AI 工作資料夾在共用位置取得 biz.md 用字表', !!sandbox && /類別：實體貨品/.test(fs.readFileSync(sandbox, 'utf8')) && /賣出件數/.test(fs.readFileSync(sandbox, 'utf8')), sandbox && fs.readFileSync(sandbox, 'utf8'));
+  const intake = await waitFor(async () => { const s = await status(base); return s.intake?.state === 'waiting' ? s.intake : null; });
+  ok('沒有類別、其餘留空可以送出；尚未擬草稿不寫 biz.json', !!intake && !fs.existsSync(path.join(DATA, 'company', 'biz.json')), intake);
+  write(path.join(DATA, 'fake-mode.txt'), 'intake:intake-platform\n');
+  const cert = await certify(base);
+  ok('設定完成後接續交資料', cert.certify?.state === 'passed');
+  const drafted = await waitFor(async () => { const s = await status(base); return s.intake?.state === 'done' ? s.intake : null; });
+  const pageFile = path.join(DATA, 'company', 'page.json');
+  const page = read(pageFile), biz = read(path.join(DATA, 'company', 'biz.json'));
+  ok('新草稿 biz.type 寫入 biz.json，來源為 ai', !!drafted && biz.type === 'platform' && biz.source === 'ai', { drafted, biz });
+  const archive = fs.readdirSync(path.join(DATA, 'archive'), { recursive: true }).map(String).find(f => f.endsWith('-intake.md'));
+  const intakeText = archive && fs.readFileSync(path.join(DATA, 'archive', archive), 'utf8');
+  ok('交資料封存有八題及原本 AI 生意描述，沒有虛構類別行', !!intakeText && intakeText.includes('用 AI 幫傳統小生意') && !intakeText.includes('生意類別：') && /"q8": ""/.test(intakeText), intakeText);
+  const reading = page.detail.reading;
+  const fields = reading.map(f => f.id);
+  // 即使資料指定這些欄位為決定題，首屏也要排除。
+  page.decide = { items: fields }; write(pageFile, page);
+  await chrome.go(base + '/proofread.html');
+  ok('生意模式十二欄存在詳情，biz.type、canvas.* 不進首屏決定題', reading.length === 12 && await chrome.ev(`${JSON.stringify(fields)}.every(id=>!document.getElementById('dq-'+id.replace(/[^a-zA-Z0-9_-]/g,'-')))&&document.body.innerText.includes(${JSON.stringify(lib.NAMES.ui.readingTitle)})`));
+  // 恢復預設決定題後，經正常確認介面產出的相同契約修改類別。
+  delete page.decide; write(pageFile, page);
+  const f = reading.find(x => x.plan === 'biz.type');
+  const machine = { format: 'startup-os.proofread-reply/0.1', confirmedAt: lib.localIso(), edits: [{ id: f.id, label: f.label, ai: f.value, value: lib.BIZ_TYPES.goods.label, founder: lib.BIZ_TYPES.goods.label }], order: page.path.milestones.map(m=>m.id), kinds: {}, stillMissing: [] };
+  const head = ['kind: proofread', 'ref: '+page.page.id, 'hash: '+lib.fnv(JSON.stringify(page)), 'rev: 1'];
+  const response = await fetch(base + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ kind: 'proofread', ref: page.page.id, text: head.join('\n')+'\n\n'+fence+'json\n'+JSON.stringify(machine)+'\n'+fence+'\n' }) });
+  const founderBiz = await waitFor(() => { const b = read(path.join(DATA, 'company', 'biz.json')); return b.source === 'founder' ? b : null; });
+  ok('確認公司概覽改類別，biz.json 改為 founder 來源', response.ok && founderBiz?.type === 'goods', founderBiz);
+  await waitFor(async () => !(await status(base)).busy);
   const helpRequest = await post(base, { kind: 'note', type: 'help', text: '請說明下一步。' });
-  const helpRun = await waitFor(async () => (await status(base)).runs?.find(r => r.kind === 'note' && r.noteType === 'help' && r.ref === helpRequest.j?.id) || null);
-  const helpBiz = await waitFor(() => helpRun && fs.existsSync(path.join(DATA, 'sandbox', helpRun.id, 'biz.md')) ? path.join(DATA, 'sandbox', helpRun.id, 'biz.md') : null);
-  ok('非交資料的求助工作同樣取得本次工作資料夾的 biz.md 用字表', helpRequest.code === 202 && !!helpRun && !!helpBiz && /類別：實體貨品/.test(fs.readFileSync(helpBiz, 'utf8')), { request: helpRequest, run: helpRun, file: helpBiz });
-
-  await waitFor(async () => !(await status(base)).busy, 10000);
-  seedCompany(DATA, PROTO);
-  const confirmedPage = read(path.join(DATA, 'company', 'page.json'));
-  const confirmedState = read(path.join(DATA, 'ledger', 'state.json'));
-  confirmedState.intake = { ...(confirmedState.intake || {}), confirmedAt: new Date().toISOString() };
-  write(path.join(DATA, 'ledger', 'state.json'), confirmedState);
-  write(path.join(DATA, 'ledger', 'confirmed.json'), { company: confirmedPage.company.name, pageId: confirmedPage.page.id, values: {}, order: confirmedPage.path.milestones.map(m => m.id), kinds: {} });
-  await certifyDirect(DATA, PROTO, ADAPTER);
+  const helpRun = await waitFor(async () => (await status(base)).runs?.find(r => r.kind === 'note' && r.ref === helpRequest.j?.id && ['done','failed'].includes(r.state)) || null);
+  const helpBiz = helpRun && path.join(DATA, 'sandbox', helpRun.id, 'biz.md');
+  ok('非交資料的求助工作同樣取得 biz.md 用字表', helpRequest.code === 202 && !!helpBiz && fs.existsSync(helpBiz) && /實體貨品/.test(fs.readFileSync(helpBiz, 'utf8')), helpRun);
 
   seedCompany(OLD_DATA, PROTO);
   const oldBase = start(OLD_DATA, PORT + 3);
@@ -109,7 +103,15 @@ try {
   ok('沒有 biz.json 的舊資料不會在 AI 工作資料夾加入 biz.md', !!oldSandbox && !fs.existsSync(path.join(oldSandbox, 'biz.md')), oldSandbox);
   const prefill = await post(oldBase, { kind: 'prefill', bizType: 'goods', files: [{ name: '貨品資料.md', data: Buffer.from('# 貨品\n果醬').toString('base64') }] });
   const prefillSandbox = await waitFor(() => fs.readdirSync(path.join(OLD_DATA, 'sandbox')).map(id => path.join(OLD_DATA, 'sandbox', id)).find(dir => fs.existsSync(path.join(dir, 'questions.json')) && fs.existsSync(path.join(dir, 'biz.md')) && /實體貨品/.test(fs.readFileSync(path.join(dir, 'biz.md'), 'utf8'))) || null);
-  ok('文件預填按已選類別寫 questions.json，未選類別才用通用題目', prefill.code === 202 && !!prefillSandbox && read(path.join(prefillSandbox, 'questions.json'))[0].ask.includes('賣甚麼貨品'), prefillSandbox && read(path.join(prefillSandbox, 'questions.json')));
+  ok('文件預填八題保持通用問法，同時提供已有類別用字表', prefill.code === 202 && !!prefillSandbox && read(path.join(prefillSandbox, 'questions.json'))[0].ask === lib.INTAKE_QUESTIONS[0].ask, prefillSandbox && read(path.join(prefillSandbox, 'questions.json')));
+
+  await waitFor(async () => !(await status(oldBase)).busy);
+  const savedBiz = '{"type":"service","other":"舊值","source":"founder"}';
+  write(path.join(OLD_DATA, 'company', 'biz.json'), savedBiz);
+  await certifyDirect(OLD_DATA, PROTO, ADAPTER);
+  const redraft = await post(oldBase, { bizType: '', fields: { q1: '重新整理測試生意' }, files: [] });
+  const redrafted = await waitFor(async () => { const s=await status(oldBase); return s.intake?.id===redraft.j?.id && s.intake.state==='done'; });
+  ok('空白類別可送出；新草稿推斷不覆寫已有 biz.json', redraft.code === 202 && !!redrafted && fs.readFileSync(path.join(OLD_DATA, 'company', 'biz.json'), 'utf8') === savedBiz, redraft);
 
   const weekState = { schemaVersion: 1, tasks: [], events: [], company: { assumptions: [{ id: 'h1', text: '服務對象會參與', grade: 'guess', status: 'open' }] }, intake: { confirmedAt: '2000-01-01T00:00:00+00:00', answers: {} }, interviews: { nextOn: '2000-01-01', applied: {} } };
   write(path.join(WEEK_DATA, 'ledger', 'state.json'), weekState);
@@ -157,7 +159,7 @@ try {
   const grade = afterResults.company.assumptions[0].grade;
   const record = path.join(WEEK_DATA, 'work', 'interviews', servicePack.pack.rhythm.on + '.md');
   ok('每週成果答案寫入事件與訪問紀錄，才完成訪問並推進下次日期，不改變證據級', !!resultEvent && afterResults.interviews.lastFor === servicePack.pack.rhythm.on && afterResults.interviews.nextOn !== servicePack.pack.rhythm.on && grade === 'guess' && fs.existsSync(record) && fs.readFileSync(record, 'utf8').includes('本週完成 3 次服務，收到 900 元'), { resultEvent, interviews: afterResults.interviews, grade, record });
-  for (const type of ['goods', 'online', 'nonprofit', 'other']) {
+  for (const type of ['goods', 'online', 'platform', 'nonprofit', 'other']) {
     const placed = await placeWeek(type);
     ok(`每週訪問的首題按 ${type} 類別設定`, placed?.pack.questions[0]?.ask === resultAsk[type], placed?.pack.questions[0]);
     if (placed) write(path.join(WEEK_DATA, 'ledger', 'answers', placed.pack.id + '.json'), { answers: Object.fromEntries(placed.pack.questions.map(q => [q.id, { value: '沒有' }])) });

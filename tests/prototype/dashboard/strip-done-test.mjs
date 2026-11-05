@@ -81,9 +81,9 @@ try {
   ok('外殼套用：小旗留喺完成咗嘅站、標待更新；同一確認包加咗「下一個對外動作」題（AI 預填下一站嘅事件）', sA.company.nextExternalAction.milestoneId === 'm1' && sA.company.nextExternalAction.pendingUpdate === true && packOf(pk.id).questions.some(q => q.id === 'nad' && q.options.some(o => o.apply && o.apply.op === 'setNextExternalAction' && o.apply.milestoneId === 'm4')), { nea: sA.company.nextExternalAction, qs: packOf(pk.id).questions.map(q => q.id) });
 
   /* 畫面：三級慶祝寫明下一站；約 6 秒後壓縮條 */
-  const bn = await waitFor(async () => { const x = await strip(); return x.bn3 ? x : null; }, 12000);
+  const bn = await waitFor(() => c.ev(`document.querySelector('#cz-cele-stage')?.textContent||document.querySelector('#cz-cele-card')?.textContent||''`), 12000);
   await sleep(1300); await c.shot(path.join(OUT, 'done-celebration-1440.png'));
-  ok('三級慶祝：寫明進入下一站「牌照保險」', bn && bn.bn3.includes(msShort('m4')), bn && bn.bn3);
+  ok('真實事件完成站點：慶祝寫明進入下一站「牌照保險」', bn && bn.includes(msShort('m4')), bn);
   await sleep(Math.max(0, 6000 - (Date.now() - tDone)));
   const s6 = await strip();
   await c.shot(path.join(OUT, 'done-after-6s-1440.png'));

@@ -1,6 +1,6 @@
 ---
 name: dashboard
-description: "營運監察台（CrewZero 公司日常運作頁面：業務路徑圖、待你處理、未來兩星期日程、工作看板、時間線、AI 團隊現況）。Use when the founder asks to open 營運監察台, dashboard, 看板, 時間線 or 日程 (e.g. 「打開營運監察台」, /crewzero:dashboard in Claude Code, $crewzero:dashboard in Codex, /dashboard in Antigravity), or wants to see the fictional demo (「睇示範」). Decisions and answers still happen on Founder Desk."
+description: "營運監察台（CrewZero 公司日常運作頁面：業務路徑圖、待你處理、未來兩星期日程、工作看板、時間線、Zero 團隊現況）。Use when the founder asks to open 營運監察台, dashboard, 看板, 時間線 or 日程 (e.g. 「打開營運監察台」, /crewzero:dashboard in Claude Code, $crewzero:dashboard in Codex, /dashboard in Antigravity), or wants to see the fictional demo (「睇示範」). Decisions and answers still happen on Founder Desk."
 ---
 
 <!--
@@ -8,7 +8,7 @@ CrewZero 插件入面嘅營運監察台指令（只係轉接層，核心係項�
 同 Founder Desk 同一個本機伺服器、同一份資料；監察台只睇同跳轉，所有作答都喺 Founder Desk。呢個檔唔寫任何本機絕對路徑。
 -->
 
-營運監察台係創辦人睇公司日常運作嘅頁面：生意行到邊、AI 團隊做緊乜、邊度卡住、要邊個決定、未來兩星期有乜到期。監察台冇作答框；要創辦人決定嘅事一按就跳去 Founder Desk。
+營運監察台係創辦人睇公司日常運作嘅頁面：生意行到邊、Zero 團隊做緊乜、邊度卡住、要邊個決定、未來兩星期有乜到期。監察台冇作答框；要創辦人決定嘅事一按就跳去 Founder Desk。
 
 ## 先搵安裝位置
 

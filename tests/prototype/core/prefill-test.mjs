@@ -26,7 +26,7 @@ const norm = s => String(s || '').replace(/\s+/g, '');
 const PLAN = '# 計劃書\n\n我們替社區洗衣店收集和配送衣物。\n\n客戶按月付款，每月最少收集四次。\n';
 const MEET = '與兩間洗衣店店主會面，兩間都願意試用一個月。\n';
 const DOCS = [{ name: '計劃書.md', data: b64(PLAN) }, { name: '會議紀錄.txt', data: b64(MEET) }, { name: '簡報.pdf', data: Buffer.from('%PDF-1.4 fake binary').toString('base64') }];
-const fields = o => { const f = {}; for (let n = 1; n <= 12; n++) f['q' + n] = o['q' + n] || ''; return f; };
+const fields = o => { const f = {}; for (let n = 1; n <= 8; n++) f['q' + n] = o['q' + n] || ''; return f; };
 const prefillDone = id => waitFor(async () => { const r = await get('/api/prefill?id=' + id); return r.j && r.j.state !== 'running' ? r.j : null; });
 const scan = (dir, out) => spawnSync(process.execPath, [path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'prefill-scan.mjs'), dir, ...(out ? [out] : [])], { encoding: 'utf8' });
 
@@ -80,12 +80,12 @@ try {
   const mc = JSON.parse((md.match(/```json\s*([\s\S]*?)```\s*$/) || [, '{}'])[1]);
   const pv = mc.provenance || {};
   ok('來源紀錄：第 1、5 題係「你確認的文件原句」（已確認、連出處）', pv.q1 && pv.q1.kind === 'quote' && pv.q1.confirmed && pv.q1.source === A.q1.source && pv.q5.kind === 'quote' && pv.q5.confirmed, pv);
-  ok('來源紀錄：第 2 題係「你認同的 AI 建議」，唔係原句', pv.q2 && pv.q2.kind === 'adopted' && pv.q2.label === 'inferred' && pv.q2.confirmed, pv.q2);
+  ok('來源紀錄：第 2 題係「你認同的 Zero 建議」，唔係原句', pv.q2 && pv.q2.kind === 'adopted' && pv.q2.label === 'inferred' && pv.q2.confirmed, pv.q2);
   ok('來源紀錄：自己改寫嘅第 3 題先係「你寫的」', pv.q3 && pv.q3.kind === 'founder', pv.q3);
   ok('來源紀錄：抄咗預填去第 4 題，都唔記成「你寫的」，亦唔記「已確認」', pv.q4 && pv.q4.kind === 'adopted' && pv.q4.moved === true && !pv.q4.confirmed, pv.q4);
-  ok('交 AI 嘅檔案每題下面寫明來源（搬題嗰條照實寫）', md.includes('（來源：你確認的文件原句，出自《' + A.q1.source + '》') && md.includes('（來源：你認同的 AI 建議') && md.includes('（來源：你寫的）') && md.includes('（來源：AI 按文件預填的句子，由另一題搬來'), md.slice(0, 900));
+  ok('交 AI 嘅檔案每題下面寫明來源（搬題嗰條照實寫）', md.includes('（來源：你確認的文件原句，出自《' + A.q1.source + '》') && md.includes('（來源：你認同的 Zero 建議') && md.includes('（來源：你寫的）') && md.includes('（來源：Zero 按文件預填的句子，由另一題搬來'), md.slice(0, 900));
   const sbIntake = fs.readdirSync(path.join(DATA, 'sandbox')).map(d => path.join(DATA, 'sandbox', d, 'task.md')).filter(f => fs.existsSync(f)).map(f => fs.readFileSync(f, 'utf8')).find(t => /^# 擬公司概覽/m.test(t));
-  ok('擬公司概覽嘅工作說明：AI 推斷唔可以升做文件寫明', sbIntake && /只可以當 AI 推斷/.test(sbIntake), (sbIntake || '').slice(0, 300));
+  ok('擬公司概覽嘅工作說明：AI 推斷唔可以升做文件寫明', sbIntake && /只可以當 Zero 推斷/.test(sbIntake), (sbIntake || '').slice(0, 300));
   ok('擬公司概覽嘅工作說明第一行寫今日日期，並要對照文件日期', sbIntake && sbIntake.startsWith('> 今日日期：' + ymd(new Date())) && /3b./.test(sbIntake), (sbIntake || '').slice(0, 160));
 
   // 讀唔到文字嘅文件：標「未能核對原句」，永不升做原句
@@ -135,7 +135,7 @@ try {
   ok('掃描：「你原話」標籤零違規', s1.status === 0 && /違規 0 項/.test(s1.stdout), s1.stdout + s1.stderr);
   const T = path.join(OUT, 'tamper'); fs.cpSync(DATA, T, { recursive: true });
   const tf = path.join(T, 'archive', mdFile);
-  fs.writeFileSync(tf, fs.readFileSync(tf, 'utf8').replace('"kind": "adopted",\n      "label": "inferred"', '"kind": "founder",\n      "label": "inferred"').replace(/（來源：你認同的 AI 建議[^\n]*/, '（來源：你寫的）'));
+  fs.writeFileSync(tf, fs.readFileSync(tf, 'utf8').replace('"kind": "adopted",\n      "label": "inferred"', '"kind": "founder",\n      "label": "inferred"').replace(/（來源：你認同的 Zero 建議[^\n]*/, '（來源：你寫的）'));
   const pf = path.join(T, 'ledger', 'prefill', id + '.json'), pj = JSON.parse(fs.readFileSync(pf, 'utf8'));
   pj.answers.q3.label = 'quote'; fs.writeFileSync(pf, JSON.stringify(pj));
   const s2 = scan(T);

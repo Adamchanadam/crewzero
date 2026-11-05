@@ -26,7 +26,7 @@ window.STARTUP_OS_PAGE = {
           { "id": "m1-d2", "label": "2", "value": "農場主本人決定，一次會面可簽", "origin": "ai" },
           { "id": "m1-d3", "label": "3", "value": "一頁簡介、採購量同付款條款草案", "origin": "ai" },
           { "id": "m1-d4", "label": "4", "value": "要求獨家或供應量不穩", "origin": "ai" },
-          { "id": "m1-d5", "label": "5", "value": "三個農場來自本季目標", "origin": "doc" }
+          { "id": "m1-d5", "label": "5", "value": "三個農場來自目前目標", "origin": "doc" }
         ] },
       { "id": "m2", "short": "餐廳試單", "why": "有農場先試單。",
         "event": { "id": "m2-e", "label": "第 2 站：真事", "value": "五間餐廳各完成一次試單並提供回饋", "origin": "ai" },

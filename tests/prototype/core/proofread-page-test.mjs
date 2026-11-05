@@ -2,9 +2,12 @@
 // 用法：node cdp-test2.mjs <chrome.exe> <輸出資料夾> <proofread.html file URL> <第二間公司資料 file URL>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const [CHROME, OUT, PAGE, ALT] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(path.dirname(fileURLToPath(new URL(PAGE))), 'names.js'));
 const DL = path.join(OUT, 'downloads');
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(DL, { recursive: true });
@@ -85,7 +88,7 @@ try {
   await metrics(1440, 900, false);
   await fresh(PAGE);
   ok('載入公司名（虛構樣本）', (await text('h1')) === '從田間到餐桌');
-  ok('頂部大掣「採用 AI 建議並開始」', (await text('#go-main')) === '採用 AI 建議並開始');
+  ok('頂部大掣「採用 AI 建議並開始」', (await text('#go-main')) === N.ui.adoptStart);
   ok('只有 3 張「要你決定」卡', (await ev(`document.querySelectorAll('.dq').length`)) === 3);
   ok('三張卡係規劃書 3.1 嘅三條（而家去到邊、下一步、本季目標）', await ev(`['dq-status','dq-next-action','dq-goal-quarter'].every(i=>document.getElementById(i))`));
   ok('進度：要你決定：已答 0／3', (await prog()) === '待決事項：已答 0／3', await prog());
@@ -103,7 +106,7 @@ try {
   await click('#dq-next-action > .opt:nth-of-type(2)');
   ok('揀選項即算答咗', (await prog()) === '待決事項：已答 1／3');
   ok('頂部說明跟住下一步改', (await text('.hero-p')).includes('先約何師傅'));
-  ok('大掣變「其餘採用 AI 建議並開始」', (await text('#go-main')) === '其餘採用 AI 建議並開始');
+  ok('大掣變「其餘採用 AI 建議並開始」', (await text('#go-main')) === N.ui.adoptRestStart);
   // 卡 1：而家去到邊，撳一項再揀程度
   await click('#dq-status .chip');
   ok('撳咗嘅項目出程度選擇', (await ev(`document.querySelectorAll('#dq-status .grade-row').length`)) === 1);
@@ -147,16 +150,16 @@ try {
   // 預覽
   await click('#go-main');
   const sum = await text('.m-sum');
-  ok('預覽四行：下一步、目標、路線、AI 權限', ['下一步', '本季目標', '路線'].every(x => sum.includes(x)) && (sum.includes('AI 可以自己做到幾盡') || sum.includes('AI 可自行處理的事')), sum);
+  ok('預覽四行：下一步、目標、路線、AI 權限', ['下一步', N.field.G1, '路線'].every(x => sum.includes(x)) && sum.includes(N.field.G7), sum);
   ok('預覽講明 AI 權限一定先問你', sum.includes('必須先詢問你'));
-  ok('離線時預覽講明未連上 AI', (await text('.modal .warn')).includes('未連接 AI'));
+  ok('離線時預覽講明未連上 AI', (await text('.modal .warn')).includes('未連接 CrewZero'));
   const pre = await ev(`document.querySelector('pre.file').textContent`);
   ok('回覆檔：kind proofread、記低次序改動同日子', pre.startsWith('kind: proofread') && pre.includes('"orderChanged": true') && pre.includes('"value": "2026-11-30"'));
   await shot('d3-modal.png');
   await click('#do-confirm');
   await sleep(1200);
   ok('離線下載咗回覆檔', downloads().length === 1, downloads());
-  ok('確認後提示（離線，AI 未收到）', (await text('.notice')).includes('AI 尚未收到'));
+  ok('確認後提示（離線，AI 未收到）', (await text('.notice')).includes('Zero 尚未收到'));
   await nav(PAGE);
   ok('重開保留答案', (await prog()) === '✓ 待決事項已全部作答');
 

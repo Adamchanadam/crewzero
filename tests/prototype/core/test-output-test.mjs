@@ -16,7 +16,9 @@ const ok = (name, pass, info) => { results.push({ name, pass: !!pass, info }); c
 const test = async (name, fn) => { try { await fn(); ok(name, true); } catch (e) { ok(name, false, e && e.stack || e); } };
 const hash = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const write = (file, text = 'x') => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
-const make = name => { const dir = path.join(OUT, 'cases', name); fs.mkdirSync(dir, { recursive: true }); return dir; };
+fs.mkdirSync(OUT, { recursive: true });
+const CASES = fs.mkdtempSync(path.join(OUT, 'cases-'));
+const make = name => { const dir = path.join(CASES, name); fs.mkdirSync(dir, { recursive: true }); return dir; };
 const isWin = process.platform === 'win32';
 const link = (target, at) => fs.symlinkSync(target, at, isWin ? 'junction' : 'dir');
 const real = p => fs.realpathSync.native ? fs.realpathSync.native(p) : fs.realpathSync(p);
@@ -36,7 +38,7 @@ await test('junction 只撤走自己，哨兵唔會郁', () => {
 });
 
 await test('boundary 外同指去外面嘅 junction 唔會刪外面', () => {
-  const root = make('outside'), outside = path.join(OUT, 'cases', 'outside-sentinel'), inside = path.join(root, 'inside'), alias = path.join(root, 'alias');
+  const root = make('outside'), outside = path.join(CASES, 'outside-sentinel'), inside = path.join(root, 'inside'), alias = path.join(root, 'alias');
   write(path.join(outside, 'keep.txt'), 'keep'); write(path.join(inside, 'inside.txt'), 'inside');
   const before = hash(path.join(outside, 'keep.txt'));
   let threw = false; try { safeRemove(outside, root); } catch { threw = true; }
@@ -67,7 +69,7 @@ await test('未標記、搬咗標記、錯工具同受保護名全部原封不�
 });
 
 await test('候選本身係 junction 時唔會當舊輸出', () => {
-  const root = make('junction-candidate'), realOut = path.join(OUT, 'cases', 'real-candidate'), alias = path.join(root, 'alias'), current = path.join(root, 'current');
+  const root = make('junction-candidate'), realOut = path.join(CASES, 'real-candidate'), alias = path.join(root, 'alias'), current = path.join(root, 'current');
   mark(realOut); write(path.join(realOut, 'keep.txt'), 'keep'); mark(current);
   const before = hash(path.join(realOut, 'keep.txt'));
   try { link(realOut, alias); } catch (e) { throw new Error('建 link 失敗：' + e.message); }

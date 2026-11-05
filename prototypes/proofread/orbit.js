@@ -54,7 +54,7 @@
   function poseOf(d) { var work = ((d.meta && d.meta.workLevel) || 0) > 0; return work ? 'working' : d.counts && d.counts.pending > 0 && d.connected !== false ? 'salute' : d.autoStopped ? 'sitting' : 'standing'; }
   function motionOK() { return !S.paused && !S.reduced && !document.hidden; }
   function ghost(o) { var to = S.pLead || S.pAI; if (!to) return; var g = clay('member', 'o-ghost'); g.style.transform = 'translate(' + o.x.toFixed(1) + 'px,' + o.y.toFixed(1) + 'px)'; S.stage.append(g); requestAnimationFrame(function () { requestAnimationFrame(function () { g.style.transform = 'translate(' + to.x.toFixed(1) + 'px,' + to.y.toFixed(1) + 'px) scale(.35)'; g.style.opacity = '0'; }); }); setTimeout(function () { g.remove(); }, 450); }
-  function hostCode(s) { return s.hostShort || (s.host ? String(s.host).slice(0, 2).toUpperCase() : 'AI'); }
+  function hostCode(s) { return s.hostShort || (s.host ? String(s.host).slice(0, 2).toUpperCase() : 'AI 工具'); }
   function stateName(st) { var n = S.n; return n['act_' + (st === 'stopped' ? 'blocked' : st)] || n['act_' + st] || st; }
   // 任務編號：畫面寫「任務 n」（n 由頁面按看板次序給，唔寫內部代號）
   function taskLabel(id) { var n = S.n, no = S.taskNo && S.taskNo[id]; return (n.tasksL || '任務') + ' ' + (no != null ? no : String(id).replace(/^t/, '')); }
@@ -71,9 +71,9 @@
     var g = el('div', 'o-gauge');
     var r1 = el('div', 'grow'); r1.append(el('span', null, n.workLevelL || '工作強度'), el('b', null, lv + ' / 3')); g.append(r1);
     var bars = el('div', 'gbars'); for (var i = 0; i < 3; i++) { var b = el('i'); if (i < lv) b.className = 'on'; bars.append(b); } g.append(bars);
-    var r2 = el('div', 'grow'); r2.append(el('span', null, (n.aiCore || 'AI 團隊') + ' ' + (n.sessionsL || 'AI 對話')), el('b', null, (d.meta.workingSessions || 0) + ' / ' + (d.sessions || []).length)); g.append(r2);
+    var r2 = el('div', 'grow'); r2.append(el('span', null, (n.aiCore || 'Zero 團隊') + ' ' + (n.sessionsL || 'AI 對話')), el('b', null, (d.meta.workingSessions || 0) + ' / ' + (d.sessions || []).length)); g.append(r2);
     var r3 = el('div', 'grow'); r3.append(el('span', null, n.subagentsL || '協助的助手'), el('b', null, String(d.meta.activeSubagents || 0))); g.append(r3);
-    g.append(el('div', 'idle-note', d.connected === false ? (n.offlineNote || '連線中斷：保留最後紀錄，不代表即時工作。') : (n.idleNote || '目前沒有 AI 在工作：畫面靜止，不會假裝忙碌。')));
+    g.append(el('div', 'idle-note', d.connected === false ? (n.offlineNote || '連線中斷：保留最後紀錄，不代表即時工作。') : (n.idleNote || '目前沒有 Zero 在工作。')));
     st.append(g); S.gauge = g;
     // 創辦人決定核心（左）
     var human = el('div', 'o-human' + (d.counts.pending > 0 && d.connected !== false ? ' alert' : '')); human.dataset.node = 'human';
@@ -97,10 +97,10 @@
     var engine = el('div', 'o-engine'); engine.append(clay('workbench', 'o-bench'), el('i', 'floor'));
     // 統籌成員姿勢：有真實工作＝工作；冇工作有待決＝敬禮等指示；自動停＝坐低等；其餘＝企定等。換姿勢時定格咁跳一下
     var pose = poseOf(d); var lead = clay('lead-' + pose, 'o-lead'); lead.dataset.pose = pose; engine.append(lead); engine.title = n['clayLead_' + pose] || '';
-    if (S.prevPose && S.prevPose !== pose && motionOK()) lead.classList.add('swap'); S.prevPose = pose; var cube = el('div', 'cube'); ['front', 'back', 'right', 'left', 'topf', 'bottomf'].forEach(function (f) { var face = el('span', 'face ' + f, f === 'front' ? (d.initials || 'AI') : f === 'right' ? '↗' : ''); cube.append(face); }); cube.append(el('i', 'cube-core')); engine.append(cube); core.append(engine);
+    if (S.prevPose && S.prevPose !== pose && motionOK()) lead.classList.add('swap'); S.prevPose = pose; var cube = el('div', 'cube'); ['front', 'back', 'right', 'left', 'topf', 'bottomf'].forEach(function (f) { var face = el('span', 'face ' + f, f === 'front' ? (d.initials || 'Z') : f === 'right' ? '↗' : ''); cube.append(face); }); cube.append(el('i', 'cube-core')); engine.append(cube); core.append(engine);
     core.append(el('span', 'o-eyebrow', n.eyebrowAI || '統籌'));
-    var idn = el('div', 'o-ident'); var mark = el('span', 'o-mark', (d.initials || 'AI').slice(0, 2)); idn.append(mark, el('b', null, n.aiCore || 'AI 團隊')); core.append(idn);
-    core.append(el('span', 'o-status', d.connected === false ? (n.offlineStatus || '回報待核實 · 保留最後紀錄') : d.scope ? (n.scopeStatus || '此站任務：進行中 {a} · 等待 {b} · 已交付 {c}').replace('{a}', d.scope.active || 0).replace('{b}', d.scope.waiting || 0).replace('{c}', d.scope.done || 0) : work ? (n.workingNow || '{n} 個 AI 對話工作中，另有 {m} 個助手協助').replace('{n}', d.meta.workingSessions).replace('{m}', d.meta.activeSubagents) : (n.noWorkPlain || '目前沒有 AI 在工作')));
+    var idn = el('div', 'o-ident'); var mark = el('span', 'o-mark', (d.initials || 'Z').slice(0, 2)); idn.append(mark, el('b', null, n.aiCore || 'Zero 團隊')); core.append(idn);
+    core.append(el('span', 'o-status', d.connected === false ? (n.offlineStatus || '回報待核實 · 保留最後紀錄') : d.scope ? (n.scopeStatus || '此站任務：進行中 {a} · 等待 {b} · 已交付 {c}').replace('{a}', d.scope.active || 0).replace('{b}', d.scope.waiting || 0).replace('{c}', d.scope.done || 0) : work ? (n.workingNow || '{n} 個 AI 對話工作中，另有 {m} 個助手協助').replace('{n}', d.meta.workingSessions).replace('{m}', d.meta.activeSubagents) : (n.noWorkPlain || '目前沒有 Zero 在工作')));
     st.append(core); S.core = core;
     // 會話節點（≤ 6，溢出 +n）
     var list = (d.sessions || []).slice(0, 6), more = (d.sessions || []).length - list.length;
@@ -148,7 +148,7 @@
     // 底部狀態行
     var foot = el('div', 'o-foot'); var route = el('span', 'route', 'view / ' + (n.orbit || '運作環')); route.append(el('i', 'cursor')); foot.append(route);
     var ws = S.nodes.filter(function (x) { return x.working; }), first = ws.map(function (x) { return x.taskIds[0]; }).filter(Boolean)[0], ft = first ? ((d.tasks || []).filter(function (t) { return t.id === first; })[0] || {}).title || '' : '';
-    foot.append(el('span', 'focus', d.connected === false ? (n.offlineFocus || '連線中斷 · 保留最後紀錄') : lv ? (n.act_working || '工作中') + ' · ' + (first ? taskLabel(first) + ' ' + ft : ws.length + ' ' + (n.unlinkedFocus || '個 AI 對話在做未登記的工作')) : (n.idleFocus || '目前沒有 AI 在工作')));
+    foot.append(el('span', 'focus', d.connected === false ? (n.offlineFocus || '連線中斷 · 保留最後紀錄') : lv ? (n.act_working || '工作中') + ' · ' + (first ? taskLabel(first) + ' ' + ft : ws.length + ' ' + (n.unlinkedFocus || '個 AI 對話在做未登記的工作')) : (n.idleFocus || '目前沒有 Zero 在工作')));
     var hb = el('span', 'hb'); hb.setAttribute('data-hb', '1'); hb.textContent = '讀回 0 秒前'; var lp = el('span', 'lp'); var l1 = el('b', null, '0'); l1.setAttribute('data-lit', '1'); var l2 = el('b', null, '0'); l2.setAttribute('data-pt', '1'); lp.append(document.createTextNode((n.litL || '工作連結') + ' '), l1, document.createTextNode(' · ' + (n.particlesL || '工作提示') + ' '), l2); foot.append(hb, lp, el('span', 'r', (n.taskUpdated || '任務更新') + ' ' + (d.updatedAt || '—')));
     st.append(foot); S.foot = foot;
   }
@@ -303,7 +303,7 @@
     S.ripples = S.ripples.filter(function (r) { return r.until > now; }).concat([{ id: spec.from, start: now, until: now + 1150, color: color }, { id: spec.from, start: now + 160, until: now + 1310, color: color }, { id: spec.rippleTarget || target, start: now + dur, until: now + dur + 1150, color: color }]).slice(-12);
     if (text && !S.paused && !S.narrow && S.fx) addFloat(anchor(spec.from), text, spec.direction === 'human-to-ai' || spec.direction === 'inbox-to-ai');
     S.cv.dataset.lastPulse = spec.direction || 'unknown';
-    if (spec.direction === 'human-to-ai') { var dn = S.human.querySelector('.o-hnode'); if (dn) flash(dn, 'lit', 1200); S.humanPulseUntil = now + 1500; S.humanLabel = S.n.humanHandoff || '已收到你的決定 · 交 AI 團隊'; S.humanStatus.textContent = S.humanLabel; }
+    if (spec.direction === 'human-to-ai') { var dn = S.human.querySelector('.o-hnode'); if (dn) flash(dn, 'lit', 1200); S.humanPulseUntil = now + 1500; S.humanLabel = S.n.humanHandoff || '已收到你的決定 · 交 Zero 團隊'; S.humanStatus.textContent = S.humanLabel; }
     if (spec.onArrive) setTimeout(spec.onArrive, dur);
     if (spec.from.indexOf('session:') === 0) { var nd = S.nodes.filter(function (x) { return 'session:' + x.key === spec.from; })[0]; if (nd) flash(nd.el, 'recent', 320); }
   }

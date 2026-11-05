@@ -1,0 +1,47 @@
+// 純函數契約：不啟動伺服器、瀏覽器或 AI；API／頁面與每週成果在 biztype-test。
+// node intake-v2-test.mjs <原型資料夾> <輸出資料夾>
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+const [PROTO] = process.argv.slice(2);
+const A = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+const C = await import(pathToFileURL(path.join(PROTO, 'company-page-check.mjs')).href);
+const P = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs')).href);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
+const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
+const keys = Array.from({ length: 8 }, (_, i) => 'q' + (i + 1));
+ok('八題依序，只有第 1 題必填', A.INTAKE_QUESTIONS.length === 8 && A.INTAKE_QUESTIONS.every((q, i) => q.n === i + 1 && q.required === (i === 0)));
+ok('六類別包含 platform，拒絕繼承屬性', Object.keys(A.BIZ_TYPES).join() === 'service,goods,online,platform,nonprofit,other' && !A.BIZ_TYPES.constructor && A.BIZ_TYPES.platform.label === '平台或配對');
+for (const type of ['', ...Object.keys(A.BIZ_TYPES)]) {
+  const qs = A.intakeQuestions(type);
+  ok(`類別 ${type || '未選'} 的題目通用，回傳副本`, JSON.stringify(qs) === JSON.stringify(A.INTAKE_QUESTIONS) && qs !== A.INTAKE_QUESTIONS && qs.every((q,i) => q !== A.INTAKE_QUESTIONS[i]));
+}
+ok('預填範圍為 q1 至 q8', JSON.stringify(P.PREFILL_Q) === JSON.stringify(keys));
+const answers = Object.fromEntries(keys.map(q => [q, { text: q + ' 的建議', quote: false, source: '討論', at: '' }]));
+const checked = P.checkPrefill({ answers }, []);
+ok('八題預填全部保留為推斷，不能升為原句', checked.ok && Object.keys(checked.answers).join() === keys.join() && Object.values(checked.answers).every(a => a.label === 'inferred'), checked);
+const raw = JSON.parse(fs.readFileSync(path.join(PROTO, 'fixtures', 'example-company-page.json'), 'utf8'));
+const expected = ['biz.type', 'canvas.customer', 'canvas.problem', 'canvas.alternatives', 'canvas.value', 'canvas.channel', 'canvas.relationship', 'canvas.revenue', 'canvas.resources', 'canvas.activities', 'canvas.partners', 'canvas.cost'];
+const legacy = structuredClone(raw); legacy.detail ||= {}; delete legacy.detail.reading;
+const old = C.checkCompanyPage(legacy, { id: 'legacy-reading', revision: 1 });
+ok('舊公司概覽核對不補 reading 欄', old.ok && !old.page.detail.reading, old.errors);
+const fresh = C.checkCompanyPage(structuredClone(legacy), { id: 'new-reading', revision: 1, newDraft: true });
+const reading = fresh.page?.detail?.reading || [];
+ok('新草稿補齊十二欄，次序固定', fresh.ok && reading.map(f => f.plan).join() === expected.join() && C.READING_FIELDS.map(([p])=>p).join() === expected.join(), fresh.errors || reading);
+ok('生意模式標題', N.ui.readingTitle === '生意模式一覽');
+ok('生意類型六個選項，其他十一欄保留待補語義', reading[0]?.options?.map(o=>o.text).join() === Object.values(A.BIZ_TYPES).map(b=>b.label).join() && reading.slice(1).every(f=>f.value === '待你補充' && f.origin === 'missing'), reading);
+const supplied = structuredClone(legacy);
+supplied.detail.reading = [{ id: 'given-customer', plan: 'canvas.customer', label: '舊名', value: '本地店主', origin: 'founder', kind: 'text' }, { id: 'given-biz', plan: 'biz.type', label: '類別', value: A.BIZ_TYPES.platform.label, origin: 'ai' }];
+const normalized = C.checkCompanyPage(supplied, { newDraft: true }).page;
+ok('補欄保留既有內容及編號，平台推斷不被換走', normalized.detail.reading[0].value === A.BIZ_TYPES.platform.label && normalized.detail.reading[1].value === '本地店主' && normalized.detail.reading[1].id === 'given-customer');
+const again = C.checkCompanyPage(structuredClone(normalized), { newDraft: true }).page;
+ok('重複核對不新增重複欄位', again.detail.reading.map(f=>f.id).join() === normalized.detail.reading.map(f=>f.id).join() && new Set(again.detail.reading.map(f=>f.id)).size === 12);
+const template = fs.readFileSync(path.join(PROTO, 'startup-background-template.md'), 'utf8');
+ok('範本與八題一致，每題有答案位置', A.INTAKE_QUESTIONS.every(q => template.includes(`${q.n}. ${q.ask}`)) && (template.match(/^你的答案：/gm) || []).length === 8);
+ok('創辦人本人的規則：經驗入關鍵資源，不算生意證據', /只有你一人可留空；也可以寫你自己的相關經驗或人脈/.test(template) && A.INTAKE_QUESTIONS[6].hint.includes('相關經驗') && fs.readFileSync(path.join(PROTO, 'ai-intake.md'), 'utf8').includes('創辦人能親自做到的事') && /不是生意證據/.test(fs.readFileSync(path.join(PROTO, 'ai-plain.md'), 'utf8')) && /創辦人做過或見過/.test(fs.readFileSync(path.join(PROTO, 'ai-plain.md'), 'utf8')));
+ok('範本有給其他 AI 工具的指示', /給協助填寫的 AI/.test(template) && /不可估計或虛構/.test(template));
+ok('範本不含內部代號', !/\bG\d+\b|canvas\.|biz\.type|plan:/.test(template));
+for (const r of results) console.log((r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : '\n' + JSON.stringify(r.info ?? null)));
+console.log(`${results.filter(r=>r.pass).length}/${results.length} passed`);
+process.exitCode = results.every(r=>r.pass) ? 0 : 1;

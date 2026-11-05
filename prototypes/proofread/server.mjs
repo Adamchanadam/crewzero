@@ -12,7 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { hosts, version, certified, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
+import { hosts, version, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
@@ -233,13 +233,13 @@ function refuse(req, res, url, why) {
 }
 // Founder Desk（首頁等你決定、問題包、決定紀錄）係 ask.html；公司概覽係 proofread.html
 // 頁面同共用檔（名稱、版面、Markdown）：只准呢幾個檔，加共用檔就加入 SHARED
-const SHARED = ['md.js', 'names.js', 'desk.js', 'orbit.js', 'pair.js'];
-const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'proofread.html', ...Object.fromEntries(SHARED.map(f => ['/' + f, f])) };
+const SHARED = ['md.js', 'names.js', 'desk.js', 'orbit.js', 'pair.js', 'celebration.js'];
+const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'proofread.html', '/startup-background-template.md': 'startup-background-template.md', ...Object.fromEntries(SHARED.map(f => ['/' + f, f])) };
 // 營運監察台：/dashboard（公司現況）、/dashboard/<分頁> 同 /dashboard/brain/<項目>，同一個頁面檔
 const DASH_TABS = ['path', 'brain', 'inputs', 'team', 'log', 'system'];
 const BRAIN_PAGES = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 let lastSeenPrev = null;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
+const TYPES = { '.md': 'text/markdown; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const KINDS = ['proofread', 'ask-answer'];
 
 const pad = n => String(n).padStart(2, '0');
@@ -256,7 +256,46 @@ function onPath(cmd) {
   }
   return false;
 }
-let certChild = null, certStartedAt = '';
+let certChild = null, certStartedAt = '', kickArgsAfterCert = null;
+// 自動同手動共用一條認證流程；通過先續做等候工作。
+function startCertification(hostId) {
+  if (certChild) return false;
+  certStartedAt = localIso();
+  try { certChild = spawn(process.execPath, [path.join(ROOT, 'certify.mjs'), hostId, String(PORT)], { cwd: ROOT, stdio: 'ignore', windowsHide: true }); }
+  catch { certChild = null; return false; }
+  // 開唔到認證程式只會出 error、唔會出 exit：兩條路共用一次收尾，已提交嘅工作唔會卡住
+  let ended = false;
+  const finishCert = spawnFailed => {
+    if (ended) return;
+    ended = true;
+    certChild = null;
+    if (spawnFailed) try { writeJSON(path.join(DIR.ledger, 'certify-status.json'), { host: hostId, startedAt: certStartedAt, state: 'failed', items: [] }); } catch { }
+    const c = readJSON(path.join(DIR.ledger, 'certify-status.json'), null);
+    const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
+    const ids = c?.state === 'passed' ? st.runs.filter(r => r.state === 'waiting' && r.waitingFor === 'ai-setup').map(r => r.id) : [];
+    if (ids.length) fs.writeFileSync(path.join(DIR.ledger, 'retry-requested'), JSON.stringify({ runIds: ids, at: localIso() }));
+    // 認證未通過都要交外殼：已提交嘅工作會顯示等候 AI 設定，唔會無聲卡住
+    const queued = kickArgsAfterCert;
+    kickArgsAfterCert = null;
+    if (queued) { again = false; kick(queued); }
+    else if (ids.length || again || pendingFiles().length || pendingMatches(DIR).length) { again = false; schedule(200); }
+  };
+  certChild.on('error', () => finishCert(true));
+  certChild.on('exit', () => finishCert(false));
+  return true;
+}
+let recertCheckedAt = 0, recertSlot = '';
+function maybeRecertify(force = false) {
+  if (certChild || child || isDemoInstance() || (!force && Date.now() - recertCheckedAt < 10 * 60000)) return false;
+  recertCheckedAt = Date.now();
+  const c = certified(ROOT, DIR.ledger);
+  if (!c.versionOnly) return false;
+  const file = path.join(DIR.ledger, 'recert-attempt.json'), prior = readJSON(file, null);
+  if (prior?.host === c.hostId && prior.version === c.version) return false;
+  // 先記低再啟動，失敗或中斷都唔會無限再試。
+  try { writeJSON(file, { host: c.hostId, version: c.version, at: localIso() }); } catch { return false; }
+  return startCertification(c.hostId);
+}
 // 認證狀態：認證程式運行緊時只報今次嘅結果（舊結果當未開始），免得頁面一撳就見到上次嘅失敗
 function certifyState() {
   const c = readJSON(path.join(DIR.ledger, 'certify-status.json'), null);
@@ -297,7 +336,9 @@ function hostList() {
     return { id: h.id, label: h.label || h.name || h.id, installed: !!v, version: v, loggedIn, why: v ? (loggedIn === false ? NAMES.ui.hostNotLoggedIn : '') : resolveCommand(h.command).why || '' };
   });
 }
-const certInfo = () => { const c = readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null); return c ? { host: c.host, label: c.label, certifiedAt: c.certifiedAt } : null; };
+// 只有仍然有效的認證才算已設定：設定變更後舊紀錄不再當作通過
+const certInfo = () => { const c = readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null); return c && certCurrent(ROOT, DIR.ledger) ? { host: c.host, label: c.label, certifiedAt: c.certifiedAt } : null; };
+const certStale = () => !!readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null) && !certCurrent(ROOT, DIR.ledger);
 const WELCOME_FILE = path.join(ROOT, 'welcome.html'), WELCOME_SEEN = path.join(DESK_DIR, 'welcome-seen.json');
 let welcomeSeenInMemory = false, demoOpeningAt = 0;
 function isDemoInstance() {
@@ -337,6 +378,9 @@ let child = null, again = false, timer = null;
 function schedule(ms = 1500) { clearTimeout(timer); timer = setTimeout(() => kick(), ms); }
 // args：排程 run 嘅類型同觸發（模擬計時器用）；你送出後嘅 run 唔帶參數。一次只准一個外殼程序
 function kick(args) {
+  maybeRecertify();
+  // 認證期間按「立即開工」：保留參數，認證完先照做，唔會變成無參數嘅工作
+  if (certChild) { if (args) kickArgsAfterCert = args; again = true; return false; }
   if (child) { again = true; return false; }
   say(args ? '排定時間到，交外殼做日常工作' : '有新內容，交外殼處理');
   child = spawn(process.execPath, [path.join(ROOT, 'run.mjs'), ...(args || [])], { cwd: ROOT, stdio: 'ignore', windowsHide: true });
@@ -357,6 +401,8 @@ function kick(args) {
 let firedDay = null;
 function overviewCurrent() { return overviewIsCurrent(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null)); }
 function rhythmTick() {
+  maybeRecertify();
+  if (certChild) return;
   if (child || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) return;
   const s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
   if (s.demo === true) return;
@@ -369,6 +415,8 @@ function rhythmTick() {
   if (!slot) return;
   const day = ymd(slot), recorded = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === day);
   if (recorded) { if (firedDay && firedDay.day === day) firedDay = null; return; }
+  if (recertSlot !== day) { recertSlot = day; maybeRecertify(true); }
+  if (certChild) return;
   if (firedDay && firedDay.day === day) {
     if (Date.now() - firedDay.at > 120000) firedDay = null;
     else return;
@@ -387,7 +435,7 @@ function simInfo() {
 }
 // 推前一日：時鐘推到下一次排定開工時間後三分鐘（每日一次即剛好一日），由計時器觸發嗰次排程
 function simAdvance() {
-  if (child) return [409, { error: 'busy', message: 'AI 工作進行中，完成後再推前。' }];
+  if (child) return [409, { error: 'busy', message: 'Zero 工作進行中，完成後再推前。' }];
   const now = clockNow(), s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, ranToday = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === ymd(now));
   const next = nextRunAt(rhythmOf(s), now, { ranToday });
   if (!next) return [400, { error: 'invalid' }];
@@ -399,7 +447,7 @@ function simAdvance() {
 // 模擬用 AI：假 AI（零費用）同真 AI 各自保存一份認證；切換只係換用邊份，冇就要喺系統設定頁認證一次
 function simSetAI(mode) {
   if (!['fake', 'real'].includes(mode)) return [400, { error: 'invalid' }];
-  if (child || certChild) return [409, { error: 'busy', message: 'AI 工作進行中，完成後再切換。' }];
+  if (child || certChild) return [409, { error: 'busy', message: 'Zero 工作進行中，完成後再切換。' }];
   fs.mkdirSync(DESK_DIR, { recursive: true });
   const cur = readJSON(CERT_FILE, null);
   if (cur) fs.copyFileSync(CERT_FILE, path.join(DESK_DIR, 'sim-cert-' + aiMode(cur) + '.json'));
@@ -409,7 +457,7 @@ function simSetAI(mode) {
   hostCache = null;
   return [200, { ok: true, ai: mode, ready: fs.existsSync(CERT_FILE) }];
 }
-const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc)\.md$/.test(f))].sort();
+const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate)\.md$/.test(f))].sort();
 const EXTS = ['md', 'txt', 'csv', 'pdf', 'docx', 'pptx', 'xlsx', 'png', 'jpg', 'jpeg'];
 const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
 const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -434,18 +482,17 @@ function receiveIntake(body) {
   const fail = message => ({ error: 'invalid', message });
   if (!body || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields) || !Array.isArray(body.files)) return fail('請填寫資料並檢查附件。');
   const bizType = typeof body.bizType === 'string' ? body.bizType : '';
-  if (!bizType) return fail('請先選擇你的生意類別。');
-  if (!BIZ_TYPES[bizType]) return fail('請選擇有效的生意類別。');
+  if (body.bizType != null && body.bizType !== '' && (typeof body.bizType !== 'string' || !BIZ_TYPES[body.bizType])) return fail('請選擇有效的生意類別。');
   const bizOther = typeof body.bizOther === 'string' ? body.bizOther.trim() : '';
   if (body.bizOther != null && typeof body.bizOther !== 'string') return fail('其他類別的說明必須是文字。');
   if (bizOther.length > 60) return fail('其他類別的說明不可超過 60 字。');
   const fields = {};
   for (const q of INTAKE_QUESTIONS) {
     const value = body.fields['q' + q.n] ?? '';
-    if (typeof value !== 'string' || value.length > 4000 || (q.required && !value.trim())) return fail('請填寫首五條問題，每欄最多 4000 字。');
+    if (typeof value !== 'string' || value.length > 4000 || (q.required && !value.trim())) return fail('請填寫第 1 條問題，每欄最多 4000 字。');
     fields['q' + q.n] = value;
   }
-  if (Object.keys(body.fields).some(k => !/^q(?:[1-9]|1[0-2])$/.test(k)) || Buffer.byteLength(Object.values(fields).join(''), 'utf8') > 32 * 1024) return fail('填寫的文字太長，請把較長的內容改為文件附上，再送出。');
+  if (Object.keys(body.fields).some(k => !/^q[1-8]$/.test(k)) || Buffer.byteLength(Object.values(fields).join(''), 'utf8') > 32 * 1024) return fail('填寫的文字太長，請把較長的內容改為文件附上，再送出。');
   const got = takeFiles(body.files);
   if (got.error) return fail(got.error);
   const files = got.files;
@@ -457,24 +504,27 @@ function receiveIntake(body) {
   const provenance = provenanceOf(fields, body.provenance, loadPrefills(path.join(DIR.ledger, 'prefill'), prefillId));
   if (unconfirmed(provenance, body.provenance).length) return fail(NAMES.ui.prefillUnconfirmed);
   for (const q of Object.keys(provenance)) if (provenance[q].kind !== 'founder' && !provenance[q].moved) provenance[q].confirmed = true;
-  const machine = { format: 'startup-os.intake/0.1', id, bizType, bizOther: bizType === 'other' ? bizOther : '', fields, files: records, ...(prefill ? { prefillId } : {}), provenance };
-  const text = '# 交資料\n\n生意類別：' + bizTypeLabel(bizType, bizOther) + '\n\n' + intakeQuestions(bizType).map(q => `## ${q.n}. ${q.ask}\n\n${fields['q' + q.n]}\n${fields['q' + q.n].trim() ? '\n' + provenanceLine(provenance['q' + q.n]) + '\n' : ''}`).join('\n') + '\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
+  const machine = { format: 'startup-os.intake/0.1', id, ...(bizType ? { bizType, bizOther: bizType === 'other' ? bizOther : '' } : {}), fields, files: records, ...(prefill ? { prefillId } : {}), provenance };
+  const text = '# ' + NAMES.ui.intake + '\n\n' + (bizType ? '生意類別：' + bizTypeLabel(bizType, bizOther) + '\n\n' : '') + intakeQuestions(bizType).map(q => `## ${q.n}. ${q.ask}\n\n${fields['q' + q.n]}\n${fields['q' + q.n].trim() ? '\n' + provenanceLine(provenance['q' + q.n]) + '\n' : ''}`).join('\n') + '\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
   const created = [];
   try {
     files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
     const p = path.join(DIR.inbox, `${id}-intake.md`); fs.writeFileSync(p, text, { flag: 'wx' }); created.push(p);
-    writeJSON(path.join(DIR.company, 'biz.json'), { type: bizType, other: bizType === 'other' ? bizOther : '' });
+    if (bizType && !fs.existsSync(path.join(DIR.company, 'biz.json'))) writeJSON(path.join(DIR.company, 'biz.json'), { type: bizType, other: bizType === 'other' ? bizOther : '' });
+    const ideate = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+    if (ideate) writeJSON(path.join(DIR.ledger, 'ideate.json'), { ...ideate, state: 'closed', reason: '', updatedAt: localIso() });
   } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
   return { ok: true, id, receivedAt: localIso() };
 }
 
-/* ---------- 由文件預填（規劃書 3.1）：只有附件，唔含答案；AI 只讀文件交返五條預填，唔擬公司概覽、唔建任何紀錄 ---------- */
+/* ---------- 由文件預填（規劃書 3.1）：只有附件，唔含答案；AI 只讀文件交返八條預填，唔擬公司概覽、唔建任何紀錄 ---------- */
 function receivePrefill(body) {
   const fail = message => ({ error: 'invalid', message });
   if (!Array.isArray(body.files) || !body.files.length) return fail('請先加入文件。');
   const got = takeFiles(body.files);
   if (got.error) return fail(got.error);
-  const bizType = typeof body.bizType === 'string' && BIZ_TYPES[body.bizType] ? body.bizType : '';
+  const bizType = typeof body.bizType === 'string' ? body.bizType : '';
+  if (body.bizType != null && body.bizType !== '' && (typeof body.bizType !== 'string' || !BIZ_TYPES[body.bizType])) return fail('請選擇有效的生意類別。');
   const bizOther = typeof body.bizOther === 'string' ? body.bizOther.trim().slice(0, 60) : '';
   const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
   const records = got.files.map((f, i) => ({ name: f.name, stored: `${id}-prefill-${pad(i + 1)}-${f.name}`, bytes: f.bytes.length }));
@@ -487,6 +537,11 @@ function receivePrefill(body) {
   return { ok: true, id, receivedAt: localIso() };
 }
 // 預填進度：外殼核對好嘅結果喺 ledger/prefill/<id>.json；未有就睇嗰次 AI 工作嘅狀態
+function ideateStatus() {
+  const s = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+  if (!s) return null;
+  return { state: s.state, round: s.round, packId: ((s.rounds || []).find(r => r.round === s.round) || {}).packId || '', prefillId: s.prefillId || '', reason: s.reason || '' };
+}
 function prefillStatus(id) {
   if (!/^[\w-]{1,40}$/.test(String(id || ''))) return null;
   const done = readJSON(path.join(DIR.ledger, 'prefill', id + '.json'), null);
@@ -499,12 +554,30 @@ function prefillStatus(id) {
 
 /* ---------- 創辦人交要求（「我想改次序／加一站」「交一件臨時工作」）：寫入收件匣，交外殼叫 AI 擬成問題包 ---------- */
 // 同交資料一樣只新增檔案，AI 寫唔到 founder 資料夾，所以 AI 冒充唔到創辦人嘅要求；真正改路線或開工要等創辦人答咗問題包先生效。
-const NOTE_TYPES = ['order', 'adhoc', 'help', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc'];
+const NOTE_TYPES = ['order', 'adhoc', 'help', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc', 'ideate'];
 const BRAIN_ITEMS = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 const DEBATE_ACTIONS = ['respond', 'adopt', 'reattack2', 'rerun'];
 function receiveNote(body) {
   const fail = message => ({ error: 'invalid', message });
   if (!NOTE_TYPES.includes(body.type)) return fail('要求類型不正確。');
+  if (body.type === 'ideate') {
+    if (body.text != null && typeof body.text !== 'string') return fail(NAMES.ui.ideateTooLong);
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (text.length > 1000) return fail(NAMES.ui.ideateTooLong);
+    if (companyStatus().ready) return fail(NAMES.ui.ideateHasOverview);
+    const stateFile = path.join(DIR.ledger, 'ideate.json'), prev = readJSON(stateFile, null);
+    // 重複按鈕不新增工作；失敗才由原進度續行。
+    if (prev && ['running', 'asking', 'ready'].includes(prev.state)) return { ok: true, id: prev.id, receivedAt: prev.updatedAt };
+    const checked = certified(ROOT, DIR.ledger);
+    if (!checked.host) return { error: 'ai', message: NAMES.ui.err_ai };
+    const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
+    const session = prev && prev.state === 'failed' ? prev : { id, round: 1, say: text, rounds: [], prefillId: '' };
+    const file = path.join(DIR.inbox, `${id}-note-ideate.md`);
+    fs.writeFileSync(file, `kind: note\ntype: ideate\nat: ${localIso()}\n\n${text}\n`, { flag: 'wx' });
+    try { writeJSON(stateFile, { ...session, state: 'running', reason: '', updatedAt: localIso() }); }
+    catch (e) { fs.unlinkSync(file); throw e; }
+    return { ok: true, id, receivedAt: localIso() };
+  }
   // 紅藍對打：開一場辯論（題目、席位、力度）；場次操作（回應、採用、再攻第二輪、重跑）。外殼按規則做，AI 唔可以自己開場
   if (body.type === 'debate-start' || body.type === 'debate-action') {
     let m;
@@ -584,7 +657,7 @@ function receiveNote(body) {
   }
   const text = typeof body.text === 'string' ? body.text.trim() : '';
   if (!text || text.length > 4000) return fail(body.type === 'event' ? '請寫下發生了甚麼事（最多 4000 字）。' : '請用一兩句寫下你的要求（最多 4000 字）。');
-  if (!readJSON(path.join(DIR.company, 'page.json'), null)) return fail('尚未有公司概覽：請先提交資料，AI 擬定公司概覽後才可提交要求。');
+  if (!readJSON(path.join(DIR.company, 'page.json'), null)) return fail('尚未有公司概覽：請先提交資料，Zero 擬定公司概覽後才可提交要求。');
   const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
   // 記錄真實事件（規劃書 3.10）：事件日期由你填（唔係提交時間）；證明文件同筆記一齊入收件匣，由外殼登記
   if (body.type === 'event') {
@@ -614,7 +687,7 @@ async function practiceAction(body) {
   if (body.action === 'start') {
     const sc = loadScenario(DIR, body.scenarioId);
     if (!sc) return [404, { error: 'not found', message: '找不到此場景。' }];
-    if (!host) return [409, { error: 'ai', message: 'AI 尚未設定，練習需要 AI 扮演對方。' }];
+    if (!host) return [409, { error: 'ai', message: 'AI 工具尚未設定，練習需要 Zero 扮演對方。' }];
     const edits = body.edits && typeof body.edits === 'object' ? body.edits : {};
     return [200, { ok: true, session: startSession(DIR, host, sc, body.level, edits) }];
   }
@@ -627,7 +700,7 @@ async function practiceAction(body) {
   let keep = null;
   try {
     if (body.action === 'undo') { const r = practiceUndo(DIR, s); return r.error ? [400, { error: 'invalid', message: r.error }] : [200, { ok: true, session: r.session }]; }
-    if (!host) return [409, { error: 'ai', message: 'AI 尚未設定，練習需要 AI 扮演對方。' }];
+    if (!host) return [409, { error: 'ai', message: 'AI 工具尚未設定，練習需要 Zero 扮演對方。' }];
     // 對方講完就回覆；建議講法補完先解鎖（期間再送會叫你等）
     if (body.action === 'say') { const r = await practiceSay(DIR, host, s, sc, typeof body.text === 'string' ? body.text : ''); if (r.error) return [502, { error: 'reply', message: r.error }]; keep = r.done; return [200, { ok: true, session: r.session }]; }
     if (body.action === 'end') { const r = await practiceFinish(DIR, host, s, sc); return [200, { ok: true, session: r.session }]; }
@@ -722,6 +795,20 @@ function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { 
   return found;
 }
 
+const CELEBRATIONS_SEEN = path.join(DIR.ledger, 'celebrations-seen.json');
+function celebrationState() {
+  const entries = ((readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}).celebrations || {}).entries || [];
+  const seen = new Set((readJSON(CELEBRATIONS_SEEN, {}) || {}).seen || []);
+  return { entries, seen };
+}
+function claimCelebration(id) {
+  const { entries, seen } = celebrationState();
+  if (typeof id !== 'string' || !entries.some(entry => entry.id === id)) return [400, { error: 'invalid' }];
+  if (seen.has(id)) return [200, { ok: true, claimed: false }];
+  seen.add(id);
+  writeJSON(CELEBRATIONS_SEEN, { seen: [...seen] });
+  return [200, { ok: true, claimed: true }];
+}
 function statusPayload() {
   const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
   const todo = pendingTodo(DIR);
@@ -729,8 +816,8 @@ function statusPayload() {
   const failedByRef = (st.runs || []).filter(r => r && r.state === 'failed' && r.ref).reduce((all, r) => ({ ...all, [r.ref]: (all[r.ref] || 0) + 1 }), {});
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
-    ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), sample: (readJSON(path.join(DIR.ledger, 'state.json'), null) || {}).demo === true, today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, celebrations: (() => { const { entries, seen } = celebrationState(); return entries.filter(e => !seen.has(e.id)).slice(-5).reverse(); })(), ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI 工具', ready: !!c }; })(), busy: !!child,
+    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -756,7 +843,8 @@ function companyStatus() {
   const c = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const page = readJSON(path.join(DIR.company, 'page.json'), null), co = page?.company || {};
   const biz = readJSON(path.join(DIR.company, 'biz.json'), null);
-  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null,
+  const { entries, seen } = celebrationState();
+  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null, firstConfirmedAt: c ? (c.firstConfirmedAt || c.confirmedAt) : null, firstFlagSeen: entries.some(e => e.level === 'top' && seen.has(e.id)),
     ...(biz && BIZ_TYPES[biz.type] ? { bizType: biz.type } : {}) };
 }
 const isDay = value => {
@@ -1126,9 +1214,9 @@ const handler = async (req, res) => {
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-logo') { const l = companyLogo(DIR); return l ? send(res, 200, fs.readFileSync(l.file), TYPES['.' + l.ext]) : send(res, 404, { error: 'not found' }); }
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-page.js') { const page = readJSON(path.join(DIR.company, 'page.json'), null); return page ? send(res, 200, 'window.STARTUP_OS_PAGE = ' + JSON.stringify(page).replace(/</g, '\\u003c') + ';', TYPES['.js']) : send(res, 404, { error: 'not found' }); }
     if (req.method === 'GET') {
-      if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, questionsByBizType: Object.fromEntries(Object.keys(BIZ_TYPES).map(type => [type, intakeQuestions(type)])), bizTypes: Object.entries(BIZ_TYPES).map(([id, x]) => ({ id, label: x.label, example: x.example })), limits });
+      if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, questionsByBizType: Object.fromEntries(Object.keys(BIZ_TYPES).map(type => [type, intakeQuestions(type)])), bizTypes: Object.entries(BIZ_TYPES).map(([id, x]) => ({ id, label: x.label, example: x.example })), limits, ideate: ideateStatus() });
       if (p === '/api/prefill') { const r = prefillStatus(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, ...r }) : send(res, 404, { error: 'not found' }); }
-       if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
+       if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), aiStale: certStale(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
       if (p === '/api/status') return send(res, 200, statusPayload());
       if (p === '/api/sim' && SIM) return send(res, 200, { ok: true, sim: simInfo() });
       if (p === '/api/dashboard') { const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), localOnly: pass.kind === 'phone', version: SERVER_VERSION, instance: INSTANCE }); }
@@ -1173,7 +1261,7 @@ const handler = async (req, res) => {
       if (p === '/api/practice/session') { const s = loadSession(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, session: s, scenario: loadScenario(DIR, s.scenarioId) }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/run') { const r = runResult(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, run: r }) : send(res, 404, { error: 'not found' }); }
     }
-    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || (p === '/api/sim' && SIM))) {
+    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/celebrations/seen' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
       const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
@@ -1183,6 +1271,7 @@ const handler = async (req, res) => {
       const body = JSON.parse(await readBody(req, (p === '/api/intake' ? 75 * 1024 * 1024 : p === '/api/logo' ? 1.5 * 1024 * 1024 : 32 * 1024)) || '{}');
       // 半截手機請求在讀 body 期間可被撤銷；讀完後、套用任何動作前必須以同一代手機模式重驗。
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
+      if (p === '/api/celebrations/seen') return send(res, ...claimCelebration(body.id));
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
       if (p === '/api/founder-op') { const result = founderOp(body); return send(res, result.ok ? 202 : result.error === 'busy' ? 409 : 400, result); }
       if (p === '/api/practice') return send(res, ...await practiceAction(body));
@@ -1220,17 +1309,7 @@ const handler = async (req, res) => {
         }
         if (body.action !== 'certify' || !hosts(ROOT).some(h => h.id === body.host)) return send(res, 400, { error: 'invalid' });
         if (certChild) return send(res, 409, { error: 'busy' });
-        certStartedAt = localIso();
-        certChild = spawn(process.execPath, [path.join(ROOT, 'certify.mjs'), body.host, String(PORT)], { cwd: ROOT, stdio: 'ignore', windowsHide: true });
-        certChild.on('error', () => { certChild = null; });
-        certChild.on('exit', () => {
-          certChild = null;
-          const c = readJSON(path.join(DIR.ledger, 'certify-status.json'), null);
-          if (c?.state !== 'passed') return;
-          const st = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] });
-          const ids = st.runs.filter(r => r.state === 'waiting' && r.waitingFor === 'ai-setup').map(r => r.id);
-          if (ids.length) { fs.writeFileSync(path.join(DIR.ledger, 'retry-requested'), JSON.stringify({ runIds: ids, at: localIso() })); schedule(200); }
-        });
+        if (!startCertification(body.host)) return send(res, 500, { error: 'start', message: NAMES.ui.errGeneric });
         return send(res, 202, { ok: true });
       }
       if (p === '/api/retry') {

@@ -4,9 +4,11 @@
 <meta charset="utf-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' file:; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' file:; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>公司概覽 · Founder Desk</title>
 <style>
+.hero.with-scene{isolation:isolate;overflow:hidden}.hero .scene-bg{position:absolute;inset:0 0 0 auto;width:43.5%;z-index:-1;background:url('assets/crew-scene-handover.webp') center 40%/cover no-repeat;opacity:.6;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%)}
+@media(max-width:600px){.hero .scene-bg{width:100%;opacity:.2;-webkit-mask-image:none;mask-image:none}}
 .steps{display:flex;gap:8px;margin:20px 0 4px;flex-wrap:wrap}
 .step{all:unset;box-sizing:border-box;cursor:pointer;height:30px;padding:0 12px;border:1px solid var(--line);border-radius:7px;
   font-size:var(--fs-sub);color:var(--muted);display:inline-flex;align-items:center;gap:6px}
@@ -408,10 +410,10 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       // 未配對（403）：共用殼已全頁顯示配對指引，唔再畫「未有公司概覽」
       if (st === 'pass') return;
       $('#cbar').hidden = true;
-      $('#app').replaceChildren(DESK.header({ page: 'company', company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim) }),
+      $('#app').replaceChildren(DESK.header({ page: 'company', company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim), sample: !!(st && st.sample) }),
         h('section', { class: 'layer', id: 'no-company' }, h('span', { class: 'eyebrow' }, N.ui.company),
           h('h2', { class: 'layer-title' }, N.ui.noCompany),
-          h('p', { class: 'guide' }, '請先提交公司背景資料，AI 會為你擬定公司概覽。'),
+          h('p', { class: 'guide' }, '請先提交公司背景資料，Zero 會為你擬定公司概覽。'),
           h('div', { class: 'p-foot' }, h('a', { class: 'btn primary big', href: '/#/intake' }, N.ui.goIntake))));
       DESK.title('company');
     });
@@ -467,7 +469,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function clearDraft() {
     try { localStorage.removeItem(skey()); } catch (e) { }
     var d = D; window.STARTUP_OS_PAGE = d; start(d);
-    toast('已清除你的修改，恢復 AI 建議');
+    toast('已清除你的修改，恢復 Zero 建議');
   }
 
   /* ---------- 狀態計算 ---------- */
@@ -493,7 +495,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       else if (!isEdited(d.id) && d.origin === 'ai') assumed++;
     });
     var ok = missing === 0 && assumed <= 3;
-    var reason = missing ? '尚有 ' + missing + ' 個「為甚麼」未有答案' : (assumed > 3 ? 'AI 推測的答案多於三個' : '');
+    var reason = missing ? '尚有 ' + missing + ' 個「為甚麼」未有答案' : (assumed > 3 ? 'Zero 推測的答案多於三個' : '');
     return { ok: ok, missing: missing, assumed: assumed, reason: reason };
   }
   // 真事／工作（規劃書 7.4）：AI 建議放喺 m.kind；你按一下改，成頁確認時記錄
@@ -528,6 +530,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var list = [];
     function push(id) {
       if (!id || list.indexOf(id) >= 0) return;
+      if (REG[id] && (REG[id].plan === 'biz.type' || String(REG[id].plan || '').startsWith('canvas.'))) return;
       if (id === '@status' ? statusItems().length : REG[id]) list.push(id);
     }
     var want = D.decide && D.decide.items;
@@ -587,7 +590,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     S.open = null; S.focus = { key: key };
     if (S.confirmed) S.changedAfter = true;
     save(); render();
-    announce(isEdited(id) ? '已改：' + e.label : '已還原 AI 建議：' + e.label);
+    announce(isEdited(id) ? '已改：' + e.label : '已還原 Zero 建議：' + e.label);
   }
   function toggleEd(key) {
     S.open = S.open === key ? null : key;
@@ -615,14 +618,14 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var m = h('div', { class: 'ed-meta' });
     if (edited) {
       m.append(tag(N.ui.changed, 'mine'));
-      if (!compact) m.append(h('span', { class: 'orig' }, 'AI：' + clip(showVal(e, e.value) || N.ui.fillShort, 48)));
+      if (!compact) m.append(h('span', { class: 'orig' }, 'Zero：' + clip(showVal(e, e.value) || N.ui.fillShort, 48)));
       return m;
     }
     if (e.kind === 'grade') return null;
     if (compact) {
       // 一行版：只留短標籤，出處喺撳開嘅面板睇
       if (e.origin === 'doc') m.append(tag(N.ui.docShort, 'doc', N.ui.fromDoc));
-      else if (e.origin === 'ai') m.append(tag('AI', 'ai', N.ui.tent_ai));
+      else if (e.origin === 'ai') m.append(tag('Zero', 'ai', N.ui.tent_ai));
       else if (e.origin === 'default') m.append(tag('預設', ''));
       if (e.tentative && e.tentative.until) m.append(tag(N.ui.tentative + ' ' + md(e.tentative.until), 'tent', (N.ui['tent_' + e.tentative.by] || N.ui.tent_ai) + '，' + md(e.tentative.until) + '再詢問你'));
       return m.childNodes.length ? m : null;
@@ -735,18 +738,18 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function header() {
     var srcs = (D.sources || []).map(function (s) { return s.title + (s.date ? '（' + md(s.date) + '）' : ''); }).join('、');
     return DESK.header({
-      page: 'company', company: D.company, nav: !!S.server, pending: S.server ? S.server.openAsks : 0, work: S.server && S.server.work, sim: !!(S.server && S.server.sim),
-      basis: 'AI 根據' + (srcs ? '：' + srcs : '你的資料') + ' 擬定 · 約 ' + (D.page.minutes || 3) + ' 分鐘可閱畢'
+      page: 'company', company: Object.assign({}, D.company, S.server && S.server.company || {}), nav: !!S.server, pending: S.server ? S.server.openAsks : 0, work: S.server && S.server.work, sim: !!(S.server && S.server.sim), sample: !!(S.server && S.server.sample),
+      basis: 'Zero 根據' + (srcs ? '：' + srcs : '你的資料') + ' 擬定 · 約 ' + (D.page.minutes || 3) + ' 分鐘可閱畢'
     });
   }
   /* ---------- 第一眼：一個大掣、三張卡、其餘收埋（但直接講內容） ---------- */
   function hero() {
     var st = qStats(), next = FLAGFIELD ? cur(FLAGFIELD.id) : '';
-    return h('section', { class: 'hero' },
-      h('span', { class: 'eyebrow' }, N.ui.company + ' · ' + N.ui.companyReady +
-        (S.server && S.server.ai && S.server.ai.ready ? ' · 已連接 ' + S.server.ai.name + '，確認後將自動提交' : '')),
+    return h('section', { class: 'hero with-scene' },
+      h('div', { class: 'scene-bg', 'aria-hidden': 'true' }),
+      h('span', { class: 'eyebrow' }, N.ui.company + ' · ' + N.ui.companyReady),
       h('h2', { class: 'hero-t' }, st.total ? T('companyHero', { n: st.total }) : N.ui.companyHeroNone),
-      h('p', { class: 'hero-p' }, '確認後，AI 將隨即為你準備' + (next ? '「' + clip(next, 30) + '」' : '下一步') + '的草稿；不會對外發送。'),
+      h('p', { class: 'hero-p' }, T('companyHeroNext', { next: next ? '「' + clip(next, 30) + '」' : N.ui.companyHeroNextDefault })),
       h('div', { class: 'hero-act' },
         h('button', { type: 'button', class: 'btn primary big', id: 'go-main', onclick: openModal }, mainLabel()),
         st.left ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null));
@@ -757,7 +760,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var box = h('section', { class: 'decide', 'aria-labelledby': 'dqt' },
       h('div', { class: 'dq-top' },
         h('h2', { class: 'layer-title', id: 'dqt' }, T('pendingTitle', { n: st.done, t: st.total })),
-        h('span', { class: 'lt-sum' }, st.left ? '按一下即可選擇；未作答的將按 AI 建議' : '✓ 已全部作答，可以開始')));
+        h('span', { class: 'lt-sum' }, st.left ? '按一下即可選擇；未作答的將按 Zero 建議' : '✓ 已全部作答，可以開始')));
     QIDS.forEach(function (id, i) { box.append(id === '@status' ? statusCard(i) : optionCard(id, i)); });
     return box;
   }
@@ -867,10 +870,10 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var box = h('div');
     if (S.confirmed && S.changedAfter) {
       box.append(h('div', { class: 'notice' },
-        h('span', null, '你在確認後再作了修改。如需 AI 按新內容處理，請再按頁底「再確認一次」。')));
+        h('span', null, '你在確認後再作了修改。如需 Zero 按新內容處理，請再按頁底「再確認一次」。')));
     } else if (S.confirmed && !S.confirmed.sent) {
       box.append(h('div', { class: 'notice' },
-        h('span', null, '已確認（' + S.confirmed.at + '），但只下載了回覆檔，AI 尚未收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並再次確認，AI 才會跟進。')));
+        h('span', null, '已確認（' + S.confirmed.at + '），但只下載了回覆檔，Zero 尚未收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並再次確認，Zero 才會跟進。')));
     } else if (S.restored) {
       box.append(h('div', { class: 'notice' },
         h('span', null, '已還原你上次未確認的修改。'),
@@ -904,7 +907,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var sec = h('section', { class: 'layer', id: 'layer1', 'aria-labelledby': 'l1t' },
       h('span', { class: 'eyebrow' }, N.ui.glanceEyebrow),
       h('h2', { class: 'layer-title', id: 'l1t' }, N.ui.glanceTitle),
-      h('p', { class: 'guide' }, '按任何一句均可修改；不作修改則按 AI 建議。'),
+      h('p', { class: 'guide' }, '按任何一句均可修改；不作修改則按 Zero 建議。'),
       notReady().length ? h('p', { class: 'notice', id: 'ready-miss' }, N.t('readinessMissing', { list: notReady().join('、') })) : null,
       tipBox(g.tip), rows);
     if (g.status) sec.append(statusBlock(g.status));
@@ -924,7 +927,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
   function gaps() {
     var t = tentCount(), miss = missingList().length, parts = [];
-    if (t) parts.push('AI 以「' + N.ui.tentative + '」值處理了 ' + t + ' 項' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
+    if (t) parts.push('Zero 以「' + N.ui.tentative + '」值處理了 ' + t + ' 項' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
     if (miss) parts.push((t ? '另有 ' : '有 ') + miss + ' 項未有答案');
     if (!parts.length) return null;
     var txt = parts.join('；') + '。毋須現在全部作答。';
@@ -974,7 +977,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (tip) sec.append(tip);
     var fm = flagged();
     sec.append(h('div', { class: 'order-q', id: 'order-q' },
-      h('span', null, orderChanged() ? '你已調整次序；確認後生效。' : '此次序為 AI 建議；如不合適，請按住左邊把手拖動排序；毋須更改則無須理會。')));
+      h('span', null, orderChanged() ? '你已調整次序；確認後生效。' : '此次序為 Zero 建議；如不合適，請按住左邊把手拖動排序；毋須更改則無須理會。')));
     if (fm && S.order[0] !== fm.id) sec.append(h('div', { class: 'row-sub' }, '⚑ 你下一個對外動作屬於「' + fm.short + '」，但該站目前排第 ' + (S.order.indexOf(fm.id) + 1) + ' 站。下一步所屬的站通常排第一，是否需要移回首位？'));
     sec.append(miniMap(fm), stationList(fm));
     return sec;
@@ -1140,6 +1143,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     }
     if (dt.reading && dt.reading.length) {
       sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.readingTitle),
+        h('p', { class: 'small muted' }, N.ui.readingCredit),
         dt.reading.map(function (r) { return h('div', { class: 'kv' }, h('div', { class: 'k' }, r.label), ed(r.id, 'r', 'small')); })));
     }
     if (dt.actors && dt.actors.items) {
@@ -1163,7 +1167,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         var kv = h('div', { class: 'kv' }, h('div', { class: 'k' }, qChip(r.id), ' ', r.label), ed(r.id, 'u', 'small'));
         if (r.boxes) {
           kv.append(h('div', { class: 'boxes' },
-            boxCol('AI 自行處理', r.boxes.auto, ''), boxCol('完成後通知你', r.boxes.tellAfter, ''), boxCol('必須先詢問你', r.boxes.askFirst, 'ask')));
+            boxCol('Zero 自行處理', r.boxes.auto, ''), boxCol('完成後通知你', r.boxes.tellAfter, ''), boxCol('必須先詢問你', r.boxes.askFirst, 'ask')));
         }
         if (r.plan === 'G8') kv.append(h('p', { class: 'small muted' }, N.ui.rhythmAfterOverview));
         rs.append(kv);
@@ -1203,7 +1207,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function footer() {
     var n = Object.keys(S.edits).length + (orderChanged() ? 1 : 0) + kindChanged().length;
     return h('footer', { class: 'foot' },
-      h('span', null, 'AI 擬於 ' + md(D.page.preparedAt) + ' · 第 ' + (D.page.revision || 1) + ' 版 · 只儲存在你的電腦'),
+      h('span', null, 'Zero 擬於 ' + md(D.page.preparedAt) + ' · 第 ' + (D.page.revision || 1) + ' 版 · 只儲存在你的電腦'),
       h('span', { class: 'foot-tools' },
         n ? h('button', {
           type: 'button', class: 'btn small', onclick: function () {
@@ -1267,17 +1271,18 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     fetch('/api/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        var before = trackKey(); S.server = j; S.lost = false;
+        var before = trackKey(), oldCompany = S.server && S.server.company || {}; S.server = j; S.lost = false;
         // 伺服器重新開過（例如升級後再打開 Founder Desk）：呢頁可能過時
         if (j.instance && S.instance && j.instance !== S.instance) S.stale = true;
-        if (trackKey() !== before) { renderTrack(); renderBar(); }
+        if (!!oldCompany.confirmed !== !!(j.company && j.company.confirmed)) render();
+        else if (trackKey() !== before) { renderTrack(); renderBar(); }
       })
       .catch(function () { if (!S.lost) { S.lost = true; renderTrack(); } })
       .then(function () { pollTimer = setTimeout(poll, aiBusy() ? 2000 : 10000); });
   }
   function retryRun() {
     DESK.send('/api/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-      .then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); })
+      .then(function () { toast('已請 Zero 重新處理'); setTimeout(poll, 800); })
       .catch(function (e) { toast(N.ui.retryFailed + '：' + DESK.why(e)); });
   }
   function renderTrack() {
@@ -1288,14 +1293,14 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, N.ui.reload)));
     if (!S.server) {
       root.append(h('div', { class: 'track off' }, h('b', null, N.ui.offlineView + '：'),
-        '可以修改及確認，但無法交予 AI。' + N.ui.reopenDesk + '，再於該處打開公司概覽；確認後才會自動交予 AI 跟進。'));
+        '可以修改及確認，但無法交予 Zero。' + N.ui.reopenDesk + '，再於該處打開公司概覽；確認後才會自動交予 Zero 跟進。'));
       return;
     }
-    var st = S.server, r = myRun(), ready = st.ai && st.ai.ready, aiName = (st.ai && st.ai.name) || 'AI';
+    var st = S.server, r = myRun(), ready = st.ai && st.ai.ready, aiName = (st.ai && st.ai.name) || 'AI 工具';
     if (!r && !queued()) {
       // 已連上就唔重複講（頂部已經寫明）；搵唔到 AI 工具先出警告
       if (!ready) root.append(h('div', { class: 'track bad' }, h('b', null, N.ui.aiNotSet + '：'),
-        '你仍可確認，但 AI 須設定完成後才會跟進；設定完成後將自動繼續。 ', h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
+        '你仍可確認，Zero 會在 AI 工具設定完成後自動跟進。 ', h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
       return;
     }
     function stepOf(k) { return r ? (r.steps || []).filter(function (s) { return s.key === k; })[0] : null; }
@@ -1321,7 +1326,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         return h('li', null, h('span', { class: 'tr-ic ' + x.state }, ic),
           h('span', null, x.label, x.sub ? h('span', { class: 'tr-sub' }, x.sub) : null));
       })));
-    if (state === 'waiting') card.append(h('p', null, (ai && ai.detail) || 'AI 尚未設定，設定完成後將自動繼續。'), h('div', { class: 'p-foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
+    if (state === 'waiting') card.append(h('p', null, (ai && ai.detail) || 'AI 工具尚未設定，設定完成後將自動繼續。'), h('div', { class: 'p-foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
     if (S.lost) card.append(h('p', { class: 'tr-sub' }, N.ui.stoppedDesk + '已收到的確認不會遺失。'));
     if (state === 'failed') {
       add(card, [(ai && ai.detail === r.error) ? null : h('p', null, r.error ? N.ui.reason + '：' + N.fix(r.error) : N.ui.failNoReason),
@@ -1341,7 +1346,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       });
       if (res.founderNext && res.founderNext.length) box.append(h('h4', null, N.ui.yourNext), h('ul', null, res.founderNext.map(function (x) { return h('li', null, x); })));
       if (res.needsYourDecision && res.needsYourDecision.length) box.append(h('h4', null, N.ui.pending), h('ul', null, res.needsYourDecision.map(function (x) { return h('li', null, x); })));
-      box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，AI 未有對外發送任何內容。'));
+      box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，Zero 未有對外發送任何內容。'));
       if (res.asks && res.asks.length) {
         box.append(h('div', { class: 'asks-next' },
           h('b', null, T('aiFollowAskN', { n: res.asks.reduce(function (n, a) { return n + a.count; }, 0) }) + '：'),
@@ -1366,23 +1371,23 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var L = [];
     L.push('# 確認回覆：' + D.company.name + ' ' + N.ui.company, '');
     L.push('確認時間：' + human(now));
-    L.push('結果：' + (edits.length || oc ? '已確認（你修改了 ' + edits.length + ' 項' + (oc ? '，並調整了次序' : '') + '）' : '已確認，全部採用 AI 建議'), '');
+    L.push('結果：' + (edits.length || oc ? '已確認（你修改了 ' + edits.length + ' 項' + (oc ? '，並調整了次序' : '') + '）' : '已確認，全部採用 Zero 建議'), '');
     L.push('## ' + N.ui.nowAfter);
     L.push('- 開局答案：目標、目前進度、下一個對外動作、負責人');
     L.push('- ' + N.ui.route + '次序' + (oc ? '（' + N.ui.changed + '）' : '（' + N.ui.adopted + '）') + '：');
     S.order.forEach(function (mid, i) {
       var pi = pr.indexOf(mid);
-      L.push('  ' + (i + 1) + '. ' + ms[mid].short + (pi !== i ? '（AI 原本排第 ' + (pi + 1) + '）' : '') + (fm && fm.id === mid ? '　⚑ 下一個對外動作' : ''));
+      L.push('  ' + (i + 1) + '. ' + ms[mid].short + (pi !== i ? '（Zero 原本排第 ' + (pi + 1) + '）' : '') + (fm && fm.id === mid ? '　⚑ 下一個對外動作' : ''));
     });
     effects.forEach(function (r) { L.push('- ' + r.label + '：' + cur(r.id) + (isEdited(r.id) ? '（你已修改）' : '')); });
     L.push('', '## 每站是' + N.ui.kindReal + '還是' + N.ui.kindTask);
     S.order.forEach(function (mid, i) { var k = kindOf(ms[mid]); L.push('- ' + (i + 1) + '. ' + ms[mid].short + '：' + kindName(k) + (kindChanged().indexOf(mid) >= 0 ? '（你已修改）' : '（' + N.ui.adopted + '）')); });
     L.push('', '## 你修改的項目（' + edits.length + ' 項）');
     if (!edits.length) L.push('- 沒有');
-    edits.forEach(function (x) { L.push('- ' + x.label, '  - AI：' + (x.ai || N.ui.fillShort), '  - 你：' + x.founder); });
-    L.push('', '## 其餘採用 AI 建議');
+    edits.forEach(function (x) { L.push('- ' + x.label, '  - Zero：' + (x.ai || N.ui.fillShort), '  - 你：' + x.founder); });
+    L.push('', '## 其餘採用 Zero 建議');
     L.push('- 當中 ' + tentKept.length + ' 項為「' + N.ui.tentative + '」' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
-    if (missing.length) L.push('- ' + missing.length + ' 項尚未有答案：' + missing.map(function (e) { return e.label; }).join('；') + '。AI 會開設一項工作尋找答案，找到後再詢問你。');
+    if (missing.length) L.push('- ' + missing.length + ' 項尚未有答案：' + missing.map(function (e) { return e.label; }).join('；') + '。Zero 會開設一項工作尋找答案，找到後再詢問你。');
     L.push('');
     if (S.note.trim()) L.push('## 你的備註', S.note.trim(), '');
     var machine = {
@@ -1404,7 +1409,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       kinds: (function () { var o = {}; S.order.forEach(function (mid) { o[mid] = kindOf(byId()[mid]); }); return o; })(), kindsChanged: kindChanged(),
       note: S.note.trim()
     };
-    L.push('## 機器讀取部分（供 AI 系統使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
+    L.push('## 機器讀取部分（供 CrewZero 使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
     var head = ['kind: proofread', 'ref: ' + D.page.id, 'option: ' + (edits.length || oc || kindChanged().length ? 'confirm-with-edits' : 'confirm'),
       'rev: ' + (D.page.revision || 0), 'hash: ' + HASH, 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
     return {
@@ -1453,13 +1458,13 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var online = !!S.server;
     if (!online) {
       body.append(h('div', { class: 'warn' },
-        h('span', null, '未連接 AI：此次確認只會下載為檔案，AI 不會收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並確認，AI 才會自動跟進。')));
+        h('span', null, '未連接 CrewZero：此次確認只會下載為檔案，Zero 不會收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並確認，Zero 才會自動跟進。')));
     }
     // 預覽只講四件事：下一步、目標、路線、AI 權限；其餘收埋
     var g5 = FLAGFIELD, g1id = byPlan('G1') || (D.glance.rows[0] && D.glance.rows[0].id), g1 = g1id && REG[g1id];
     var g1row = D.glance.rows.filter(function (r) { return r.id === g1id; })[0];
     var sum = h('ul', { class: 'm-sum' },
-      g5 ? h('li', null, h('b', null, N.ui.nextStep + '：'), cur(g5.id), h('span', { class: 'tr-sub' }, 'AI 將隨即準備草稿，不會對外發送')) : null,
+      g5 ? h('li', null, h('b', null, N.ui.nextStep + '：'), cur(g5.id), h('span', { class: 'tr-sub' }, 'Zero 將隨即準備草稿，不會對外發送')) : null,
       g1 && (!g5 || g1id !== g5.id) ? h('li', null, h('b', null, g1.label + '：'), cur(g1id),
         g1row && g1row.due ? '（期限 ' + showVal(REG[g1row.due.id], cur(g1row.due.id)) + '）' : '') : null,
       h('li', null, h('b', null, N.ui.routeName + '：'), S.order.map(function (mid, i) { return (i + 1) + ' ' + ms[mid].short; }).join(' → '), R.oc ? '（' + N.ui.changed + '）' : ''),
@@ -1471,11 +1476,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var qs = qStats();
     body.append(h('p', { class: 'p-judge m-rest' },
       (R.edits.length ? '你修改了 ' + R.edits.length + ' 項；' : '') + (kindChanged().length ? '你改了 ' + kindChanged().length + ' 站的' + N.ui.kindReal + '／' + N.ui.kindTask + '判斷；' : '') +
-      (qs.left ? '未作答的 ' + qs.left + ' 條按 AI 建議；' : '') +
-      '其餘採用 AI 建議' + (R.tentKept.length && D.page.nextAskOn ? '，「' + N.ui.tentative + '」項目由 ' + md(D.page.nextAskOn) + ' 起分批再詢問你' : '') + '。'));
+      (qs.left ? '未作答的 ' + qs.left + ' 條按 Zero 建議；' : '') +
+      '其餘採用 Zero 建議' + (R.tentKept.length && D.page.nextAskOn ? '，「' + N.ui.tentative + '」項目由 ' + md(D.page.nextAskOn) + ' 起分批再詢問你' : '') + '。'));
     var changes = R.edits.length ? h('ul', { class: 'chg' }, R.edits.map(function (x) {
       return h('li', null, x.label + '：', h('span', { class: 'was' }, clip(x.ai || N.ui.fillShort, 40)), ' → ', h('span', { class: 'now' }, x.founder));
-    })) : h('p', { class: 'p-judge' }, '未作修改，全部採用 AI 建議。');
+    })) : h('p', { class: 'p-judge' }, '未作修改，全部採用 Zero 建議。');
     body.append(h('details', { class: 'm-sec' }, h('summary', null, N.ui.reviewMore),
       h('h4', null, N.ui.changedItems), changes, h('div', { class: 'm-sec' }, note), pre));
     body.append(copyHolder);
@@ -1535,7 +1540,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
       h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, online ? N.ui.submit : N.ui.confirmOnly),
         h('p', null, online
-          ? '按確認後即交予 AI，AI 將自動跟進。'
+          ? '按確認後即交予 Zero，Zero 將自動跟進。'
           : '')),
       body,
       h('div', { class: 'm-foot' },

@@ -206,7 +206,7 @@ try {
     const s = await (await fetch(BASE + '/api/status')).json();
     return (s.runs || []).find(r => r.kind === 'ask' && r.ref === retryPack.id && r.id !== 'R-retry-required-source' && r.state === 'done') || null;
   }, 10000);
-  ok('/api/retry 指向未回答必答題時不會開啟 AI，工作如實說明尚未開始', retryResponse.status === 200 && blockedRetry && /AI 尚未開始/.test(blockedRetry.result?.summary || '') && !fs.existsSync(path.join(DATA, 'sandbox', blockedRetry.id)), { status: retryResponse.status, blockedRetry });
+  ok('/api/retry 指向未回答必答題時不會開啟 AI，工作如實說明尚未開始', retryResponse.status === 200 && blockedRetry && /Zero 尚未開始/.test(blockedRetry.result?.summary || '') && !fs.existsSync(path.join(DATA, 'sandbox', blockedRetry.id)), { status: retryResponse.status, blockedRetry });
   clearPacks();
   writeJson(stateFile, { company: { name: '測試公司' }, tasks: [
     { id: 'task-action-done', title: '確認實地行動', owner: 'founder', status: 'waiting' },

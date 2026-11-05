@@ -1,6 +1,6 @@
 # CrewZero（零號隊員）
 
-給已在用 Claude Code、Codex 或 Antigravity 的創辦人與小團隊：一隊在你電腦上運行的 AI 團隊，先替你準備資料、草稿和練習；見客、收款、簽約仍由你決定和去做。
+創業起步常常孤軍作戰。Zero 是你的 AI 隊員，在背後陪你由構思開始一起打拚。給已在用 Claude Code、Codex 或 Antigravity 的創辦人與小團隊：Zero 團隊在你電腦上運行，先替你準備資料、草稿和練習；見客、收款、簽約仍由你決定和去做。
 
 - 介紹頁：https://adamchanadam.github.io/crewzero/
 - 每個版本改了甚麼：[版本說明](https://github.com/Adamchanadam/crewzero/releases)
@@ -21,7 +21,7 @@ Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安�
 
 ## 開始
 
-1. 在 AI 對話說「安裝 CrewZero」。如尚未有工作位置，請先為你的生意開一個專用資料夾；AI 會在開始前問你是否同意。
+1. 在 AI 對話說「安裝 CrewZero」。如尚未有工作位置，請先為你的生意開一個專用資料夾；AI 工具會在開始前問你是否同意。
 2. 完成後，在 AI 對話說「打開 Founder Desk」。第一次打開時，系統會替你的瀏覽器配對，不用輸入任何東西。
 
 以後在 AI 對話說「打開 Founder Desk」，便可再次打開。
@@ -33,11 +33,11 @@ Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安�
 | 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
 
-使用 Codex 或 Antigravity 時，AI 工作不會上網做研究，生意體檢與商機掃描只用你交的資料；情景演練與紅藍對打在 Claude Code 提供。
+使用 Codex 或 Antigravity 時，Zero 工作不會上網做研究，生意體檢與商機掃描只用你交的資料；情景演練與紅藍對打在 Claude Code 提供。
 
 ## 取得新版
 
-到 AI 對話說「更新 CrewZero」，AI 會先問過你才進行。更新只換程式，你的公司資料不會改動。
+到 AI 對話說「更新 CrewZero」，AI 工具會先問過你才進行。更新只換程式，你的公司資料不會改動。
 
 ## 由 startup-os 轉用 CrewZero
 
@@ -56,3 +56,7 @@ CrewZero 是 startup-os 的新名字。已在用 startup-os 的話，按你的�
 ## 你的資料
 
 公司資料只存放在這部電腦。只有已配對的瀏覽器或手機可以讀取及寫入；手機配對可以隨時撤銷。手機只可在與這部電腦相同的家中或辦公室 Wi-Fi 使用；其他人要使用，請在這部電腦的瀏覽器開啟。
+
+## 意見及支持
+
+歡迎[給意見](https://docs.google.com/forms/d/e/1FAIpQLScnJzUP1-pt5IfWE29x8URA9fJpVBvgji4vHHdj12wIb2zRgA/viewform)，或[支持 CrewZero](https://buymeacoffee.com/adamchan)。

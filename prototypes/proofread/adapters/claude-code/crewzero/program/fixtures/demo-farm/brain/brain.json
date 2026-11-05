@@ -8,7 +8,7 @@
         "id": "weak-1",
         "title": "是否有餐廳願意為來源支付較高價錢",
         "evidence": 1,
-        "source": "AI 解讀",
+        "source": "Zero 解讀",
         "why": "只有一位主廚口頭表示有興趣，尚未有老闆表態",
         "cheapestTest": "就同一張訂單向三間餐廳報兩個價錢",
         "stop": "如兩星期內沒有一間願意試用較高價，便改以穩定供應作賣點"
@@ -17,7 +17,7 @@
         "id": "weak-2",
         "title": "一人送貨能否應付",
         "evidence": 0,
-        "source": "AI 建議 · 未確認",
+        "source": "Zero 建議 · 未確認",
         "why": "須於清晨六時前送達，第二間餐廳加入後未必趕得及",
         "cheapestTest": "試行一次在同一個早上送兩個地點，並記錄時間",
         "stop": "如兩個地點未能於六時前送達，便先物色後備送貨人"
@@ -41,12 +41,12 @@
       {
         "id": "unseen-2",
         "text": "農場甲有兩間散客餐廳，可能是最快的介紹渠道",
-        "source": "AI 解讀"
+        "source": "Zero 解讀"
       },
       {
         "id": "unseen-3",
         "text": "雨天菜量較少，須及早與餐廳說明補貨安排",
-        "source": "AI 建議 · 未確認"
+        "source": "Zero 建議 · 未確認"
       }
     ],
     "notNow": [
@@ -70,7 +70,7 @@
       "chef-a"
     ],
     "waitText": "四日後與農場主丙會面：請先在 Founder Desk 練習一次",
-    "summary": "AI 扮演對方與你模擬會面，練習後提供覆盤及會面卡",
+    "summary": "Zero 扮演對方與你模擬會面，練習後提供覆盤及會面卡",
     "doneSummary": "練習完成：已有覆盤及會面卡"
   },
   "opportunities": {
@@ -154,7 +154,7 @@
   "pipeline": {
     "status": "done",
     "updatedAt": "@-1d 21:05",
-    "summary": "五個對象，AI 每週建議下一步並準備材料",
+    "summary": "五個對象，Zero 每週建議下一步並準備材料",
     "prospects": [
       {
         "id": "f-a",
@@ -212,7 +212,7 @@
         "kind": "客戶",
         "stage": 0,
         "lastReal": "",
-        "rehearsal": "演練：AI 扮演主廚表示會試菜（不計作證據）",
+        "rehearsal": "演練：Zero 扮演主廚表示會試菜（不計作證據）",
         "next": "先請餐廳甲介紹"
       }
     ]

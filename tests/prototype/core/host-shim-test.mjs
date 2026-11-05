@@ -51,8 +51,8 @@ try {
   ok('殼指向嘅程式唔存在：當未安裝，原因講明程式不存在', !!gone.why && /不存在/.test(gone.why) && L.version({ command: 'goneai' }) === '', gone);
   const exBad = await L.execute({ ...foo, command: 'badai' }, SB, prompt);
   ok('認唔出嘅 .cmd 唔會執行 AI 工作', exBad.ok === false, exBad);
-  const declared = crypto.createHash('sha256').update(JSON.stringify([foo.command, foo.args])).digest('hex');
-  ok('認證雜湊照舊用宿主檔原本嘅命令（解析結果唔影響已有認證）', L.hashHost(foo) === declared, { got: L.hashHost(foo), declared });
+  const declared = crypto.createHash('sha256').update(JSON.stringify(['v2', foo.command, foo.args, foo.chat?.args || null, foo.env || null, foo.sandboxProbe || null, foo.required || null, foo.modelsProbe || null, foo.modelsCache || null, foo.loginProbe || null, foo.versionArgs || null, foo.certify || null])).digest('hex');
+  ok('v2 認證雜湊用宣告命令同安全範本，唔用解析結果', L.hashHost(foo) === declared, { got: L.hashHost(foo), declared });
 
   /* 伺服器設定頁資料：認唔出嘅工具 installed:false 連原因 */
   const ADP = path.join(OUT, 'badai.json');

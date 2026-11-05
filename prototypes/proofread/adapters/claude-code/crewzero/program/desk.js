@@ -68,6 +68,8 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .since{margin:6px 0 0;font-size:var(--fs-sub);color:var(--muted)}
 .since b{color:var(--text);font-weight:500}
 .banner{margin-top:8px;font-size:var(--fs-label);color:#ffc18e;border:1px dashed rgba(232,141,79,.5);border-radius:7px;padding:4px 12px;background:rgba(232,141,79,.05);display:inline-block}
+.first-steps{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;font-size:var(--fs-sub)}
+.first-steps a,.first-steps span{white-space:nowrap;color:var(--muted);text-decoration:none}.first-steps>a,.first-steps>span:not([aria-hidden]){padding:5px 13px;border:1px solid var(--line);border-radius:999px}.first-steps [aria-current="step"]{color:var(--text);font-weight:650;border-color:var(--amber,#e88d4f);background:rgba(232,141,79,.14)}.first-steps .done{color:var(--mint);border-color:rgba(153,215,188,.45)}.first-steps .done::before{content:'✓ '}
 .toolbar{display:flex;align-items:center;gap:10px;margin:8px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .tabs{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;overflow-x:auto;max-width:100%;min-width:0;flex:1 1 auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
@@ -146,7 +148,7 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .pair-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.pair-qr{display:block;width:220px;height:220px;background:#fff;padding:16px;margin:16px auto;border-radius:4px}
 .pair-url{display:block;overflow-wrap:anywhere;text-align:center;font:var(--fs-sub)/1.45 var(--mono);color:var(--muted)}
 .phone-bar{margin-top:10px;padding:9px 12px;border:1px solid rgba(232,141,79,.65);border-radius:8px;background:rgba(232,141,79,.08);display:flex;align-items:center;gap:10px;flex-wrap:wrap}.phone-bar strong{font-family:var(--mono);font-size:var(--fs-title);letter-spacing:.12em}.phone-bar .btn{margin-left:auto}
-.help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
+.help-modal textarea{width:100%;min-height:94px;resize:vertical;margin-top:6px}.help-modal input[type=email]{width:100%;box-sizing:border-box;font:inherit;color:var(--text);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin-top:6px}.help-modal .help-note{min-height:1.6em;margin:10px 0 0;color:var(--muted)}
 [hidden]{display:none!important}.help-part{margin:0 0 16px}.help-part p{margin:6px 0 10px}
 .tool-more{position:relative}.tool-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center}.tool-more>summary::-webkit-details-marker{display:none}
 .tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:128px;padding:8px;background:#14161c;border:1px solid var(--line);border-radius:10px}.tool-menu .btn{width:100%;justify-content:center}
@@ -336,17 +338,29 @@ body.paused .bg *{animation:none!important}
     var bad = ST.conn !== 'live';
     return el('span', { cls: 'live' + (bad ? ' offline' : ''), id: 'conn', role: 'status', 'aria-live': 'off' }, el('i'), el('span', { 'data-live-text': '1' }, ST.conn === 'live' ? workText() : ST.conn === 'rejected' ? D.rejected : D.offline));
   }
-  function toolbar(cur, counts) {
-    return el('div', { cls: 'toolbar' }, nav(cur, counts),
+  function firstDay(company, sample, sim) { return !company.confirmed && !sample && !sim; }
+  function firstSteps(company) {
+    var ready = !!company.ready;
+    return el('nav', { cls: 'first-steps', id: 'first-steps', 'aria-label': U.firstSteps },
+      el('a', { href: '/#/intake', cls: ready ? 'done' : null, 'aria-current': ready ? null : 'step' }, U.firstTell),
+      el('span', { 'aria-hidden': 'true' }, '→'),
+      ready ? el('a', { href: '/proofread.html', 'aria-current': 'step' }, U.firstReview) : el('span', null, U.firstReview),
+      el('span', { 'aria-hidden': 'true' }, '→'), el('span', null, U.firstStart));
+  }
+  function toolbar(cur, counts, first, company) {
+    return el('div', { cls: 'toolbar' }, first ? firstSteps(company) : nav(cur, counts),
       el('div', { cls: 'tool-right' }, liveBadge(),
         el('button', { type: 'button', cls: 'btn small', id: 'open-help', onclick: function () { helpDialog(cur); } }, U.helpOpen),
-        toolMore()));
+        toolMore(first)));
   }
   // 輔助工具收入「更多」，頁頭只留主線入口同求助；重畫頁頭時保持開關狀態
-  function toolMore() {
+  function toolMore(first) {
     var box = el('details', { cls: 'tool-more', id: 'tool-more' }, el('summary', { cls: 'btn small' }, U.toolMore),
       el('div', { cls: 'tool-menu' },
+        first ? el('a', { cls: 'btn small', href: HREF.system }, D.system) : null,
         el('a', { cls: 'btn small', href: '/welcome' }, U.welcomeLink),
+        el('button', { type: 'button', cls: 'btn small', id: 'open-feedback', onclick: feedbackDialog }, N.feedback.open),
+        el('a', { cls: 'btn small', id: 'open-support', href: N.feedback.support, target: '_blank', rel: 'noopener noreferrer' }, N.feedback.supportText),
         el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
@@ -359,6 +373,68 @@ body.paused .bg *{animation:none!important}
     var box = document.getElementById('tool-more');
     if (box && box.open && !box.contains(e.target)) box.open = false;
   });
+  function feedbackUsage(st) {
+    var f = N.feedback, co = st.company || {}, hosts = f.tools;
+    var stage = st.sample || st.sim ? f.stages[3] : co.confirmed ? f.stages[2] : (st.intake || co.ready) ? f.stages[1] : f.stages[0];
+    var version = String(st.version || '').replace(/^proofread-chain-/, '');
+    if (!/^[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?$/.test(version)) version = f.unset;
+    var host = st.ai && st.ai.ready && st.cert && hosts[st.cert.host] || f.unset;
+    return f.stageLabel + '：' + stage + '；' + f.versionLabel + '：' + version + '；' + f.toolLabel + '：' + host;
+  }
+  function feedbackDialog() {
+    var f = N.feedback, opener = document.activeElement, rating = '', status = null, shown = document.getElementById('feedback-modal');
+    if (shown) shown.remove();
+    var modal = el('div', { cls: 'pair-modal help-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'feedback-title', id: 'feedback-modal' });
+    var card = el('section', { cls: 'layer' });
+    var close = function () { modal.remove(); if (opener && opener.isConnected) opener.focus(); };
+    var buttons = f.ratings.map(function (r) { return el('button', { type: 'button', cls: 'btn small', 'aria-pressed': 'false', onclick: function () { rating = rating === r ? '' : r; buttons.forEach(function (b, i) { b.setAttribute('aria-pressed', f.ratings[i] === rating ? 'true' : 'false'); }); updateFeedback(); } }, r); });
+    var message = el('textarea', { id: 'feedback-text', maxlength: '300', rows: '3' });
+    var quote = el('input', { id: 'feedback-quote', type: 'checkbox' });
+    var email = el('input', { id: 'feedback-email', type: 'email', maxlength: '120' });
+    var preview = el('ul', { id: 'feedback-preview', 'aria-live': 'polite' });
+    var note = el('p', { id: 'feedback-required', cls: 'small muted' });
+    var submit = el('a', { id: 'feedback-send', cls: 'btn primary', target: '_blank', rel: 'noopener noreferrer', 'aria-disabled': 'true' }, f.send);
+    function updateFeedback() {
+      var fields = f.fields, params = new URLSearchParams(), rows = [], text = message.value.trim(), mail = email.value.trim();
+      function add(key, label, value) { params.append(key, value); rows.push(el('li', null, label + '：' + value)); }
+      if (rating) add(fields.rating, f.question, rating);
+      if (text) { add(fields.text, f.text, text); add(fields.quote, f.quote, quote.checked ? f.quoteYes : f.quoteNo); }
+      if (mail) add(fields.email, f.email, mail);
+      if (status) add(fields.usage, f.usage, feedbackUsage(status));
+      preview.replaceChildren.apply(preview, rows);
+      var enabled = !!status && !!(rating || text);
+      note.textContent = rating || text ? '' : f.required;
+      submit.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+      if (enabled) { params.append('submit', 'Submit'); submit.href = f.response + '?' + params.toString(); } else submit.removeAttribute('href');
+    }
+    [message, quote, email].forEach(function (x) { x.addEventListener('input', updateFeedback); x.addEventListener('change', updateFeedback); });
+    submit.addEventListener('click', function (e) { if (!submit.hasAttribute('href')) { e.preventDefault(); return; } setTimeout(function () { card.replaceChildren(el('p', null, f.sent), el('button', { type: 'button', cls: 'btn', onclick: close }, f.close)); card.querySelector('button').focus(); }, 0); });
+    card.append(el('h2', { id: 'feedback-title' }, f.open), el('p', null, f.question), el('div', { cls: 'pair-actions' }, buttons), el('p', null, el('label', { for: 'feedback-text' }, f.text)), message,
+      el('p', null, el('label', null, quote, ' ', f.quote)), el('p', null, el('label', { for: 'feedback-email' }, f.email)), email,
+      el('h3', null, f.preview), preview, note, el('div', { cls: 'pair-actions' }, submit, el('button', { type: 'button', cls: 'btn', onclick: close }, f.close)));
+    modal.append(card); modal.addEventListener('click', function (e) { if (e.target === modal) close(); }); modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    document.body.append(modal); buttons[0].focus(); updateFeedback();
+    send('/api/status', { cache: 'no-store' }).then(function (s) { status = s; updateFeedback(); });
+  }
+  function feedbackPrompt(st, asks) {
+    var f = N.feedback, c = st.company || {}, prompts = f.prompts;
+    if (st.sample || st.sim || !c.confirmed || !(c.firstConfirmedAt || c.confirmedAt) || (asks.packs || []).some(function (p) { return p.open && p.urgent; }) || (asks.todo || []).some(function (t) { return t.effect === 'now' || t.conflict; })) return null;
+    var age = Date.now() - Date.parse(c.firstConfirmedAt || c.confirmedAt), picked = null;
+    if (!Number.isFinite(age) || age < 0) return null;
+    try {
+      localStorage.setItem('crewzero-feedback-probe', '1');
+      if (localStorage.getItem('crewzero-feedback-probe') !== '1') return null;
+      localStorage.removeItem('crewzero-feedback-probe');
+      var eligible = prompts.filter(function (p) { return p.key === 'firstFlag' ? !!c.firstFlagSeen : age >= p.days * 86400000; });
+      eligible.forEach(function (p) { if (!localStorage.getItem('crewzero-feedback-' + p.key)) picked = p; });
+      if (!picked) return null;
+      eligible.forEach(function (p) { if (p !== picked) localStorage.setItem('crewzero-feedback-' + p.key, '1'); });
+    } catch (e) { return null; }
+    var card = el('section', { cls: 'layer', id: 'feedback-prompt', 'data-prompt': picked.key }, el('p', null, picked.text));
+    function done(open) { try { localStorage.setItem('crewzero-feedback-' + picked.key, '1'); } catch (e) { } card.remove(); if (open) feedbackDialog(); }
+    card.append(el('div', { cls: 'pair-actions' }, el('button', { type: 'button', cls: 'btn small', onclick: function () { done(true); } }, f.open), el('button', { type: 'button', cls: 'btn small', onclick: function () { done(false); } }, f.dismiss)));
+    return card;
+  }
   function helpDialog(page) {
     var opener = document.getElementById('open-help');
     var modal = el('div', { cls: 'pair-modal help-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'help-title', id: 'help-modal' });
@@ -608,6 +684,7 @@ body.paused .bg *{animation:none!important}
     if (o.work !== undefined) ST.work = o.work;
     var pg = o.tab ? [o.tab, o.sub] : (PAGE[o.page] || ['pending']), cur = pg[0], sub = o.sub || pg[1];
     var d = ST.data || {}, c = o.company || d.company || {}, mt = o.metrics || d.metrics;
+    var first = firstDay(c, o.sample || d.sample, o.sim || d.sim);
     ST.company = c;
     if (o.pending != null) ST.pending = o.pending;
     var counts = { pending: o.pending != null ? o.pending : (mt ? mt.pending : 0), brain: o.brainWaiting != null ? o.brainWaiting : brainWaiting(d) };
@@ -622,11 +699,12 @@ body.paused .bg *{animation:none!important}
             el('h1', null, c.name || D.shell),
             c.oneLiner ? el('p', { cls: 'one' }, c.oneLiner) : null,
             o.basis ? el('div', { cls: 'basis' }, o.basis) : null)),
-        metricsNav(mt)),
-      o.sample ? el('div', { cls: 'banner', id: 'sample' }, D.sample) : null,
+        first ? null : metricsNav(mt)),
+      // 頁面重畫頁頭時保留示範標記，唔好等下次讀回先補返（整頁會跳）
+      o.sample || d.sample ? el('div', { cls: 'banner', id: 'sample' }, D.sample) : null,
       // 模擬實例：每頁都標明唔係生意證據（設計稿第 8 節）
       o.sim ? el('div', { cls: 'banner desk-sim', id: 'sim-badge', role: 'note' }, simText) : null,
-      toolbar(cur, counts),
+      toolbar(cur, counts, first, c),
       o.since || null);
     // 直接開檔（file://，例如校對頁測試）唔讀伺服器
     if (!mt && /^https?:$/.test(location.protocol)) poll();
@@ -648,14 +726,33 @@ body.paused .bg *{animation:none!important}
     var t = (ST.data || {}).tele;
     return el('div', { cls: 'tele', 'data-tele': 'ai' }, el('span', { cls: 'hb' }, hbRing(), el('span', { 'data-hb': '1' }, D.readAgo.replace('{n}', '0'))), el('span', null, D.nextRunL + ' ', el('b', { cls: 'cd', 'data-cd': t ? t.nextRunAt : '' }, t ? cd(t.nextRunAt) : '—')), el('span', { 'data-tele-parts': '1' }, t ? teleParts(t) : ''));
   }
-  // 舊介面（ask.html／proofread.html）：header({ page, company, pending, work, sim, basis, nav })
-  function header(o) { return shell({ page: o.page, company: o.company, pending: o.pending, work: o.work, sim: o.sim, basis: o.basis }); }
+  // 舊介面（ask.html／proofread.html）：header({ page, company, pending, work, sim, sample, basis, nav })
+  function header(o) { return shell({ page: o.page, company: o.company, pending: o.pending, work: o.work, sim: o.sim, sample: o.sample, basis: o.basis }); }
   function updateTitle() {
     if (!ST.title) return;
     var pg = PAGE[ST.title.page] || [ST.title.page], mt = (ST.data || {}).metrics || {}, n = Number(mt.pending != null ? mt.pending : ST.pending || 0) || 0;
     document.title = (document.hidden && n ? '(' + n + ') ' : '') + (ST.title.extra ? ST.title.extra + ' · ' : '') + (tabName(pg[0]) || pg[0]) + ' · ' + D.shell;
   }
-  function title(page, extra) { ST.title = { page: page, extra: extra || '' }; updateTitle(); }
+  function title(page, extra) {
+    if (page === 'company') { try { sessionStorage.removeItem('crewzero-overview-ready'); sessionStorage.removeItem('crewzero-overview-watching'); } catch (e) {} }
+    else { try { if (sessionStorage.getItem('crewzero-overview-ready')) extra = U.companyReady; } catch (e) {} }
+    ST.title = { page: page, extra: extra || '' }; updateTitle();
+  }
+
+  // 即使創辦人轉往另一個畫面，仍跟進已提交的公司概覽。
+  var overviewPollBusy = false;
+  setInterval(function () {
+    var watching = false; try { watching = !!sessionStorage.getItem('crewzero-overview-watching'); } catch (e) {}
+    if (!watching || overviewPollBusy || !/^https?:$/.test(location.protocol)) return;
+    overviewPollBusy = true;
+    fetch('/api/status', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (st) {
+      if (!st || !st.intake || !ST.title || ST.title.page === 'company') return;
+      if (st.intake.state === 'done' && st.company && st.company.ready) {
+        try { sessionStorage.removeItem('crewzero-overview-watching'); sessionStorage.setItem('crewzero-overview-ready', '1'); } catch (e) {}
+        title(ST.title.page, U.companyReady);
+      } else if (st.intake.state === 'failed') { try { sessionStorage.removeItem('crewzero-overview-watching'); } catch (e) {} }
+    }).catch(function () {}).then(function () { overviewPollBusy = false; });
+  }, 2000);
 
   /* ---------- 就地更新（每次讀回）：指標、分頁徽章、連線徽章；唔重畫頁面 ---------- */
   function update(d) {
@@ -804,7 +901,7 @@ body.paused .bg *{animation:none!important}
   }
 
   g.SOS_DESK = {
-    shell: shell, header: header, devices: devices, title: title, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
+    shell: shell, header: header, devices: devices, title: title, feedbackDialog: feedbackDialog, feedbackPrompt: feedbackPrompt, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast, watchHelp: watchHelp,
     send: send, why: why, netError: netError, apiError: apiError,
     paused: function () { return !!ST.paused; }, fx: function () { return !!ST.fx; }, reduced: !!REDUCED,

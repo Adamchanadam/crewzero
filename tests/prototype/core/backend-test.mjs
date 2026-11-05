@@ -38,8 +38,8 @@ try {
   ok('冇公司概覽時 /company-page.js 回 404', (await fetch(BASE + '/company-page.js')).status === 404);
 
   // 1. 未設定 AI 都可以交資料：記低，等 AI 設定
-  const bad = await post('/api/intake', { bizType: 'other', fields: { q1: '只填一條' }, files: [] });
-  ok('必填未齊：拒收並講原因', bad.code === 400 && /首五條/.test(bad.j && bad.j.message || ''), bad);
+  const bad = await post('/api/intake', { bizType: 'other', fields: { q1: '   ' }, files: [] });
+  ok('必填未齊：拒收並講原因', bad.code === 400 && /第 1 條/.test(bad.j && bad.j.message || ''), bad);
   const badExt = await post('/api/intake', { bizType: 'other', fields, files: [file('x.exe', 'x')] });
   ok('唔支援嘅附件：拒收', badExt.code === 400, badExt);
   const sub = await post('/api/intake', { bizType: 'other', fields, files: [file('商業模式.md', '# 測試\n農場直送'), file('會議紀錄.txt', '測試會議')] });

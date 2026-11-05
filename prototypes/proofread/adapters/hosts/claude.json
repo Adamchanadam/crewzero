@@ -44,7 +44,7 @@
     "WebFetch(domain:172.30.*.*)",
     "WebFetch(domain:172.31.*.*)",
     "--model",
-    "sonnet",
+    "{model}",
     "--no-session-persistence",
     "--output-format",
     "json",
@@ -110,9 +110,20 @@
       "172.30.*.*",
       "172.31.*.*"
     ],
-    "note": "網絡：所有 AI 工作都可以對外讀取（搜尋、讀網頁、下載公開資料），一定要禁止本機同私人網段（規劃書 5.2 第 3、4 點、決定十六）"
+    "note": "網絡：所有 AI 工作都可以對外讀取（搜尋、讀網頁、下載公開資料），一定要禁止本機同私人網段（規劃書 5.2 第 3、4 點、決定十六）",
+    "pairs": [
+      [
+        "--model",
+        "{model}"
+      ]
+    ]
   },
-  "denialProof": { "tool": "WebFetch", "method": "GET", "urlField": "url", "noPostTool": true },
+  "denialProof": {
+    "tool": "WebFetch",
+    "method": "GET",
+    "urlField": "url",
+    "noPostTool": true
+  },
   "chat": {
     "note": "情景演練扮對方（原型試行）：冇工具、唔讀設定、清走 MCP；伺服器開，等創辦人決定正式規則",
     "args": [
@@ -139,11 +150,32 @@
     "fastModel": "haiku",
     "reviewModel": "sonnet"
   },
-  "roles": {
-    "note": "紅藍對打角色模型表（原型）：同一服務商三個不同模型；只換 --model，限制同工具唔變；裁判唔可以同藍方同一模型。轉強由藍方模型做。",
-    "blue": "sonnet",
-    "red": "haiku",
-    "judge": "opus",
+  "models": {
+    "note": "紅藍同級、立場分工；裁判應與藍方不同模型，做不到時顯示警告",
+    "everyday": [
+      {
+        "model": "sonnet",
+        "label": "Sonnet 5.5"
+      }
+    ],
+    "blue": [
+      {
+        "model": "sonnet",
+        "label": "Sonnet 5.5"
+      }
+    ],
+    "red": [
+      {
+        "model": "sonnet",
+        "label": "Sonnet 5.5"
+      }
+    ],
+    "judge": [
+      {
+        "model": "opus",
+        "label": "Opus 5.5"
+      }
+    ],
     "timeoutMinutes": 25
   }
 }

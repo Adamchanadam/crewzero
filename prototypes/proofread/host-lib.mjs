@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { dataDirs, readJSON } from './ask-lib.mjs';
+import { dataDirs, readJSON, writeJSON, localIso, NAMES } from './ask-lib.mjs';
+
+// 只接受這個完整設定值；不可藉 required.pairs 同步改動而放寬權限。
+const AGY_SETTINGS = '{"permissions":{"deny":["command(*)","read_url(*)","execute_url(*)","mcp(*)","unsandboxed(*)","read_file({agyHome}/)"]},"allowNonWorkspaceAccess":false,"enableTerminalSandbox":true}';
 
 export function hosts(root) {
   const hostDir = path.join(root, 'adapters', 'hosts');
@@ -13,9 +16,8 @@ export function hosts(root) {
   else try { list = fs.readdirSync(hostDir).filter(f => f.endsWith('.json')).sort().map(f => path.join(hostDir, f)); } catch { }
   return [...new Set(list)].map(file => { const h = readJSON(file, null); return h && { ...h, id: h.id || 'test', file, root }; }).filter(Boolean);
 }
-// 認證雜湊：啟動參數（包括網絡允許同禁止清單）同角色模型表；任何一樣改咗都要重新認證
-// 舊 Claude 設定冇 env，必須維持舊雜湊，令已認證嘅 Claude 唔需要再認證；有隔離 home 嘅宿主則把未代入嘅 env 範本納入。
-export const hashHost = h => crypto.createHash('sha256').update(JSON.stringify(h.roles ? [h.command, h.args, h.env || null, h.roles] : h.env ? [h.command, h.args, h.env, h.sandboxProbe || null] : [h.command, h.args])).digest('hex');
+// 模型表唔影響安全限制；安全範本任何改動都要重新認證，舊雜湊只會失效一次。
+export const hashHost = h => crypto.createHash('sha256').update(JSON.stringify(['v2', h.command, h.args, h.chat?.args || null, h.env || null, h.sandboxProbe || null, h.required || null, h.modelsProbe || null, h.modelsCache || null, h.loginProbe || null, h.versionArgs || null, h.certify || null])).digest('hex');
 // 呢個宿主嘅 AI 工作可唔可以上網讀取（工具清單有讀網頁）
 export function readsWeb(h) { const a = h && h.args || [], f = h && h.required && h.required.toolsFlag, i = f ? a.indexOf(f) : -1; return i >= 0 && String(a[i + 1] || '').split(',').includes('WebFetch'); }
 // Windows：npm 裝嘅 AI 工具（例如 codex）喺 PATH 只係 .cmd 啟動殼；Node 唔經命令殼開唔到 .cmd，而經命令殼開會令提示文字被當指令解讀。
@@ -50,7 +52,12 @@ function dataDirFor(h, sandbox = '') {
 export function adapterValue(h, value, sandbox = '') {
   const dataDir = dataDirFor(h, sandbox);
   const codexHome = path.join(dataDir, 'codex-home');
-  const agyHome = path.join(dataDir, 'agy-home');
+  const agyHome = path.resolve(dataDir, 'agy-home').replace(/\\/g, '/');
+  if (value === AGY_SETTINGS) {
+    const settings = JSON.parse(value);
+    settings.permissions.deny = settings.permissions.deny.map(rule => rule.replaceAll('{agyHome}', agyHome));
+    return JSON.stringify(settings);
+  }
   return String(value || '').replaceAll('{dataDir}', dataDir).replaceAll('{codexHome}', codexHome).replaceAll('{agyHome}', agyHome)
     .replaceAll('{cwd}', sandbox).replaceAll('{outfile}', sandbox ? path.join(sandbox, h.outputFile || 'last-message.txt') : '');
 }
@@ -119,11 +126,11 @@ function withAuthLock(home, work) {
       fs.mkdirSync(lock);
       try { return work(); } finally { try { fs.rmdirSync(lock); } catch { } }
     } catch (e) {
-      if (e?.code !== 'EEXIST') return { ok: false, reason: '無法安全準備 AI 登入檔。' };
+      if (e?.code !== 'EEXIST') return { ok: false, reason: '無法安全準備 AI 工具登入檔。' };
       pause(20);
     }
   }
-  return { ok: false, reason: 'AI 登入檔正由另一個程序處理，請重試。' };
+  return { ok: false, reason: 'AI 工具登入檔正由另一個程序處理，請重試。' };
 }
 // 活躍租約：檔名帶 PID；程序已結束嘅租約當作失效並清走（中斷嘅程序唔會永遠鎖住登入檔）
 const LEASE = /^\.startup-os-auth-(\d+)-\w+\.lease$/;
@@ -157,9 +164,9 @@ function authHandoff(h, sandbox = '') {
     const made = [];
     const remove = entry => { try { fs.unlinkSync(entry.target); } catch { } try { fs.unlinkSync(entry.marker); } catch { } };
     try {
-      if (!fs.statSync(source).isFile() || (winCap && !fs.statSync(capSource).isFile())) return { ok: false, reason: '找不到 AI 登入資料：請先在該 AI 工具正常登入並使用一次，再按重試。' };
+      if (!fs.statSync(source).isFile() || (winCap && !fs.statSync(capSource).isFile())) return { ok: false, reason: '找不到 AI 工具登入資料：請先在該 AI 工具正常登入並使用一次，再按重試。' };
       const leases = liveLeases(home);
-      if (entries.some(entry => fs.existsSync(entry.target) && !fs.existsSync(entry.marker))) return { ok: false, reason: '隔離登入檔狀態不明，未有啟動 AI。' };
+      if (entries.some(entry => fs.existsSync(entry.target) && !fs.existsSync(entry.marker))) return { ok: false, reason: '隔離登入檔狀態不明，未有啟動 AI 工具。' };
       if (!leases.length) for (const entry of entries) if (fs.existsSync(entry.marker)) remove(entry);
       for (const entry of entries) if (!fs.existsSync(entry.target)) {
         try { fs.linkSync(entry.source, entry.target); }
@@ -176,7 +183,7 @@ function authHandoff(h, sandbox = '') {
       // 交接失敗：收回今次建立嘅租約；登入檔與沙盒身份檔同樣不留在 data。
       try { fs.unlinkSync(lease); } catch { }
       if (made.length && !liveLeases(home).length) made.forEach(remove);
-      return { ok: false, reason: '無法安全準備 AI 登入檔。' };
+      return { ok: false, reason: '無法安全準備 AI 工具登入檔。' };
     }
   });
   if (!prepared.ok) return { ...prepared, cleanup: () => { } };
@@ -209,7 +216,7 @@ export function sandboxProbe(h, sandbox, target, content = 'startup-os-sandbox-p
   const argList = process.platform !== 'win32' && Array.isArray(probe.posixArgs) ? probe.posixArgs : probe.args;
   const args = argList.map(value => adapterValue(h, value, sandbox).replaceAll('{target}', String(target)).replaceAll('{content}', String(content)));
   const prepared = preparedAdapter(h, sandbox);
-  if (!prepared.handoff.ok) { prepared.cleanup(); return Promise.resolve({ ok: false, code: null, reason: prepared.handoff.reason || '無法安全準備 AI 登入。' }); }
+  if (!prepared.handoff.ok) { prepared.cleanup(); return Promise.resolve({ ok: false, code: null, reason: prepared.handoff.reason || '無法安全準備 AI 工具登入。' }); }
   return new Promise(resolve => {
     let child, settled = false;
     const finish = result => { if (settled) return; settled = true; clearTimeout(timer); prepared.cleanup(); resolve(result); };
@@ -279,7 +286,31 @@ function pairedArgsAreSafe(args, required) {
   }
   return true;
 }
+export const validModel = model => typeof model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(model);
+const validEffort = effort => ['low', 'medium', 'high', 'xhigh', 'max'].includes(effort);
+function modelsAreSafe(h) {
+  if (h.args !== undefined && (!Array.isArray(h.args) || h.args.some(a => typeof a !== 'string'))) return false;
+  // 清單探測只可以係唯讀查詢：唔准帶旗標、佔位或者提示文字
+  if (h.modelsProbe && (!Array.isArray(h.modelsProbe.args) || !h.modelsProbe.args.length || h.modelsProbe.args.length > 2 || h.modelsProbe.args.some(a => typeof a !== 'string' || a.startsWith('-') || /[{}\s]/.test(a)))) return false;
+  if (h.chat && [h.chat.fastModel, h.chat.reviewModel].some(m => m !== undefined && !validModel(m))) return false;
+  const args = h.args || [], modelCount = args.reduce((n, a) => n + (String(a).match(/\{model\}/g) || []).length, 0);
+  if (args.some((a, i) => a.includes('{agyHome}') && !(h.id === 'agy' && a === AGY_SETTINGS && args[i - 1] === '--settings'))) return false;
+  const effortArgs = args.filter(a => String(a).includes('{effort}'));
+  if (!Object.hasOwn(h, 'models')) return modelCount === 0 && effortArgs.length === 0;
+  const table = h.models;
+  if (!table || typeof table !== 'object' || Array.isArray(table) || !Array.isArray(table.everyday)) return false;
+  const mi = args.indexOf('{model}');
+  if (modelCount !== 1 || mi < 1 || args[mi - 1] !== '--model' || args.filter(a => a === '--model' || String(a).startsWith('--model=')).length !== 1) return false;
+  if (effortArgs.length > 1 || effortArgs.some(a => a !== 'model_reasoning_effort="{effort}"')) return false;
+  return Object.entries(table).filter(([k]) => !['note', 'timeoutMinutes'].includes(k)).every(([, list]) => Array.isArray(list) && list.length > 0 && list.every(c => c && validModel(c.model) && (c.effort === undefined ? !effortArgs.length : validEffort(c.effort))));
+}
 export function restrictions(h) {
+  if (!h || !modelsAreSafe(h)) return false;
+  if (h.id === 'agy') {
+    const args = h.args || [], at = args.indexOf('--settings');
+    if (at < 0 || args[at + 1] !== AGY_SETTINGS || args.filter(a => a === '--settings' || a.startsWith('--settings=')).length !== 1 ||
+      !(h.required?.pairs || []).some(pair => pair?.[0] === '--settings' && pair?.[1] === AGY_SETTINGS)) return false;
+  }
   const r = h.required || {}, a = normalizedArgs(h.args || [], r);
   const banned = [...(r.mustNotHave || []), ...(r.forbiddenFlags || [])].map(String);
   if ((r.mustHave || []).some(x => !a.includes(x)) || banned.some(x => a.some(v => String(v) === x || String(v).startsWith(x + '='))) || !pairedArgsAreSafe(a, r)) return false;
@@ -291,61 +322,140 @@ export function restrictions(h) {
   if (readsWeb(h) && (r.mustDeny || []).some(x => !a.includes(`WebFetch(domain:${x})`))) return false;
   return isolatedHomesAreSafe(h);
 }
+// 認證紀錄是否仍然適用於現在的設定（不開工具查版本，頁面每次讀回都可以用）
+export function certCurrent(root, ledger) {
+  const cert = readJSON(path.join(ledger, 'adapter-cert.json'), null);
+  if (!cert) return false;
+  const h = hosts(root).find(x => x.id === cert.host || x.file === cert.host);
+  return !!(h && restrictions(h) && hashHost(h) === cert.argsHash && cert.version);
+}
 export function certified(root, ledger) {
   const cert = readJSON(path.join(ledger, 'adapter-cert.json'), null);
-  if (!cert) return { code: 'none', reason: 'AI 未設定，設定好之後會自動繼續' };
+  if (!cert) return { code: 'none', reason: 'AI 工具未設定，設定好之後會自動繼續' };
   const h = hosts(root).find(x => x.id === cert.host || x.file === cert.host);
-  if (!h || !restrictions(h) || hashHost(h) !== cert.argsHash || !cert.version || version(h) !== cert.version) return { code: 'changed', reason: 'AI 工具設定已變更，須重新認證' };
-  return { host: h, label: cert.label || h.label || h.name || 'AI' };
+  const changed = { code: 'changed', reason: 'AI 工具設定已變更，須重新認證' };
+  if (!h || !restrictions(h) || hashHost(h) !== cert.argsHash || !cert.version) return changed;
+  const current = version(h);
+  if (current !== cert.version) return current ? { ...changed, versionOnly: true, hostId: h.id, version: current } : changed;
+  return { host: h, label: cert.label || h.label || h.name || 'AI 工具' };
 }
 export function cleanEnv() {
   return Object.fromEntries(Object.entries(process.env).filter(([k]) => !/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|BEARER|OAUTH/i.test(k) && !/^CLAUDE/i.test(k) && !/^CODEX_THREAD_ID$/i.test(k)));
 }
-// prompt：認證探測用自己嘅啟動句（講明係安全測試、預期會被拒絕）；一般工作用宿主檔嘅 prompt
-// opts.role：紅藍對打嘅角色（blue／red／judge），按宿主檔 roles 換 --model 嘅值同時限；其餘啟動設定（限制、工具）完全唔變
-export function roleModel(h, role) {
-  const r = h && h.roles || {};
-  const m = typeof r[role] === 'string' && /^[\w.-]{1,40}$/.test(r[role]) ? r[role] : '';
-  return m;
+// 認證使用專用提示；一般工作使用宿主檔的提示。
+export function modelCandidates(h, role = 'everyday') {
+  return h?.models?.[role] || h?.models?.everyday || [];
+}
+// 清單只用嚟揀已批准嘅候選，唔會自動加入新模型。探測失敗就照用首選。
+export function pickModel(h, role = 'everyday', ctx = {}) {
+  const candidates = modelCandidates(h, role);
+  if (!candidates.length) return null;
+  const sandbox = ctx.sandbox || '', data = dataDirFor(h, sandbox), ledger = ctx.ledger || path.join(data, 'ledger');
+  let available = null;
+  if (h.modelsCache) {
+    const cache = readJSON(adapterValue(h, h.modelsCache, sandbox), null);
+    if (Array.isArray(cache?.models)) available = new Set(cache.models.filter(m => m && typeof m.slug === 'string' && (!m.deprecated || (Array.isArray(m.deprecated) && !m.deprecated.length))).map(m => m.slug));
+  } else if (h.modelsProbe && restrictions(h)) {
+    const file = path.join(ledger, 'model-list-' + h.id + '.json'), day = localIso().slice(0, 10), saved = readJSON(file, null);
+    if (saved?.day === day) available = Array.isArray(saved.models) ? new Set(saved.models) : null;
+    else {
+      let models = null;
+      const c = resolveCommand(h.command), prepared = c.why ? null : preparedAdapter(h, sandbox);
+      try {
+        if (prepared?.handoff.ok) {
+          const r = spawnSync(c.command, [...c.prefix, ...h.modelsProbe.args], { env: prepared.env, encoding: 'utf8', windowsHide: true, timeout: 15000 });
+          if (r.status === 0) models = (r.stdout || '').split(/\r?\n/).map(l => l.trim().split(/\s+/)[0]).filter(validModel);
+        }
+      } catch { } finally { prepared?.cleanup(); }
+      try { writeJSON(file, { day, models }); } catch { }
+      if (models) available = new Set(models);
+    }
+  }
+  return (available && candidates.find(c => available.has(c.model))) || candidates[0];
 }
 // 所有 AI 工作用同一組啟動參數（網絡規則都喺入面）；只係紅藍對打嘅角色換模型同時限
 export function buildArgs(h, sandbox, prompt, opts = {}) {
   const outfile = path.join(sandbox, h.outputFile || 'last-message.txt');
-  let args = h.args.map(a => adapterValue(h, a, sandbox).replaceAll('{prompt}', prompt || h.prompt || '').replaceAll('{cwd}', sandbox).replaceAll('{outfile}', outfile));
-  const model = opts.role ? roleModel(h, opts.role) : '';
-  const mi = args.indexOf('--model');
-  if (model && mi >= 0 && mi + 1 < args.length) { args = args.slice(); args[mi + 1] = model; }
-  return args;
+  const candidates = modelCandidates(h, opts.role), chosen = opts.model === undefined ? candidates[0] : candidates.find(c => c.model === (typeof opts.model === 'string' ? opts.model : opts.model?.model) && (typeof opts.model === 'string' || c.effort === opts.model?.effort));
+  if (h.models && (!modelsAreSafe(h) || !chosen)) throw new Error('AI 模型設定不合格');
+  // 先代入模型再放提示文字，唔會改寫提示入面嘅佔位字樣。
+  return h.args.map(a => adapterValue(h, a, sandbox).replaceAll('{model}', chosen?.model || '').replaceAll('{effort}', chosen?.effort || '')
+    .replaceAll('{cwd}', sandbox).replaceAll('{outfile}', outfile).replaceAll('{prompt}', prompt || h.prompt || ''));
+}
+function hasOutput(dir) {
+  try { return fs.readdirSync(dir, { withFileTypes: true }).some(e => e.isDirectory() ? hasOutput(path.join(dir, e.name)) : true); }
+  catch (e) { return e.code !== 'ENOENT'; }
+}
+function actualModel(h, meta) {
+  if (h.outputFormat !== 'jsonl' && h.outputFormat !== 'stream-json') return Object.entries(meta?.modelUsage || {}).sort((a, b) => Number(b[1]?.costUSD || 0) - Number(a[1]?.costUSD || 0))[0]?.[0] || '';
+  // 只認事件實際提供嘅欄位，唔由請求參數估。
+  for (const event of [...(meta?.events || [])].reverse()) {
+    for (const obj of [event, event.init, event.result, event.message, event.item, event.step_update]) if (typeof obj?.model === 'string') return obj.model;
+  }
+  return '';
+}
+// Claude 別名會隨工具升級；有實際代號就顯示實際版本。其他代號認唔到就用模型表名稱，唔估。
+export function modelName(actual, label) {
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(String(actual || ''));
+  return m ? m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + (m[3] ? '.' + m[3] : '') : label;
+}
+function recordModel(h, sandbox, role, chosen, meta) {
+  if (!chosen) return;
+  const ledger = path.join(dataDirFor(h, sandbox), 'ledger'), file = path.join(ledger, 'model-seen.json'), seen = readJSON(file, {}), prior = seen[role];
+  const now = { requested: chosen.model, label: chosen.label || chosen.model, fallback: chosen !== modelCandidates(h, role)[0], actual: actualModel(h, meta), at: localIso() };
+  seen[role] = now;
+  try {
+    writeJSON(file, seen);
+    if (prior && (now.actual !== prior.actual || now.fallback !== prior.fallback)) writeJSON(path.join(ledger, 'model-notice.json'), { id: crypto.randomUUID(), text: NAMES.t(now.fallback ? 'aiModelFallback' : 'aiModelUpdated', { model: modelName(now.actual, now.label) + (chosen.effort === 'high' ? NAMES.ui.aiDeepThinking : '') }) });
+  } catch { }
 }
 // AI 工作失敗原因（創辦人會喺失敗卡「原因：」見到）：只按程式真係分辨到嘅訊號分類，唔估英文錯誤字句。
 // 訊號：計時器到時 → 超時；啟動檔解析失敗或者系統話搵唔到程式（ENOENT）→ 搵唔到工具；其他啟動失敗 → 未能啟動；
 // 工具執行完但失敗，而宿主檔有登入探測（loginProbe）且探測話未登入 → 登入失效；其餘 → 通用句（都有下一步）。
 export const AI_FAIL = {
-  timeout: 'AI 處理時間過長，這次未有完成。請按「重試」。',
+  timeout: 'Zero 處理時間過長，這次未有完成。請按「重試」。',
   notFound: '找不到 AI 工具：電腦上的 AI 工具可能已移除或搬走。請重新安裝並登入該工具，再到「系統設定」重新認證。',
   cannotStart: '未能啟動 AI 工具。請再按一次「重試」；仍然失敗，請重新開機後再試。',
   loggedOut: 'AI 工具的登入已失效。請在你的 AI 工具重新登入，再按「重試」。',
   generic: 'AI 工具未能完成這項工作。請再按一次「重試」；仍然失敗，請到「系統設定」重新認證 AI 工具。'
 };
 function failedReason(h) { return h?.loginProbe && login(h) === false ? AI_FAIL.loggedOut : AI_FAIL.generic; }
-export function execute(h, sandbox, prompt, opts = {}) {
+export async function execute(h, sandbox, prompt, opts = {}) {
+  if (!restrictions(h)) return { ok: false, reason: 'AI 工具的限制設定不完整。' };
+  // 認證要 AI 真係逐項嘗試：實測 Codex 平日模型（Terra）會自行判斷唔試，所以用藍方模型（冇藍方就用平日）
+  const role = opts.certify ? h.certify?.role || 'blue' : opts.role || 'everyday', candidates = modelCandidates(h, role);
+  const chosen = opts.certify ? candidates[0] : opts.model === undefined ? pickModel(h, role, { sandbox }) : candidates.find(c => c.model === (typeof opts.model === 'string' ? opts.model : opts.model?.model));
+  let model = chosen, result;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (opts.onStart && opts.onStart({ model, attempt }) === false) return { ok: false, reason: NAMES.ui.skip_budgetExhausted };
+    result = await executeOnce(h, sandbox, prompt, { ...opts, role, ...(model ? { model } : {}) });
+    const next = candidates[candidates.indexOf(model) + 1];
+    if (attempt || opts.certify || !next || !Number.isInteger(result.code) || result.code === 0 || result.elapsedMs > 20000 || result.timedOut || hasOutput(path.join(sandbox, 'out'))) break;
+    model = next;
+  }
+  if (Number.isInteger(result.code)) recordModel(h, sandbox, role, model, result.meta);
+  return result;
+}
+function executeOnce(h, sandbox, prompt, opts) {
   const args = buildArgs(h, sandbox, prompt, opts);
-  if (opts.role && h.roles && Number(h.roles.timeoutMinutes) > 0) h = { ...h, timeoutMinutes: Math.min(30, Number(h.roles.timeoutMinutes)) };
+  if (opts.role && opts.role !== 'everyday' && Number(h.models?.timeoutMinutes) > 0) h = { ...h, timeoutMinutes: Math.min(30, Number(h.models.timeoutMinutes)) };
   // 外殼可以收短一份工作嘅時限（例如商機掃描只用每次上限嘅三分之一）
   if (Number(opts.timeoutMinutes) > 0) h = { ...h, timeoutMinutes: Math.min(h.timeoutMinutes || 10, Number(opts.timeoutMinutes)) };
   return new Promise(resolve => {
     let out = '', err = '', done = false, child;
+    const started = Date.now();
     const c = resolveCommand(h.command);
     if (c.why) return resolve({ ok: false, reason: AI_FAIL.notFound });
     const prepared = preparedAdapter(h, sandbox);
-    if (!prepared.handoff.ok) { prepared.cleanup(); return resolve({ ok: false, reason: prepared.handoff.reason || '無法安全準備 AI 登入，請重新登入後再試。' }); }
+    if (!prepared.handoff.ok) { prepared.cleanup(); return resolve({ ok: false, reason: prepared.handoff.reason || '無法安全準備 AI 工具登入，請重新登入後再試。' }); }
     try { child = spawn(c.command, [...c.prefix, ...args], { cwd: sandbox, env: prepared.env, stdio: ['ignore','pipe','pipe'], windowsHide: true }); }
     catch (e) { prepared.cleanup(); return resolve({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart }); }
-    const timer = setTimeout(() => { child.kill(); finish({ ok: false, reason: AI_FAIL.timeout }); }, (h.timeoutMinutes || 10) * 60000);
+    const timer = setTimeout(() => { child.kill(); finish({ ok: false, timedOut: true, reason: AI_FAIL.timeout }); }, (h.timeoutMinutes || 10) * 60000);
     function finish(result) { if (done) return; done = true; clearTimeout(timer); prepared.cleanup(); try { fs.writeFileSync(path.join(sandbox, 'ai-output.txt'), out + '\n' + err); } catch {} resolve(result); }
     child.stdout.on('data', x => { out += x; }); child.stderr.on('data', x => { err += x; });
     child.on('error', e => finish({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart }));
     child.on('close', code => {
+      if (done) return;
       let meta = null;
       if (h.outputFormat === 'jsonl') {
         const events = out.split(/\r?\n/).map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean);
@@ -367,7 +477,7 @@ export function execute(h, sandbox, prompt, opts = {}) {
       const statusOk = !meta || !Object.hasOwn(meta, 'status') || meta.status === 'SUCCESS';
       const ok = code === 0 && !meta?.is_error && statusOk;
       // 失敗先做登入探測（同認證用同一個探測；冇探測嘅宿主唔做）；探測期間計時器唔會觸發，finish 隨即清走
-      finish({ ok, meta, stderr: err, reason: ok ? '' : failedReason(h) });
+      finish({ ok, code, elapsedMs: Date.now() - started, meta, stderr: err, reason: ok ? '' : failedReason(h) });
     });
   });
 }

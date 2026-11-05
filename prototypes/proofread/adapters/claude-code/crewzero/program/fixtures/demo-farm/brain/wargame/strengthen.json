@@ -18,7 +18,7 @@
       "routeImpact": [ { "milestoneId": "m5", "change": "none", "detail": "連續四週訂單：增加觀察項「每週毛利」", "value": "" } ],
       "test": { "what": "兩星期內向兩間餐廳提出同價試單，並於試食時提出一條問題", "by": "@+12d", "testBy": "founder", "success": "至少一位主廚表示「同價便願意試用」", "stop": "如兩間均表示問題不在價錢而在送貨時間，便改為把送貨時間轉為優勢（以清晨送達作賣點）", "founderAction": "試食時親自詢問主廚：上次更換菜商的原因為何", "costHours": 2 },
       "reattacks": [ { "round": 1, "persona": "投資者", "attack": "同價沒有溢價，親自送貨的成本從何彌補？", "severity": "中", "verdict": "受傷", "reason": "須待首週成本表完成，論點才穩妥；此項維持「修正」處理，測試加入記錄工時" } ],
-      "askFirst": true, "label": "AI 建議 · 未確認", "status": "擬議", "founderNote": ""
+      "askFirst": true, "label": "Zero 建議 · 未確認", "status": "擬議", "founderNote": ""
     },
     {
       "id": "T2",
@@ -36,7 +36,7 @@
       "routeImpact": [ { "milestoneId": "m3", "change": "retarget", "detail": "首條送貨路線改為「創辦人送一間、農場甲代送一間」", "value": "兩間餐廳、兩個送貨人" } ],
       "test": { "what": "詢問農場甲代送價錢，並付費試行一次代送", "by": "@+9d", "testBy": "approval", "success": "農場甲答應試行一次，每次收費低於 80 元", "stop": "如農場甲不願意或收費高於毛利，便改為物色兼職清晨司機", "founderAction": "支付首次試送車費（約 80 元）", "costHours": 1 },
       "reattacks": [ { "round": 1, "persona": "渠道伙伴", "attack": "農場甲收成時十分繁忙，順路代送一個月後便可能不願繼續", "severity": "高", "verdict": "受傷", "reason": "須先試行一個月；同時預留兼職司機作後備" } ],
-      "askFirst": true, "label": "AI 建議 · 未確認", "status": "擬議", "founderNote": ""
+      "askFirst": true, "label": "Zero 建議 · 未確認", "status": "擬議", "founderNote": ""
     },
     {
       "id": "T3",
@@ -51,7 +51,7 @@
       "routeImpact": [ { "milestoneId": "m2", "change": "none", "detail": "餐廳試單：沒有改動", "value": "" } ],
       "test": { "what": "本週發三個試食邀請", "by": "@+7d", "testBy": "founder", "success": "一星期內兩位以上主廚答應", "stop": "如少於兩位答應，試食會便改於一月第二週舉行", "founderAction": "親自打電話邀請三位主廚", "costHours": 2 },
       "reattacks": [ { "round": 1, "persona": "競爭者", "attack": "即使約見成功，試菜後也要到一月才會更換供應商", "severity": "低", "verdict": "企得住", "reason": "試單原本已安排在一月，不影響今次測試" } ],
-      "askFirst": false, "label": "AI 建議 · 未確認", "status": "擬議", "founderNote": ""
+      "askFirst": false, "label": "Zero 建議 · 未確認", "status": "擬議", "founderNote": ""
     },
     {
       "id": "T4",
@@ -67,7 +67,7 @@
       "test": { "what": "查閱過去三年 11 至 12 月的大雨日數，估算缺貨風險集中於哪幾日", "by": "@+14d", "testBy": "ai", "success": "大雨日數少於每月三日", "stop": "如任何一週缺貨超過一成，便重新辯論並物色第三個農場", "founderAction": "", "costHours": 1,
         "aiChecked": [ { "finding": "示範：過去三年 11 至 12 月平均每月約有兩日大雨，缺貨風險集中於這幾日；每週照常記錄缺貨比例", "label": "observation", "sources": [ { "title": "示範虛構出處", "url": "", "readOn": "2026-10-27" } ], "minutes": 6 } ] },
       "reattacks": [ { "round": 1, "persona": "渠道伙伴", "attack": "大雨季節未到，兩週數字未能證明甚麼", "severity": "中", "verdict": "企得住", "reason": "觀察項會持續跟進，到雨季自然有數據" } ],
-      "askFirst": false, "label": "AI 建議 · 未確認", "status": "擬議", "founderNote": "兩個農場遇上大雨便會同時缺貨，我不認同此論點「企得住」"
+      "askFirst": false, "label": "Zero 建議 · 未確認", "status": "擬議", "founderNote": "兩個農場遇上大雨便會同時缺貨，我不認同此論點「企得住」"
     }
   ],
   "accepted": [ { "claimId": "B3", "note": "判為「受傷」但暫時接受：試食時順道詢問主廚現有供應商的問題，不另設測試" } ],

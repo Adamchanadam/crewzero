@@ -5,6 +5,8 @@
 // 示範帳本（state.demo = true）嘅時間寫成相對值（例如 "@-3d"、"@+5d 21:00"、"@wed"），讀嘅時候按今日推算，示範資料唔會過期。
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { hosts, modelCandidates, modelName } from './host-lib.mjs';
 import { NAMES, BIZ_TYPES, readJSON, listPacks, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
 import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
@@ -231,6 +233,21 @@ export function assumptionsFromPage(page) {
 }
 
 /* ---------- 主函數 ---------- */
+function modelDisplay(DIR, cert) {
+  const host = cert && hosts(path.dirname(fileURLToPath(import.meta.url))).find(h => h.id === cert.host || h.file === cert.host);
+  if (!host?.models) return {};
+  const seen = readJSON(path.join(DIR.ledger, 'model-seen.json'), {}), selected = {};
+  for (const role of ['everyday', 'blue', 'red', 'judge']) {
+    const candidates = modelCandidates(host, role);
+    const candidate = candidates.find(c => c.model === seen[role]?.requested) || candidates[0];
+    if (!candidate) return {};
+    const actual = seen[role]?.requested === candidate.model ? seen[role].actual : '';
+    selected[role] = { candidate, name: modelName(actual, candidate.label || candidate.model) + (candidate.effort === 'high' ? NAMES.ui.aiDeepThinking : '') };
+  }
+  const teams = selected.blue.name === selected.red.name ? NAMES.t('aiModelTeams', { model: selected.blue.name }) : NAMES.t('aiModelSplit', { blue: selected.blue.name, red: selected.red.name });
+  const fallback = [...new Set(Object.entries(selected).filter(([role, s]) => seen[role]?.fallback && s.candidate.model === seen[role].requested).map(([, s]) => NAMES.t('aiModelFallback', { model: s.name })))];
+  return { models: NAMES.t('aiModelsLine', { everyday: selected.everyday.name, teams, judge: selected.judge.name }), modelWarnings: fallback, modelNotice: readJSON(path.join(DIR.ledger, 'model-notice.json'), null) };
+}
 export function dashboardState(DIR, extra = {}) {
   const now = extra.now || clockNow();
   const today = dayStart(now);
@@ -381,7 +398,7 @@ export function dashboardState(DIR, extra = {}) {
     return f && f.title ? { ...e, title: '你對「' + (f.itemName ? f.itemName + '：' : '') + f.title + '」的意見：' + String(e.title).replace(/^你對「.*」的意見：/, '') } : e; };
   const events = (Array.isArray(state.events) ? state.events : []).map(fbTitle).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   // 只記錄（冇開 AI）嘅外殼工作唔算 AI 事件：佢哋已經記咗做創辦人輸入
-  for (const r of shellRuns) if ((r.state === 'ended' || r.state === 'failed') && r.aiStarted) events.push({ id: 'ev-' + r.id, at: r.endedAt || r.startedAt, actor: 'ai', type: 'run', title: (r.state === 'failed' ? 'AI 工作未完成：' : 'AI 完成工作：') + (r.label || ''), relatedIds: [r.id], moduleIds: ['ai-week', 'artifacts'] });
+  for (const r of shellRuns) if ((r.state === 'ended' || r.state === 'failed') && r.aiStarted) events.push({ id: 'ev-' + r.id, at: r.endedAt || r.startedAt, actor: 'ai', type: 'run', title: (r.state === 'failed' ? 'Zero 工作未完成：' : 'Zero 完成工作：') + (r.label || ''), relatedIds: [r.id], moduleIds: ['ai-week', 'artifacts'] });
   events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const businessEvents = events.filter(e => !['run', 'health', 'capability'].includes(e.type));
 
@@ -390,7 +407,7 @@ export function dashboardState(DIR, extra = {}) {
   const inboxFiles = fs.existsSync(DIR.inbox) ? fs.readdirSync(DIR.inbox).filter(f => !f.startsWith('.')) : [];
   const unprocessed = inputs.filter(i => i.status === 'unprocessed').map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt }));
   // 預填同放入文件嘅附件跟住說明檔，唔另計
-  for (const f of inboxFiles) if (!/-(?:prefill|note-doc-file)-\d+-/.test(f) && !unprocessed.some(u => u.title === f)) unprocessed.push({ id: f, title: /-intake(\.md|-)/.test(f) ? '公司資料（交資料）' : /-prefill\.md$/.test(f) ? '由文件預填（AI 正在讀）' : /-note-doc\.md$/.test(f) ? '文件（等 AI 閱讀）' : /-note-/.test(f) ? '你的要求（等 AI 處理）' : /-feedback-/.test(f) ? '你對生意大腦的意見' : '文件', at: '' });
+  for (const f of inboxFiles) if (!/-(?:prefill|note-doc-file)-\d+-/.test(f) && !unprocessed.some(u => u.title === f)) unprocessed.push({ id: f, title: /-intake(\.md|-)/.test(f) ? '公司資料（' + NAMES.ui.intake + '）' : /-prefill\.md$/.test(f) ? '由文件預填（Zero 正在讀）' : /-note-doc\.md$/.test(f) ? '文件（等 Zero 閱讀）' : /-note-/.test(f) ? '你的要求（等 Zero 處理）' : /-feedback-/.test(f) ? '你對生意大腦的意見' : '文件', at: '' });
   const awaiting = inputs.filter(i => i.status === 'awaitingFounder').map(i => ({ id: i.id, title: i.title || '', question: i.awaitingFounderText || '', packId: i.packId || '', at: i.receivedAt }));
   const recentInputs = inputs.filter(i => i.status === 'processed').sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0, 3).map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt, effects: (i.effects || []).map(e => e.change).filter(Boolean) }));
   // 輸入頁「真實事件」欄：最近記錄嘅真實事件（任何狀態）同各自收據
@@ -550,7 +567,7 @@ export function dashboardState(DIR, extra = {}) {
   return {
     ok: true, sample, now: localIso(now), today: ymd(today), guide, firstWeekDone: ivDone,
     company, goals, nextAction, metrics, since, pathTouched,
-    ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
+    ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', ...modelDisplay(DIR, cert), busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
     lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, calendar, tasks, parallel,
     brain,
     teammates: teammates.map(t => ({ ...t, milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: t.lifecycle === 'planned' ? 'not_started' : tasks.some(x => x.teammate === t.name && workingTasks.has(x.id)) ? 'working' : tasks.some(x => x.teammate === t.name && x.column === 'doing') ? 'doing' : tasks.some(x => x.teammate === t.name && (x.column === 'waiting' || x.column === 'review')) ? 'waiting' : 'idle' })),
@@ -628,7 +645,7 @@ function buildTodoLists(DIR, { state, milestones, company, page, now }) {
   const lastSchedule = (Array.isArray(state.runs) ? state.runs : []).filter(r => r.trigger === 'schedule').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))).pop();
   const certAt = (readJSON(path.join(DIR.ledger, 'adapter-cert.json'), null) || {}).certifiedAt || '';
   if (lastSchedule && lastSchedule.skipReason === 'adapterVersionChanged' && !(certAt && new Date(certAt) > new Date(lastSchedule.startedAt))) add({ id: 'schedule-recertify', type: 'order', text: NAMES.ui.schedRecertifyTodo, milestoneId: '', milestone: '', rec: NAMES.ui.schedRecertify, due: '', askedAt: lastSchedule.startedAt || '', waited: 0, overdueDays: 0, lane: 'main', state: 'open', href: '/dashboard/system', kind: 'schedule' });
-  if (company.ready && !company.confirmed) { const at = page && page.page && page.page.preparedAt || ''; add({ id: 'overview', type: 'order', text: '公司概覽及里程碑次序待確認', milestoneId: '', milestone: '', rec: '按 AI 建議次序', due: '', askedAt: at, waited: at ? daysBetween(parseDay(at) || today, today) : 0, overdueDays: 0, lane: 'main', state: 'open', href: '/proofread.html', kind: 'overview' }); }
+  if (company.ready && !company.confirmed) { const at = page && page.page && page.page.preparedAt || ''; add({ id: 'overview', type: 'order', text: '公司概覽及里程碑次序待確認', milestoneId: '', milestone: '', rec: '按 Zero 建議次序', due: '', askedAt: at, waited: at ? daysBetween(parseDay(at) || today, today) : 0, overdueDays: 0, lane: 'main', state: 'open', href: '/proofread.html', kind: 'overview' }); }
   const at = t => { const v = new Date(t.askedAt).getTime(); return Number.isFinite(v) ? v : Infinity; };
   const rankOf = t => t.forNextAction ? 7.5 : (TODO_RANK[t.type] ?? 9);
   const sort = (a, b) => (b.overdueDays - a.overdueDays) || (rankOf(a) - rankOf(b)) || (at(a) - at(b));
@@ -661,7 +678,7 @@ export function pendingSnoozed(DIR, now = clockNow()) {
 }
 
 /* ---------- 「今日要做的事」卡（規劃書 4.1）：文字全部由 FIRST-WEEK.md 供應，伺服器只揀段同入口 ---------- */
-const GUIDE_HEAD = { 'AI 未設定': 'noAI', '未交資料': 'noCompany', '待校對公司概覽': 'proofread', '待驗收首份產出': 'accept', '首次訪問未到': 'waitInterview', '待首次訪問': 'firstInterview', '日常': 'daily' };
+const GUIDE_HEAD = { 'AI 未設定': 'noAI', 'AI 工具未設定': 'noAI', '未交資料': 'noCompany', '尚未告訴 Zero': 'noCompany', '待校對公司概覽': 'proofread', '待驗收首份產出': 'accept', '首次訪問未到': 'waitInterview', '待首次訪問': 'firstInterview', '日常': 'daily' };
 export function guideCard(text, ds) {
   const sec = {};
   let cur = null;
@@ -691,13 +708,13 @@ function workOf({ shellRuns, ledgerRuns, sample, busy, observed, observeFolders,
   const sessions = [];
   for (const r of shellRuns.filter(r => r.state === 'running')) {
     const stale = now.getTime() - new Date(r.lastAt || r.startedAt).getTime() > STALE_MS;
-    sessions.push({ key: 'run-' + r.id, host: 'shell', kind: 'run', state: busy && !stale ? 'working' : 'unknown', title: r.label || 'AI 團隊工作', latestRequest: '',
-      lastActiveAt: r.lastAt || r.startedAt, reason: !busy ? 'AI 團隊程序已停止，等待收尾' : stale ? '15 分鐘內沒有新進度' : 'AI 團隊正在處理', taskIds: [], moduleIds: r.moduleIds || [], runKind: r.type, brainItem: r.brainItem || '' });
+    sessions.push({ key: 'run-' + r.id, host: 'shell', kind: 'run', state: busy && !stale ? 'working' : 'unknown', title: r.label || 'Zero 團隊工作', latestRequest: '',
+      lastActiveAt: r.lastAt || r.startedAt, reason: !busy ? 'Zero 團隊程序已停止，等待收尾' : stale ? '15 分鐘內沒有新進度' : 'Zero 團隊正在處理', taskIds: [], moduleIds: r.moduleIds || [], runKind: r.type, brainItem: r.brainItem || '' });
   }
   // 帳本嘅運行中 run：示範照計（虛構）；真資料要外殼程序仍在先算工作中，同一次 run 唔重複計
   for (const r of ledgerRuns.filter(r => r.state === 'running' && (sample || busy) && !sessions.some(x => x.key === 'run-' + r.id))) {
-    sessions.push({ key: 'run-' + r.id, host: 'shell', kind: 'run', state: 'working', title: r.label || 'AI 團隊工作', latestRequest: '', lastActiveAt: r.startedAt || '',
-      reason: 'AI 團隊正在處理', taskIds: Array.isArray(r.taskIds) ? r.taskIds : [], moduleIds: r.moduleIds || [] });
+    sessions.push({ key: 'run-' + r.id, host: 'shell', kind: 'run', state: 'working', title: r.label || 'Zero 團隊工作', latestRequest: '', lastActiveAt: r.startedAt || '',
+      reason: 'Zero 團隊正在處理', taskIds: Array.isArray(r.taskIds) ? r.taskIds : [], moduleIds: r.moduleIds || [] });
   }
   for (const s of ob.sessions || []) sessions.push({ ...s, moduleIds: [] });
   const proc = shellRuns.find(r => r.state === 'running' && busy && INBOX_KINDS.includes(r.kindRaw) && sessions.some(x => x.key === 'run-' + r.id && x.state === 'working'));

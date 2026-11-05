@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const PREFILL_Q = ['q1', 'q2', 'q3', 'q4', 'q5'];
+export const PREFILL_Q = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8'];
 export const TEXT_EXT = ['md', 'txt', 'csv'];
 const norm = s => String(s || '').replace(/[\s　]+/g, '');
 const ext = f => (String(f).split('.').pop() || '').toLowerCase();
@@ -39,7 +39,7 @@ export function checkPrefill(raw, docs) {
     const label = labelOf({ ...a, text, source }, docs);
     const named = docs.find(d => d.name === source) || docs.find(d => source && d.name.endsWith(source));
     const hit = label === 'quote' ? [named, ...docs].find(d => d && d.text != null && norm(d.text).includes(norm(text))) : null;
-    if (a.quote === true && label === 'inferred') warnings.push(q + '：AI 話係原句，但文件搵唔到，已改為按文件推斷');
+    if (a.quote === true && label === 'inferred') warnings.push(q + '：Zero 標示為文件原句，但未能在文件找到，已改為按文件推斷');
     answers[q] = { text, label, source: hit ? hit.name : named ? named.name : '', at, ...(a.quote === true && label !== 'quote' ? { downgraded: true } : {}) };
   }
   return { ok: true, answers, warnings };
@@ -55,7 +55,7 @@ export function provenanceOf(fields, claims, prefills) {
     let hit = null, rec = null, moved = false;
     for (const p of list) { const a = p.answers[q]; if (a && norm(a.text) === norm(v)) { hit = a; rec = p; break; } }
     if (!hit) for (const p of list) { const a = Object.values(p.answers).find(a => a && norm(a.text) === norm(v)); if (a) { hit = a; rec = p; moved = true; break; } }
-    out[q] = !hit ? { kind: 'founder' } : { kind: hit.label === 'quote' ? 'quote' : 'adopted', ...(hit.label === 'quote' ? {} : { label: hit.label }), source: hit.source, at: hit.at, prefillId: rec.id, ...(moved ? { moved: true } : {}) };
+    out[q] = !hit ? { kind: 'founder' } : { kind: hit.label === 'quote' ? 'quote' : 'adopted', ...(hit.label === 'quote' ? {} : { label: hit.label }), source: hit.source, at: hit.at, prefillId: rec.id, ...(rec.from === 'ideate' ? { from: 'ideate' } : {}), ...(moved ? { moved: true } : {}) };
   }
   return out;
 }
@@ -66,6 +66,6 @@ export function loadPrefills(dir, first) {
   return [...all.filter(p => p.id === first), ...all.filter(p => p.id !== first)];
 }
 // 交資料檔每題下面嘅來源一句（交 AI 擬公司概覽時睇）
-export const provenanceLine = p => !p ? '' : p.moved ? `（來源：AI 按文件預填的句子，由另一題搬來，未經逐條確認；出自《${p.source || '你的文件'}》）` : p.kind === 'quote' ? `（來源：你確認的文件原句，出自《${p.source}》${p.at ? '：' + p.at : ''}）` : p.kind === 'adopted' && p.label === 'unverified' ? `（來源：你確認的 AI 預填，出自《${p.source || '你的文件'}》，未能核對是否原句）` : p.kind === 'adopted' ? `（來源：你認同的 AI 建議，按《${p.source || '你的文件'}》推斷，不是原句）` : '（來源：你寫的）';
+export const provenanceLine = p => !p ? '' : p.from === 'ideate' ? `（來源：${p.moved ? 'Zero 預填的句子，由另一題搬來' : '你認同的 Zero 建議'}，根據${p.source}整理，不是原句）` : p.moved ? `（來源：Zero 按文件預填的句子，由另一題搬來，未經逐條確認；出自《${p.source || '你的文件'}》）` : p.kind === 'quote' ? `（來源：你確認的文件原句，出自《${p.source}》${p.at ? '：' + p.at : ''}）` : p.kind === 'adopted' && p.label === 'unverified' ? `（來源：你確認的 Zero 預填，出自《${p.source || '你的文件'}》，未能核對是否原句）` : p.kind === 'adopted' ? `（來源：你認同的 Zero 建議，按《${p.source || '你的文件'}》推斷，不是原句）` : '（來源：你寫的）';
 // 送出時仍有同預填一樣、但頁面未確認嘅答案：伺服器拒收（創辦人確認之後先算數）
 export const unconfirmed = (prov, claims) => Object.keys(prov).filter(q => prov[q].kind !== 'founder' && !prov[q].moved && !(claims && claims[q] === 'confirmed'));

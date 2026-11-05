@@ -91,7 +91,7 @@ try {
   fs.writeFileSync(LOCK, String(process.pid));
   const b1 = run(UPDATE, [PROJ]), b2 = run(UPDATE, [PROJ, '--apply']);
   fs.rmSync(LOCK, { force: true });
-  ok('AI 工作進行中（有鎖）：檢查同 --apply 都結束碼 4、冇改任何檔', b1.status === 4 && b2.status === 4 && /AI 工作進行中/.test(b2.stdout) && same(tree(T), before), { b1: b1.stdout, b2: b2.stdout });
+  ok('AI 工作進行中（有鎖）：檢查同 --apply 都結束碼 4、冇改任何檔', b1.status === 4 && b2.status === 4 && /Zero 工作進行中/.test(b2.stdout) && same(tree(T), before), { b1: b1.stdout, b2: b2.stdout });
 
   /* 檢查（唔寫）：創辦人只見版本和資料保障，技術數目與備份位置只在 stderr */
   const c1 = run(UPDATE, [PROJ]);

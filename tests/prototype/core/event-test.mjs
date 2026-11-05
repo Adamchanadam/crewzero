@@ -86,6 +86,18 @@ try {
   r = await newRun(seen, x => x.kind === 'ask' && x.ref === P1.id);
   ok('套用完成', r && r.state === 'done', r && r.result);
   s = state(); input = s.inputs.find(i => i.id === input.id);
+  const celebration = (s.celebrations?.entries || []).at(-1);
+  ok('同一次確認只記一筆最高級，並列另一項', s.celebrations?.entries.length === 1 && celebration?.level === 'top' && celebration.also?.length === 1, celebration);
+  const statusBefore = await get('/api/status');
+  ok('狀態回傳未看的紀錄', statusBefore.celebrations.some(e => e.id === celebration?.id) && statusBefore.company.firstFlagSeen === false, statusBefore.celebrations);
+  const missingPass = await fetch(BASE + '/api/celebrations/seen', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE, Cookie: 'invalid=1' }, body: JSON.stringify({ id: celebration?.id }) });
+  const wrongOrigin = await fetch(BASE + '/api/celebrations/seen', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://example.invalid' }, body: JSON.stringify({ id: celebration?.id }) });
+  ok('沒有通行證或來源錯誤均拒絕', missingPass.status === 403 && wrongOrigin.status === 403, [missingPass.status, wrongOrigin.status]);
+  const unknownCelebration = await post('/api/celebrations/seen', { id: 'unknown' });
+  const claim = await post('/api/celebrations/seen', { id: celebration?.id });
+  const againClaim = await post('/api/celebrations/seen', { id: celebration?.id });
+  const statusAfter = await get('/api/status');
+  ok('領取只成功一次，已看後不再顯示，未知編號拒絕', unknownCelebration.code === 400 && claim.j?.claimed === true && againClaim.j?.claimed === false && !statusAfter.celebrations.some(e => e.id === celebration?.id) && statusAfter.company.firstFlagSeen === true, { unknownCelebration, claim, againClaim });
   const q1 = P1.questions[0].options[0].apply, q2 = P1.questions[1].options[0].apply;
   const as = s.company.assumptions.find(a => a.id === q1.id), ms = s.milestones.find(m => m.id === q2.id);
   ok('假設級別：由「假設」改為「實際行動」，狀態轉為有支持，來源記這件事，日期係事件日期', as.grade === 'did' && as.status === 'supported' && as.sourceId === input.id && as.changedAt === '2026-10-29', as);

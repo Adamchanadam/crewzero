@@ -90,73 +90,32 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.37.0';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.38.0';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 
 export const BIZ_TYPES = Object.assign(Object.create(null), {
   service: { label: '服務', example: '上門照顧、顧問、維修' },
   goods: { label: '實體貨品', example: '手作、零售、食品' },
-  online: { label: '網上或內容', example: '網店、課程、訂閱' },
+  online: { label: '軟件、網上服務或內容', example: '網上工具、訂閱、課程' },
+  platform: { label: '平台或配對', example: '連接買方與賣方' },
   nonprofit: { label: '非牟利或社企', example: '社區計劃、資助項目' },
   other: { label: '其他', example: '請用一句說明' }
 });
 
-const PROGRESS_HINT = '程度說明：口頭表示是對方說有興趣；實際行動是對方試用、預訂或參與；付出成本是對方付款或投入資源。';
-
 export const INTAKE_QUESTIONS = [
-  { n: 1, ask: '你提供甚麼？對象是誰？', hint: '以一句說明你正在做的事，以及主要面向哪類人士或機構。', example: '我們協助小型機構整理日常預約和聯絡安排。', required: true },
-  { n: 2, ask: '如何收取款項或得到資金支持？', hint: '說明由誰付款或支持，以及大致方式；尚未決定可寫「未定」。', example: '目前正考慮按月收費，價錢未定。', required: true },
-  { n: 3, ask: '目前有哪些實際進展？', hint: '只寫公司以外已發生的事，並說明對象及行動。' + PROGRESS_HINT + '尚未有進展可寫「未有」。', example: '兩個機構表示有興趣（口頭表示）；其中一個已安排試用（實際行動）。', required: true },
-  { n: 4, ask: '下一步打算做甚麼？會接觸誰？', hint: '寫出下一個行動、接觸對象及希望得到的答覆。', example: '下星期聯絡一個合作機構，了解是否可安排試行。', required: true },
-  { n: 5, ask: '誰會參與或協助？', hint: '列出參與人士或機構，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位兼職人員協助整理資料（已確定）；一個合作單位正商討參與方式（商討中）。', required: true },
-  { n: 6, ask: '希望在何時之前達到甚麼成果？', hint: 'AI 將按你的文件建議一個目標，並標示為「暫定」', example: '年底前完成三次試行', required: false },
-  { n: 7, ask: '這項工作有哪些必須做到的要求或特別之處？', hint: 'AI 將從文件摘錄，供你校對', example: '', required: false },
-  { n: 8, ask: '有哪些事情 AI 絕不可自行處理？', hint: '預設：對外聯絡、支出、作出承諾及刪除檔案，均須先徵求你的同意', example: '', required: false },
-  { n: 9, ask: '希望 AI 多久工作一次？每星期哪一天向你了解近況？', hint: '預設：每日晚上 9 時工作一次；逢星期一了解近況', example: '', required: false },
-  { n: 10, ask: '是否同時進行兩項彼此獨立的工作（對象、資金或做法均不同）？', hint: '預設：視為同一項工作處理', example: '', required: false },
-  { n: 11, ask: '你最擔心甚麼？', hint: 'AI 將從文件列出估計，供你校對', example: '', required: false },
-  { n: 12, ask: '現有文件清單（名稱、日期、是否最新版本）', hint: 'AI 將閱讀你提交的全部文件，以最新日期為準', example: '', required: false }
+  { n: 1, ask: '你在做甚麼，或打算做甚麼？', hint: '一句即可；未想清楚，可先寫初步想法。', example: '為咖啡店供應低糖果醬', required: true },
+  { n: 2, ask: '主要是給誰的？', hint: '可以是使用者、購買者或服務對象。', example: '五至二十人的私家診所', required: false },
+  { n: 3, ask: '對方為甚麼需要？', hint: '對方現時的麻煩，或者為甚麼會選你。不清楚可留空，Zero 會列出估計供你校對。', example: '家長一改時段，主任便要全部重排', required: false },
+  { n: 4, ask: '如何收取款項或得到資金？', hint: '有數字就寫，未定可留空。', example: '每瓶 78 元，成本約 30 元；每月訂閱；佣金 15%；正申請資助', required: false },
+  { n: 5, ask: '到目前為止，有誰已經試用、付款或答應合作？', hint: '只寫已發生的事。沒有也可留空，這是很常見的起點。', example: '兩人查詢、一間已試用、三間已付款', required: false },
+  { n: 6, ask: '下一步打算做甚麼？', hint: '未想好可留空，Zero 會提出建議。', example: '下星期約見第三間診所', required: false },
+  { n: 7, ask: '有誰一起做或協助？', hint: '只有你一人可留空；也可以寫你自己的相關經驗或人脈。', example: '一名兼職幫手；兩間合作機構；我做過八年餐飲採購', required: false },
+  { n: 8, ask: '你最擔心甚麼？', hint: '想到甚麼寫甚麼。', example: '', required: false }
 ];
 
-const TYPE_OVERRIDES = {
-  service: {
-    1: { ask: '你提供甚麼服務？服務誰？', hint: '以一句說明服務內容及服務對象。', example: '我們為長者家庭提供上門電腦設定服務。' },
-    2: { ask: '如何收費？', hint: '說明按次、按月或按項目的收費方式；尚未定價可寫「未定」。', example: '每次上門服務收費 300 元，長期支援按月收費。' },
-    3: { ask: '已有誰試用服務或付款嗎？', hint: '只寫服務對象已經做過的事。' + PROGRESS_HINT, example: '兩個家庭查詢服務（口頭表示）；一個家庭已預約（實際行動）；一個家庭已付款（付出成本）。' },
-    4: { ask: '下一步要見誰？談甚麼？', hint: '寫出下一次接觸的服務對象或合作方，以及希望談妥的事。', example: '下星期約見社區中心主任，商談是否安排試用服務。' },
-    5: { ask: '誰參與協助服務？', hint: '列出參與服務的人士或機構，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位兼職導師已協助服務（已確定）；一名顧問表示願意提供意見（商討中）。' },
-    7: { ask: '服務有哪些要求或特別之處？', hint: '例如服務範圍、回應時間、保密安排或必須具備的資格。', example: '每次服務後提供簡短紀錄，涉及個人資料時不得外傳。' }
-  },
-  goods: {
-    1: { ask: '你賣甚麼貨品？賣給誰？', hint: '以一句說明貨品及主要購買者。', example: '我們製作低糖果醬，主要賣給附近家庭和小型咖啡店。' },
-    2: { ask: '定價多少？每件成本約多少？', hint: '寫出售價、每件成本或尚未確定的部分。', example: '每瓶售 68 元，每瓶材料和包裝成本約 24 元。' },
-    3: { ask: '已賣出多少？有人預訂嗎？', hint: '只寫購買者已經做過的事。' + PROGRESS_HINT, example: '五人查詢（口頭表示）；兩人預訂共六瓶（實際行動）；其中一人已付款（付出成本）。' },
-    4: { ask: '下一步要做甚麼？', hint: '例如擺檔、上架或聯絡供應商，並說明希望得到的結果。', example: '下星期在市集擺檔，並向兩間包裝供應商索取報價。' },
-    5: { ask: '誰參與？', hint: '列出供應商、工匠、代賣點或協助者，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位工匠已完成首批貨品（已確定）；一間選物店表示願意代賣（商討中）。' },
-    7: { ask: '貨品規格、每月可做多少、在哪裏賣？', hint: '寫出貨品規格、產量、保存要求及銷售地點。', example: '每月可製作 120 瓶，冷藏保存，在市集和網店出售。' }
-  },
-  online: {
-    1: { ask: '你提供甚麼內容或網上服務？對象是誰？', hint: '以一句說明內容或服務，以及主要使用者或觀眾。', example: '我們提供給初學者的家居烘焙短片課程。' },
-    2: { ask: '如何收費？', hint: '說明訂閱、單次收費、廣告或其他方式；尚未定價可寫「未定」。', example: '首三課免費，其後按月訂閱，每月 48 元。' },
-    3: { ask: '已有多少人使用？有人付款嗎？', hint: '只寫使用者或觀眾已經做過的事。' + PROGRESS_HINT, example: '二十人觀看試看片段（實際行動）；三人表示願意訂閱（口頭表示）；一人已付款（付出成本）。' },
-    4: { ask: '下一步要推出甚麼？接觸誰？', hint: '寫出下一項內容、功能或合作接觸，以及希望得到的結果。', example: '下星期推出首個完整單元，並聯絡一個內容平台商談合作。' },
-    5: { ask: '誰參與？', hint: '列出製作、技術或合作平台，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '一位剪輯師已完成試看片段（已確定）；一個平台表示可安排推介（商討中）。' },
-    7: { ask: '平台或內容有哪些規格？', hint: '例如發布平台、內容長度、更新頻率、存取安排或技術要求。', example: '每節課不超過 12 分鐘，每兩星期更新一次，支援手機觀看。' }
-  },
-  nonprofit: {
-    1: { ask: '計劃做甚麼？服務對象是誰？', hint: '以一句說明計劃內容及服務對象。', example: '我們為獨居長者安排社區飯聚和電話關懷。' },
-    2: { ask: '資金來自哪裏？', hint: '說明資助、捐款、收費或其他資金來源；尚未確定可寫「未定」。', example: '正申請社區資助，同時接受小額捐款。' },
-    3: { ask: '已服務多少人？已申請或取得哪些資助？', hint: '只寫服務對象、資助方或捐款方已經做過的事。' + PROGRESS_HINT, example: '十名長者參加過活動（實際行動）；一個基金表示有興趣（口頭表示）；已收到一筆捐款（付出成本）。' },
-    4: { ask: '下一步要接觸誰？', hint: '例如基金、合作機構或服務對象，並說明希望談妥的事。', example: '下星期聯絡一間社區中心，商談轉介服務對象。' },
-    5: { ask: '誰參與？', hint: '列出核心成員、義工或合作機構，並說明目前情況。每項寫明：已確定、商討中或未接洽。', example: '兩名義工已協助活動（已確定）；一間機構表示願意借出場地（商討中）。' },
-    7: { ask: '計劃有甚麼法規或受資助條件？', hint: '例如服務資格、申請條件、保密要求或報告責任。', example: '服務對象須由合作機構轉介，每季提交活動和資金使用紀錄。' }
-  }
-};
-
 export function intakeQuestions(type) {
-  const changes = TYPE_OVERRIDES[type] || {};
-  return INTAKE_QUESTIONS.map(q => ({ ...q, ...(changes[q.n] || {}) }));
+  return INTAKE_QUESTIONS.map(q => ({ ...q }));
 }
 
 export function bizTypeLabel(type, other = '') {
@@ -268,7 +227,7 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
     if (kind === 'multi' && opts.length < 2) errors.push(at + '多選題須至少有兩個選項');
     if (kind === 'choice' && opts.length === 1) errors.push(at + '只有一個選項');
     const v = q.value;
-    if (!actionConfirm && (v == null || (!Array.isArray(v) && !String(v).trim()) || (Array.isArray(v) && !v.length && kind !== 'multi'))) errors.push(at + '缺少 AI 建議答案');
+    if (!actionConfirm && (v == null || (!Array.isArray(v) && !String(v).trim()) || (Array.isArray(v) && !v.length && kind !== 'multi'))) errors.push(at + '缺少 Zero 建議答案');
     if (!actionConfirm && kind === 'multi' && !Array.isArray(v)) errors.push(at + '多選題的建議答案格式不正確');
     if (!actionConfirm && kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) errors.push(at + '日期格式不正確（須包含年、月、日）');
     if (!actionConfirm && !String(q.why || '').trim()) errors.push(at + '缺少建議理由');
@@ -298,7 +257,7 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
     if (!noDedupe && seen.has(norm(q.ask))) { dropped.push(q.ask); return; }
     if (q.effect !== 'now' && unknowns.some(u => sameThing(q, u))) { dropped.push(q.ask); warnings.push('你已答「' + NAMES.ui.unknownLater + '」的事項，到期前不再詢問：' + q.ask); return; }
     const fixed = q.effect === 'now' ? q : unknownOption(q);
-    if (fixed !== q) warnings.push('AI 建議只是提示句，已改為「' + NAMES.ui.unknownLater + '」：' + q.ask);
+    if (fixed !== q) warnings.push('Zero 建議只是提示句，已改為「' + NAMES.ui.unknownLater + '」：' + q.ask);
     keep.push({ ...fixed, kind: fixed.kind || 'choice', effect: q.effect || 'tentative', priority: Number(q.priority) || i + 1 });
   });
   if (!keep.length) return { ok: true, packs: [], dropped, warnings };
@@ -341,6 +300,6 @@ export function listPacks(dirs) {
     if (!p || !Array.isArray(p.questions)) return null;
     const a = loadAnswers(dirs, p.id).answers;
     const answered = p.questions.filter(q => a[q.id]).length;
-    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '', isHelp: !!p.help };
+    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, urgent: p.questions.some(q => !a[q.id] && (q.effect === 'now' || q.conflict)), fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '', isHelp: !!p.help };
   }).filter(Boolean).sort((x, y) => String(y.askedAt).localeCompare(String(x.askedAt)));
 }

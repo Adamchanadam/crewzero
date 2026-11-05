@@ -64,6 +64,12 @@ node tests/prototype/run-all.mjs
 
 ## 加新測試
 
+模型對齊（安全範本、候選清單、一次後備重試、模型紀錄、工具升級自動認證；全用假工具）：
+
+```
+node tests/prototype/run-all.mjs --only 模型對齊 --out C:\temp\cz-model-alignment --no-browser
+```
+
 1. 放入對應資料夾，參數沿用 `<原型資料夾> <輸出資料夾> <埠> <AI 設定>` 次序；要瀏覽器嘅加 Chrome 路徑。
 2. 用隔離資料夾（`SOS_DATA` 指向輸出資料夾），唔好用真資料或者試走產出做夾具。
 3. 最後一行印「通過數/總數」（例如 `12/12 通過`），失敗嘅行以 `FAIL` 開頭；全部通過以 0 結束。

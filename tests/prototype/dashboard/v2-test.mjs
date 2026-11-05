@@ -5,9 +5,11 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
@@ -119,7 +121,7 @@ try {
   setState(quiet); setFake({ sessions: [{ ...S_WORK, state: 'idle', subagents: { active: 0, windowMinutes: 15 } }, S_IDLE] });
   const t0 = Date.now();
   fl = await waitFor(async () => { const x = await c.ev(flow); return x.working === 0 && x.lit === 0 && x.pts === 0 ? x : null; }, 15000);
-  ok('全部閒置（唔重新載入）：零亮線、零粒子、立方體唔閃、冇工作中節點', fl && !fl.engine && /目前沒有 AI 在工作/.test(fl.ai), fl || await c.ev(flow));
+  ok('全部閒置（唔重新載入）：零亮線、零粒子、立方體唔閃、冇工作中節點', fl && !fl.engine && fl.ai.includes(N.dash.noWorkPlain), fl || await c.ev(flow));
   console.log('停止用咗', Date.now() - t0, 'ms（觀測每 5 秒＋頁面每 5 秒讀回）');
   ok('全部閒置：分類索引冇一格工作中', await c.ev(`!document.querySelector('.module[data-activity="working"]')`));
   await sleep(1500);
@@ -134,7 +136,7 @@ try {
   await waitFor(async () => (await c.ev(flow)).working >= 1, 15000);
 
   /* ---------- C. 導航、公司現況三帶 ---------- */
-  ok('導航三組（決定二十五）：待決事項・輸入・公司概覽 ｜ 公司現況・生意大腦・業務路徑 ｜ 團隊・紀錄・系統', await c.ev(`[...document.querySelectorAll('nav.tabs [data-grp]')].map(g=>[...g.querySelectorAll('a')].map(a=>a.childNodes[0].textContent).join()).join('|')==='待決事項,輸入,公司概覽|公司現況,生意大腦,業務路徑|團隊,紀錄,系統' && document.querySelectorAll('nav.tabs .divider').length===2`), await c.ev(`document.querySelector('nav.tabs').textContent`));
+  ok('導航三組（決定二十五）：待決事項・真實進展・公司概覽 ｜ 公司現況・生意大腦・業務路徑 ｜ 團隊・紀錄・系統', await c.ev(`[...document.querySelectorAll('nav.tabs [data-grp]')].map(g=>[...g.querySelectorAll('a')].map(a=>a.childNodes[0].textContent).join()).join('|')==='待決事項,真實進展,公司概覽|公司現況,生意大腦,業務路徑|團隊,紀錄,系統' && document.querySelectorAll('nav.tabs .divider').length===2`), await c.ev(`document.querySelector('nav.tabs').textContent`));
   ok('生意大腦分頁有「等你處理」數目', await c.ev(`(document.querySelector('nav.tabs a[href="/dashboard/brain"] .cnt')||{}).textContent`) === String(d ? (await get('/api/dashboard')).brain.items.filter(x => x.status === 'waiting').length : -1));
   ok('首頁三帶（方案 B）：壓縮條＋待你處理、運作環＋事件流、分類索引＋生意大腦摘要；冇甲板、冇首頁日程', await c.ev(`!!document.querySelector('.band.strip #strip') && !!document.querySelector('.band.strip #needs') && !!document.querySelector('.band.b #arena-panel') && !!document.querySelector('.band.b #evstream') && document.querySelectorAll('#index-row .module').length===10 && !!document.querySelector('#brain-strip') && !document.querySelector('.deck') && !document.querySelector('#schedule')`));
   ok('未來兩星期日程搬咗去業務路徑頁', await (async () => { await c.go(B + '/dashboard/path', 1440, 2500); return c.ev(`!!document.querySelector('#schedule-panel #schedule')`); })());
@@ -202,15 +204,15 @@ try {
   ok('首次載入唔播慶祝', (await c.ev(`window.__cel.length`)) === 0);
   const s3 = JSON.parse(JSON.stringify(st)), mA = s3.milestones.find(m => m.pathStatus === 'confirmed' && m.state !== 'done');
   mA.state = 'done'; setState(s3);
-  const cel3 = await waitFor(async () => (await c.ev(`window.__cel`)).find(x => x.startsWith('3|')), 15000);
-  ok('第 3 級：里程碑完成 → 橫幅「里程碑達成」（冇英文），寫明下一站', cel3 && /里程碑達成/.test(cel3) && /下一站/.test(cel3) && !/[A-Z]{4,}/.test(cel3), cel3 || await c.ev(`window.__cel`));
+  const cel3 = await waitFor(async () => (await c.ev(`window.__cel`)).find(x => x.startsWith('3|')), 7000);
+  ok('第 3 級：沒有慶祝紀錄的里程碑完成，監察台不會自行播放', !cel3, cel3);
   const s2 = JSON.parse(JSON.stringify(s3)), mW = s2.milestones.find(m => (m.watchItems || []).some(w => w.target != null && w.target !== '' && Number(w.value) < Number(w.target)));
   const wi = mW && mW.watchItems.find(w => w.target != null && w.target !== '' && Number(w.value) < Number(w.target)); if (wi) wi.value = wi.target;
   setState(s2);
   const cel2 = await waitFor(async () => (await c.ev(`window.__cel`)).find(x => x.startsWith('2|')), 15000);
   ok('第 2 級：觀察項達目標 → 橫幅「條件達成」（冇英文）', cel2 && /條件達成/.test(cel2) && !/[A-Z]{4,}/.test(cel2), cel2 || await c.ev(`window.__cel`));
   const s1 = JSON.parse(JSON.stringify(s2)), tk = s1.tasks.find(t => t.id === 't10'); tk.status = 'done'; setState(s1);
-  ok('第 1 級：任務交付 → 事件流多一行、冇橫幅', await waitFor(async () => c.ev(`!!document.querySelector('#evlist li[data-delivered="t10"]')`), 15000) && !(await c.ev(`window.__cel`)).some(x => x.startsWith('1|')));
+  ok('第 1 級：交付確認 → 事件流多一行、冇橫幅', await waitFor(async () => c.ev(`!!document.querySelector('#evlist li[data-delivered="t10"]')`), 15000) && !(await c.ev(`window.__cel`)).some(x => x.startsWith('1|')));
   setState(st);
 
   /* ---------- H. 手機闊度 ---------- */
@@ -234,7 +236,7 @@ try {
   const B2 = await startServer(TRIAL, Number(PORT) + 1);
   await usePass(B2, c); // 第二個伺服器用另一個資料夾：Chrome 要換成佢嘅通行證
   await c.go(B2 + '/dashboard', 1440, 2500);
-  ok('未交資料＋試驗資料夾：阻塞卡新句', await c.ev(`document.querySelector('#block-title').textContent`) === '未交資料 · 生意大腦正讀取試驗資料夾', await c.ev(`(document.querySelector('#block-card')||{}).textContent`));
+  ok('未交資料＋試驗資料夾：阻塞卡新句', await c.ev(`document.querySelector('#block-title').textContent`) === N.dash.blockNoCompanyBrain, await c.ev(`(document.querySelector('#block-card')||{}).textContent`));
   ok('公司現況摘要有來源徽章', await c.ev(`/來源：試驗資料夾 · 未入公司概覽/.test(document.querySelector('#brain-strip').textContent)`));
   await c.go(B2 + '/dashboard/brain', 1440, 2500);
   ok('生意大腦總覽頁頭有來源徽章', await c.ev(`/來源：試驗資料夾 · 未入公司概覽/.test(document.querySelector('#brain-head').textContent)`));

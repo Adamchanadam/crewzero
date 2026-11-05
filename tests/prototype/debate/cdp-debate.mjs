@@ -3,10 +3,12 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
 import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, SHOTS] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data');
@@ -74,7 +76,7 @@ try {
       ok('轉強卡四張：修正、反轉做優勢、先驗證、接受並監察；有改前改後、再攻印章', (await ev(`[...document.querySelectorAll('#tcards .tcard .hchip')].map(x=>x.innerText).join()`)) === '修正,反轉做優勢,先驗證,接受並監察' && (await count('#tcards .ba-r')) === 3 && (await count('#tcards .rea-r .stamp')) === 4,
         { h: await ev(`[...document.querySelectorAll('#tcards .tcard .hchip')].map(x=>x.innerText).join()`), ba: await count('#tcards .ba-r'), rea: await count('#tcards .rea-r .stamp') });
       ok('轉強卡：必須先問、你原話、新賣點、14 日內測試', (await text('#tcards')).includes('必須先問') && (await text('#tcards')).includes('你原話') && (await text('#tcards')).includes('新賣點或合作機會') && (await text('#tcards')).includes('兩星期內測試'));
-      ok('測試由誰做（AI 自己做、要你做、要你批准）、AI 已經查了（收起可展開）', (await text('#tcards')).includes('AI 自己做') && (await text('#tcards')).includes('要你批准') && (await count('#tcards details.aich')) === 1 && (await text('#tcards details.aich summary')).includes('AI 已經查了：1 項'));
+      ok('測試由誰做（AI 自己做、要你做、要你批准）、AI 已經查了（收起可展開）', (await text('#tcards')).includes(N.dash.tb_ai) && (await text('#tcards')).includes(N.dash.tb_approval) && (await count('#tcards details.aich')) === 1 && (await text('#tcards details.aich summary')).includes(N.dash.aiCheckedN.split('（')[0].replace('{n}', '1')));
       ok('你的回應：三個表態、挑戰裁判', (await text('#b-wargame .fresp')).includes('同意裁判') && (await text('#b-wargame .fresp')).includes('你挑戰裁判'));
       ok('生意模式修訂草案：三格改動', (await count('#model-revision .mcell')) === 3);
       await ev(`[...document.querySelectorAll('#b-wargame details.aich')].forEach(d => d.open = true)`); await S('s03-strengthen', '#tcards', { height: 2400 });
@@ -111,7 +113,7 @@ try {
   await go(BASE + '/', 1440, 1800);
   ok('首頁有紅藍對打卡（最新一場、開一場辯論）', await waitFor(() => ev(`!!document.querySelector('#debate-card #hub-debate-match')`), 5000) && await has('#hub-debate-new'));
   await go(BASE + '/#/debate/new', 1440, 1800);
-  ok('開一場：六種題目、預設五席、力度三級、回合同預計', (await count('#dt-types .chip')) === 6 && (await count('#dt-seats [data-seat]')) === 5 && (await count('#dt-levels .chip')) === 3 && (await text('#debate-form')).includes('約 7 次 AI'));
+  ok('開一場：六種題目、預設五席、力度三級、回合同預計', (await count('#dt-types .chip')) === 6 && (await count('#dt-seats [data-seat]')) === 5 && (await count('#dt-levels .chip')) === 3 && (await text('#debate-form')).includes('約 7 次 Zero 處理'));
   await S('f01-new', '#debate-form');
   await click('#dt-types [data-type="pricing"]');
   ok('揀定價：席位換成定價預設、改為快打', await waitFor(() => ev(`document.querySelectorAll('#dt-seats [data-seat]').length===4 && document.querySelector('#debate-form').innerText.includes('快打')`), 4000));

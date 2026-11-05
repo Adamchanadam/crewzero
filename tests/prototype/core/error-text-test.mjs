@@ -115,8 +115,8 @@ try {
   const form = await cdp.ev(`!!document.getElementById('req-text')`);
   ok('交要求頁有表格（公司概覽已備）', form, await cdp.ev('document.body.innerText.slice(0,300)'));
   await cdp.type('#req-text', '測試要求：整理下星期的會面');
-  const t1 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'invalid',message:'尚未有公司概覽：請先按「前往交資料」提交公司背景資料。'}),{status:400,headers:{'Content-Type':'application/json'}}))`, '#req-send');
-  ok('送出被拒、伺服器有中文原因：照顯示中文原因，唔顯示代號', t1 === '未能提交：尚未有公司概覽：請先按「前往交資料」提交公司背景資料。' && !RAW.test(t1), t1);
+  const t1 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'invalid',message:'尚未有公司概覽：請先按「前往告訴 Zero」提交公司背景資料。'}),{status:400,headers:{'Content-Type':'application/json'}}))`, '#req-send');
+  ok('送出被拒、伺服器有中文原因：照顯示中文原因，唔顯示代號', t1 === '未能提交：尚未有公司概覽：請先按「前往告訴 Zero」提交公司背景資料。' && !RAW.test(t1), t1);
   const t2 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'busy'}),{status:409,headers:{'Content-Type':'application/json'}}))`, '#req-send');
   ok('送出被拒、只有代號：按代號講中文原因同做法', t2 === '未能提交：' + U.err_busy && !RAW.test(t2), t2);
   const t3 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.reject(new TypeError('Failed to fetch'))`, '#req-send');

@@ -1,6 +1,6 @@
 ---
 name: install
-description: "安裝 CrewZero（零號隊員：AI 團隊同創辦人一齊經營初創嘅工具）到創辦人嘅項目，同埋開啟、重新登記或者移除每日自動開工；登入啟動必須另行同意。Only for CrewZero, not a general installer. Use when the founder asks to install CrewZero (e.g. /crewzero:install in Claude Code, $crewzero:install in Codex, /install in Antigravity, 「安裝 CrewZero」), or says 「安裝排程」「重新登記排程」「移除排程」「排程狀態」. Every write, daily auto-start approval, and login auto-start registration needs the founder's explicit approval in this conversation first."
+description: "安裝 CrewZero（零號隊員：Zero 團隊同創辦人一齊經營初創嘅工具）到創辦人嘅項目，同埋開啟、重新登記或者移除每日自動開工；登入啟動必須另行同意。Only for CrewZero, not a general installer. Use when the founder asks to install CrewZero (e.g. /crewzero:install in Claude Code, $crewzero:install in Codex, /install in Antigravity, 「安裝 CrewZero」), or says 「安裝排程」「重新登記排程」「移除排程」「排程狀態」. Every write, daily auto-start approval, and login auto-start registration needs the founder's explicit approval in this conversation first."
 ---
 
 <!--
@@ -8,7 +8,7 @@ CrewZero 插件入面嘅安裝指令（只係轉接層，核心係程式資料�
 同一份插件喺 Claude Code、Codex、Antigravity（agy）三種工具都用得；程式隨插件附帶，喺插件資料夾入面嘅 program/（由開發會話用 build-plugin.mjs 生成）。呢個檔唔寫任何本機絕對路徑。
 -->
 
-CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項目入面新增一個 `crewzero/` 資料夾（程式檔同一個空嘅 `data/`），唔改項目其他檔；之後創辦人批准，已開啟的 CrewZero 伺服器每日按時開工。
+CrewZero 係 Zero 團隊同創辦人一齊經營初創嘅工具。安裝會喺項目入面新增一個 `crewzero/` 資料夾（程式檔同一個空嘅 `data/`），唔改項目其他檔；之後創辦人批准，已開啟的 CrewZero 伺服器每日按時開工。
 
 創辦人亦可以在營運監察台的系統頁自行開關和更改自動開工時間；原有批准規則不變。
 
@@ -43,7 +43,7 @@ CrewZero 係 AI 團隊同創辦人一齊經營初創嘅工具。安裝會喺項�
    - 結束碼 2：已經安裝，冇改任何檔；命令印出有新版本或者舊版安裝嘅話，講一句「要更新請輸入 …」（填入創辦人工具嘅更新指令叫法）；然後跳去「登記每日排程」。
    - 其他：照印出嘅原因話畀創辦人知（用白話講原因同點做，見「命令出錯時點講」），唔算完成；唔好自己改檔或者再試第二種方法。
 4. 跟住做「登記每日排程」。
-5. 最後登記觀察資料夾同打開 Founder Desk（同一條命令）：`node "<安裝>/ask.mjs" --desk --observe "<項目根>"`。話畀創辦人知已經打開，下一步是頁頂「AI 未設定」的「前往設定」。最後一定要說：「以後在 AI 對話說「打開 Founder Desk」，便可再次打開。」創辦人喺第 2 步明確講唔要觀察，就改用 `node "<安裝>/ask.mjs" --desk`。
+5. 最後登記觀察資料夾同打開 Founder Desk（同一條命令）：`node "<安裝>/ask.mjs" --desk --observe "<項目根>"`。話畀創辦人知已經打開，下一步是頁頂「AI 工具未設定」的「前往設定」。最後一定要說：「以後在 AI 對話說「打開 Founder Desk」，便可再次打開。」創辦人喺第 2 步明確講唔要觀察，就改用 `node "<安裝>/ask.mjs" --desk`。
 
 ## 登記每日自動開工（亦處理「安裝排程」「重新登記排程」）
 

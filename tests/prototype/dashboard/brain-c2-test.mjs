@@ -220,7 +220,7 @@ try {
   await idle();
   await openChrome();
   await go('/dashboard/brain/pipeline');
-  ok('客戶推進頁：每個對象下一步標「AI 建議 · 未確認」', (await ev(`[...document.querySelectorAll('#pipeline .pr')].filter(r=>/AI 建議 · 未確認/.test(r.innerText)).length`)) === 5, await text('#pipeline'));
+  ok('客戶推進頁：每個對象下一步標「AI 建議 · 未確認」', (await ev(`[...document.querySelectorAll('#pipeline .pr')].filter(r=>r.innerText.includes(${JSON.stringify(N.dash.aiUnconfirmed)})).length`)) === 5, await text('#pipeline'));
   await shot('c2-pipeline.png');
   await go('/dashboard/brain');
   const waits = await ev(`[...document.querySelectorAll('#wait-strip li')].map(l=>({item:l.dataset.item,t:l.innerText}))`);

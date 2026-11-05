@@ -24,9 +24,10 @@ for (const p of prefills) {
   checked.prefills++;
   const mine = archived.filter(f => path.basename(f).startsWith(p.id + '-prefill-'));
   const docs = mine.map(f => ({ name: path.basename(f).slice((p.id + '-prefill-').length).replace(/^\d+-/, ''), text: TEXT.includes(path.extname(f).slice(1).toLowerCase()) ? fs.readFileSync(f, 'utf8') : null }));
-  if (!mine.length) bad('預填 ' + p.id, '搵唔到封存文件，無法核對', '');
+  if (!mine.length && p.from !== 'ideate') bad('預填 ' + p.id, '搵唔到封存文件，無法核對', '');
   for (const [q, a] of Object.entries(p.answers || {})) {
     checked.answers++;
+    if (p.from === 'ideate' && a.label !== 'inferred') bad('預填 ' + p.id + ' ' + q, '構思答案只能是推斷，不能當文件原句', a.label);
     if (!['quote', 'inferred', 'unverified'].includes(a.label)) bad('預填 ' + p.id + ' ' + q, '標籤不明', a.label);
     if (a.label !== 'quote') continue;
     const hit = docs.filter(d => d.text != null && norm(d.text).includes(norm(a.text)));
@@ -37,7 +38,7 @@ for (const p of prefills) {
 const allAns = prefills.flatMap(p => Object.entries(p.answers || {}).map(([q, a]) => ({ id: p.id, q, ...a })));
 
 // (2) 交資料（收件匣同封存）
-const LINE = { quote: '（來源：你確認的文件原句', adopted: '（來源：你認同的 AI 建議', unverified: '（來源：你確認的 AI 預填', moved: '（來源：AI 按文件預填的句子，由另一題搬來', founder: '（來源：你寫的）' };
+const LINE = { quote: '（來源：你確認的文件原句', adopted: '（來源：你認同的 Zero 建議', unverified: '（來源：你確認的 Zero 預填', moved: '（來源：Zero 按文件預填的句子，由另一題搬來', founder: '（來源：你寫的）' };
 const intakes = [...walk(path.join(DATA, 'archive')), ...walk(path.join(DATA, 'founder', 'inbox'))].filter(f => f.endsWith('-intake.md'));
 for (const f of intakes) {
   checked.intakes++;
@@ -58,7 +59,9 @@ for (const f of intakes) {
     // 檔案入面嗰題下面嘅來源一句
     const sec = text.split(/^## /m).find(s => s.startsWith(q.slice(1) + '. '));
     const want = !p ? null : p.moved ? LINE.moved : p.kind === 'quote' ? LINE.quote : p.kind === 'adopted' && p.label === 'unverified' ? LINE.unverified : p.kind === 'adopted' ? LINE.adopted : LINE.founder;
-    if (mc.provenance && want && !(sec || '').includes(want)) bad(path.basename(f) + ' ' + q, '檔案入面嘅來源一句同機器紀錄唔一致', { want, got: (sec || '').split('\n').filter(l => l.startsWith('（來源')) });
+    // 已保存的 AI 來源字眼仍是有效紀錄；新紀錄使用 Zero。
+    const accepted = want ? [want, want.replace('Zero', 'AI')] : [];
+    if (mc.provenance && want && !accepted.some(w => (sec || '').includes(w))) bad(path.basename(f) + ' ' + q, '檔案入面嘅來源一句同機器紀錄唔一致', { want, got: (sec || '').split('\n').filter(l => l.startsWith('（來源')) });
     if (mc.provenance && (sec || '').includes(LINE.founder) && same.length) bad(path.basename(f) + ' ' + q, '檔案寫「你寫的」但答案同 AI 預填一樣', String(v).slice(0, 80));
   }
 }

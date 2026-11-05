@@ -64,6 +64,7 @@ const TESTS = [
   ['更新', 'core/update-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['AI 工具啟動殼', 'core/host-shim-test.mjs', ['{proto}', '{out}', '{port}']],
   ['宿主認證與隔離', 'core/certify-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['模型對齊', 'core/model-alignment-test.mjs', ['{proto}', '{out}', '{port}']],
   ['手機配對', 'core/phone-pair-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['伺服器安全反例', 'core/round3-server-safety-test.mjs', ['{proto}', '{out}', '{port}']],
   ['公司標誌', 'core/logo-test.mjs', ['{chrome}', '{out}', '{proto}', '{port}'], true],
@@ -82,12 +83,19 @@ const TESTS = [
   ['名稱表', 'core/names-check.mjs', ['{proto}', '{out}']],
   ['測試輸出清理', 'core/test-output-test.mjs', ['{proto}', '{out}']],
   ['真實事件', 'core/event-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['慶祝紀錄', 'core/celebration-test.mjs', []],
   ['示範保護', 'core/event-demo-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['待決排序', 'core/todo-test.mjs', ['{proto}', '{out}', '{port}']],
   ['首頁業務主線', 'core/founder-op-test.mjs', ['{proto}', '{out}', '{port}']],
   ['由文件預填', 'core/prefill-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['由文件預填頁面', 'core/cdp-prefill.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
-  ['生意類別', 'core/biztype-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['八題及生意模式純函數', 'core/intake-v2-test.mjs', ['{proto}', '{out}']],
+  ['八題及生意類別', 'core/biztype-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['Zero 稱呼', 'core/zero-voice-test.mjs', ['{proto}', '{out}']],
+  ['和 Zero 一起想', 'core/ideate-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['給意見', 'core/cdp-feedback.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['第一天', 'core/cdp-firstday.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['慶祝', 'core/cdp-celebration.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['新手收尾', 'core/novice-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['入門頁', 'core/welcome-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['首頁業務主線頁面', 'core/main-line-page-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
@@ -165,7 +173,9 @@ for (const [i, [name, file, params, browser]] of TESTS.entries()) {
   // 唔通過就自動重試一次（機器忙時嘅時序問題）；兩次都照記，總結標明「重試後通過」
   if (!v.pass) {
     first = v.score;
-    ({ text, code } = await run(file, { list, out }));
+    const retryOut = path.join(out, 'retry');
+    const retryList = list.map((arg, j) => params[j] === '{out}' ? retryOut : arg);
+    ({ text, code } = await run(file, { list: retryList, out: retryOut }));
     fs.writeFileSync(log.replace(/\.txt$/, '-retry.txt'), text);
     v = verdict(text, code);
   }

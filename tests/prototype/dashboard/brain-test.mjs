@@ -2,10 +2,12 @@
 // 用法：node brain-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
@@ -58,7 +60,7 @@ try {
   shiftSeed(DEMO, 165);
   d = await A.get('/api/dashboard');
   const w = item(d, 'wargame');
-  ok('整合完成：最大風險、推薦路線、要你決定、假設變動；你回應後轉強中', w.status === 'running' && w.detail.phase === 'strengthening' && w.detail.synthesis.topRisks.length === 3 && w.detail.synthesis.routes.length === 3 && w.detail.synthesis.founderDecisions.length === 2 && w.detail.synthesis.assumptionChanges.every(a => a.label === 'AI 建議 · 未確認'));
+  ok('整合完成：最大風險、推薦路線、要你決定、假設變動；你回應後轉強中', w.status === 'running' && w.detail.phase === 'strengthening' && w.detail.synthesis.topRisks.length === 3 && w.detail.synthesis.routes.length === 3 && w.detail.synthesis.founderDecisions.length === 2 && w.detail.synthesis.assumptionChanges.every(a => a.label === N.dash.aiUnconfirmed));
   ok('紅藍對打完成後路線推演開始', item(d, 'routes').status === 'running' && item(d, 'routes').progress);
   shiftSeed(DEMO, 260);
   ok('路線推演完成：每條有紅隊評分、第一個測試、停止條件', item(await A.get('/api/dashboard'), 'routes').status === 'done' && item(await A.get('/api/dashboard'), 'routes').detail.routes.every(r => r.redScore && r.firstTest && r.stop));

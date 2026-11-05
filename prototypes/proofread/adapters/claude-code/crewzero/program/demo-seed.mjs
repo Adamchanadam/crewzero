@@ -20,7 +20,7 @@ const ARTIFACTS = {
   'R-demo-b': { label: '擬好農場甲供應協議草稿', summary: '按會面紀錄擬好協議草稿，已由你接受。', file: 'farm-a-agreement.md', title: '農場甲供應協議草稿',
     text: '# 供應協議草稿（農場甲）\n\n1. 供應期：首三個月，期滿再議。\n2. 數量：每週兩次，每次按前一日訂單。\n3. 價格：按當週市價，每月檢討一次。\n4. 付款：月結。\n5. 不設獨家。\n' },
   'R-demo-c': { label: '整理牌照要求查詢清單', summary: '列出三類可能需要的牌照及查詢方法；建議先查牌照再買保險。', file: 'licence-checklist.md', title: '牌照要求查詢清單（初稿）',
-    text: '# 牌照要求查詢清單（初稿）\n\n> 以下由 AI 整理，**要確認**：以發牌機關答覆為準。\n\n| 類別 | 要問的問題 | 查詢方法 |\n|---|---|---|\n| 食物業相關牌照 | 只做配送、不做加工，是否需要牌照？ | 致電發牌機關查詢熱線 |\n| 車輛 | 私家車送貨是否需要另外登記？ | 運輸部門網頁 |\n| 保險 | 第三者及貨物保險的最低保額 | 向兩間保險公司索取報價 |\n' }
+    text: '# 牌照要求查詢清單（初稿）\n\n> 以下由 Zero 整理，**要確認**：以發牌機關答覆為準。\n\n| 類別 | 要問的問題 | 查詢方法 |\n|---|---|---|\n| 食物業相關牌照 | 只做配送、不做加工，是否需要牌照？ | 致電發牌機關查詢熱線 |\n| 車輛 | 私家車送貨是否需要另外登記？ | 運輸部門網頁 |\n| 保險 | 第三者及貨物保險的最低保額 | 向兩間保險公司索取報價 |\n' }
 };
 
 export function seedDemo(dir = DEMO_DIR, { reset = false, now = new Date(), copyCert = false } = {}) {
@@ -64,7 +64,7 @@ export function seedDemo(dir = DEMO_DIR, { reset = false, now = new Date(), copy
   const at = s => resolveTimes(s, now);
   const log = [
     { at: at('@-25d 22:10'), source: 'proofread', packId: page.page.id, packTitle: '公司概覽', qid: 'order', question: '里程碑路線次序', ai: '農場簽約 → 餐廳試單 → 首條送貨路線 → 牌照保險 → 連續四週', answer: '農場簽約 → 牌照保險 → 餐廳試單 → 首條送貨路線 → 連續四週', changed: true, effect: 'now' },
-    { at: at('@-25d 22:10'), source: 'proofread', packId: page.page.id, packTitle: '公司概覽', qid: 'rest', question: 'AI 已擬好的其他內容', ai: '', answer: '採用建議（暫定，到期再問）', changed: false, effect: 'tentative' },
+    { at: at('@-25d 22:10'), source: 'proofread', packId: page.page.id, packTitle: '公司概覽', qid: 'rest', question: 'Zero 已擬好的其他內容', ai: '', answer: '採用建議（暫定，到期再問）', changed: false, effect: 'tentative' },
     { at: at('@-18d 20:40'), source: 'ask', packId: 'ask-demo-exclusive', packTitle: '農場甲的獨家要求', qid: 'exclusive', question: '農場甲要求獨家供應，接受嗎？', ai: '不接受', answer: '不接受', changed: false, effect: 'now' },
     { at: at('@-18d 20:41'), source: 'ask', packId: 'ask-demo-accept-a', packTitle: '驗收：農場甲供應協議草稿', qid: 'accept', question: '協議草稿可以用嗎？', ai: '接受', answer: '接受', changed: false, effect: 'now' },
     { at: at('@-10d 09:15'), source: 'ask', packId: 'ask-demo-route0', packTitle: '農場乙退出後的路線', qid: 'route', question: '農場乙退出，先以兩個農場試做兩週嗎？', ai: '採用', answer: '採用', changed: false, effect: 'now' }

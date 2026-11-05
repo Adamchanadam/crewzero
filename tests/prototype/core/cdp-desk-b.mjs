@@ -72,7 +72,7 @@ try {
   await usePass(A, { send });
   await go(A);
   ok('今日要做的事卡：待校對公司概覽，入口去校對', (await ev(`(document.querySelector('#today-card')||{}).dataset.key`)) === 'proofread' && (await ev(`document.querySelector('#today-go').getAttribute('href')`)) === '/proofread.html', await text('#today-card'));
-  ok('今日要做的事卡：一句要做的事、一句不會自動發生，文字來自 FIRST-WEEK.md', /檢視 AI 擬定的公司概覽/.test(await text('#today-do')) && (await text('#today-not')).startsWith(N.ui.todayNotAuto), await text('#today-card'));
+  ok('今日要做的事卡：一句要做的事、一句不會自動發生，文字來自 FIRST-WEEK.md', /檢視 Zero 擬定的公司概覽/.test(await text('#today-do')) && (await text('#today-not')).startsWith(N.ui.todayNotAuto), await text('#today-card'));
   ok('第一次打開冇「上次離開之後」', !(await has('#since')));
   const at1 = seenAt(DA);
   ok('打開待決事項：記低今次時間', !!at1, at1);
@@ -147,7 +147,7 @@ try {
   await waitFor(async () => !(await api(PB, '/api/dashboard')).j.ai.busy, 30000);
   await go(B + 'dashboard/inputs');
   await click('#run-now');
-  ok('「立即開始 AI 工作」：開始一次手動工作', /已請 AI 開始工作/.test(await text('#toast')), await text('#toast'));
+  ok('「立即開始 AI 工作」：開始一次手動工作', (await text('#toast')).includes(N.ui.runNowSent), await text('#toast'));
   const manual = await waitFor(async () => ((await api(PB, '/api/dashboard')).j.runs || []).find(r => r.trigger === 'manual'), 40000);
   ok('手動工作記錄為「手動」觸發', !!manual, ((await api(PB, '/api/dashboard')).j.runs || []).map(r => r.trigger));
   await waitFor(async () => !(await api(PB, '/api/dashboard')).j.ai.busy, 30000);

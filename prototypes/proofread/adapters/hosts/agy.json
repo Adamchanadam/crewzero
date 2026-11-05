@@ -11,19 +11,35 @@
     "--mode",
     "accept-edits",
     "--sandbox",
+    "--settings",
+    "{\"permissions\":{\"deny\":[\"command(*)\",\"read_url(*)\",\"execute_url(*)\",\"mcp(*)\",\"unsandboxed(*)\",\"read_file({agyHome}/)\"]},\"allowNonWorkspaceAccess\":false,\"enableTerminalSandbox\":true}",
     "--disable-slash-commands",
     "--print-timeout",
-    "10m"
+    "25m",
+    "--model",
+    "{model}"
   ],
-  "prompt": "請先讀呢個資料夾入面嘅 task.md，然後完全照入面嘅指示做；所有產出只可以寫入 out 資料夾。",
+  "prompt": "請先讀呢個資料夾入面嘅 task.md，然後完全照入面嘅指示做；所有產出只可以寫入 out 資料夾。命令列喺呢度用唔到，請用讀檔、寫檔同列資料夾工具。",
+  "certify": {
+    "neutral": true,
+    "role": "everyday"
+  },
   "timeoutMinutes": 10,
-  "versionArgs": ["--version"],
+  "versionArgs": [
+    "--version"
+  ],
   "outputFormat": "stream-json",
   "denialProof": {
+    "commandUrl": true,
     "streamToolEvent": {
       "event": "step_update",
       "stepType": "tool",
-      "rejectStates": ["FAILED", "ERROR", "DENIED", "REJECTED"]
+      "rejectStates": [
+        "FAILED",
+        "ERROR",
+        "DENIED",
+        "REJECTED"
+      ]
     }
   },
   "env": {
@@ -35,15 +51,99 @@
     "content": "{\"toolPermission\":\"always-proceed\"}"
   },
   "loginProbe": {
-    "args": ["models"],
+    "args": [
+      "models"
+    ],
     "okExit": 0
   },
   "required": {
-    "mustHave": ["--output-format", "stream-json", "--disable-slash-commands"],
-    "mustNotHave": ["--dangerously-skip-permissions", "--add-dir", "auto"],
-    "pairs": [
-      ["--output-format", "stream-json"], ["--mode", "accept-edits"], ["--print-timeout", "10m"]
+    "mustHave": [
+      "--output-format",
+      "stream-json",
+      "--disable-slash-commands"
     ],
-    "forbiddenFlags": ["--dangerously-skip-permissions", "--add-dir"]
+    "mustNotHave": [
+      "--dangerously-skip-permissions",
+      "--add-dir",
+      "auto"
+    ],
+    "pairs": [
+      [
+        "--output-format",
+        "stream-json"
+      ],
+      [
+        "--mode",
+        "accept-edits"
+      ],
+      [
+        "--print-timeout",
+        "25m"
+      ],
+      [
+        "--settings",
+        "{\"permissions\":{\"deny\":[\"command(*)\",\"read_url(*)\",\"execute_url(*)\",\"mcp(*)\",\"unsandboxed(*)\",\"read_file({agyHome}/)\"]},\"allowNonWorkspaceAccess\":false,\"enableTerminalSandbox\":true}"
+      ],
+      [
+        "--model",
+        "{model}"
+      ]
+    ],
+    "forbiddenFlags": [
+      "--dangerously-skip-permissions",
+      "--add-dir"
+    ]
+  },
+  "modelsProbe": {
+    "args": [
+      "models"
+    ]
+  },
+  "models": {
+    "note": "紅藍同級、立場分工；裁判應與藍方不同模型，做不到時顯示警告",
+    "everyday": [
+      {
+        "model": "gemini-3.8-flash-medium",
+        "label": "Gemini 3.8 Flash",
+        "effort": "medium"
+      }
+    ],
+    "blue": [
+      {
+        "model": "gemini-4-argon-medium",
+        "label": "Gemini 4 Argon",
+        "effort": "medium"
+      },
+      {
+        "model": "gemini-3.8-flash-high",
+        "label": "Gemini 3.8 Flash",
+        "effort": "high"
+      }
+    ],
+    "red": [
+      {
+        "model": "gemini-4-argon-medium",
+        "label": "Gemini 4 Argon",
+        "effort": "medium"
+      },
+      {
+        "model": "gemini-3.8-flash-high",
+        "label": "Gemini 3.8 Flash",
+        "effort": "high"
+      }
+    ],
+    "judge": [
+      {
+        "model": "gemini-4-argon-high",
+        "label": "Gemini 4 Argon",
+        "effort": "high"
+      },
+      {
+        "model": "gemini-3.8-flash-high",
+        "label": "Gemini 3.8 Flash",
+        "effort": "high"
+      }
+    ],
+    "timeoutMinutes": 25
   }
 }

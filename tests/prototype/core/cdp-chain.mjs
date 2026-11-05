@@ -2,10 +2,12 @@
 // 用法：node cdp-chain.mjs <chrome> <輸出資料夾> <原型資料夾> <adapter 檔或 default> <port> <ok|missing> <最長等幾多秒>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { seedCompany, certify, usePass } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT, MODE, WAIT] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -60,15 +62,15 @@ try {
   await ev('localStorage.clear()');
   await send('Page.navigate', { url: BASE + 'proofread.html' }); await sleep(1500);
   const t0 = await track();
-  if (MODE === 'missing') ok('AI 未設定：確認前已經提示並有「前往設定」', t0.includes('AI 未設定') && t0.includes('前往設定'), t0);
-  else { const hero = await ev(`document.querySelector('.hero .eyebrow')?.innerText||''`); ok('確認前講明會自動交畀 AI（寫喺頂部，唔重複）', hero.includes('已連接') && !t0.includes('已連接'), hero); }
+  if (MODE === 'missing') ok('AI 未設定：確認前已經提示並有「前往設定」', t0.includes(N.ui.aiNotSet) && t0.includes('前往設定'), t0);
+  else { const hero = await ev(`document.querySelector('.hero')?.innerText||''`); ok('首屏顯示 Zero 的公司概覽，沒有連線或批次系統字眼', hero.includes('Zero 已整理好你的公司概覽') && !/已連接|本批|Claude Code/.test(hero), hero); }
   await shot('c1-connected.png');
   // 改一項：本季目標揀第二個選項
   await click('#dq-goal-quarter > .opt:nth-of-type(2)');
   const edited = await ev(`document.querySelector('#dq-goal-quarter > .opt.cur').textContent`);
   // 成頁確認 → 交畀 AI
   await click('.cbar .btn.primary');
-  ok('回覆盒主掣係「確認並交畀 AI」', (await ev(`document.querySelector('#do-confirm').textContent`)).includes('交 AI 處理'));
+  ok('回覆盒主掣係「確認並交畀 AI」', (await ev(`document.querySelector('#do-confirm').textContent`)).includes(N.ui.submit));
   await shot('c2-modal.png');
   await click('#do-confirm');
   await sleep(600);
@@ -86,7 +88,7 @@ try {
   }
   await shot('c4-final.png');
   if (MODE === 'missing') {
-    ok('AI 未設定：顯示等緊 AI 設定同原因', t2.includes('AI 未設定') && t2.includes('自動繼續'), t2.slice(0, 300));
+    ok('AI 未設定：顯示等緊 AI 設定同原因', t2.includes(N.ui.aiNotSet) && t2.includes('自動繼續'), t2.slice(0, 300));
     ok('AI 未設定：有「前往設定」', await ev(`[...document.querySelectorAll('#track a')].some(b=>b.textContent.includes('前往設定'))`));
     ok('AI 未設定：套用照樣完成（唔使 AI）', t2.includes('已記錄修改與次序'));
   } else {

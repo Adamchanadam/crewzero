@@ -65,8 +65,7 @@ try {
   if (await ev(`!!document.querySelector('#intake-anyway')`)) await ev(`document.querySelector('#intake-anyway').click()`);
   ok('交資料頁：文件區排喺題目之前，有「由文件預填」掣', await ev(`(()=>{const b=document.querySelector('#pf-go'),q=document.querySelector('#q1');return !!b&&!!q&&!!(b.compareDocumentPosition(q)&Node.DOCUMENT_POSITION_FOLLOWING)})()`));
   ok('未加文件：「由文件預填」停用', await ev(`document.querySelector('#pf-go').disabled`));
-  await ev(`document.querySelector('input[name="biz-type"][value="other"]').click()`); await sleep(500);
-  ok('交資料頁：可選擇生意類別，題目維持可填', await ev(`document.querySelector('input[name="biz-type"][value="other"]').checked&&!!document.querySelector('#q1')`));
+  ok('交資料頁：毋須先選類別，八題可以直接填寫', await ev(`!document.querySelector('input[name="biz-type"]')&&Array.from({length:8},(_,i)=>!!document.querySelector('#q'+(i+1))).every(Boolean)`));
   // 創辦人已經寫咗第 2 題：預填唔可以覆蓋
   const mine2 = '我們按月收費。';
   await typeEnd('#q2', mine2);
@@ -80,9 +79,9 @@ try {
   await shot('pf1-filled.png');
   ok('空格填入預填：第 1、3、5 題', (await val('#q1')) === rec.q1.text && (await val('#q3')) === rec.q3.text && (await val('#q5')) === rec.q5.text, { q1: await val('#q1'), q3: await val('#q3') });
   ok('已經寫咗嘅第 2 題唔覆蓋，只顯示「用這句」建議', (await val('#q2')) === mine2 && (await has('[data-pf-use="q2"]')) && (await text('#pf-q2')).includes(rec.q2.text.slice(0, 10)), await text('#pf-q2'));
-  // 硬規矩：每條預填都標「AI 按文件預填」連出處
+  // 硬規矩：每條預填都標「Zero 按文件預填」連出處
   const rows = {}; for (const q of ['q1', 'q2', 'q3', 'q5']) rows[q] = await text('#pf-' + q);
-  ok('每條預填都標「AI 按文件預填」連文件出處', Object.values(rows).every(t => t.includes('AI 按文件預填') && t.includes('出自《')), rows);
+  ok('每條預填都標「Zero 按文件預填」連文件出處', Object.values(rows).every(t => t.includes('Zero 按文件預填') && t.includes('出自《')), rows);
   ok('原句標「待確認」；推斷標「不是原句」（第 3 題 AI 扮原句都照標推斷）', rows.q1.split('\n')[0] === N.ui.prefillTagQuote && rows.q3.split('\n')[0] === N.ui.prefillTagInferred && rows.q2.includes(N.ui.prefillTagInferred), rows);
   ok('文件冇講嘅第 4 題：叫你自行填寫', (await text('#pf-q4')).includes(N.ui.prefillNone), await text('#pf-q4'));
   ok('未確認之前畫面冇「你原話」', !(await text('#intake-form')).includes('你原話'));

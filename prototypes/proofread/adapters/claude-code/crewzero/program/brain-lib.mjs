@@ -57,8 +57,8 @@ function mdCards(text, prefix) {
 
 /* ---------- 紅藍對打：最新一場做第 2 項；舞台可以切換睇其他場 ---------- */
 const PHASE_TEXT = {
-  preparing: 'AI 正在準備辯論', blue: '藍方正在撰寫論證', red: '紅方正在逐點攻擊', rebuttal: '藍方正在反駁', judge: '裁判正在逐條判定',
-  done: '辯論完結：等你回應三個關鍵時刻，其後開始轉強', strengthening: 'AI 將批評變成轉強卡', reattack: '紅方再攻轉強卡', adopt: '轉強卡等你採用', adopted: '已採用轉強卡', failed: '有一方未完成，可以重跑一次'
+  preparing: 'Zero 正在準備辯論', blue: '藍方正在撰寫論證', red: '紅方正在逐點攻擊', rebuttal: '藍方正在反駁', judge: '裁判正在逐條判定',
+  done: '辯論完結：等你回應三個關鍵時刻，其後開始轉強', strengthening: 'Zero 將批評變成轉強卡', reattack: '紅方再攻轉強卡', adopt: '轉強卡等你採用', adopted: '已採用轉強卡', failed: '有一方未完成，可以重跑一次'
 };
 function wargameItem(DIR, src, now, reveal, packs) {
   const ms = listMatches(DIR, src, { now, reveal });
@@ -123,7 +123,7 @@ export function loadBrain(DIR, { now = new Date(), runs = [], packs = [] } = {})
       const open = packs.find(p => p.id === d.packId);
       const run = runs.find(r => r.kind === 'ask' && r.ref === d.packId);
       if (open && x.status !== 'done') Object.assign(x, { status: 'waiting', waitHref: '/#/ask/' + d.packId, waitText: d.waitText || '請先在 Founder Desk 回答一條問題' });
-      else if (run && run.state === 'running') Object.assign(x, { status: 'running', summary: 'AI 正按你的答案跟進', progress: { done: 1, total: 2 } });
+      else if (run && run.state === 'running') Object.assign(x, { status: 'running', summary: 'Zero 正按你的答案跟進', progress: { done: 1, total: 2 } });
       else if (run && run.state === 'done' && (run.result && run.result.artifacts || []).length) Object.assign(x, { status: 'done', summary: d.doneSummary || x.summary, resultRun: { id: run.id, title: run.result.artifacts[0].title } });
     }
   }

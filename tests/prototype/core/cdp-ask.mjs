@@ -3,10 +3,12 @@
 // 用法：node cdp-ask.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <示範 14 條問題包>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { seedCompany, certify, usePass } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, DEMO] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -36,7 +38,7 @@ ok('命令入口：印出答題網址', /Founder Desk：http/.test(cli.stdout));
 const bad = path.join(OUT, 'bad.json');
 fs.writeFileSync(bad, JSON.stringify({ format: 'startup-os.ask/0.1', title: '壞', questions: [{ id: 'x', ask: '？', kind: 'text', value: '', why: '' }] }));
 const cli2 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), bad, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA } });
-ok('命令入口：唔合規格就退回並講原因', cli2.status === 1 && /不符合規格/.test(cli2.stdout) && /缺少 AI 建議答案/.test(cli2.stdout), cli2.stdout.trim());
+ok('命令入口：唔合規格就退回並講原因', cli2.status === 1 && /不符合規格/.test(cli2.stdout) && /缺少 Zero 建議答案/.test(cli2.stdout), cli2.stdout.trim());
 
 const cport = 9371;
 const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${cport}`, `--user-data-dir=${path.join(OUT, 'profile')}`, 'about:blank'], { stdio: 'ignore' });
@@ -72,8 +74,12 @@ async function go(u) { await send('Page.navigate', { url: u }); await sleep(1200
 try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   // 首頁
+  // 待決事項數字在分頁上，第一天不顯示分頁：只有這項檢查用概覽確認後的畫面
+  const confirmedFile = path.join(DATA, 'ledger', 'confirmed.json');
+  fs.mkdirSync(path.dirname(confirmedFile), { recursive: true }); fs.writeFileSync(confirmedFile, JSON.stringify({ confirmedAt: new Date().toISOString() }));
   await go(BASE);
   ok('首頁：導航顯示 2 個待決事項', (await text('.desk-count')) === '2', await text('.desk-count'));
+  fs.rmSync(confirmedFile, { force: true });
   await shot('h1-hub.png');
   // 第一包：答 3 條
   await click('#next-list a[href^="#/ask/"]');
@@ -110,7 +116,7 @@ try {
   // 紀錄
   await go(BASE + '#/log');
   ok('紀錄：分兩次回覆、每次 3 條', (await ev(`document.querySelectorAll('.log-item').length`)) === 2);
-  ok('紀錄：記低你改咗嗰條（AI 原建議）', (await text('#app')).includes('AI 原建議'));
+  ok('紀錄：記低你改咗嗰條（AI 原建議）', (await text('#app')).includes(N.ui.aiOrig));
   await click('.log-item .foot .btn');
   ok('紀錄：撳得出 AI 跟住做咗乜', await waitFor(async () => (await ev(`document.querySelectorAll('.log-item details.art').length`)) >= 1, 5000));
   await click('.tabs .btn:nth-of-type(2)');
@@ -122,7 +128,7 @@ try {
   await go(BASE + 'proofread.html');
   await click('#go-main');
   await click('#do-confirm');
-  ok('公司一頁：AI 跟進完出咗新問題包', await waitFor(async () => (await text('#track')).includes('AI 追問'), 30000), await text('#track'));
+  ok('公司一頁：AI 跟進完出咗新問題包', await waitFor(async () => (await text('#track')).includes(N.ui.aiFollowAsk), 30000), await text('#track'));
   await go(BASE);
   // 另加：深化問題包、生意體檢之後嘅「建議開辯論」（規劃書 4.6）
   ok('首頁：AI 出嘅問題包出現（3 個；缺口 5 後另加深化問題包；建議開辯論留在生意大腦）', (await text('.desk-count')) === String(3 + (fs.readdirSync(path.join(DATA, 'asks')).filter(f => { try { const p = JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')); return !!p.depth; } catch { return false; } }).length)), await text('.desk-count'));

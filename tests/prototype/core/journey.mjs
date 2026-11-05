@@ -2,9 +2,11 @@
 // 用法：node journey.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port> <main|errors>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT, MODE] = process.argv.slice(2);
+const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 真 AI：JOURNEY_HOST=claude、JOURNEY_SLOW=8（等候時間乘大）、adapter 參數寫 none
 const HOST = process.env.JOURNEY_HOST || 'test', SLOW = Number(process.env.JOURNEY_SLOW || 1), REAL = HOST !== 'test';
@@ -50,16 +52,15 @@ async function typeInto(sel, value) {
 }
 async function fillIntake() {
   // 虛構公司「從田間到餐桌」（規劃書附錄 C）
-  if (!await ev(`document.querySelector('input[name="biz-type"][value="other"]').checked`)) {
-    await ev(`document.querySelector('input[name="biz-type"][value="other"]').click()`);
-    await waitFor(() => ev(`document.querySelector('input[name="biz-type"][value="other"]').checked`), 4000);
-  }
-  const vals = ['「從田間到餐桌」把本地小農的當季蔬菜直送餐廳；客戶是注重食材來源的中小型餐廳。',
+  const vals = ['「從田間到餐桌」把本地小農的當季蔬菜直送餐廳。',
+    '注重食材來源的中小型餐廳。',
+    '餐廳想知道食材來源，又需要穩定供應。',
     '向農場按批採購，向餐廳按週收費，餐廳每週下一次或兩次單。',
-    '已認識兩位農場主（甲、乙），口頭有興趣（有人講過），未簽。餐廳未接觸。牌照保險未查。',
+    '已認識兩位農場主（甲、乙），口頭有興趣（有人講過），未簽。餐廳未接觸。',
     '約第三位農場主（丙）見面。',
-    '送貨我自己做；農場我自己談；餐廳我自己 pitch；合規與保險未有人。'];
-  for (let i = 0; i < 5; i++) await typeInto('#q' + (i + 1), vals[i]);
+    '送貨我自己做；農場我自己談；餐廳我自己 pitch；合規與保險未有人。',
+    '牌照和保險未查，擔心起步成本。'];
+  for (let i = 0; i < vals.length; i++) await typeInto('#q' + (i + 1), vals[i]);
 }
 async function attach(files) {
   const doc = await send('DOM.getDocument', { depth: -1 });
@@ -84,11 +85,11 @@ const bad = path.join(OUT, '程式.exe'); fs.writeFileSync(bad, 'x');
 try {
   await send('Page.navigate', { url: BASE }); await sleep(1800);
   ok('第一次打開：直接去交資料頁', (await ev('location.hash')) === '#/intake', await ev('location.hash'));
-  ok('第一次打開：未設定 AI 時只見設定卡，交資料表格未顯示', await has('#intake-setup-first') && /AI 未設定/.test(await text('#intake-setup-first')) && !(await has('#intake-form')));
+  ok('第一次打開：未設定 AI 時只見設定卡，交資料表格未顯示', await has('#intake-setup-first') && (await text('#intake-setup-first')).includes(N.ui.aiNotSet) && !(await has('#intake-form')));
   await click('#intake-anyway');
   ok('第一次打開：按次要入口後才顯示交資料表格', await has('#intake-form'));
-  ok('交資料頁：有共用頁頭同導航', (await has('.desk-nav')) && /交資料/.test(await text('.eyebrow')));
-  ok('交資料頁：5 條必填、選填收埋', (await ev(`document.querySelectorAll('#intake-form .iq-sec + .iq, #intake-form > .iq').length`)) >= 5 && (await has('details.iq-opt')));
+  ok('告訴 Zero 頁：共用頁頭顯示第一天進度', (await has('#first-steps')) && !(await has('.desk-nav')) && (await text('.eyebrow')).toUpperCase().includes(N.ui.intake.toUpperCase()));
+  ok('交資料頁：八題直接可填，只有第 1 題必填', await ev(`Array.from({length:8},(_,i)=>!!document.querySelector('#q'+(i+1))).every(Boolean)&&document.querySelectorAll('#intake-form .qn').length===1`));
   ok('必填未齊：主掣停用', await ev(`document.querySelector('#intake-go').disabled`));
   await shot('j1-intake-first.png');
 
@@ -114,13 +115,13 @@ try {
     ok('AI 擬好公司概覽：自動轉去公司概覽', !!moved, await ev('location.href'));
     await sleep(1500);
     ok('公司概覽：顯示 AI 擬嘅公司', /從田間到餐桌/.test(await text('h1')), await text('h1'));
-    ok('公司概覽：有共用頁頭導航', await has('.desk-nav'));
+    ok('公司概覽：共用頁頭顯示校對進度', (await has('#first-steps')) && /校對/.test(await text('#first-steps')) && !(await has('.desk-nav')));
     await shot('j4-company.png');
     await click('#go-main');
     await click('#do-confirm');
     const fin = await waitFor(async () => /✓ 完成|未完成/.test(await text('#track')), 40000 * SLOW);
     ok('成頁確認：AI 跟進完成', fin && /✓ 完成/.test(await text('#track')), await text('#track'));
-    ok('AI 跟進：有新問題包' + (REAL ? '（真 AI 只記錄）' : ''), REAL || /AI 追問/.test(await text('#track')), await text('#track'));
+    ok('AI 跟進：有新問題包' + (REAL ? '（真 AI 只記錄）' : ''), REAL || (await text('#track')).includes(N.ui.aiFollowAsk), await text('#track'));
     await shot('j5-followup.png');
     await send('Page.navigate', { url: BASE }); await sleep(1500);
     ok('待決事項：AI 問題包排第一' + (REAL ? '（真 AI 只記錄）' : ''), (await ev('location.hash')) !== '#/intake' && (REAL || (await text('.desk-count')) === String(1 + (fs.readdirSync(path.join(DATA, 'asks')).filter(f => { try { return !!JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')).depth; } catch { return false; } }).length))), await text('.desk-count'));
@@ -131,7 +132,7 @@ try {
     await attach([f1]);
     await click('#intake-go');
     await click('#intake-confirm');
-    const w = await waitFor(async () => /AI 未設定/.test(await text('#track h3')), 20000);
+    const w = await waitFor(async () => (await text('#track h3')).includes(N.ui.aiNotSet), 20000);
     ok('AI 未設定：交資料記低、等 AI 設定', !!w, await text('#track'));
     ok('AI 未設定：有「前往設定」', /前往設定/.test(await text('#track')));
     await shot('e1-waiting.png');

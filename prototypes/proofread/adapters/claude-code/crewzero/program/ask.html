@@ -13,6 +13,7 @@
 .layer.accent.ok{border-left-color:var(--mint)}
 /* 品牌角色 AI 團隊場景圖：文字在左、圖在右；靜止、無邊框；手機闊度不顯示（品牌角色規格第 7 節） */
 .with-scene{isolation:isolate;overflow:hidden;min-height:240px;display:flex;flex-direction:column;justify-content:center}
+.track.with-scene{position:relative;isolation:isolate;overflow:hidden}
 .scene-bg{position:absolute;top:0;bottom:0;right:0;width:43.5%;z-index:-1;border-radius:0 var(--r-card) var(--r-card) 0;background-repeat:no-repeat;background-size:cover;background-position:center top;opacity:.6;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%)}
 .layer > .eyebrow + .row{margin-top:4px}
 .hero-meta{font-size:var(--fs-sub);color:var(--muted);margin:0 0 14px}
@@ -45,9 +46,6 @@ input[type=date]{font:var(--fs-sub) var(--ui);color:var(--text);background:rgba(
 .iq{margin-top:14px}
 .iq-q{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:600;font-size:var(--fs-body);margin-bottom:2px}
 .iq-hint{font-size:var(--fs-sub);color:var(--muted);margin:0 0 6px}
-#biz-type{border:0;padding:0;min-inline-size:0}
-#biz-type input[type=radio]{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
-#biz-type .opt:focus-within{outline:2px solid var(--mint);outline-offset:2px}
 .iq-sec{font-size:var(--fs-sub);color:var(--muted);margin:20px 0 0;font-weight:600}
 details.iq-opt{margin-top:18px}
 details.iq-opt summary{cursor:pointer;font-weight:600}
@@ -161,6 +159,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 <script src="names.js"></script>
 <script src="pair.js"></script>
 <script src="desk.js"></script>
+<script src="/celebration.js"></script>
 </head>
 <body>
 <div class="shell" id="app">
@@ -234,7 +233,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   var why = DESK.why;
   function retryCatch(e) { toast(N.ui.retryFailed + '：' + why(e)); }
   function failReason(err) { return err ? N.ui.reason + '：' + N.fix(err) : N.ui.failNoReason; }
-  function head(page, st) { return DESK.header({ page: page, company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim) }); }
+  function head(page, st) { return DESK.header({ page: page, company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim), sample: !!(st && st.sample) }); }
   function showAns(q, v) { return Array.isArray(v) ? v.join('、') : (q && q.kind === 'date' ? fmtDay(v) : String(v == null ? '' : v)); }
 
   /* ---------- 伺服器重新開過：頁面可能過時 ---------- */
@@ -250,6 +249,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   var V = { status: null, pollTimer: null };
   function route() {
     clearTimeout(V.pollTimer);
+    clearTimeout(V.ideateTimer);
     $('#cbar').hidden = true;
     closeModal();
     var cm = /^#\/change\/(target|task)\/([\w-]{1,80})$/.exec(location.hash);
@@ -317,15 +317,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (!st || st.cert) return null;
     var running = st.certify && st.certify.state === 'running';
     return h('section', { class: 'layer block', id: 'ai-block' },
-      h('span', { class: 'eyebrow' }, N.ui.aiNotSet),
+      h('span', { class: 'eyebrow' }, st.aiStale ? N.ui.aiStale : N.ui.aiNotSet),
       h('div', { class: 'row' },
-        h('div', null, h('div', { class: 't' }, N.ui.aiNotSet, ' ', running ? tag(N.ui.certChecking, 'qn') : null),
-          h('div', { class: 'small muted' }, running ? 'AI 工具正在認證，通常一分鐘內完成。' : 'AI 設定完成前，你提交的資料與答案仍會記錄，但 AI 不會跟進；設定完成後將自動繼續。')),
+        h('div', null, h('div', { class: 't' }, st.aiStale ? N.ui.aiStale : N.ui.aiNotSet, ' ', running ? tag(N.ui.certChecking, 'qn') : null),
+          h('div', { class: 'small muted' }, running ? 'AI 工具正在認證，通常一分鐘內完成。' : st.aiStale ? N.ui.aiStaleNote : 'AI 工具設定完成前，你提交的資料與答案仍會記錄，但 Zero 不會跟進；設定完成後將自動繼續。')),
         h('a', { class: 'btn primary', href: '#/setup', id: 'go-setup' }, N.ui.goSetup)));
   }
   function waitingNote(r) {
     var ai = r && (r.steps || []).filter(function (s) { return s.key === 'ai'; })[0];
-    return [h('p', null, (ai && ai.detail) || 'AI 尚未設定，設定完成後將自動繼續。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup))];
+    return [h('p', null, (ai && ai.detail) || 'AI 工具尚未設定，設定完成後將自動繼續。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup))];
   }
   function runTitle(r, fallback) {
     var ai = r && (r.steps || []).filter(function (s) { return s.key === 'ai'; })[0];
@@ -491,7 +491,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var companyCard = h('section', { class: 'layer accent' + (c.confirmed ? ' ok' : '') },
         h('span', { class: 'eyebrow' }, N.ui.company),
         h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, c.confirmed ? N.ui.confirmed + '（' + dayOf(c.confirmedAt) + '）' : N.ui.unconfirmed),
-          h('div', { class: 'small muted' }, c.confirmed ? '如有改動，可隨時再次確認。' : c.ready ? 'AI 已擬定，請你查閱。' : '請先交資料，讓 AI 建立公司概覽。')),
+          h('div', { class: 'small muted' }, c.confirmed ? '如有改動，可隨時再次確認。' : c.ready ? 'Zero 已擬定，請你查閱。' : '請先告訴 Zero，讓 Zero 建立公司概覽。')),
           h('a', { class: 'btn', href: c.ready ? '/proofread.html' : '#/intake' }, c.confirmed ? N.ui.viewEdit : c.ready ? N.ui.goConfirm : N.ui.goIntake)));
       // 只列 AI 工作；舊分頁送錯、套用都未成功嗰類失敗唔係 AI 工作，唔列（同公司概覽一樣）
       var runs = st.runs.filter(function (rn) { return !(rn.state === 'failed' && (rn.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; })); }).slice(0, 3);
@@ -508,14 +508,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         // 即時微動畫：讀回心跳、下次 AI 開工倒數、今日 AI 啟動、用時、費用（共用殼每秒重算）
         DESK.aiTele());
       var practiceCard = h('section', { class: 'layer', id: 'practice-card' }, h('span', { class: 'eyebrow' }, N.ui.yourActions + ' · ' + N.ui.practice),
-        h('p', { class: 'guide' }, '需要親身會面？可先與 AI 模擬的對方練習一次，練習後提供覆盤及會面卡（練習不算證據）。'),
+        h('p', { class: 'guide' }, '需要親身會面？可先與 Zero 模擬的對方練習一次，練習後提供覆盤及會面卡（練習不算證據）。'),
         h('div', { id: 'practice-actions' }, h('p', { class: 'empty' }, '讀取中……')), h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceAll)));
       get('/api/practice').then(function (pr) { var box = $('#practice-actions'); if (!box) return; box.replaceChildren(); var acts = (pr.actions || []).slice(0, 4);
         if (!acts.length) { box.append(h('p', { class: 'empty' }, '暫無需要你親身執行的行動。')); return; }
         acts.forEach(function (a) { box.append(h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, a.title), h('div', { class: 'small muted' }, a.dueAt ? dayOf(a.dueAt) + ' ' + hm(a.dueAt) : '未定日期')),
           h('a', { class: 'btn', href: a.scenarioId ? '#/practice/' + a.scenarioId : '#/practice/new/' + a.id, 'data-practice': a.id }, '🎭 ' + N.ui.practiceGo))); }); }).catch(function () { });
       var debateCard = h('section', { class: 'layer', id: 'debate-card' }, h('span', { class: 'eyebrow' }, N.ui.debate),
-        h('p', { class: 'guide' }, '請 AI 分藍方、紅方、裁判辯論你的生意、策略、定價或伙伴提案；完場後把批評轉成轉強卡，由你決定採用。辯論結果不算證據。'),
+        h('p', { class: 'guide' }, '請 Zero 分藍方、紅方、裁判辯論你的生意、策略、定價或伙伴提案；完場後把批評轉成轉強卡，由你決定採用。辯論結果不算證據。'),
         h('div', { id: 'debate-latest' }, h('p', { class: 'empty' }, '讀取中……')),
         h('div', { class: 'foot', style: 'justify-content:flex-start' }, h('a', { class: 'btn', href: '#/debate/new', id: 'hub-debate-new' }, N.ui.debateNew), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll)));
       get('/api/debate').then(function (d) { var box = $('#debate-latest'); if (!box) return; box.replaceChildren(); var m = d.matches[d.matches.length - 1];
@@ -525,8 +525,10 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var intakeLink = !c.ready ? h('p', { class: 'small muted' }, h('a', { href: '#/intake' }, N.ui.goIntake)) : null;
       var kept = [].map.call(document.querySelectorAll('#app details[id][open]'), function (d) { return d.id; });
       V.hubDirty = !!String(V.quickText || '').trim(); V.hubWatching = false;
-      setApp(head('pending', st), aiBlock(st), main, next, quietToday, others, snoozedCard, brainLine, sinceRow(home), quickInput(), intakeLink, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, aiCard,
+      setApp(head('pending', st), aiBlock(st), main, next, DESK.feedbackPrompt(st, asks), quietToday, others, snoozedCard, brainLine, sinceRow(home), quickInput(), intakeLink, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, aiCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
+      var cele = window.SOS_CELEBRATE;
+      cele.handle(st, { allowed: function () { return location.hash === '#/' || location.hash === ''; } });
       kept.forEach(function (id) { var d = document.getElementById(id); if (d) d.open = true; });
       // 由月曆跳過嚟：畫好之後捲到對應卡，只做一次，定時更新唔會再跳
       var jump = /^#(next-action|quick-input)$/.exec(location.hash);
@@ -546,7 +548,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       DESK.title('pending', title);
       if (!st.company || !st.company.ready) {
         setApp(head('request', st), h('section', { class: 'layer block', id: 'req-nocompany' }, h('span', { class: 'eyebrow' }, title),
-          h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.ui.reqNoCompany), h('div', { class: 'small muted' }, '提交資料並由 AI 擬定公司概覽後，方可提交要求。')),
+          h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.ui.reqNoCompany), h('div', { class: 'small muted' }, '提交資料並由 Zero 擬定公司概覽後，方可提交要求。')),
             h('a', { class: 'btn primary', href: '#/intake' }, N.ui.goIntake))));
         return;
       }
@@ -565,9 +567,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var evDate = isEvent ? h('input', { type: 'date', id: 'req-date', class: 'in', 'aria-label': N.ui.eventDate, value: preset && parseDay(preset.date) ? preset.date : st && st.today || isoDay(new Date()) }) : null;
       var evFiles = isEvent ? h('input', { type: 'file', id: 'req-files', multiple: true, 'aria-label': N.ui.eventFiles }) : null;
       var form = h('section', { class: 'layer', id: 'req-form' }, h('span', { class: 'eyebrow' }, N.ui.reqTitle), h('h2', { class: 'layer-title' }, title),
-        h('p', { class: 'guide' }, isOrder ? '請用一兩句說明想如何調整：哪一站提前、哪一站押後，或想新增哪一站（以及發生甚麼事才算完成）。AI 會擬成一條問題，經你確認後路線才會更改；未確認則一切不變。'
-          : isEvent ? '請寫下公司以外發生了甚麼事：與哪個機構哪一位、對方說了或做了甚麼。AI 會按此擬定證據級及站點進度的確認問題，每項經你確認後才會生效；未確認則一切不變。'
-          : '請用一兩句說明需要 AI 做甚麼、交付甚麼、何時需要。此工作不屬於任何里程碑，只計產出，不計業務進展。AI 會先擬定範圍供你確認，確認後才開始，完成後會請你驗收。'),
+        h('p', { class: 'guide' }, isOrder ? '請用一兩句說明想如何調整：哪一站提前、哪一站押後，或想新增哪一站（以及發生甚麼事才算完成）。Zero 會擬成一條問題，經你確認後路線才會更改；未確認則一切不變。'
+          : isEvent ? '請寫下公司以外發生了甚麼事：與哪個機構哪一位、對方說了或做了甚麼。Zero 會按此擬定證據級及站點進度的確認問題，每項經你確認後才會生效；未確認則一切不變。'
+          : '請用一兩句說明需要 Zero 做甚麼、交付甚麼、何時需要。此工作不屬於任何里程碑，只計產出，不計業務進展。Zero 會先擬定範圍供你確認，確認後才開始，完成後會請你驗收。'),
         ta, h('p', { class: 'small muted' }, '可使用系統語音輸入。'),
         isEvent ? h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, h('label', { for: 'req-date' }, N.ui.eventDate + '：'), evDate) : null,
         isEvent ? h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, h('label', { for: 'req-files' }, N.ui.eventFiles + '：'), evFiles) : null,
@@ -598,11 +600,11 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var asks = r && r.result && r.result.asks || [];
     var card = h('section', { class: 'track' + (state === 'failed' ? ' bad' : state === 'waiting' ? ' off' : ''), id: 'req-track', 'aria-live': 'polite' },
       h('span', { class: 'eyebrow' }, N.ui.track),
-      h('h3', null, state === 'done' ? (asks.length ? 'AI 已擬定問題，待你確認' : N.ui.trackDone) : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
+      h('h3', null, state === 'done' ? (asks.length ? 'Zero 已擬定問題，待你確認' : N.ui.trackDone) : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
-      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }, retryCatch); } }, N.ui.retry)), failureHelp(r, mine.type === 'order' ? N.ui.reqOrder : mine.type === 'event' ? N.ui.reqEvent : N.ui.reqAdhoc));
+      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 Zero 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }, retryCatch); } }, N.ui.retry)), failureHelp(r, mine.type === 'order' ? N.ui.reqOrder : mine.type === 'event' ? N.ui.reqEvent : N.ui.reqAdhoc));
     if (state === 'done' && r.result && r.result.summary && mine.type === 'event') card.append(h('p', { id: 'req-summary' }, N.fix(r.result.summary)));
     if (state === 'done') card.append(asks.length ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'req-answer', href: '#/ask/' + asks[0].id }, '★ ' + T('answerN', { n: Math.min(3, asks[0].count) })))
       : h('p', null, '已記錄。'));
@@ -613,7 +615,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   var LV = { easy: '友善', normal: '一般', hard: '難應付' };
   var PK = [['identity', '身分與職位'], ['background', '背景'], ['stance', '立場'], ['interests', '利益'], ['decision', '決策方式'], ['concerns', '顧慮與底線'], ['style', '說話風格']];
   var PR = { level: 'normal', edits: {}, editing: null, session: null, scenario: null, hint: false, busy: false, draft: '' };
-  function srcTagP(s) { s = String(s || ''); return tag(/^你原話/.test(s) ? s.slice(0, 20) : /^外部/.test(s) ? s.slice(0, 20) : 'AI 解讀', /^你原話/.test(s) ? 'mine' : /^外部/.test(s) ? '' : 'ai'); }
+  function srcTagP(s) { s = String(s || ''); return tag(/^你原話/.test(s) ? s.slice(0, 20) : /^外部/.test(s) ? s.slice(0, 20) : 'Zero 解讀', /^你原話/.test(s) ? 'mine' : /^外部/.test(s) ? '' : 'ai'); }
   function prHead(st, page) { return head(page || (location.hash.indexOf('#/debate') === 0 ? 'debate' : 'practice'), st); }
   function showPracticeList() {
     Promise.all([get('/api/status'), get('/api/practice')]).then(function (r) {
@@ -622,13 +624,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var acts = pr.actions || [];
       setApp(prHead(st), aiBlock(st),
         h('section', { class: 'layer', id: 'practice-list' }, h('span', { class: 'eyebrow' }, N.ui.practice), h('h2', { class: 'layer-title' }, N.ui.practiceTitle),
-          h('p', { class: 'guide' }, 'AI 扮演對方與你模擬會面：對方會從自身利益與立場出發，不會一味配合你。練習後提供覆盤及一張會面卡。'), h('p', null, h('span', { class: 'pr-tag' }, N.ui.practiceLabel)),
+          h('p', { class: 'guide' }, 'Zero 扮演對方與你模擬會面：對方會從自身利益與立場出發，不會一味配合你。練習後提供覆盤及一張會面卡。'), h('p', null, h('span', { class: 'pr-tag' }, N.ui.practiceLabel)),
           (pr.scenarios || []).length ? pr.scenarios.map(function (s) {
             var last = (pr.sessions || []).filter(function (x) { return x.scenarioId === s.id; })[0];
             return h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, s.title), h('div', { class: 'small muted' }, s.counterpart.name + ' · ' + s.counterpart.role + (s.date ? ' · ' + dayOf(s.date) : '') + (last ? ' · 上次練習 ' + dayOf(last.startedAt) : ' · 未曾練習'))),
               h('a', { class: 'btn primary', href: '#/practice/' + s.id, 'data-scenario': s.id }, last ? N.ui.practiceAgain : N.ui.practiceGo));
           }) : h('p', { class: 'empty' }, '未有練習場景。')),
-        h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.yourActions), h('p', { class: 'guide' }, '任何需要你親身出席的會面，均可先行練習。如未有場景，請按「' + N.ui.practicePrepare + '」，AI 會根據準備文件及公司紀錄整理對方人物卡。'),
+        h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.yourActions), h('p', { class: 'guide' }, '任何需要你親身出席的會面，均可先行練習。如未有場景，請按「' + N.ui.practicePrepare + '」，Zero 會根據準備文件及公司紀錄整理對方人物卡。'),
           acts.length ? acts.map(function (a) {
             return h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, a.title), h('div', { class: 'small muted' }, a.dueAt ? dayOf(a.dueAt) + ' ' + hm(a.dueAt) : '未定日期')),
               a.scenarioId ? h('a', { class: 'btn primary', href: '#/practice/' + a.scenarioId }, N.ui.practiceGo) : h('a', { class: 'btn', href: '#/practice/new/' + a.id, 'data-new': a.id }, N.ui.practicePrepare));
@@ -654,7 +656,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (run) {
         var done = run.state === 'done' && run.result && run.result.scenarioId;
         setApp(prHead(st), aiBlock(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'prep-track' }, h('span', { class: 'eyebrow' }, N.ui.practicePrepare),
-          h('h3', null, done ? '場景已準備好' : run.state === 'failed' ? N.ui.trackFailed : 'AI 正在準備對方人物卡（約半分鐘）'),
+          h('h3', null, done ? '場景已準備好' : run.state === 'failed' ? N.ui.trackFailed : 'Zero 正在準備對方人物卡（約半分鐘）'),
           h('ol', { class: 'tr-steps' }, (run.steps || []).map(function (s) { return trRow(s.state, N.fix(s.label), s.detail); })),
           run.state === 'failed' ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: run.id }).then(function () { setTimeout(function () { showPracticeNew(taskId); }, 800); }, retryCatch); } }, N.ui.retry)) : null,
           done ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'prep-go', href: '#/practice/' + run.result.scenarioId }, '★ ' + N.ui.practiceSeeCard)) : null));
@@ -662,10 +664,10 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         return;
       }
       var who = h('input', { class: 'in', id: 'prep-who', placeholder: '例：對方的姓名與身分', maxlength: '200' });
-      var ta = h('textarea', { id: 'prep-text', rows: '3', placeholder: '是次希望爭取甚麼、對方有何背景（可留空，AI 會參閱準備文件及公司紀錄）', maxlength: '4000' });
+      var ta = h('textarea', { id: 'prep-text', rows: '3', placeholder: '是次希望爭取甚麼、對方有何背景（可留空，Zero 會參閱準備文件及公司紀錄）', maxlength: '4000' });
       setApp(prHead(st), aiBlock(st), h('section', { class: 'layer', id: 'prep-form' }, h('span', { class: 'eyebrow' }, N.ui.practicePrepare),
         h('h2', { class: 'layer-title' }, act ? act.title : N.ui.practiceFree), act && act.dueAt ? h('p', { class: 'guide' }, dayOf(act.dueAt) + ' ' + hm(act.dueAt)) : null,
-        h('p', { class: 'guide' }, 'AI 會整理對方的身分、背景、立場、利益、決策方式、顧慮及說話風格，逐項標明出處；開始前你可以修改。'),
+        h('p', { class: 'guide' }, 'Zero 會整理對方的身分、背景、立場、利益、決策方式、顧慮及說話風格，逐項標明出處；開始前你可以修改。'),
         h('label', { class: 'iq-q', for: 'prep-who' }, '對方是誰？'), who, h('label', { class: 'iq-q', for: 'prep-text', style: 'margin-top:10px' }, '補充（可留空）'), ta,
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceBack), h('button', { type: 'button', class: 'btn primary big', id: 'prep-send', onclick: function (e) {
           if (!act && !who.value.trim() && !ta.value.trim()) { toast('請寫下對方是誰。'); return; }
@@ -826,7 +828,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (DB.sent && !run) run = { state: 'running', steps: [{ label: N.ui.stepReqReceived, state: 'done' }, { label: N.ui.stepQueued, state: 'running' }] };
       if (run) {
         var asks = run.result && run.result.asks || [];
-        setApp(prHead(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'debrief-track' }, h('span', { class: 'eyebrow' }, N.ui.practiceDebrief), h('h3', null, run.state === 'done' ? '已記錄；AI 已擬定跟進問題' : run.state === 'failed' ? N.ui.trackFailed : '已記錄，AI 正在擬定跟進問題'),
+        setApp(prHead(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'debrief-track' }, h('span', { class: 'eyebrow' }, N.ui.practiceDebrief), h('h3', null, run.state === 'done' ? '已記錄；Zero 已擬定跟進問題' : run.state === 'failed' ? N.ui.trackFailed : '已記錄，Zero 正在擬定跟進問題'),
           h('ol', { class: 'tr-steps' }, (run.steps || []).map(function (x) { return trRow(x.state, N.fix(x.label), x.detail); })),
           asks.length ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'debrief-answer', href: '#/ask/' + asks[0].id }, '★ ' + T('answerN', { n: Math.min(3, asks[0].count) }))) : null));
         if (run.state !== 'done' && run.state !== 'failed') DB.timer = setTimeout(function () { if (location.hash === '#/practice/debrief/' + id) showDebrief(id); }, 2500);
@@ -835,7 +837,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var said = h('textarea', { id: 'db-said', rows: '4', placeholder: '對方實際說了甚麼（重點、原話）', maxlength: '4000' });
       var date = h('input', { type: 'date', class: 'in', id: 'db-date', style: 'max-width:220px' });
       setApp(prHead(st), h('section', { class: 'layer', id: 'debrief-form' }, h('span', { class: 'eyebrow' }, N.ui.practiceDebrief), h('h2', { class: 'layer-title' }, sc.counterpart.name + '：真實會面後'),
-        h('p', { class: 'guide' }, '此處記錄真實發生的事。練習不算證據；只有對方真實說過、做過的事，才可令證據升級。AI 會按你的紀錄擬定跟進問題，供你確認。'),
+        h('p', { class: 'guide' }, '此處記錄真實發生的事。練習不算證據；只有對方真實說過、做過的事，才可令證據升級。Zero 會按你的紀錄擬定跟進問題，供你確認。'),
         h('label', { class: 'iq-q', for: 'db-said' }, '對方實際說了甚麼？'), said,
         h('div', { class: 'iq-q', style: 'margin-top:12px' }, '對方有否承諾？'), h('div', { class: 'lvls' }, [['yes', '有'], ['partly', '部分'], ['no', '沒有']].map(function (c) { return h('button', { type: 'button', class: 'chip' + (DB.commit === c[0] ? ' on' : ''), 'data-commit': c[0], onclick: function () { DB.commit = c[0]; [].forEach.call(document.querySelectorAll('[data-commit]'), function (b) { b.classList.toggle('on', b.getAttribute('data-commit') === c[0]); }); } }, c[1]); })),
         h('label', { class: 'iq-q', for: 'db-date', style: 'margin-top:12px' }, '跟進日期'), date,
@@ -866,7 +868,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var st = r[0], d = r[1]; V.status = st; checkInstance(st);
       DESK.title('pending', N.ui.debate);
       setApp(prHead(st), aiBlock(st), h('section', { class: 'layer', id: 'debate-list' }, h('span', { class: 'eyebrow' }, N.ui.debate), h('h2', { class: 'layer-title' }, N.ui.debateAll),
-        h('p', { class: 'guide' }, 'AI 分藍方、紅方、裁判辯論你的生意；完場後你表態，AI 再把批評變成轉強卡，由你決定採用。辯論結果不算證據。'),
+        h('p', { class: 'guide' }, 'Zero 分藍方、紅方、裁判辯論你的生意；完場後你表態，Zero 再把批評變成轉強卡，由你決定採用。辯論結果不算證據。'),
         d.matches.length ? d.matches.slice().reverse().map(function (m) {
           return h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, DD.matchN.replace('{n}', m.n) + ' · ' + (m.topic.title || DD['tp_' + m.topic.type])), h('div', { class: 'small muted' }, DD['tp_' + m.topic.type] + ' · ' + m.format + ' · ' + DPH(m.phase) + (m.startedAt ? ' · ' + dayOf(m.startedAt) : '') + (m.score ? ' · ' + DD.vStand + ' ' + m.score.standing + '／' + DD.vHurt + ' ' + m.score.wounded + '／' + DD.vFall + ' ' + m.score.fallen : ''))),
             h('a', { class: 'btn' + (['done', 'adopt', 'failed'].indexOf(m.phase) >= 0 ? ' primary' : ''), href: '#/debate/' + m.id, 'data-match': m.id }, '查看'));
@@ -884,7 +886,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (run) {
         var mid = run.result && run.result.matchId;
         setApp(prHead(st), aiBlock(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'debate-track' }, h('span', { class: 'eyebrow' }, N.ui.debateNew),
-          h('h3', null, mid ? '已開場：AI 正逐回合辯論' : run.state === 'failed' ? N.ui.trackFailed : '排隊中'),
+          h('h3', null, mid ? '已開場：Zero 正逐回合辯論' : run.state === 'failed' ? N.ui.trackFailed : '排隊中'),
           h('ol', { class: 'tr-steps' }, (run.steps || []).map(function (s) { return trRow(s.state, N.fix(s.label), s.detail); })),
           run.state === 'failed' ? h('p', null, N.ui.reason + '：' + (run.error || '')) : null,
           mid ? h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/debate/' + mid, id: 'debate-go-match' }, N.ui.quickTrack), h('a', { class: 'btn primary big', href: stageHref(mid), id: 'debate-go-stage' }, '★ ' + N.ui.debateStage + ' ↗')) : null));
@@ -902,7 +904,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var addSeat = h('input', { class: 'in', id: 'dt-seat-add', maxlength: '20', placeholder: '例：發牌機關', style: 'max-width:220px' });
       var nAI = T0.passes + 3;
       setApp(prHead(st), aiBlock(st), h('section', { class: 'layer', id: 'debate-form' }, h('span', { class: 'eyebrow' }, N.ui.debate), h('h2', { class: 'layer-title' }, N.ui.debateNew),
-        h('p', { class: 'guide' }, '藍方撰寫最有力而誠實的論證，紅方以數個外部身份逐點攻擊，裁判逐條判定為' + DD.vStand + '、' + DD.vHurt + '或' + DD.vFall + '；完場後你表態，AI 把批評轉成修正、優勢、測試或觀察。辯論結果不算證據。'),
+        h('p', { class: 'guide' }, '藍方撰寫最有力而誠實的論證，紅方以數個外部身份逐點攻擊，裁判逐條判定為' + DD.vStand + '、' + DD.vHurt + '或' + DD.vFall + '；完場後你表態，Zero 把批評轉成修正、優勢、測試或觀察。辯論結果不算證據。'),
         h('div', { class: 'iq-q' }, N.ui.debateType), h('div', { class: 'lvls', id: 'dt-types' }, d.types.map(function (t) {
           return h('button', { type: 'button', class: 'chip' + (DT.type === t.id ? ' on' : ''), 'data-type': t.id, onclick: function () { DT.type = t.id; DT.seats = null; DT.title = ''; DT.target = ''; showDebateNew(t.id); } }, DD['tp_' + t.id]);
         })), h('p', { class: 'small muted', style: 'margin:6px 0 0' }, DTYPE_HINT[DT.type]),
@@ -920,7 +922,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           return h('button', { type: 'button', class: 'chip' + (DT.level === k ? ' on' : ''), 'data-level': k, onclick: function () { DT.level = k; [].forEach.call(document.querySelectorAll('[data-level]'), function (b) { b.classList.toggle('on', b.getAttribute('data-level') === k); }); } }, DLV[k]);
         })),
         h('dl', { class: 'kv', style: 'margin-top:14px' }, h('dt', null, N.ui.debateFormat), h('dd', null, T0.format + '：' + (T0.format === '全場' ? '藍方 → 紅方 → 藍方反駁 → 裁判' : '藍方 → 紅方 → 裁判')),
-          h('dt', null, N.ui.debateCost), h('dd', null, '約 ' + nAI + ' 次 AI 處理（辯論 ' + T0.passes + ' 次，轉強及再攻 3 次）；每次通常需時數分鐘，完成後會在營運監察台逐幕呈現')),
+          h('dt', null, N.ui.debateCost), h('dd', null, '約 ' + nAI + ' 次 Zero 處理（辯論 ' + T0.passes + ' 次，轉強及再攻 3 次）；每次通常需時數分鐘，完成後會在營運監察台逐幕呈現')),
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/debate' }, N.ui.debateBack), h('button', { type: 'button', class: 'btn primary big', id: 'dt-start', onclick: function (e) {
           if (!title.value.trim()) { toast('請用一句話寫下題目。'); title.focus(); return; }
           e.target.disabled = true;
@@ -967,8 +969,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         debateEta,
         m.score ? h('p', { style: 'margin:12px 0 0' }, '記分：' + DD.vStand + ' ' + m.score.standing + ' · ' + DD.vHurt + ' ' + m.score.wounded + ' · ' + DD.vFall + ' ' + m.score.fallen + (m.score.redHitRate != null ? ' · ' + DD.redHitRate + ' ' + Math.round(m.score.redHitRate * 100) + '%' : ''), h('small', { style: 'display:block;margin-top:4px' }, DD.scoreRules + ' ' + attackStats(m))) : null,
         km.length ? h('ul', { class: 'm-sum', id: 'dm-moments' }, km.map(function (k) { return h('li', null, tag(DD['km_' + ({ '一擊倒下': 'fall', '最傷': 'top', '盲點': 'blind', '反轉': 'flip', '漏咗嘅路': 'missed' }[k.kind])] || k.kind), ' ', k.text); })) : null,
-        s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · AI 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · AI 未查' : ''); })) : null,
-        running && !debateEta ? h('p', { class: 'guide' }, 'AI 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
+        s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · Zero 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · Zero 未查' : ''); })) : null,
+        running && !debateEta ? h('p', { class: 'guide' }, 'Zero 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
         h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, act, h('a', { class: 'btn', href: stageHref(id), id: 'dm-stage' }, N.ui.debateStage + ' ↗'), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll))));
       // 做緊嘢就密啲更新；等你嘅時候都更新（例如喺另一頁答咗問題）
       DM.timer = setTimeout(function () { if (location.hash === '#/debate/' + id) showDebateMatch(id); }, running || sent ? 2500 : 5000);
@@ -983,7 +985,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   /* ---------- 答題：每次最多 3 條 ---------- */
   var P = null, A = null, S = null;
   function manualQuestion(q) { return !!(P && (P.actionConfirm || (P.acceptance && q.id === 'accept'))); }
-  function requiresFounderAnswer(q) { return !!(q && (q.effect === 'now' || q.conflict || q.bind === 'results' || manualQuestion(q))); }
+  function requiresFounderAnswer(q) { return !!(q && (P.ideate || q.effect === 'now' || q.conflict || q.bind === 'results' || manualQuestion(q))); }
   function cur(q) {
     if (manualQuestion(q) && !Object.prototype.hasOwnProperty.call(S.edits, q.id) && !S.ok[q.id]) return '';
     return Object.prototype.hasOwnProperty.call(S.edits, q.id) ? S.edits[q.id] : q.value;
@@ -1139,7 +1141,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     }
     var stopArt = P.rhythm && P.rhythm.kind === 'autoStop' ? scene('autoStop') : null;
     var hero = h('section', { class: 'hero' + (stopArt ? ' with-scene' : '') }, stopArt,
-      h('span', { class: 'eyebrow' }, (P.askedBy === 'AI' ? N.ui.aiAsk : N.ui.yourAsk) + ' · ' + dayOf(P.askedAt)),
+      h('span', { class: 'eyebrow' }, ((P.askedBy === 'AI' || P.askedBy === 'Zero') ? N.ui.aiAsk : N.ui.yourAsk) + ' · ' + dayOf(P.askedAt)),
       h('h2', { class: 'hero-t' }, N.fix(P.title)),
       P.context ? h('p', { class: 'hero-p' }, N.fix(P.context)) : null,
       h('div', { class: 'hero-meta' }, st.total ? (S.rest.length ? T('batchHeroRest', { n: st.total, r: S.rest.length }) : T('batchHero', { n: st.total })) : N.ui.packDone,
@@ -1192,14 +1194,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     });
     var qs = {}; P.questions.forEach(function (q) { qs[q.id] = q; });
     var L = ['# 答案：' + P.title, ''];
-    answers.forEach(function (a) { L.push('- ' + qs[a.id].ask, '  - ' + (a.changed ? '你：' : S.allSame ? N.ui.confirmedSame + '：' : qs[a.id].preset ? '採用預設：' : '採用 AI 建議：') + showAns(qs[a.id], a.value)); });
+    answers.forEach(function (a) { L.push('- ' + qs[a.id].ask, '  - ' + (a.changed ? '你：' : S.allSame ? N.ui.confirmedSame + '：' : qs[a.id].preset ? '採用預設：' : '採用 Zero 建議：') + showAns(qs[a.id], a.value)); });
     var leftQuestions = S.rest.filter(function (q) { return !answers.some(function (a) { return a.id === q.id; }); });
     var left = leftQuestions.length, leftNeedsFounderAnswer = leftQuestions.some(requiresFounderAnswer);
-    var leftNote = '其餘 ' + left + ' 條' + (leftNeedsFounderAnswer ? '之後再詢問。' : '暫按 AI 建議處理，之後再詢問。');
+    var leftNote = '其餘 ' + left + ' 條' + (leftNeedsFounderAnswer ? '之後再詢問。' : '暫按 Zero 建議處理，之後再詢問。');
     if (left > 0) L.push('', leftNote);
     var machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: localIso(now), batch: S.batch.map(function (q) { return q.id; }), answers: answers };
     if (S.allSame) machine.allSame = true;
-    L.push('', '## 機器讀取部分（供 AI 系統使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
+    L.push('', '## 機器讀取部分（供 CrewZero 使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
     var head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
     return { text: head.join('\n') + '\n\n' + L.join('\n') + '\n', answers: answers, qs: qs, left: Math.max(0, left), leftNote: leftNote };
   }
@@ -1227,6 +1229,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     // 訪問：文字答案、結果、或者自己寫嘅答案（唔係選項）先交 AI 擬確認題
     var opensAI = rk === 'interview' ? R.answers.some(function (a) { var q = R.qs[a.id], v = String(a.value || '').trim(); if (!v || v === N.ui.interviewNone || v === N.ui.unknownLater) return false; if (q.bind === 'none' || q.bind === 'held') return true; return (q.bind === 'stale' || q.bind === 'overdue') && !(q.options || []).some(function (o) { return o.text === v; }); })
       : rk === 'monthly' ? R.answers.some(function (a) { return a.value === N.ui.monthlyPermNarrow; }) : rk ? false
+      : P.ideate ? true
       : P.realEvent || P.depth || P.actionConfirm ? false
       // 驗收：只有退回（或者接受但想改方向）先交 AI 改；辯論：只有回應裁判先排 AI 轉強或重判
       : P.acceptance ? (function () { var a = R.answers.filter(function (x) { return x.id === 'accept'; })[0], q = R.qs.accept; var v = a ? a.value : q ? q.value : '接受'; return v !== '接受'; })()
@@ -1249,7 +1252,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
-      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, noAI ? N.ui.submitApply : N.ui.submit), h('p', { class: 'small muted' }, noAI ? N.ui.submitApplyNote : '按確認後即交予 AI。')),
+      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, noAI ? N.ui.submitApply : N.ui.submit), h('p', { class: 'small muted' }, noAI ? N.ui.submitApplyNote : '按確認後即交予 Zero。')),
       h('div', { class: 'm-body' },
         nowItems.length ? h('div', { class: 'effect' }, h('h4', null, N.ui.nowItems), h('ul', { class: 'm-sum' }, nowItems.map(li))) : null,
         others.length ? h('div', { class: 'effect', style: 'border-left-color:var(--mint);border-color:rgba(153,215,188,.3);background:transparent' }, h('h4', null, N.ui.yourAnswers), h('ul', { class: 'm-sum' }, others.map(li))) : null,
@@ -1300,7 +1303,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var appliedFailed = (r.steps || []).some(function (s) { return s.key === 'applied' && s.state === 'failed'; });
       card.append(h('p', null, failReason(r.error)), appliedFailed
         ? h('a', { class: 'btn primary', href: '/#/' }, N.ui.backPending)
-        : h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); setTimeout(poll, 800); }, retryCatch); } }, N.ui.retry), failureHelp(r, P && P.title));
+        : h('button', { type: 'button', class: 'btn primary', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 Zero 重新處理'); setTimeout(poll, 800); }, retryCatch); } }, N.ui.retry), failureHelp(r, P && P.title));
     }
     if (state === 'done' && r.result) card.append(resultBox(r.result));
     if (state === 'done') {
@@ -1317,12 +1320,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (res.artifacts && res.artifacts.length) {
       box.append(h('h4', null, N.ui.aiOutputs));
       res.artifacts.forEach(function (a, i) { var d = h('details', { class: 'art' }, h('summary', null, a.title), window.SOS_MD ? SOS_MD(a.text) : h('pre', null, a.text)); if (i === 0) d.open = true; box.append(d); });
-      box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，AI 未有對外發送任何內容。'));
+      box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，Zero 未有對外發送任何內容。'));
     }
     if (res.founderNext && res.founderNext.length) box.append(h('h4', null, N.ui.yourNext), h('ul', null, res.founderNext.map(function (x) { return h('li', null, x); })));
     if (res.asks && res.asks.length) box.append(h('div', { class: 'foot' }, h('b', null, N.ui.aiFollowAsk + '：'),
       res.asks.map(function (a) { return h('a', { class: 'btn primary', href: '#/ask/' + a.id }, N.fix(a.title) + '（' + T('nQuestions', { n: a.count }) + '）→ ' + N.ui.goAnswer); })));
-    if (res.askRejected) box.append(h('p', { class: 'tr-sub' }, 'AI 擬追問的問題不符規格，已退回：' + res.askRejected.join('；')));
+    if (res.askRejected) box.append(h('p', { class: 'tr-sub' }, 'Zero 擬追問的問題不符規格，已退回：' + res.askRejected.join('；')));
     return box;
   }
 
@@ -1340,8 +1343,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }
       var current = h('section', { class: 'layer' + (s.cert ? ' accent ok' : ' block') }, h('span', { class: 'eyebrow' }, N.ui.currentAI),
         h('div', { class: 'row' },
-          h('div', null, h('div', { class: 't' }, s.cert ? s.cert.label : N.ui.aiNotSet),
-            s.cert ? h('div', { class: 'small muted' }, N.ui.certDate + '：' + dayOf(s.cert.certifiedAt) + ' ' + hm(s.cert.certifiedAt)) : h('div', { class: 'small muted' }, '請選擇一個 AI 工具並通過認證，AI 才會開始跟進。')),
+          h('div', null, h('div', { class: 't' }, s.cert ? s.cert.label : s.aiStale ? N.ui.aiStale : N.ui.aiNotSet),
+            s.cert ? h('div', { class: 'small muted' }, N.ui.certDate + '：' + dayOf(s.cert.certifiedAt) + ' ' + hm(s.cert.certifiedAt)) : h('div', { class: 'small muted' }, '請選擇一個 AI 工具並通過認證，Zero 才會開始跟進。')),
           s.cert ? tag(N.ui.certPass, 'qdone') : tag(N.ui.aiNotSet, 'qn')));
       var result = null;
       if (c) {
@@ -1356,12 +1359,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
                 it.detail ? h('span', { class: 'tr-sub' }, it.detail) : null,
                 it.pass === false && it.fix ? h('span', { class: 'tr-fix' }, N.ui.fixHow + '：' + it.fix) : null));
           })) : h('p', { class: 'tr-sub' }, '正在準備檢查……'),
-          c.state === 'passed' ? h('p', null, 'AI 已設定：' + (s.cert ? s.cert.label : '') + '。先前等候 AI 的工作將自動繼續。') : null,
+          c.state === 'passed' ? h('p', null, 'AI 工具已設定：' + (s.cert ? s.cert.label : '') + '。先前等候 Zero 的工作將自動繼續。') : null,
           c.state === 'passed' ? h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '#/', id: 'setup-done' }, N.ui.backPending)) : null);
       }
       var picked = pickHost(hosts);
       var pickCard = h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.aiTools),
-        h('p', { class: 'guide' }, '請選擇你電腦上已登入的 AI 工具。認證約需兩分鐘，確保 AI 只處理 CrewZero 的工作，不會改動你電腦上的其他資料。'),
+        h('p', { class: 'guide' }, '請選擇你電腦上已登入的 AI 工具。認證約需兩分鐘，確保 AI 工具只處理 CrewZero 的工作，不會改動你電腦上的其他資料。'),
         (hosts.some(function (x) { return x.installed; }) ? hosts.filter(function (x) { return x.installed; }) : hosts).map(function (x) {
           var on = x.id === SET.pick;
           return h('button', { type: 'button', class: 'opt' + (on ? ' cur' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-host': x.id, disabled: running ? true : null, onclick: function () { SET.pick = x.id; showSetup(); } },
@@ -1387,46 +1390,35 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 
   /* ---------- 交資料：公司背景資料 → AI 擬公司概覽 ---------- */
   var IN = { meta: null, files: [], err: '', sent: null, watching: false, open: false };
-  // 由文件預填（規劃書 3.1）：AI 按文件預填首五條，每條標「AI 按文件預填」連出處；創辦人確認或改寫之後先算數
+  // 由文件預填（規劃書 3.1）：AI 按文件預填八條，每條標「AI 按文件預填」連出處；創辦人確認或改寫之後先算數
   var PF = { id: '', state: '', data: null, err: '' };
-  var DRAFT_KEY = 'startup-os-intake-draft';
-  function draftLoad() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  var DRAFT_KEY = 'startup-os-intake-draft-v2';
+  // 升級前未送出的草稿：題目次序已變，按舊題意對應；舊紀錄保留不刪
+  var DRAFT_OLD = { q1: 'q1', q2: 'q4', q3: 'q5', q4: 'q6', q5: 'q7', q11: 'q8' };
+  function draftLoad() {
+    try {
+      var now = localStorage.getItem(DRAFT_KEY); if (now) return JSON.parse(now) || {};
+      var raw = localStorage.getItem('startup-os-intake-draft'), old = raw && JSON.parse(raw), d = {}; if (!old) return {};
+      // 由舊預填而來的答案要重新預填及確認，否則伺服器按來源規則會拒收
+      var pf = (old._prefill && old._prefill.st) || {};
+      Object.keys(DRAFT_OLD).forEach(function (k) { if (!pf[k] && typeof old[k] === 'string' && old[k].trim()) d[DRAFT_OLD[k]] = old[k]; });
+      localStorage.setItem('startup-os-intake-draft-backup', raw); localStorage.removeItem('startup-os-intake-draft'); localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      return d;
+    } catch (e) { return {}; }
+  }
   function draftSave(d) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) { } }
   function draftClear() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) { } }
-  function intakeBizType() { var t = draftLoad()._bizType; return IN.meta && (IN.meta.bizTypes || []).some(function (x) { return x.id === t; }) ? t : ''; }
-  function intakeQuestionsNow() { var t = intakeBizType(), byType = IN.meta && IN.meta.questionsByBizType; return t && byType && byType[t] ? byType[t] : IN.meta.questions; }
-  function bizOtherControl(d) {
-    var other = h('input', { type: 'text', id: 'biz-other', maxlength: '60', placeholder: N.ui.intakeBizOther, 'aria-label': N.ui.intakeBizOther });
-    other.value = d._bizOther || '';
-    other.addEventListener('input', function () { var dd = draftLoad(); dd._bizOther = other.value; draftSave(dd); });
-    return h('div', { class: 'foot', id: 'biz-other-wrap' }, other);
-  }
-  function chooseBizType(type) {
-    var d = draftLoad(); d._bizType = type; if (type !== 'other') d._bizOther = ''; draftSave(d);
-    var form = $('#intake-form'); if (!form) { showIntake(); return; }
-    intakeQuestionsNow().forEach(function (q) {
-      var label = $('#q-label-' + q.n), hint = $('#q-hint-' + q.n), input = $('#q' + q.n);
-      if (label) label.textContent = q.n + '. ' + q.ask;
-      if (hint) { hint.textContent = q.hint || ''; hint.hidden = !q.hint; }
-      if (input) input.placeholder = q.example ? '例：' + q.example : '';
-    });
-    document.querySelectorAll('#biz-type .opt').forEach(function (option) {
-      var input = $('input[type="radio"]', option), selected = !!input && input.value === type;
-      option.classList.toggle('cur', selected); if (input) input.checked = selected;
-    });
-    var otherWrap = $('#biz-other-wrap');
-    if (type === 'other') { if (!otherWrap) $('#biz-type').append(bizOtherControl(d)); }
-    else if (otherWrap) otherWrap.remove();
-    intakeBar();
-  }
+  function intakeQuestionsNow() { return IN.meta.questions; }
   function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(b / 1024)) + 'KB'; }
   function showIntake() {
-    Promise.all([get('/api/status'), IN.meta ? Promise.resolve(IN.meta) : get('/api/intake')]).then(function (r) {
+    clearTimeout(V.ideateTimer);
+    Promise.all([get('/api/status'), get('/api/intake')]).then(function (r) {
       var st = r[0]; IN.meta = r[1]; V.status = st; checkInstance(st);
       var it = st.intake, final = it && (it.state === 'done' || it.state === 'failed');
+      if (it && !final) { try { sessionStorage.setItem('crewzero-overview-watching', '1'); } catch (e) {} }
       var draft = draftLoad(), hasDraft = Object.keys(draft).some(function (k) { return /^q\d+$/.test(k) && String(draft[k] || '').trim(); });
       if (!st.cert && !IN.open && !it && !(st.company && st.company.ready) && !hasDraft) {
-        setApp(head('intake', st), h('section', { class: 'layer block', id: 'intake-setup-first' }, h('span', { class: 'eyebrow' }, N.ui.aiNotSet), h('h2', { class: 'layer-title' }, '先設定 AI'), h('p', { class: 'guide' }, '設定完成後，AI 才會整理你交出的資料。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/setup', id: 'intake-go-setup' }, N.ui.goSetup), h('a', { class: 'btn', href: '#/intake-anyway', id: 'intake-anyway' }, '先填寫資料（設定 AI 後才會處理）'))));
+        setApp(head('intake', st), h('section', { class: 'layer block', id: 'intake-setup-first' }, h('span', { class: 'eyebrow' }, N.ui.aiNotSet), h('h2', { class: 'layer-title' }, '先設定 AI 工具'), h('p', { class: 'guide' }, '設定完成後，Zero 才會整理你交出的資料。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/setup', id: 'intake-go-setup' }, N.ui.goSetup), h('a', { class: 'btn', href: '#/intake-anyway', id: 'intake-anyway' }, '先填寫資料（設定 AI 工具後才會處理）'))));
         DESK.title('intake'); return;
       }
       var parts = [head('intake', st), aiBlock(st)], form = false;
@@ -1441,11 +1433,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (form) parts.push(intakeForm());
       setApp(parts);
       if (!form) { $('#cbar').hidden = true; document.body.style.paddingBottom = '24px'; }
+      if (it && it.state === 'done' && st.company.ready && IN.watching) { try { sessionStorage.setItem('crewzero-overview-ready', '1'); } catch (e) {} }
       DESK.title('intake');
       if (it && !final) { IN.watching = true; V.pollTimer = setTimeout(showIntake, 2000); }
       else if (it && it.state === 'done' && st.company.ready && (IN.sent || IN.watching)) {
         IN.sent = null; IN.watching = false;
-        V.pollTimer = setTimeout(function () { location.href = '/proofread.html'; }, 1500);
+        if (!document.hidden) V.pollTimer = setTimeout(function () { location.href = '/proofread.html'; }, 1500);
       }
     }).catch(function (e) { fail(e); });
   }
@@ -1454,14 +1447,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var rows = r ? (r.steps || []).map(function (s) { return { label: N.fix(s.label), state: s.state, sub: s.detail }; })
       : [{ label: N.ui.stepIntakeReceived, state: 'done' }, { label: N.ui.stepQueued, state: 'running' }];
     var state = r ? r.state : 'running';
-    var card = h('section', { class: 'track' + (state === 'failed' ? ' bad' : state === 'waiting' ? ' off' : ''), id: 'track', 'aria-live': 'polite' },
+    var card = h('section', { class: 'track' + (state === 'running' ? ' with-scene' : '') + (state === 'failed' ? ' bad' : state === 'waiting' ? ' off' : ''), id: 'track', 'aria-live': 'polite' },
+      state === 'running' ? scene('empty') : null,
       h('span', { class: 'eyebrow' }, N.ui.track),
       h('h3', null, state === 'done' ? N.ui.companyReady : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
       h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
-    if (state === 'running') card.append(h('p', { class: 'small muted' }, N.ui.intakeExpected, r && r.startedAt ? [' ', h('span', { 'data-since': r.startedAt, 'aria-hidden': 'true' })] : null));
+    if (state === 'running') card.append(h('p', { class: 'small muted' }, N.ui.intakeExpected, r && r.startedAt ? [' ', h('span', { 'data-since': r.startedAt })] : null));
     if (state === 'waiting') add(card, waitingNote(r));
     if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
-      h('button', { type: 'button', class: 'btn primary', id: 'intake-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 AI 重新處理'); IN.watching = true; setTimeout(showIntake, 800); }, retryCatch); } }, N.ui.retry),
+      h('button', { type: 'button', class: 'btn primary', id: 'intake-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 Zero 重新處理'); IN.watching = true; setTimeout(showIntake, 800); }, retryCatch); } }, N.ui.retry),
       h('button', { type: 'button', class: 'btn', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)), failureHelp(r, N.ui.company));
     if (state === 'done') {
       if (r && r.result) card.append(resultBox(r.result));
@@ -1472,16 +1466,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function readyCard() {
     return h('section', { class: 'layer accent ok' }, h('span', { class: 'eyebrow' }, N.ui.company),
       h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.ui.companyExists),
-        h('div', { class: 'small muted' }, IN.open ? '重新提交資料會令 AI 重新擬定公司概覽，先前未確認的修改將會失去。' : '如需更新背景資料，可重新提交一次。')),
+        h('div', { class: 'small muted' }, IN.open ? '重新提交資料會令 Zero 重新擬定公司概覽，先前未確認的修改將會失去。' : '如需更新背景資料，可重新提交一次。')),
         h('a', { class: 'btn primary', href: '/proofread.html' }, N.ui.goCompany)),
       IN.open ? null : h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', id: 'reintake', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)));
   }
   function intakeForm() {
-    var d = draftLoad(), type = intakeBizType(), qs = intakeQuestionsNow(), lim = IN.meta.limits;
+    var d = draftLoad(), qs = intakeQuestionsNow(), lim = IN.meta.limits;
     function qBlock(q) {
       var ta = h('textarea', { rows: q.required ? '3' : '2', id: 'q' + q.n, placeholder: q.example ? '例：' + q.example : '' });
       ta.value = d['q' + q.n] || '';
-      ta.addEventListener('input', function () { var dd = draftLoad(); dd['q' + q.n] = ta.value; pfEdited(dd, 'q' + q.n, ta.value); draftSave(dd); pfRow('q' + q.n); intakeBar(); });
+      ta.addEventListener('input', function () { var dd = draftLoad(); dd['q' + q.n] = ta.value; pfEdited(dd, 'q' + q.n, ta.value); draftSave(dd); pfRow('q' + q.n); pfBox(); intakeBar(); });
       return h('div', { class: 'iq' }, h('label', { class: 'iq-q', for: 'q' + q.n }, h('span', { id: 'q-label-' + q.n }, q.n + '. ' + q.ask), q.required ? tag(N.ui.required, 'qn') : null),
         h('div', { class: 'iq-hint', id: 'q-hint-' + q.n, hidden: q.hint ? null : true }, q.hint || ''), ta, h('div', { class: 'pf-row', id: 'pf-q' + q.n }));
     }
@@ -1495,22 +1489,63 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
     drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
     drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer && e.dataTransfer.files); });
-    var typeOptions = h('fieldset', { class: 'iq', id: 'biz-type' }, h('legend', { class: 'iq-q' }, N.ui.intakeBizType, tag(N.ui.required, 'qn')),
-      (IN.meta.bizTypes || []).map(function (x) {
-        return h('label', { class: 'opt' + (type === x.id ? ' cur' : '') }, h('input', { type: 'radio', name: 'biz-type', value: x.id, checked: type === x.id, onchange: function () { chooseBizType(x.id); } }),
-          h('span', { class: 'dot' }), h('span', null, x.label + '：' + x.example));
-      }));
-    if (type === 'other') typeOptions.append(bizOtherControl(d));
     var form = h('section', { class: 'layer', id: 'intake-form' },
       h('span', { class: 'eyebrow' }, N.ui.intake),
       h('h2', { class: 'layer-title' }, N.ui.intakeTitle),
-      h('p', { class: 'guide' }, '毋須全部填寫；如不清楚，請寫「不清楚」；現有文件可直接拖入，按「由文件預填」，AI 會按文件預填首五條，你逐條確認或改寫即可。每條一兩句即可，約需 10 分鐘。'),
-      typeOptions, h('h3', { class: 'iq-sec' }, N.ui.files), drop, h('div', { id: 'file-list' }), h('div', { id: 'intake-err', class: 'small', role: 'alert' }), h('div', { class: 'pf-box', id: 'pf-box' }),
+      h('p', { class: 'guide' }, 'Zero 是你的 AI 隊員，由構思開始陪你一起打拚。每條一兩句即可；未有答案可以留空，Zero 會先建議，之後由你校對。現有文件可直接拖入，按「由文件預填」，Zero 會先填，你逐條確認或改寫即可。'),
+      h('div', { class: 'iq', id: 'zero-think-box' }),
+      h('h3', { class: 'iq-sec' }, N.ui.files),
+      h('div', { class: 'iq', id: 'intake-template' }, h('p', { class: 'small muted' }, N.ui.intakeTemplateNote),
+        h('a', { class: 'btn', id: 'template-get', href: '/startup-background-template.md', download: 'CrewZero-公司背景資料範本.md' }, N.ui.intakeTemplateGet), ' ',
+        h('button', { type: 'button', class: 'btn', id: 'template-copy', onclick: function () {
+          fetch('/startup-background-template.md').then(function (r) { if (!r.ok) throw new Error('read'); return r.text(); }).then(function (t) { return navigator.clipboard.writeText(t); })
+            .then(function () { toast(N.ui.intakeTemplateCopied); }).catch(function () { toast(N.ui.intakeTemplateCopyFailed); });
+        } }, N.ui.intakeTemplateCopy)),
+      drop, h('div', { id: 'file-list' }), h('div', { id: 'intake-err', class: 'small', role: 'alert' }), h('div', { class: 'pf-box', id: 'pf-box' }),
       h('h3', { class: 'iq-sec' }, N.ui.required + '（' + req.length + ' 條）'), req.map(qBlock),
-      h('details', { class: 'iq-opt' }, h('summary', null, T('optionalN', { n: opt.length })), opt.map(qBlock)));
+      h('h3', { class: 'iq-sec' }, N.ui.intakeOptionalHead), opt.map(qBlock));
     if (!PF.id && d._prefill && d._prefill.id) { PF.id = d._prefill.id; PF.state = 'running'; }
-    setTimeout(function () { renderFiles(); pfBox(); pfAll(); intakeBar(); if (PF.id && !PF.data) pfPoll(); }, 0);
+    setTimeout(function () { renderFiles(); pfBox(); pfAll(); intakeBar(); zeroThinkRender(true); if (PF.id && !PF.data) pfPoll(); }, 0);
     return form;
+  }
+  function zeroThinkRender(skipPrefill) {
+    var box = $('#zero-think-box'); if (!box) return;
+    clearTimeout(V.ideateTimer);
+    box.replaceChildren();
+    var s = IN.meta.ideate;
+    if (!s || s.state === 'closed' || s.state === 'failed') {
+      box.append(h('p', { class: 'small muted', role: s && s.state === 'failed' ? 'alert' : null }, s && s.state === 'failed' ? N.ui.ideateFailed + (s.reason ? ' ' + N.fix(s.reason) : '') : N.ui.zeroThinkNote),
+        h('button', { type: 'button', class: 'btn', id: 'zero-think', onclick: zeroThinkStart }, s && s.state === 'failed' ? N.ui.ideateRetry : N.ui.zeroThink));
+    } else if (s.state === 'running') {
+      box.append(h('p', { class: 'small muted', 'aria-live': 'polite' }, N.ui.ideateRunning));
+      V.ideateTimer = setTimeout(zeroThinkPoll, 4000);
+    } else if (s.state === 'asking') {
+      box.append(h('p', { class: 'small muted' }, T('ideateAsking', { n: s.round })), h('a', { class: 'btn', href: '#/ask/' + s.packId }, N.ui.ideateAnswer));
+      V.ideateTimer = setTimeout(zeroThinkPoll, 4000);
+    } else if (s.state === 'ready') {
+      box.append(h('p', { class: 'small muted' }, N.ui.ideateReady));
+      if (s.prefillId && PF.id !== s.prefillId) PF = { id: s.prefillId, data: null, err: '' };
+      if (!skipPrefill && PF.id && !PF.data && !PF.err) pfPoll();
+    }
+  }
+  function zeroThinkPoll() {
+    if (!$('#zero-think-box')) return;
+    get('/api/intake').then(function (meta) {
+      if (!$('#zero-think-box')) return;
+      var was = IN.meta.ideate, now = meta.ideate; IN.meta.ideate = now;
+      // 同一包問題未變時不重畫，免得答題連結在點擊途中被換掉
+      if (was && now && was.state === 'asking' && now.state === 'asking' && was.packId === now.packId) { V.ideateTimer = setTimeout(zeroThinkPoll, 4000); return; }
+      zeroThinkRender();
+    })
+      .catch(function (e) { if (!$('#zero-think-box')) return; IN.err = why(e); renderFiles(); V.ideateTimer = setTimeout(zeroThinkPoll, 4000); });
+  }
+  function zeroThinkStart() {
+    var b = $('#zero-think'); if (b) b.disabled = true;
+    var d = draftLoad();
+    intakeQuestionsNow().forEach(function (q) { var ta = $('#q' + q.n); if (ta) d['q' + q.n] = ta.value; });
+    draftSave(d);
+    post('/api/intake', { kind: 'note', type: 'ideate', text: d.q1 || '' }).then(function () { IN.err = ''; return zeroThinkPoll(); })
+      .catch(function (e) { IN.err = why(e); renderFiles(); if (b) b.disabled = false; });
   }
   function addFiles(list) {
     var lim = IN.meta.limits, msgs = [];
@@ -1537,15 +1572,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     pfBox();
   }
   /* 由文件預填：每題狀態存喺草稿 _prefill.st[q] = { s, a, alt }
-     s：pending（答案係 AI 預填、未確認）／confirmed（創辦人確認咗呢句）／offer（答案係創辦人自己寫，預填只作建議）；a：嗰句預填（文字、標籤、出處）；alt：再預填時嘅新建議 */
+     s：pending（答案係 Zero 預填、未確認）／confirmed（創辦人確認咗呢句）／offer（答案係創辦人自己寫，預填只作建議）；a：嗰句預填（文字、標籤、出處）；alt：再預填時嘅新建議 */
   function pfNorm(s) { return String(s || '').replace(/[\s　]+/g, ''); }
   function pfSt() { var p = draftLoad()._prefill; return (p && p.st) || {}; }
   function pfDoc(f) { return String(f || '').replace(/\.[A-Za-z0-9]{1,5}$/, ''); }
-  function pfFrom(a) { return (a.source ? T('prefillFrom', { f: pfDoc(a.source) }) : N.ui.prefillFromAny) + (a.at ? T('prefillAt', { a: a.at }) : ''); }
-  function pfTag(a) { return a.label === 'quote' ? N.ui.prefillTagQuote : a.label === 'unverified' ? N.ui.prefillTagUnverified : N.ui.prefillTagInferred; }
-  function pfDoneTag(a) { return a.label === 'quote' ? T('srcYouDoc', { f: pfDoc(a.source) || '你的文件' }) : a.label === 'unverified' ? N.ui.srcAdoptedUnverified : N.ui.srcAdopted; }
-  function pfQs() { return IN.meta.questions.filter(function (q) { return q.required; }).map(function (q) { return 'q' + q.n; }); }
-  function pfPut(q, text, c) { var d = draftLoad(), ta = $('#' + q); if (ta) ta.value = text; d[q] = text; d._prefill = d._prefill || { id: PF.id, st: {} }; d._prefill.st[q] = c; draftSave(d); pfRow(q); intakeBar(); }
+  function pfFrom(a) { return (a.source === N.ui.ideateSource ? N.ui.ideateFrom : a.source ? T('prefillFrom', { f: pfDoc(a.source) }) : N.ui.prefillFromAny) + (a.at ? T('prefillAt', { a: a.at }) : ''); }
+  function pfTag(a) { return a.source === N.ui.ideateSource ? N.ui.ideateTag : a.label === 'quote' ? N.ui.prefillTagQuote : a.label === 'unverified' ? N.ui.prefillTagUnverified : N.ui.prefillTagInferred; }
+  function pfDoneTag(a) { return a.source === N.ui.ideateSource ? N.ui.ideateAdopted : a.label === 'quote' ? T('srcYouDoc', { f: pfDoc(a.source) || '你的文件' }) : a.label === 'unverified' ? N.ui.srcAdoptedUnverified : N.ui.srcAdopted; }
+  function pfQs() { return IN.meta.questions.map(function (q) { return 'q' + q.n; }); }
+  function pfPut(q, text, c) { var d = draftLoad(), ta = $('#' + q); if (ta) ta.value = text; d[q] = text; d._prefill = d._prefill || { id: PF.id, st: {} }; d._prefill.st[q] = c; draftSave(d); pfRow(q); pfBox(); intakeBar(); }
   // 創辦人改字：同預填一樣就仍要確認；唔一樣就係佢自己寫嘅
   function pfEdited(dd, q, v) {
     var c = dd._prefill && dd._prefill.st && dd._prefill.st[q]; if (!c) return;
@@ -1568,14 +1603,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     return any ? N.ui.srcMoved : N.ui.srcYou;
   }
   function pfOffer(q, x) {
-    return h('div', { class: 'pf-offer' }, h('span', { class: 'small' }, N.ui.prefillSuggest + '「' + clip(x.text, 160) + '」'), ' ', tag(pfTag(x), 'ai'), ' ', h('span', { class: 'small muted' }, pfFrom(x)), ' ',
+    return h('div', { class: 'pf-offer' }, h('span', { class: 'small' }, (x.source === N.ui.ideateSource ? N.ui.ideateSuggest : N.ui.prefillSuggest) + '「' + clip(x.text, 160) + '」'), ' ', tag(pfTag(x), 'ai'), ' ', h('span', { class: 'small muted' }, pfFrom(x)), ' ',
       h('button', { type: 'button', class: 'btn small', 'data-pf-use': q, onclick: function () { pfPut(q, x.text, { s: 'confirmed', a: x }); } }, N.ui.prefillUse));
   }
   function pfRow(q) {
     var box = $('#pf-' + q); if (!box) return;
     box.replaceChildren();
     var c = pfSt()[q], ta = $('#' + q);
-    if (!c) { if (PF.data && (PF.data.missing || []).indexOf(q) >= 0 && ta && !ta.value.trim()) box.append(h('span', { class: 'small muted' }, N.ui.prefillNone)); return; }
+    if (!c) { if (PF.data && (PF.data.missing || []).indexOf(q) >= 0 && ta && !ta.value.trim()) box.append(h('span', { class: 'small muted' }, PF.data.from === 'ideate' ? N.ui.ideateNone : N.ui.prefillNone)); return; }
     if (c.s === 'pending') box.append(tag(pfTag(c.a), 'ai'), ' ', h('span', { class: 'small muted' }, pfFrom(c.a)), ' ',
       h('button', { type: 'button', class: 'btn small', 'data-pf-confirm': q, onclick: function () { pfPut(q, ta.value, { s: 'confirmed', a: c.a }); } }, N.ui.prefillConfirm));
     else if (c.s === 'confirmed') { box.append(tag(pfDoneTag(c.a), 'mine'), ' ', h('span', { class: 'small muted' }, c.a.label === 'quote' ? (c.a.at ? T('prefillAt', { a: c.a.at }) : '') : pfFrom(c.a))); if (c.alt) box.append(pfOffer(q, c.alt)); }
@@ -1603,7 +1638,10 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('span', { class: 'small muted' }, N.ui.prefillGoNote)));
     if (running) box.append(h('p', { class: 'small', id: 'pf-state', 'aria-live': 'polite' }, PF.wait ? N.ui.aiNotSet : N.ui.prefillRunning));
     else if (PF.err) box.append(h('p', { class: 'small', id: 'pf-state', role: 'alert', style: 'color:var(--red)' }, PF.err));
-    else if (PF.data) box.append(h('p', { class: 'small', id: 'pf-state' }, T('prefillDone', { n: Object.keys(PF.data.answers || {}).length })));
+    else if (PF.data) box.append(h('p', { class: 'small', id: 'pf-state' }, T(PF.data.from === 'ideate' ? 'ideateDone' : 'prefillDone', { n: Object.keys(PF.data.answers || {}).length })));
+    if (pfPending().length > 1) box.append(h('button', { type: 'button', class: 'btn', id: 'pf-confirm-all', onclick: function () {
+      pfPending().forEach(function (q) { var c = pfSt()[q]; pfPut(q, $('#' + q).value, { s: 'confirmed', a: c.a }); });
+    } }, N.ui.prefillConfirmAll));
   }
   function readFiles(list) {
     return Promise.all(list.map(function (f) {
@@ -1613,8 +1651,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function pfStart() {
     var b = $('#pf-go'); if (b) b.disabled = true;
     readFiles(IN.files).then(function (files) {
-      var d = draftLoad();
-      return post('/api/intake', { kind: 'prefill', files: files, bizType: intakeBizType(), bizOther: d._bizOther || '' });
+      return post('/api/intake', { kind: 'prefill', files: files });
     }).then(function (j) {
       // 再預填：未確認嘅舊預填清走；已確認嘅保留，新建議另外顯示
       var d = draftLoad(), st = (d._prefill && d._prefill.st) || {};
@@ -1626,12 +1663,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function pfPoll() {
     clearTimeout(V.pollTimer);
     if (!PF.id || PF.data || !$('#intake-form')) return;
-    get('/api/prefill?id=' + encodeURIComponent(PF.id)).then(function (j) {
+    var id = PF.id;
+    get('/api/prefill?id=' + encodeURIComponent(id)).then(function (j) {
+      if (PF.id !== id || !$('#intake-form')) return;
       if (j.state === 'done') { PF.data = j.prefill; pfApply(); pfBox(); pfAll(); intakeBar(); return; }
       if (j.state === 'failed') { PF.err = N.ui.prefillFailed + (j.error ? '：' + N.fix(j.error) : '。' + N.ui.prefillAgain); pfBox(); return; }
       PF.wait = j.state === 'waiting'; pfBox();
       V.pollTimer = setTimeout(pfPoll, PF.wait ? 4000 : 2000);
     }).catch(function (e) {
+      if (PF.id !== id || !$('#intake-form')) return;
       if (e.message === '404') { PF.err = N.ui.prefillLost; pfBox(); return; }
       V.pollTimer = setTimeout(pfPoll, 5000);
     });
@@ -1639,23 +1679,23 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function intakeBar() {
     var bar = $('#cbar');
     if (!$('#intake-form')) { bar.hidden = true; return; }
-    var req = intakeQuestionsNow().filter(function (q) { return q.required; }), type = intakeBizType();
+    var req = intakeQuestionsNow().filter(function (q) { return q.required; });
     var done = req.filter(function (q) { var x = $('#q' + q.n); return x && x.value.trim(); });
     var missing = req.filter(function (q) { return done.indexOf(q) < 0; }), waitPf = pfPending();
     bar.hidden = false;
     bar.replaceChildren(h('div', { class: 'cbar-in' },
       h('div', { class: 'prog' },
         h('div', { class: 'prog-top' }, h('b', { class: 'prog-n' }, T('requiredProgress', { n: done.length, t: req.length })),
-          !type ? h('span', { class: 'small muted' }, '請先選擇生意類別') : missing.length ? h('span', { class: 'small muted' }, '尚欠第 ' + missing.map(function (q) { return q.n; }).join('、') + ' 題') : null,
+          missing.length ? h('span', { class: 'small muted' }, '尚欠第 ' + missing.map(function (q) { return q.n; }).join('、') + ' 題') : null,
           waitPf.length ? h('span', { class: 'small', id: 'pf-wait', style: 'color:var(--amber)' }, T('prefillPending', { n: waitPf.length })) : null),
         h('div', { class: 'prog-bar' + (missing.length ? '' : ' full'), role: 'progressbar', 'aria-label': N.ui.required, 'aria-valuemin': '0', 'aria-valuemax': String(req.length), 'aria-valuenow': String(done.length) },
           h('i', { style: 'width:' + Math.round(done.length / req.length * 100) + '%' }))),
-      h('button', { type: 'button', class: 'btn primary big', id: 'intake-go', disabled: !type || missing.length || waitPf.length ? true : null, onclick: intakeModal }, N.ui.submitIntake)));
+      h('button', { type: 'button', class: 'btn primary big', id: 'intake-go', disabled: missing.length || waitPf.length ? true : null, onclick: intakeModal }, N.ui.submitIntake)));
     document.body.style.paddingBottom = (bar.offsetHeight + 28) + 'px';
   }
   function intakeModal() {
     lastFocus = document.activeElement;
-    var qs = intakeQuestionsNow(), bizType = intakeBizType(), val = function (q) { var x = $('#q' + q.n); return x ? x.value : ''; };
+    var qs = intakeQuestionsNow(), val = function (q) { var x = $('#q' + q.n); return x ? x.value : ''; };
     var filled = qs.filter(function (q) { return val(q).trim(); });
     var btn = h('button', { type: 'button', class: 'btn primary', id: 'intake-confirm', onclick: send }, N.ui.submit);
     var msg = h('p', { class: 'small', role: 'alert', style: 'color:var(--red)' });
@@ -1666,7 +1706,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { var er = new Error('read'); er.said = T('fileUnread', { f: f.name }); rej(er); }; fr.readAsDataURL(f); });
       })).then(function (files) {
         var pf = pfClaims();
-        var d = draftLoad(), base = { fields: fields, files: files, bizType: bizType, bizOther: d._bizOther || '' };
+        var base = { fields: fields, files: files };
         return post('/api/intake', pf ? { ...base, prefillId: pf.id, provenance: pf.claims } : base);
       }).then(function (j) {
         draftClear(); IN.files = []; IN.open = false; IN.sent = { id: j.id, at: j.receivedAt }; PF = { id: '', state: '', data: null, err: '' };
@@ -1674,7 +1714,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.submit; msg.textContent = '未能送出：' + why(e); });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
-      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, N.ui.submitIntake), h('p', { class: 'small muted' }, '按確認後即交予 AI 擬定公司概覽；不會對外發送任何內容。')),
+      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, N.ui.submitIntake), h('p', { class: 'small muted' }, '按確認後即交予 Zero 擬定公司概覽；不會對外發送任何內容。')),
       h('div', { class: 'm-body' },
         h('div', { class: 'effect', style: 'border-left-color:var(--mint);border-color:rgba(153,215,188,.3);background:transparent' }, h('h4', null, N.ui.intakeTitle),
           h('ul', { class: 'm-sum' }, filled.map(function (q) { return h('li', null, h('b', null, q.n + '. ' + q.ask + '：'), clip(val(q), 80), ' ', tag(pfSource('q' + q.n, val(q)), 'src')); }))),
@@ -1716,12 +1756,12 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           })),
           g.runId ? h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', onclick: function () {
             get('/api/run?id=' + encodeURIComponent(g.runId)).then(function (rr) { runBox.replaceChildren(resultBox(rr.run)); })
-              .catch(function (e) { runBox.replaceChildren(h('p', { class: 'tr-sub' }, e.net ? why(e) : e.status === 404 ? '找不到這次工作的結果。請回到公司概覽再試。' : '暫時未能取得 AI 結果。請稍後再試。')); });
+              .catch(function (e) { runBox.replaceChildren(h('p', { class: 'tr-sub' }, e.net ? why(e) : e.status === 404 ? '找不到這次工作的結果。請回到公司概覽再試。' : '暫時未能取得 Zero 結果。請稍後再試。')); });
           } }, N.ui.viewAfter)) : null, runBox));
       });
       setApp(head('log', st),
         DESK.logFilters('decisions'),
-        h('p', { class: 'guide' }, '每次確認均會記錄：AI 原本建議、你的答案，以及 AI 隨後的工作。'),
+        h('p', { class: 'guide' }, '每次確認均會記錄：Zero 原本建議、你的答案，以及 Zero 隨後的工作。'),
         h('div', { class: 'tabs logf' },
           h('button', { type: 'button', class: 'btn' + (LOGF === 'all' ? ' on' : ''), onclick: function () { LOGF = 'all'; showLog(); } }, N.ui.all),
           h('button', { type: 'button', class: 'btn' + (LOGF === 'changed' ? ' on' : ''), onclick: function () { LOGF = 'changed'; showLog(); } }, N.ui.onlyChanged)),
