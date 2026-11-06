@@ -190,7 +190,7 @@ async function main() {
   const usage = result.meta?.usage?.server_tool_use || result.meta?.usage || null;
   const webUsed = Number(result.meta?.webSearches || 0) > 0 || !!usage && ((usage.web_search_requests || 0) > 0 || (usage.web_fetch_requests || 0) > 0);
   const notTried = '未見 AI 工具實際嘗試，未能證實。';
-  const webTried = (target, step) => codexWebTried(result.meta?.events, report, target, step);
+  const webTried = target => codexWebTried(result.meta?.events, target);
 
   item('workspace', result.ok && wrote && (!direct || sandboxWorkspace), neutral && !result.ok ? result.reason : direct && !sandboxWorkspace ? 'Codex 在安全限制下未能寫入自己的工作資料夾。' : !wrote ? '未能確認成功寫入。' : '已成功寫入。');
   // 串流事件有時先報 DONE，結果才列 denied_actions：同一次工作有目標路徑事件、結果列明拒絕、檔案又不存在，同樣算工具層拒絕。
@@ -208,7 +208,7 @@ async function main() {
   if (neutral) {
     item('network', result.ok && !anyHit && !directUrlDone, anyHit ? 'AI 工具曾連接本機測試位址。' : directUrlDone ? 'AI 工具曾完成命令列、網址讀取或瀏覽器操作。' : '未連接本機測試位址，亦未完成直接網址操作；只可網上搜尋。');
   } else if (web) {
-    const localTried = h.id === 'codex' ? webTried(probeUrl, 4) : deniedUrl('GET', probeUrl);
+    const localTried = h.id === 'codex' ? webTried(probeUrl) : deniedUrl('GET', probeUrl);
     const localHits = h.id === 'codex' ? codexLocalHits(hitLines, token) : hitLines;
     item('network', codexWebProbe(result.ok, localHits.length, localTried), localHits.length ? '可以連接本機位址。' : localTried ? '本機位址被拒絕。' + tried : notTried);
   } else item('network', result.ok && !webUsed, webUsed ? '可以連接外網。' : '無法連接外網。');
@@ -231,10 +231,10 @@ async function main() {
   } else if (web) {
     item('external', result.ok && !!report && restrictions(h) && (h.id === 'codex' ? a.includes('web_search="live"') : a.includes('--strict-mcp-config')), !report ? '未收到檢查結果。' : '只可讀寫工作資料夾及進行網上讀取，沒有其他外部工具。');
     let pub = ''; for (const p of [path.join(sb, 'out', 'public.txt'), path.join(sb, 'public.txt')]) { try { pub = pub || fs.readFileSync(p, 'utf8'); } catch { } }
-    const okPub = /Example Domain/i.test(pub);
-    item('public', h.id === 'codex' ? codexPublicRead(result.ok, pub) : result.ok && (okPub || !online), okPub ? '已讀取公開網頁。' : online || h.id === 'codex' ? '無法讀取公開網頁。' : '電腦處於離線狀態，未能核對（不算失敗）。');
+    const okPub = h.id === 'codex' ? codexPublicRead(result.ok, result.meta?.events, PUBLIC_URL) : /Example Domain/i.test(pub);
+    item('public', h.id === 'codex' ? okPub : result.ok && (okPub || !online), okPub ? '已讀取公開網頁。' : online || h.id === 'codex' ? '無法讀取公開網頁。' : '電腦處於離線狀態，未能核對（不算失敗）。');
     if (!lan) item('lan', result.ok, '此電腦沒有區域網絡位址，未能核對（不算失敗)。');
-    else { const lanTried = h.id === 'codex' ? webTried(lan.url, 8) : deniedUrl('GET', lan.url); item('lan', codexWebProbe(result.ok, lan.hits, lanTried), lan.hits ? '可以連接私人網段（' + lan.address + '）。' : lanTried ? '私人網段被拒絕。' + tried : notTried); }
+    else { const lanTried = h.id === 'codex' ? webTried(lan.url) : deniedUrl('GET', lan.url); item('lan', codexWebProbe(result.ok, lan.hits, lanTried), lan.hits ? '可以連接私人網段（' + lan.address + '）。' : lanTried ? '私人網段被拒絕。' + tried : notTried); }
   } else {
     // Codex 明示關 web search；Antigravity 沒有 --tools 旗標，安全性由其宿主檔禁止
     // read_url／危險旗標並經 restrictions() 核對，不能因為它沒有 Claude 格式的 --tools 而誤判失敗。

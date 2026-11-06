@@ -74,7 +74,7 @@
       "--disable", "memories", "--disable", "hooks", "--disable", "in_app_browser",
       "--disable", "shell_tool", "--disable", "unified_exec",
       "--model", "{model}", "-c", "model_reasoning_effort=\"low\"",
-      "--skip-git-repo-check", "--ephemeral", "--json", "-o", "{outfile}", "{prompt}"
+      "--skip-git-repo-check", "--ephemeral", "--json", "-o", "{outfile}", "-"
     ],
     "fastModel": "gpt-6.1-terra",
     "reviewModel": "gpt-6.1-sol"

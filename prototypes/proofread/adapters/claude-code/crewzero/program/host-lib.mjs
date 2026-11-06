@@ -14,7 +14,7 @@ export function hosts(root) {
   // 測試／示範指定宿主時只載入該檔，避免零費用測試觸碰電腦已安裝的真 AI 工具。
   if (process.env.SOS_ADAPTER) list = [path.resolve(process.env.SOS_ADAPTER)];
   else try { list = fs.readdirSync(hostDir).filter(f => f.endsWith('.json')).sort().map(f => path.join(hostDir, f)); } catch { }
-  return [...new Set(list)].map(file => { const h = readJSON(file, null); return h && { ...h, id: h.id || 'test', file, root }; }).filter(Boolean);
+  return [...new Set(list)].map(file => { const h = readJSON(file, null); if (!h || (!process.env.SOS_ADAPTER && (typeof h.id !== 'string' || h.id === 'test'))) return null; return { ...h, id: process.env.SOS_ADAPTER ? h.id || 'test' : h.id, file, root }; }).filter(Boolean);
 }
 // 模型表唔影響安全限制；安全範本任何改動都要重新認證，舊雜湊只會失效一次。
 export const hashHost = h => crypto.createHash('sha256').update(JSON.stringify(['v2', h.command, h.args, h.chat?.args || null, h.env || null, h.sandboxProbe || null, h.required || null, h.modelsProbe || null, h.modelsCache || null, h.loginProbe || null, h.versionArgs || null, h.certify || null])).digest('hex');
@@ -329,6 +329,55 @@ function modelsAreSafe(h) {
   if (effortArgs.length > 1 || effortArgs.some(a => a !== 'model_reasoning_effort="{effort}"')) return false;
   return Object.entries(table).filter(([k]) => !['note', 'timeoutMinutes'].includes(k)).every(([, list]) => Array.isArray(list) && list.length > 0 && list.every(c => c && validModel(c.model) && (c.effort === undefined ? !effortArgs.length : validEffort(c.effort))));
 }
+// 練習限制由程式固定，不能由宿主檔自訂放寬。
+export function chatRestrictions(h) {
+  if (h?.id === 'test') {
+    if (typeof h.file !== 'string') return true;
+    const dir = path.win32.dirname(h.file);
+    return !(path.win32.basename(dir).toLowerCase() === 'hosts' && path.win32.basename(path.win32.dirname(dir)).toLowerCase() === 'adapters');
+  }
+  if (!h?.chat) return true;
+  const protocol = h.chat.protocol ?? 'claude-stream', args = h.chat.args;
+  if (!Array.isArray(args) || args.some(x => typeof x !== 'string')) return false;
+  const specs = {
+    codex: { protocol: 'per-turn', flags: ['--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '--ephemeral', '--json'],
+      pairs: { '-C': '{cwd}', '-s': 'read-only', '--model': '{model}', '-o': '{outfile}' },
+      repeated: { '-c': ['windows.sandbox="unelevated"', 'approval_policy="never"', 'web_search="disabled"', 'project_doc_max_bytes=0', 'skills.include_instructions=false', 'model_reasoning_effort="low"'],
+        '--disable': ['apps', 'browser_use', 'browser_use_external', 'computer_use', 'plugins', 'remote_plugin', 'image_generation', 'multi_agent', 'goals', 'memories', 'hooks', 'in_app_browser', 'shell_tool', 'unified_exec'] } },
+    agy: { protocol: 'agy-stream', flags: ['--sandbox', '--disable-slash-commands'],
+      pairs: { '--input-format': 'stream-json', '--output-format': 'stream-json', '--mode': 'accept-edits', '--model': '{model}', '--settings': null } },
+    claude: { protocol: 'claude-stream', flags: ['-p', '--verbose', '--include-partial-messages', '--restricted', '--safe-mode', '--strict-mcp-config', '--no-session-persistence'],
+      pairs: { '--input-format': 'stream-json', '--output-format': 'stream-json', '--tools': '', '--model': '{model}', '--system-prompt-file': '{system}', '--max-budget-usd': '1' } }
+  };
+  const spec = specs[h.id];
+  if (!Object.hasOwn(specs, h.id) || protocol !== spec.protocol) return false;
+  if (h.id === 'codex' && (args[0] !== 'exec' || args.at(-1) !== '-')) return false;
+  const a = h.id === 'codex' ? args.slice(1, -1) : args;
+  const remaining = new Set([...spec.flags, ...Object.keys(spec.pairs)]);
+  const repeated = Object.fromEntries(Object.entries(spec.repeated || {}).map(([k, v]) => [k, new Set(v)]));
+  let settings;
+  for (let i = 0; i < a.length; i++) {
+    const flag = a[i];
+    if (Object.hasOwn(repeated, flag)) {
+      if (++i >= a.length || !repeated[flag].delete(a[i])) return false;
+    } else {
+      if (!remaining.delete(flag)) return false;
+      if (Object.hasOwn(spec.pairs, flag)) {
+        if (++i >= a.length) return false;
+        if (flag === '--settings') settings = a[i];
+        else if (a[i] !== spec.pairs[flag]) return false;
+      }
+    }
+  }
+  if (remaining.size || Object.values(repeated).some(values => values.size)) return false;
+  if (h.id !== 'agy') return true;
+  let s; try { s = JSON.parse(settings); } catch { return false; }
+  if (!s || typeof s !== 'object' || Array.isArray(s) || Object.keys(s).some(k => !['permissions', 'allowNonWorkspaceAccess', 'enableTerminalSandbox'].includes(k))) return false;
+  const p = s.permissions;
+  return !!p && typeof p === 'object' && !Array.isArray(p) && Object.keys(p).every(k => ['deny', 'allow'].includes(k)) &&
+    Array.isArray(p.deny) && ['command(*)', 'read_url(*)', 'execute_url(*)', 'mcp(*)', 'unsandboxed(*)', 'write_file(*)', 'read_file(*)', 'search_web(*)'].every(x => p.deny.includes(x)) &&
+    (!Object.hasOwn(p, 'allow') || (Array.isArray(p.allow) && p.allow.length === 0)) && s.allowNonWorkspaceAccess === false && s.enableTerminalSandbox === true;
+}
 export function restrictions(h) {
   if (!h || !modelsAreSafe(h)) return false;
   if (h.id === 'agy') {
@@ -345,6 +394,7 @@ export function restrictions(h) {
   const ai = a.indexOf('--allowedTools');
   if (ai >= 0) { for (let i = ai + 1; i < a.length && !a[i].startsWith('--'); i++) if (!(r.webTools || []).includes(a[i])) return false; }
   if (readsWeb(h) && (r.mustDeny || []).some(x => !a.includes(`WebFetch(domain:${x})`))) return false;
+  if (h.chat && !chatRestrictions(h)) return false;
   return isolatedHomesAreSafe(h);
 }
 // 認證紀錄是否仍然適用於現在的設定（不開工具查版本，頁面每次讀回都可以用）

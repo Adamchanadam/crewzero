@@ -94,6 +94,10 @@ try {
   await chrome.send('Page.reload'); await sleep(1200); await go('/#/');
   const stale = await ev(`fetch('/api/status').then(r=>r.json()).then(s=>({cert:s.cert,ready:s.ai.ready,stale:s.aiStale,text:document.querySelector('#ai-block')?.innerText||'',link:document.querySelector('#go-setup')?.getAttribute('href')}))`);
   ok('舊認證失效：頁面如實顯示要重新檢查，並有設定入口', stale.cert === null && stale.ready === false && stale.stale === true && stale.text.includes('重新檢查') && stale.link === '#/setup', stale);
+  write(path.join(DATA, 'ledger', 'certify-status.json'), { state: 'passed', items: [] });
+  await go('/#/setup');
+  const staleSetup = await ev(`({done:!!document.querySelector('#setup-done'), title:document.querySelector('#certify h3')?.textContent || '', text:document.querySelector('#certify')?.innerText || ''})`);
+  ok('舊 passed 結果不顯示成功標題或返回按鈕', !staleSetup.done && !staleSetup.title.includes('AI 工具已設定') && !staleSetup.text.includes('AI 工具已設定'), staleSetup);
   fs.writeFileSync(certFile, certKeep);
   await chrome.send('Page.reload'); await sleep(800);
   // 示範資料即使未確認也保留完整介面。

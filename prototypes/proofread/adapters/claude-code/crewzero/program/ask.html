@@ -1354,7 +1354,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
             s.cert ? h('div', { class: 'small muted' }, dayOf(s.cert.certifiedAt) + ' ' + hm(s.cert.certifiedAt) + ' ' + N.ui.setupCertified) : DESK.note('warn', N.ui.setupUnsetNote)),
           s.cert ? tag(N.ui.certPass, 'qdone') : tag(N.ui.aiNotSet, 'qn')));
       var result = null;
-      if (c) {
+      if (c && (c.state !== 'passed' || s.cert)) {
         var items = c.items || [];
         result = h('section', { class: 'track' + (c.state === 'failed' ? ' bad' : c.state === 'running' ? ' off' : '') + (c.state === 'failed' ? ' cert-note-error' : c.state === 'passed' ? ' cert-note-done' : ''), id: 'certify', 'aria-live': 'polite' },
           h('span', { class: 'eyebrow' }, N.ui.setup),

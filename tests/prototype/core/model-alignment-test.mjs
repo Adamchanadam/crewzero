@@ -34,6 +34,8 @@ try {
   };
   // 排除模型／思考程度；Codex 快照更新為 web_search=live，agy 另排除 print-timeout。
   const securityHashes = { claude: '69944eef499d3b0cb1e6cb29fb2ba02c5cc4031e4e01db40f99f478d7e79e2c9', codex: '1ce60f43b851cfe148c42d49288da9ab42bb51d0a2bcae7c95953ba9753378cd', agy: '55f70add8ae874300ac61988d98aa31850d310c254950d4b79436cbf226661ec' };
+  // Codex 練習改用 stdin，chat.args 最後由 {prompt} 改為 -，認證雜湊須更新。
+  ok('Codex stdin 練習參數的認證雜湊快照', H.hashHost(real.codex) === 'b9f779a0bba196f6a5d5e62eb9b549bde590f9a0f0db62b7d3f9d49ed9926132');
   const stripped = (args, id) => args.filter((a, i) => a !== '--model' && args[i - 1] !== '--model' && !(id === 'agy' && (a === '--print-timeout' || args[i - 1] === '--print-timeout')) && !a.startsWith('model_reasoning_effort=') && !(a === '-c' && args[i + 1]?.startsWith('model_reasoning_effort=')));
   for (const [id, h] of Object.entries(real)) {
     ok(id + ' 真實宿主通過限制（只讀設定）', H.restrictions(h));

@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url';
 const LIB = path.dirname(fileURLToPath(import.meta.url));
 const agy = JSON.parse(fs.readFileSync(path.resolve(LIB, '../../../prototypes/proofread/adapters/hosts/agy.json'), 'utf8'));
 const agySettings = agy.args[agy.args.indexOf('--settings') + 1];
-const chat = { args: [path.join(LIB, 'fake-chat.mjs'), '{system}', '{model}'], fastModel: 'fast', reviewModel: 'review' };
+// 假 Codex／Antigravity 用正式的練習參數：chatRestrictions 按 id 只准正式清單（認證測試不會用它們開始練習）
+const codexChat = JSON.parse(fs.readFileSync(path.resolve(LIB, '../../../prototypes/proofread/adapters/hosts/codex.json'), 'utf8')).chat;
+const chat ={ args: [path.join(LIB, 'fake-chat.mjs'), '{system}', '{model}'], fastModel: 'fast', reviewModel: 'review' };
 const base = { command: process.execPath, prompt: 'x', timeoutMinutes: 1, id: 'test', versionArgs: ['--version'], required: {}, chat,
   settingsProbe: { relative: '.claude/settings.local.json', content: '{"permissions":{"allow":["Bash"]}}' } };
 
@@ -24,13 +26,13 @@ export function writeAdapters(dir) {
       args: [path.join(LIB, 'fake-ai.mjs'), '--tools', 'Read,WebSearch,WebFetch', '--allowedTools', 'WebSearch', 'WebFetch', '--disallowedTools', 'WebFetch(domain:127.*.*.*)', 'WebFetch(domain:192.168.*.*)', '--strict-mcp-config'],
       required: { toolsFlag: '--tools', toolsAllowed: ['Read', 'WebSearch', 'WebFetch'], webTools: ['WebSearch', 'WebFetch'], mustDeny: ['127.*.*.*', '192.168.*.*'] },
       denialProof: { tool: 'WebFetch', methodField: 'method', urlField: 'url' } },
-    codexLike: { ...base, id: 'codex', name: '測試 Codex', label: '測試 Codex',
+    codexLike: { ...base, id: 'codex', name: '測試 Codex', label: '測試 Codex', chat: codexChat,
       args: [path.join(LIB, 'fake-ai.mjs'), '--fake-output', 'jsonl', '--ignore-user-config', '--ignore-rules', '--json', '-c', 'web_search="disabled"'],
       outputFormat: 'jsonl', env: { CODEX_HOME: '{dataDir}/codex-home', HOME: '{dataDir}/codex-home', USERPROFILE: '{dataDir}/codex-home' },
       sandboxProbe: { command: process.execPath, args: [path.join(LIB, 'fake-ai.mjs'), '--sandbox-probe', '{target}', '{content}'] },
       settingsProbe: { absolute: '{codexHome}/config.toml', content: 'sandbox_mode = "danger-full-access"' }, loginProbe: { args: ['--version'], okExit: 0 },
       required: { mustHave: ['--ignore-user-config', '--ignore-rules', '--json', 'web_search="disabled"'] } },
-    agyLike: { ...base, id: 'agy', name: '測試 Antigravity', label: '測試 Antigravity',
+    agyLike: { ...base, id: 'agy', name: '測試 Antigravity', label: '測試 Antigravity', chat: agy.chat,
       args: [path.join(LIB, 'fake-ai.mjs'), '--fake-output', 'agy', '--fake-prompt', '{prompt}', '--output-format', 'stream-json', '--disable-slash-commands', '--settings', agySettings, '--model', '{model}'],
       certify: { neutral: true, role: 'everyday' },
       models: { everyday: [{ model: 'neutral-everyday' }], blue: [{ model: 'neutral-blue' }] },

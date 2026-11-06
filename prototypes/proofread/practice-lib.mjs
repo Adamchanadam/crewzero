@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readJSON, writeJSON, localIso, stamp } from './ask-lib.mjs';
-import { adapterValue, cleanEnv, clearCliTrust, preparedAdapter, resolveCommand, validModel } from './host-lib.mjs';
+import { adapterValue, chatRestrictions, cleanEnv, clearCliTrust, preparedAdapter, resolveCommand, validModel } from './host-lib.mjs';
 
 export const LEVELS = { easy: '友善', normal: '一般', hard: '難搞' };
 export const PERSONA_KEYS = ['identity', 'background', 'stance', 'interests', 'decision', 'concerns', 'style'];
@@ -76,6 +76,7 @@ const live = new Map();
 setInterval(() => { for (const [id, e] of live) if (Date.now() - e.lastUsed > 15 * 60000) stop(id); }, 60000).unref();
 function stop(id) { const e = live.get(id); if (!e) return; live.delete(id); try { e.child?.stdin.end(); } catch { } setTimeout(() => { try { e.child?.kill(); } catch { } }, 2000); }
 function spawnChat(host, cwd, systemFile, model) {
+  if (!chatRestrictions(host)) throw new Error('AI 工具未能啟動');
   if (![host.chat.fastModel, host.chat.reviewModel].every(m => m === undefined || validModel(m)) || !validModel(model)) throw new Error('AI 模型設定不合格');
   const protocol = host.chat.protocol || 'claude-stream';
   if (!['claude-stream', 'agy-stream', 'per-turn'].includes(protocol)) throw new Error('AI 對話協定不合格');
@@ -110,13 +111,14 @@ function spawnChat(host, cwd, systemFile, model) {
 }
 function send(e, text, ms, onReply) {
   if (e.protocol === 'per-turn') return new Promise(resolve => {
+    if (!chatRestrictions(e.host)) { resolve(null); return; }
     const outfile = path.join(e.cwd, 'reply-' + randomUUID() + '.txt');
     const prepared = preparedAdapter(e.host, e.cwd), c = resolveCommand(e.host.command);
     if (c.why || !prepared.handoff.ok) { prepared.cleanup(); resolve(null); return; }
     const prompt = e.system + '\n\n' + text;
-    const args = e.host.chat.args.map(a => adapterValue(e.host, a.replaceAll('{outfile}', outfile), e.cwd).replaceAll('{model}', e.model).replaceAll('{prompt}', prompt));
+    const args = e.host.chat.args.map(a => adapterValue(e.host, a.replaceAll('{outfile}', outfile), e.cwd).replaceAll('{model}', e.model));
     let child;
-    try { child = spawn(c.command, [...c.prefix, ...args], { cwd: e.cwd, env: prepared.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); }
+    try { child = spawn(c.command, [...c.prefix, ...args], { cwd: e.cwd, env: prepared.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }); }
     catch { prepared.cleanup(); resolve(null); return; }
     e.child = child;
     child.stdout.resume(); child.stderr.resume();
@@ -124,6 +126,8 @@ function send(e, text, ms, onReply) {
     const done = code => { if (finished) { clearCliTrust(e.host, e.cwd); return; } finished = true; clearTimeout(timer); let result = ''; if (code === 0) { try { result = fs.readFileSync(outfile, 'utf8'); } catch { } } try { fs.unlinkSync(outfile); } catch { } prepared.cleanup(); e.child = null; resolve(result ? { result } : null); };
     const timer = setTimeout(() => { try { child.kill(); } catch { } done(null); }, ms);
     child.on('error', () => done(null)); child.on('close', done);
+    child.stdin.on('error', () => { try { child.kill(); } catch { } done(null); });
+    child.stdin.end(prompt);
   });
   return new Promise(resolve => {
     const t = setTimeout(() => { const k = e.waiters.indexOf(done); if (k >= 0) e.waiters.splice(k, 1); resolve(null); }, ms);
