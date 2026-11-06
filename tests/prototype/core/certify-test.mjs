@@ -46,6 +46,18 @@ try {
   ok('宿主清單由 adapters/hosts/*.json 讀取，包含 Antigravity', listed.includes('claude') && listed.includes('codex') && listed.includes('agy'), listed);
   const edgeRoot = path.join(OUT, 'restriction-root'); fs.mkdirSync(path.join(edgeRoot, 'data'), { recursive: true });
   const codexHost = { ...JSON.parse(fs.readFileSync(path.join(PROTO, 'adapters', 'hosts', 'codex.json'), 'utf8')), root: edgeRoot };
+  const trustHome = path.join(edgeRoot, 'data', 'codex-home'), trustFile = path.join(trustHome, 'config.toml');
+  fs.mkdirSync(trustHome, { recursive: true });
+  const trust = `[projects.'d:\\work']\ntrust_level = "trusted"\n\n[projects."e:/work"]\ntrust_level = "untrusted"\n`;
+  fs.writeFileSync(trustFile, trust); H.clearCliTrust(codexHost);
+  ok('Codex 只含信任紀錄時清理，限制檢查恢復', !fs.existsSync(trustFile) && H.restrictions(codexHost));
+  for (const extra of ['sandbox_mode = "danger-full-access"', 'other_key = "value"', '[other]']) {
+    fs.writeFileSync(trustFile, trust + extra + '\n'); H.clearCliTrust(codexHost);
+    ok('Codex 非信任設定保留並維持拒絕：' + extra, fs.existsSync(trustFile) && !H.restrictions(codexHost));
+  }
+  fs.writeFileSync(trustFile, trust);
+  for (const id of ['claude', 'agy']) { H.clearCliTrust({ ...codexHost, id }); ok(id + ' 不清理 Codex 信任檔', fs.existsSync(trustFile)); }
+  H.clearCliTrust(codexHost);
   const escapedHome = { ...codexHost, env: { ...codexHost.env, CODEX_HOME: '{dataDir}/../escaped' } };
   H.adapterEnv(escapedHome);
   ok('隔離 home 拒絕點段逃逸，且核對失敗前不建立逃逸資料夾', !H.restrictions(escapedHome) && !fs.existsSync(path.join(edgeRoot, 'escaped')), path.join(edgeRoot, 'escaped'));

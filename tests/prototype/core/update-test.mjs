@@ -165,6 +165,34 @@ try {
   /* 還原之後再更新：備份唔會覆寫（另起 -2） */
   const a2 = run(UPDATE, [PROJ, '--apply']);
   ok('還原後再更新：成功，舊備份原封不動、新備份另起 .backup-0.3.0-2', a2.status === 0 && fs.existsSync(path.join(T, '.backup-0.3.0-2')) && oldNonData.every(([k, h]) => { try { return sha(path.join(BK, ...k.split('/'))) === h; } catch { return false; } }) && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === newVersion && same(tree(DATA), dataMid), { status: a2.status, out: a2.stdout, err: a2.stderr });
+
+  /* 公司伺服器和示範伺服器同時開着 → 更新 → 兩個都關閉（示範伺服器曾經漏關，舊程式讀新頁面會失常） */
+  const rb3 = run(UPDATE, [PROJ, '--rollback', '--apply']);
+  await sleep(500);
+  ok('再次還原到舊版，準備同時開兩個伺服器', rb3.status === 0, rb3.stdout);
+  const openHealth = async () => { const out = []; for (let p = Number(PORT); p < Number(PORT) + 10; p++) { try { const j = await (await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(800) })).json(); out.push(j); } catch { } } return out; };
+  run(path.join(T, 'ask.mjs'), ['--desk']);
+  run(path.join(T, 'ask.mjs'), ['--dashboard', '--demo']);
+  const both = await openHealth();
+  const deskNow = both.find(j => j.root === lib.rootId(DATA)), demoNow = both.find(j => j.root === lib.rootId(path.join(T, 'demo-data')));
+  for (const j of both) pids.push(Number(j.pid));
+  ok('舊版公司伺服器和示範伺服器都開着', !!deskNow && !!demoNow && deskNow.pid !== demoNow.pid, both);
+  const c3 = run(UPDATE, [PROJ]);
+  ok('檢查時講明兩者都開着、更新後會關閉', c3.status === 3 && /Founder Desk 及示範頁面目前開着/.test(c3.stdout), c3.stdout);
+  const a3 = run(UPDATE, [PROJ, '--apply']);
+  await sleep(500);
+  ok('更新：結束碼 0、講明兩者都已關閉、兩個程序都不再運行', a3.status === 0 && /已關閉開着的 Founder Desk 及示範頁面/.test(a3.stdout) && !alive(Number(deskNow?.pid)) && !alive(Number(demoNow?.pid)), { status: a3.status, out: a3.stdout });
+  ok('更新後沒有舊版伺服器留下', (await openHealth()).every(j => j.root !== lib.rootId(DATA) && j.root !== lib.rootId(path.join(T, 'demo-data'))), await openHealth());
+
+  /* 只有示範伺服器開着：同樣認得、關得到 */
+  const rb4 = run(UPDATE, [PROJ, '--rollback', '--apply']);
+  await sleep(500);
+  run(path.join(T, 'ask.mjs'), ['--dashboard', '--demo']);
+  const onlyDemo = (await openHealth()).find(j => j.root === lib.rootId(path.join(T, 'demo-data')));
+  if (onlyDemo) pids.push(Number(onlyDemo.pid));
+  const a4 = run(UPDATE, [PROJ, '--apply']);
+  await sleep(500);
+  ok('只有示範伺服器開着：更新後已關閉，文字只提示範頁面', rb4.status === 0 && !!onlyDemo && a4.status === 0 && /已關閉開着的示範頁面/.test(a4.stdout) && !alive(Number(onlyDemo?.pid)), { rb4: rb4.status, a4: a4.status, out: a4.stdout });
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {

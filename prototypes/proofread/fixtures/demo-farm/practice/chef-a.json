@@ -1,7 +1,7 @@
 {
   "id": "chef-a",
   "title": "見餐廳甲主廚：爭取第一張試單",
-  "counterpart": { "name": "餐廳甲主廚阿明", "role": "西環一間四十座位餐廳的主廚（虛構）" },
+  "counterpart": { "name": "餐廳甲主廚", "role": "西環一間四十座位餐廳的主廚（虛構）" },
   "persona": {
     "identity": { "text": "主廚，負責廚房及採購，但價錢須經老闆批准", "source": "你原話" },
     "background": { "text": "上週試食了兩款菜，認為十分新鮮；現時使用一間批發商，送貨準時", "source": "你原話" },

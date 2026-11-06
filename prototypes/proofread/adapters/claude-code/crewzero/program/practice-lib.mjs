@@ -6,8 +6,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readJSON, writeJSON, localIso, stamp } from './ask-lib.mjs';
-import { cleanEnv, resolveCommand, validModel } from './host-lib.mjs';
+import { adapterValue, cleanEnv, clearCliTrust, preparedAdapter, resolveCommand, validModel } from './host-lib.mjs';
 
 export const LEVELS = { easy: '友善', normal: '一般', hard: '難搞' };
 export const PERSONA_KEYS = ['identity', 'background', 'stance', 'interests', 'decision', 'concerns', 'style'];
@@ -73,13 +74,20 @@ function parseReply(raw) {
 /* ---------- 對手引擎：每個練習一個預先開定嘅程式，逐句送入 ---------- */
 const live = new Map();
 setInterval(() => { for (const [id, e] of live) if (Date.now() - e.lastUsed > 15 * 60000) stop(id); }, 60000).unref();
-function stop(id) { const e = live.get(id); if (!e) return; live.delete(id); try { e.child.stdin.end(); } catch { } setTimeout(() => { try { e.child.kill(); } catch { } }, 2000); }
+function stop(id) { const e = live.get(id); if (!e) return; live.delete(id); try { e.child?.stdin.end(); } catch { } setTimeout(() => { try { e.child?.kill(); } catch { } }, 2000); }
 function spawnChat(host, cwd, systemFile, model) {
   if (![host.chat.fastModel, host.chat.reviewModel].every(m => m === undefined || validModel(m)) || !validModel(model)) throw new Error('AI 模型設定不合格');
-  const args = host.chat.args.map(a => a.replaceAll('{system}', systemFile).replaceAll('{model}', model));
+  const protocol = host.chat.protocol || 'claude-stream';
+  if (!['claude-stream', 'agy-stream', 'per-turn'].includes(protocol)) throw new Error('AI 對話協定不合格');
+  const system = fs.readFileSync(path.join(cwd, systemFile), 'utf8');
+  if (protocol === 'per-turn') return { host, cwd, model, system, protocol, child: null, lastUsed: Date.now(), primed: false, dead: false };
+  const args = host.chat.args.map(a => adapterValue(host, a, cwd).replaceAll('{system}', systemFile).replaceAll('{model}', model));
   const c = resolveCommand(host.command);
-  const child = spawn(c.command, [...c.prefix, ...args], { cwd, env: cleanEnv(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  const e = { child, buf: '', waiters: [], lastUsed: Date.now(), primed: false, dead: false };
+  const prepared = protocol === 'agy-stream' ? preparedAdapter(host, cwd) : null;
+  if (c.why || (prepared && !prepared.handoff.ok)) { prepared?.cleanup(); throw new Error('AI 工具未能啟動'); }
+  let child;
+  try { child = spawn(c.command, [...c.prefix, ...args], { cwd, env: prepared?.env || cleanEnv(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }); } catch (err) { prepared?.cleanup(); throw err; }
+  const e = { child, system, protocol, buf: '', waiters: [], lastUsed: Date.now(), primed: false, dead: false };
   child.stdout.on('data', d => {
     e.buf += d; let i;
     while ((i = e.buf.indexOf('\n')) >= 0) {
@@ -92,20 +100,39 @@ function spawnChat(host, cwd, systemFile, model) {
         if (!w0.replied && w0.acc.includes('#旁白')) { w0.replied = true; if (w0.onReply) w0.onReply(w0.acc); }
       }
       if (j && j.type === 'result') { const w = e.waiters.shift(); if (w) w(j); }
+      if (j && j.event === 'result') { const w = e.waiters.shift(); if (w) w({ result: j.response || j.result?.response || '', is_error: j.result?.status === 'ERROR' }); }
     }
   });
   child.stderr.on('data', () => { });
-  const die = () => { e.dead = true; for (const w of e.waiters.splice(0)) w(null); };
+  const die = () => { prepared?.cleanup(); e.dead = true; for (const w of e.waiters.splice(0)) w(null); };
   child.on('error', die); child.on('close', die);
   return e;
 }
 function send(e, text, ms, onReply) {
+  if (e.protocol === 'per-turn') return new Promise(resolve => {
+    const outfile = path.join(e.cwd, 'reply-' + randomUUID() + '.txt');
+    const prepared = preparedAdapter(e.host, e.cwd), c = resolveCommand(e.host.command);
+    if (c.why || !prepared.handoff.ok) { prepared.cleanup(); resolve(null); return; }
+    const prompt = e.system + '\n\n' + text;
+    const args = e.host.chat.args.map(a => adapterValue(e.host, a.replaceAll('{outfile}', outfile), e.cwd).replaceAll('{model}', e.model).replaceAll('{prompt}', prompt));
+    let child;
+    try { child = spawn(c.command, [...c.prefix, ...args], { cwd: e.cwd, env: prepared.env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); }
+    catch { prepared.cleanup(); resolve(null); return; }
+    e.child = child;
+    child.stdout.resume(); child.stderr.resume();
+    let finished = false;
+    const done = code => { if (finished) { clearCliTrust(e.host, e.cwd); return; } finished = true; clearTimeout(timer); let result = ''; if (code === 0) { try { result = fs.readFileSync(outfile, 'utf8'); } catch { } } try { fs.unlinkSync(outfile); } catch { } prepared.cleanup(); e.child = null; resolve(result ? { result } : null); };
+    const timer = setTimeout(() => { try { child.kill(); } catch { } done(null); }, ms);
+    child.on('error', () => done(null)); child.on('close', done);
+  });
   return new Promise(resolve => {
     const t = setTimeout(() => { const k = e.waiters.indexOf(done); if (k >= 0) e.waiters.splice(k, 1); resolve(null); }, ms);
     function done(r) { clearTimeout(t); resolve(r); }
     done.onReply = onReply;
     e.waiters.push(done);
-    try { e.child.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }) + '\n'); } catch { clearTimeout(t); resolve(null); }
+    const content = e.protocol === 'agy-stream' && !e.primed ? e.system + '\n\n' + text : text;
+    const message = e.protocol === 'agy-stream' ? { event: 'user', message: { content } } : { type: 'user', message: { role: 'user', content } };
+    try { e.child.stdin.write(JSON.stringify(message) + '\n'); } catch { clearTimeout(t); resolve(null); }
   });
 }
 function engineFor(DIR, host, session, sc) {
@@ -139,7 +166,7 @@ export async function say(DIR, host, session, sc, text) {
   const e = engineFor(DIR, host, session, sc);
   e.lastUsed = Date.now();
   // 新開嘅程式（重開或者收回之後）要先交返之前嘅對話做背景
-  const msg = e.primed ? line : `（之前嘅對話，你係${sc.counterpart.name}）\n${transcriptText({ turns: session.turns.slice(0, -1) })}\n\n創辦人而家講：${line}`;
+  const msg = e.primed && e.protocol !== 'per-turn' ? line : `（之前嘅對話，你係${sc.counterpart.name}）\n${transcriptText({ turns: session.turns.slice(0, -1) })}\n\n創辦人而家講：${line}`;
   const t0 = Date.now();
   let early; const first = new Promise(r => { early = r; });
   const full = send(e, msg, 30000, acc => early({ acc }));
@@ -209,8 +236,8 @@ export async function finish(DIR, host, session, sc) {
   const e = spawnChat(host, cwd, 'system.txt', host.chat.reviewModel || host.chat.fastModel || 'haiku');
   const t0 = Date.now();
   const r = await send(e, prompt, 120000);
-  try { e.child.stdin.end(); } catch { }
-  setTimeout(() => { try { e.child.kill(); } catch { } }, 2000);
+  try { e.child?.stdin.end(); } catch { }
+  setTimeout(() => { try { e.child?.kill(); } catch { } }, 2000);
   let rv = null;
   if (r && !r.is_error) { const s = String(r.result || ''); const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { rv = JSON.parse(s.slice(a, b + 1)); } catch { rv = null; } }
   session.reviewMs = Date.now() - t0;

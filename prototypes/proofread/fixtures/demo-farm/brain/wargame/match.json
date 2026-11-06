@@ -14,7 +14,10 @@
   },
   "budget": { "aiStarts": 8, "hardCap": 11, "reruns": 0, "rejudged": 1, "reattackRounds": 1 },
   "files": { "blue": "blue.json", "red": "red.json", "rebuttal": "rebuttal.json", "judge": "judge.json", "strengthen": "strengthen.json" },
+  "chosenRouteId": "S1",
+  "chosenRouteDecisionId": "d1",
   "founder": {
+    "decisions": [{ "questionId": "d1", "question": "先採用哪條路線？", "value": "A", "answer": "A 先辦試食會", "at": "@-1d 21:00" }],
     "respondedAt": "@-1d 21:00",
     "votes": [ { "ref": "B4", "agree": true }, { "ref": "risk1", "agree": true }, { "ref": "B3", "agree": true } ],
     "evidence": [],

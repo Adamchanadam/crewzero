@@ -20,6 +20,12 @@ export function hosts(root) {
 export const hashHost = h => crypto.createHash('sha256').update(JSON.stringify(['v2', h.command, h.args, h.chat?.args || null, h.env || null, h.sandboxProbe || null, h.required || null, h.modelsProbe || null, h.modelsCache || null, h.loginProbe || null, h.versionArgs || null, h.certify || null])).digest('hex');
 // 呢個宿主嘅 AI 工作可唔可以上網讀取（工具清單有讀網頁）
 export function readsWeb(h) { const a = h && h.args || [], f = h && h.required && h.required.toolsFlag, i = f ? a.indexOf(f) : -1; return i >= 0 && String(a[i + 1] || '').split(',').includes('WebFetch'); }
+export function webAccess(h) {
+  if (h?.id === 'agy') return h.webAccess === 'search' ? 'search' : 'none';
+  if (h?.id === 'codex') { const v = (h.args || []).find(x => /^web_search=/.test(String(x))); return /^(?:web_search="(?:live|indexed)")$/.test(v || '') ? 'search+read' : v === 'web_search="cached"' ? 'search' : 'none'; }
+  const a = h?.args || [], i = a.indexOf(h?.required?.toolsFlag || '--tools'), tools = i < 0 ? [] : String(a[i + 1] || '').split(',');
+  return tools.includes('WebFetch') ? 'search+read' : tools.includes('WebSearch') ? 'search' : 'none';
+}
 // Windows：npm 裝嘅 AI 工具（例如 codex）喺 PATH 只係 .cmd 啟動殼；Node 唔經命令殼開唔到 .cmd，而經命令殼開會令提示文字被當指令解讀。
 // 所以喺 PATH 搵到 .cmd／.bat 就解析出殼背後嘅 node 腳本（或者 .exe）直接開；解析唔到就當未安裝，why 寫明原因。認證雜湊照舊用宿主檔原本嘅 command。
 const isFile = f => { try { return fs.statSync(f).isFile(); } catch { return false; } };
@@ -80,6 +86,18 @@ function insideData(h, value, sandbox = '') {
   if (!baseReal || !targetReal) return true; // 尚未建立時，已拒絕點段及文字路徑逃逸。
   const fold = s => process.platform === 'win32' ? s.toLocaleLowerCase('en-US') : s;
   return fold(targetReal) === fold(baseReal) || fold(targetReal).startsWith(fold(baseReal) + path.sep);
+}
+// 只移除隔離 Codex home 內完全由 CLI 信任紀錄組成的設定。
+export function clearCliTrust(h, sandbox = '') {
+  const value = h?.env?.CODEX_HOME;
+  if (h?.id !== 'codex' || typeof value !== 'string' || !/^\{dataDir\}(?:[\\/]|$)/.test(value) || hasDotPart(value)) return;
+  const home = adapterValue(h, value, sandbox), file = path.join(home, 'config.toml');
+  if (!insideData(h, home, sandbox) || !insideData(h, file, sandbox)) return;
+  try {
+    if (!fs.lstatSync(file).isFile()) return;
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length && lines.every(line => /^\[projects\.(?:'[^'\r\n]+'|"[^"\r\n]+")\]$/.test(line) || /^trust_level\s*=\s*"(?:trusted|untrusted)"$/.test(line))) fs.unlinkSync(file);
+  } catch { } // 讀取或刪除失敗時保留檔案，讓既有安全檢查拒絕。
 }
 function isolatedHomesAreSafe(h, sandbox = '') {
   if (!h?.env) return true;
@@ -203,8 +221,13 @@ function authHandoff(h, sandbox = '') {
   };
 }
 export function preparedAdapter(h, sandbox = '') {
+  clearCliTrust(h, sandbox);
+  if (h?.id === 'codex' && !isolatedHomesAreSafe(h, sandbox)) {
+    const handoff = { ok: false, reason: 'AI 工具的限制設定不完整。', cleanup: () => { } };
+    return { env: cleanEnv(), cleanup: handoff.cleanup, handoff };
+  }
   const env = adapterEnv(h, sandbox), handoff = authHandoff(h, sandbox);
-  return { env, cleanup: handoff.cleanup, handoff };
+  return { env, cleanup: () => { handoff.cleanup(); clearCliTrust(h, sandbox); }, handoff };
 }
 // Codex 的 sandbox 子命令不會呼叫模型；認證可用它驗證實際檔案邊界。
 export function sandboxProbe(h, sandbox, target, content = 'startup-os-sandbox-probe') {
@@ -229,6 +252,7 @@ export function sandboxProbe(h, sandbox, target, content = 'startup-os-sandbox-p
   });
 }
 export function version(h) {
+  clearCliTrust(h);
   const c = resolveCommand(h.command);
   if (c.why) return '';
   if (!restrictions(h)) return '';
@@ -237,6 +261,7 @@ export function version(h) {
   try { const r = spawnSync(c.command, [...c.prefix, ...(h.versionArgs || ['--version'])], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, timeout: 10000, env: prepared.env }); return r.status === 0 ? (r.stdout || r.stderr).trim() : ''; } catch { return ''; } finally { prepared.cleanup(); }
 }
 export function login(h) {
+  clearCliTrust(h);
   const probe = h?.loginProbe;
   if (!probe || !Array.isArray(probe.args)) return null;
   const c = resolveCommand(h.command);
@@ -327,6 +352,7 @@ export function certCurrent(root, ledger) {
   const cert = readJSON(path.join(ledger, 'adapter-cert.json'), null);
   if (!cert) return false;
   const h = hosts(root).find(x => x.id === cert.host || x.file === cert.host);
+  clearCliTrust(h);
   return !!(h && restrictions(h) && hashHost(h) === cert.argsHash && cert.version);
 }
 export function certified(root, ledger) {
@@ -334,6 +360,7 @@ export function certified(root, ledger) {
   if (!cert) return { code: 'none', reason: 'AI 工具未設定，設定好之後會自動繼續' };
   const h = hosts(root).find(x => x.id === cert.host || x.file === cert.host);
   const changed = { code: 'changed', reason: 'AI 工具設定已變更，須重新認證' };
+  clearCliTrust(h);
   if (!h || !restrictions(h) || hashHost(h) !== cert.argsHash || !cert.version) return changed;
   const current = version(h);
   if (current !== cert.version) return current ? { ...changed, versionOnly: true, hostId: h.id, version: current } : changed;
@@ -348,6 +375,7 @@ export function modelCandidates(h, role = 'everyday') {
 }
 // 清單只用嚟揀已批准嘅候選，唔會自動加入新模型。探測失敗就照用首選。
 export function pickModel(h, role = 'everyday', ctx = {}) {
+  clearCliTrust(h, ctx.sandbox || '');
   const candidates = modelCandidates(h, role);
   if (!candidates.length) return null;
   const sandbox = ctx.sandbox || '', data = dataDirFor(h, sandbox), ledger = ctx.ledger || path.join(data, 'ledger');
@@ -421,6 +449,7 @@ export const AI_FAIL = {
 };
 function failedReason(h) { return h?.loginProbe && login(h) === false ? AI_FAIL.loggedOut : AI_FAIL.generic; }
 export async function execute(h, sandbox, prompt, opts = {}) {
+  clearCliTrust(h, sandbox);
   if (!restrictions(h)) return { ok: false, reason: 'AI 工具的限制設定不完整。' };
   // 認證要 AI 真係逐項嘗試：實測 Codex 平日模型（Terra）會自行判斷唔試，所以用藍方模型（冇藍方就用平日）
   const role = opts.certify ? h.certify?.role || 'blue' : opts.role || 'everyday', candidates = modelCandidates(h, role);
@@ -428,6 +457,8 @@ export async function execute(h, sandbox, prompt, opts = {}) {
   let model = chosen, result;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (opts.onStart && opts.onStart({ model, attempt }) === false) return { ok: false, reason: NAMES.ui.skip_budgetExhausted };
+    clearCliTrust(h, sandbox);
+    if (!restrictions(h)) return { ok: false, reason: 'AI 工具的限制設定不完整。' };
     result = await executeOnce(h, sandbox, prompt, { ...opts, role, ...(model ? { model } : {}) });
     const next = candidates[candidates.indexOf(model) + 1];
     if (attempt || opts.certify || !next || !Number.isInteger(result.code) || result.code === 0 || result.elapsedMs > 20000 || result.timedOut || hasOutput(path.join(sandbox, 'out'))) break;
@@ -442,20 +473,20 @@ function executeOnce(h, sandbox, prompt, opts) {
   // 外殼可以收短一份工作嘅時限（例如商機掃描只用每次上限嘅三分之一）
   if (Number(opts.timeoutMinutes) > 0) h = { ...h, timeoutMinutes: Math.min(h.timeoutMinutes || 10, Number(opts.timeoutMinutes)) };
   return new Promise(resolve => {
-    let out = '', err = '', done = false, child;
+    let out = '', err = '', done = false, child, timedOut = false, killTimer;
     const started = Date.now();
     const c = resolveCommand(h.command);
     if (c.why) return resolve({ ok: false, reason: AI_FAIL.notFound });
     const prepared = preparedAdapter(h, sandbox);
     if (!prepared.handoff.ok) { prepared.cleanup(); return resolve({ ok: false, reason: prepared.handoff.reason || '無法安全準備 AI 工具登入，請重新登入後再試。' }); }
     try { child = spawn(c.command, [...c.prefix, ...args], { cwd: sandbox, env: prepared.env, stdio: ['ignore','pipe','pipe'], windowsHide: true }); }
-    catch (e) { prepared.cleanup(); return resolve({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart }); }
-    const timer = setTimeout(() => { child.kill(); finish({ ok: false, timedOut: true, reason: AI_FAIL.timeout }); }, (h.timeoutMinutes || 10) * 60000);
-    function finish(result) { if (done) return; done = true; clearTimeout(timer); prepared.cleanup(); try { fs.writeFileSync(path.join(sandbox, 'ai-output.txt'), out + '\n' + err); } catch {} resolve(result); }
+    catch (e) { prepared.cleanup(); return resolve({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart, childError: { code: String(e?.code || ''), message: String(e?.message || '') } }); }
+    const timer = setTimeout(() => { timedOut = true; try { child.kill(); } catch (e) { return finish({ ok: false, reason: AI_FAIL.cannotStart, childError: { code: String(e?.code || ''), message: String(e?.message || '') } }); } killTimer = setTimeout(() => finish({ ok: false, reason: AI_FAIL.timeout, stderr: err }), 5000); }, (h.timeoutMinutes || 10) * 60000);
+    function finish(result) { if (done) return; done = true; clearTimeout(timer); clearTimeout(killTimer); prepared.cleanup(); try { fs.writeFileSync(path.join(sandbox, 'ai-output.txt'), out + '\n' + err); } catch {} resolve(timedOut ? { ...result, timedOut: true, stdout: out, stderr: err, safetyOutput: out } : result); }
     child.stdout.on('data', x => { out += x; }); child.stderr.on('data', x => { err += x; });
-    child.on('error', e => finish({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart }));
+    child.on('error', e => finish({ ok: false, reason: e?.code === 'ENOENT' ? AI_FAIL.notFound : AI_FAIL.cannotStart, childError: { code: String(e?.code || ''), message: String(e?.message || '') } }));
     child.on('close', code => {
-      if (done) return;
+      if (done) { clearCliTrust(h, sandbox); return; }
       let meta = null;
       if (h.outputFormat === 'jsonl') {
         const events = out.split(/\r?\n/).map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean);
@@ -477,7 +508,7 @@ function executeOnce(h, sandbox, prompt, opts) {
       const statusOk = !meta || !Object.hasOwn(meta, 'status') || meta.status === 'SUCCESS';
       const ok = code === 0 && !meta?.is_error && statusOk;
       // 失敗先做登入探測（同認證用同一個探測；冇探測嘅宿主唔做）；探測期間計時器唔會觸發，finish 隨即清走
-      finish({ ok, code, elapsedMs: Date.now() - started, meta, stderr: err, reason: ok ? '' : failedReason(h) });
+      finish({ ok: !timedOut && ok, code, elapsedMs: Date.now() - started, meta, stderr: err, ...(timedOut ? { timedOut: true, safetyOutput: out } : {}), budgetExceeded: !ok && meta?.subtype === 'error_max_budget_usd', reason: timedOut ? AI_FAIL.timeout : ok ? '' : failedReason(h) });
     });
   });
 }

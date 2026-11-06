@@ -44,6 +44,16 @@ export function parseFounderReply(text) {
     ok: duplicateFields.length === 0 && blocks.length === 1 && !!machine && typeof machine === 'object' && !Array.isArray(machine)
   };
 }
+export function validateAskReply(parsed, pack) {
+  if (!parsed?.ok || !pack || parsed.head.kind !== 'ask-answer' || parsed.machine.format !== 'startup-os.ask-reply/0.1' || parsed.head.ref !== pack.id || parsed.machine.pack !== pack.id || !Array.isArray(parsed.machine.answers) || !Array.isArray(pack.questions)) return { ok: false, reason: 'identity-or-format' };
+  const ids = new Set(pack.questions.map(q => String(q.id))), seen = new Set();
+  if (ids.size !== pack.questions.length) return { ok: false, reason: 'unknown-or-duplicate-question' };
+  for (const a of parsed.machine.answers) {
+    if (!a || !['string', 'number'].includes(typeof a.id) || !ids.has(String(a.id)) || seen.has(String(a.id))) return { ok: false, reason: 'unknown-or-duplicate-question' };
+    seen.add(String(a.id));
+  }
+  return { ok: true };
+}
 // Windows：另一個程序啱啱讀緊同一個檔時，改名覆蓋會暫時被拒（EPERM／EBUSY），等一陣再試
 export function writeJSON(f, obj) {
   const tmp = f + '.tmp';
@@ -90,7 +100,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.38.0';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.39.0';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 
@@ -104,12 +114,12 @@ export const BIZ_TYPES = Object.assign(Object.create(null), {
 });
 
 export const INTAKE_QUESTIONS = [
-  { n: 1, ask: '你在做甚麼，或打算做甚麼？', hint: '一句即可；未想清楚，可先寫初步想法。', example: '為咖啡店供應低糖果醬', required: true },
-  { n: 2, ask: '主要是給誰的？', hint: '可以是使用者、購買者或服務對象。', example: '五至二十人的私家診所', required: false },
-  { n: 3, ask: '對方為甚麼需要？', hint: '對方現時的麻煩，或者為甚麼會選你。不清楚可留空，Zero 會列出估計供你校對。', example: '家長一改時段，主任便要全部重排', required: false },
+  { n: 1, ask: '你在做甚麼，或打算做甚麼？', hint: '一句即可；初步想法亦可。', example: '為咖啡店供應低糖果醬', required: true },
+  { n: 2, ask: '主要是給誰的？', hint: '使用者、購買者或服務對象皆可。', example: '五至二十人的私家診所', required: false },
+  { n: 3, ask: '對方為甚麼需要？', hint: '對方現時的麻煩，或為甚麼選你；不清楚可留空。', example: '家長一改時段，主任便要全部重排', required: false },
   { n: 4, ask: '如何收取款項或得到資金？', hint: '有數字就寫，未定可留空。', example: '每瓶 78 元，成本約 30 元；每月訂閱；佣金 15%；正申請資助', required: false },
-  { n: 5, ask: '到目前為止，有誰已經試用、付款或答應合作？', hint: '只寫已發生的事。沒有也可留空，這是很常見的起點。', example: '兩人查詢、一間已試用、三間已付款', required: false },
-  { n: 6, ask: '下一步打算做甚麼？', hint: '未想好可留空，Zero 會提出建議。', example: '下星期約見第三間診所', required: false },
+  { n: 5, ask: '到目前為止，有誰已經試用、付款或答應合作？', hint: '只寫已發生的事；沒有也可留空。', example: '兩人查詢、一間已試用、三間已付款', required: false },
+  { n: 6, ask: '下一步打算做甚麼？', hint: '未想好可留空。', example: '下星期約見第三間診所', required: false },
   { n: 7, ask: '有誰一起做或協助？', hint: '只有你一人可留空；也可以寫你自己的相關經驗或人脈。', example: '一名兼職幫手；兩間合作機構；我做過八年餐飲採購', required: false },
   { n: 8, ask: '你最擔心甚麼？', hint: '想到甚麼寫甚麼。', example: '', required: false }
 ];
@@ -217,8 +227,8 @@ export function preparePacks(raw, { dirs, askedBy = 'AI', fromRun = null, strict
     const at = `第 ${i + 1} 條`;
     if (!q || typeof q !== 'object') { errors.push(at + '格式不正確'); return; }
     if (!/^[\w-]{1,40}$/.test(String(q.id || ''))) errors.push(at + '編號不正確');
-    else if (ids.has(q.id)) errors.push(at + '編號重複');
-    else ids.add(q.id);
+    else if (ids.has(String(q.id))) errors.push(at + '編號重複');
+    else ids.add(String(q.id));
     if (!String(q.ask || '').trim()) errors.push(at + '缺少問題內容');
     const kind = q.kind || 'choice';
     if (!KINDS.includes(kind)) errors.push(at + '題目類型不正確');

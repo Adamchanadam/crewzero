@@ -38,9 +38,15 @@ ok('補欄保留既有內容及編號，平台推斷不被換走', normalized.de
 const again = C.checkCompanyPage(structuredClone(normalized), { newDraft: true }).page;
 ok('重複核對不新增重複欄位', again.detail.reading.map(f=>f.id).join() === normalized.detail.reading.map(f=>f.id).join() && new Set(again.detail.reading.map(f=>f.id)).size === 12);
 const template = fs.readFileSync(path.join(PROTO, 'startup-background-template.md'), 'utf8');
+ok('範本每題提示與題目資料一致', A.INTAKE_QUESTIONS.every(q => { const start = template.indexOf(`### ${q.n}. ${q.ask}`); const end = template.indexOf('你的答案：', start); return start >= 0 && end > start && template.slice(start, end).split(/\r?\n/).includes(q.hint); }));
 ok('範本與八題一致，每題有答案位置', A.INTAKE_QUESTIONS.every(q => template.includes(`${q.n}. ${q.ask}`)) && (template.match(/^你的答案：/gm) || []).length === 8);
 ok('創辦人本人的規則：經驗入關鍵資源，不算生意證據', /只有你一人可留空；也可以寫你自己的相關經驗或人脈/.test(template) && A.INTAKE_QUESTIONS[6].hint.includes('相關經驗') && fs.readFileSync(path.join(PROTO, 'ai-intake.md'), 'utf8').includes('創辦人能親自做到的事') && /不是生意證據/.test(fs.readFileSync(path.join(PROTO, 'ai-plain.md'), 'utf8')) && /創辦人做過或見過/.test(fs.readFileSync(path.join(PROTO, 'ai-plain.md'), 'utf8')));
 ok('範本有給其他 AI 工具的指示', /給協助填寫的 AI/.test(template) && /不可估計或虛構/.test(template));
+ok('範本提醒協助填寫的 AI：答案要單獨讀也明白', /另一個 AI 單獨閱讀/.test(template) && /同上/.test(template) && /時間按說話當日換算/.test(template) && /各個說法及來源都寫出來/.test(template) && /不要因為未能確認而刪去/.test(template));
+const askPage = fs.readFileSync(path.join(PROTO, 'ask.html'), 'utf8');
+ok('範本及頁面都說明文件要一併放入', /資料夾路徑及網上連結/.test(template) && /## 建議一併放入的文件/.test(template) && /連同清單上的文件一併拖入/.test(template) && askPage.includes('N.ui.intakeDropWarn') && N.ui.intakeDropWarn.includes('只讀這裏的文件') && N.ui.intakeTemplateNote.includes('連同它列出的文件一併拖入上面'));
+ok('範本及頁面都說明 Google 文件要先下載', /Google Doc、Google Slides 等網上文件，請先在原檔按「檔案 → 下載」/.test(template) && /提醒創辦人先下載成 PDF、Word 或 PowerPoint/.test(template) && askPage.includes('N.ui.intakeOnline') && N.ui.intakeOnline.includes('Google Doc、Google Slides 等網上文件，請先下載成 PDF、Word 或 PowerPoint 再加入'));
+ok('範本說明外部資料要附公開出處', /在重點後寫明出處名稱、日期及公開網址；創辦人自己的業務資料毋須附網址/.test(template));
 ok('範本不含內部代號', !/\bG\d+\b|canvas\.|biz\.type|plan:/.test(template));
 for (const r of results) console.log((r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : '\n' + JSON.stringify(r.info ?? null)));
 console.log(`${results.filter(r=>r.pass).length}/${results.length} passed`);

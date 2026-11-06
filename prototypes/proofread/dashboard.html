@@ -1884,8 +1884,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return h('div', { id: 'sys-observe', 'data-off': ob.off ? 'true' : 'false' }, list,
       h('p', { class: 'small muted', id: 'sys-observe-text' }, ob.text),
       ob.pending ? h('p', { class: 'small', id: 'sys-observe-pending' }, fill(D.observePending, { n: ob.pending })) : null,
-      h('div', { class: 'obs-add' }, path, name, h('button', { type: 'button', class: 'btn small', id: 'obs-add', onclick: function (e) { var p = (V.obsPath || '').trim(); if (!p) { toast(D.observePathInvalid); return; } observeSetup({ op: 'add', path: p, name: (V.obsName || '').trim() }, e.target); } }, D.observeAdd)),
-      h('p', { class: 'small muted' }, D.observeAddHint),
+      h('details', null, h('summary', null, D.observeAdd), h('div', { class: 'obs-add' }, path, name, h('button', { type: 'button', class: 'btn small', id: 'obs-add', onclick: function (e) { var p = (V.obsPath || '').trim(); if (!p) { toast(D.observePathInvalid); return; } observeSetup({ op: 'add', path: p, name: (V.obsName || '').trim() }, e.target); } }, D.observeAdd)),
+      h('p', { class: 'small muted' }, D.observeAddHint)),
       h('p', null, h('button', { type: 'button', class: 'btn small', id: 'obs-toggle', onclick: function (e) { observeSetup({ op: ob.off ? 'on' : 'off' }, e.target); } }, ob.off ? D.observeOn : D.observeOff)));
   }
   function rhythmWhen(r) {
@@ -1918,13 +1918,13 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     document.querySelectorAll('#sys-rhythm button').forEach(function (b) { b.disabled = true; });
     if (btn) btn.textContent = N.ui.rhythmWorking;
     postJSON('/api/setup', body).then(function (j) {
-      V.rhythmBusy = false; if (done) done(); rhythmNote(typeof note === 'string' && j.ok !== false ? note : j.message || N.ui.rhythmSaved);
+      V.rhythmBusy = false; if (done) done(); rhythmNote(typeof note === 'string' && j.ok !== false ? note : j.message || N.ui.rhythmSaved, j.ok === false);
       return load().then(function () { render(true); });
-    }).catch(function (e) { V.rhythmBusy = false; rhythmNote(why(e)); render(true); });
+    }).catch(function (e) { V.rhythmBusy = false; rhythmNote(why(e), true); render(true); });
   }
   // 結果句留一陣就收起，唔好幾個鐘頭後仲寫住「已儲存」
-  function rhythmNote(text) {
-    V.rhythmNote = text;
+  function rhythmNote(text, failed) {
+    V.rhythmNote = text; V.rhythmNoteFailed = !!failed;
     clearTimeout(V.rhythmNoteTimer);
     V.rhythmNoteTimer = setTimeout(function () { V.rhythmNote = ''; if ($('#rh-note')) render(true); }, 20000);
   }
@@ -1943,23 +1943,23 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return h('div', { class: 'rh-edit', id: 'rh-editor' },
       h('div', { class: 'rh-f' }, h('div', { class: 'rh-l' }, U.rhythmEditCadence), h('div', { class: 'rh-chips' }, ['daily', 'weekdays', 'weekly'].map(function (k) { return h('button', { type: 'button', class: 'rh-chip', disabled: V.rhythmBusy, 'aria-pressed': edit.runCadence === k ? 'true' : 'false', onclick: function () { set('runCadence', k); } }, U['rhythmCad_' + k]); }))),
       // 時間欄逐格輸入：只更新預覽，唔重畫，否則打到一半游標會跳走
-      h('div', { class: 'rh-f' }, h('label', { for: 'rh-time' }, U.rhythmEditTime), h('input', { type: 'time', id: 'rh-time', class: 'rh-time', disabled: V.rhythmBusy, value: edit.runTime, oninput: function (e) { var good = /^([01]\d|2[0-3]):[0-5]\d$/.test(e.target.value), p = $('#rh-preview'), save = $('#rh-save'); V.rhythmEdit.runTime = e.target.value; if (save) save.disabled = V.rhythmBusy || !good; if (p) p.textContent = good ? rhythmPreview(V.rhythmEdit, on, ri, now) : U.rhythmPickTime; } })),
+      h('div', { class: 'rh-f' }, h('label', { for: 'rh-time' }, U.rhythmEditTime), h('input', { type: 'time', id: 'rh-time', class: 'rh-time', disabled: V.rhythmBusy, value: edit.runTime, oninput: function (e) { var good = /^([01]\d|2[0-3]):[0-5]\d$/.test(e.target.value), p = $('#rh-preview'), save = $('#rh-save'); V.rhythmEdit.runTime = e.target.value; if (save) save.disabled = V.rhythmBusy || !good; if (p) p.replaceChildren(DESK.note('tip', good ? rhythmPreview(V.rhythmEdit, on, ri, now) : U.rhythmPickTime)); } })),
       h('div', { class: 'rh-f' }, h('div', { class: 'rh-l' }, U.rhythmEditInterview), h('div', { class: 'rh-chips rh-days' }, [1, 2, 3, 4, 5, 6, 7].map(function (w) { return h('button', { type: 'button', class: 'rh-chip', disabled: V.rhythmBusy, 'aria-label': N.t('rhythmDay', { d: WD[w % 7] }), 'aria-pressed': edit.interviewWeekday === w ? 'true' : 'false', onclick: function () { set('interviewWeekday', w); } }, WD[w % 7]); })), h('p', { class: 'rh-hint' }, edit.runCadence === 'weekly' ? U.rhythmWeeklyHint : U.rhythmInterviewHint)),
-      h('div', { class: 'rh-preview', id: 'rh-preview' }, rhythmPreview(edit, on, ri, now)),
-      h('div', { class: 'rh-acts', style: 'margin:0' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-save', disabled: V.rhythmBusy || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(edit.runTime || '')), onclick: function (e) { if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(V.rhythmEdit.runTime || ''))) { rhythmNote(U.rhythmPickTime); return; } var said = on ? rhythmPreview(V.rhythmEdit, on, ri, now, true) : U.rhythmSaved; rhythmRequest({ action: 'rhythm', value: V.rhythmEdit }, e.target, function () { V.rhythmEdit = null; }, said); } }, U.rhythmSave), h('button', { type: 'button', class: 'btn', id: 'rh-cancel', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = null; V.rhythmNote = ''; render(true); } }, U.rhythmCancel)));
+      h('div', { id: 'rh-preview' }, DESK.note('tip', rhythmPreview(edit, on, ri, now))),
+      h('div', { class: 'rh-acts', style: 'margin:0' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-save', disabled: V.rhythmBusy || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(edit.runTime || '')), onclick: function (e) { if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(V.rhythmEdit.runTime || ''))) { rhythmNote(U.rhythmPickTime, true); return; } var said = on ? rhythmPreview(V.rhythmEdit, on, ri, now, true) : U.rhythmSaved; rhythmRequest({ action: 'rhythm', value: V.rhythmEdit }, e.target, function () { V.rhythmEdit = null; }, said); } }, U.rhythmSave), h('button', { type: 'button', class: 'btn', id: 'rh-cancel', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = null; V.rhythmNote = ''; render(true); } }, U.rhythmCancel)));
   }
   function rhythmPanel(x, ri, runTags) {
-    var U = N.ui, r = x.rhythm, on = ri.scheduler === 'server', body, note = V.rhythmNote ? h('div', { class: 'rh-preview', id: 'rh-note', style: 'margin-bottom:10px;white-space:pre-line' }, V.rhythmNote) : null;
+    var U = N.ui, r = x.rhythm, on = ri.scheduler === 'server', body, note = V.rhythmNote ? DESK.note(V.rhythmNoteFailed ? 'error' : 'done', V.rhythmNote, { id: 'rh-note' }) : null;
     if (x.sample) body = [rhythmTop(ri, U.rhythmDemo, 'amber', r), h('p', { class: 'rh-sub' }, U.rhythmReadonlyDemo), rhythmFacts(x, ri, runTags)];
     else if (x.localOnly) body = [rhythmTop(ri, on ? U.rhythmOn : U.rhythmOff, on ? 'mint' : ''), ri.nextRunAt ? h('p', { class: 'rh-sub', id: 'sys-next' }, N.t('rhythmNext', { t: rhythmDayWord(ri.nextRunAt, new Date(x.now)) })) : null, rhythmFacts(x, ri, runTags), h('p', { class: 'rh-rule' }, U.rhythmReadonlyPhone)];
     else if (x.sim) body = [rhythmTop(ri, U.schedSim, 'ai', r), h('p', { class: 'rh-sub' }, U.rhythmReadonlySim), rhythmFacts(x, ri, runTags)];
-    else if (ri.cleanupPending) body = [rhythmTop(ri, U.rhythmOff), h('p', { class: 'rh-sub' }, U.schedCleanupPending), note, rhythmFacts(x, ri, runTags), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn', id: 'rh-remove-again', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.schedRemoveAgain))];
-    else if (ri.scheduler === 'os') body = [rhythmTop(ri, ri.os && ri.os.missing ? U.rhythmLegacyMissing : ri.os && !ri.os.confirmed ? U.rhythmLegacyUnknown : U.rhythmLegacy, 'amber'), h('p', { class: 'rh-sub' }, ri.os && ri.os.missing ? U.rhythmOsMissing : ri.os && !ri.os.confirmed ? U.rhythmLegacyUnknown : U.rhythmLegacyNote), note, rhythmFacts(x, ri, runTags), !r || ri.overviewPending ? [h('p', { class: 'rh-sub' }, U.overviewPending), h('div', { class: 'rh-acts' }, h('a', { class: 'btn primary', href: '/proofread.html', id: 'rh-overview' }, U.rhythmToOverview))] : h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-migrate', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'on' }, e.target); } }, U.rhythmMigrate))];
-    else if (!r && ri.scheduler === 'server') body = [rhythmTop(ri, U.rhythmOn, 'mint'), h('p', { class: 'rh-sub' }, U.rhythmPendingDefault), note, h('div', { class: 'rh-acts' }, h('a', { class: 'btn primary', href: '/proofread.html', id: 'rh-overview' }, U.rhythmToOverview), h('button', { type: 'button', class: 'btn', id: 'rh-stop', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.rhythmStop)), h('p', { class: 'rh-rule' }, U.schedServerRule, h('br'), ri.autostart && ri.autostart.enabled ? U.schedAutostartOn : U.schedAutostartOff)];
+    else if (ri.cleanupPending) body = [rhythmTop(ri, U.rhythmOff), DESK.note('warn', U.schedCleanupPending), note, rhythmFacts(x, ri, runTags), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn', id: 'rh-remove-again', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.schedRemoveAgain))];
+    else if (ri.scheduler === 'os') body = [rhythmTop(ri, ri.os && ri.os.missing ? U.rhythmLegacyMissing : ri.os && !ri.os.confirmed ? U.rhythmLegacyUnknown : U.rhythmLegacy, 'amber'), ri.os && ri.os.missing ? DESK.note('warn', U.rhythmOsMissing) : h('p', { class: 'rh-sub' }, ri.os && !ri.os.confirmed ? U.rhythmLegacyUnknown : U.rhythmLegacyNote), note, rhythmFacts(x, ri, runTags), !r || ri.overviewPending ? [h('p', { class: 'rh-sub' }, U.overviewPending), h('div', { class: 'rh-acts' }, h('a', { class: 'btn primary', href: '/proofread.html', id: 'rh-overview' }, U.rhythmToOverview))] : h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-migrate', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'on' }, e.target); } }, U.rhythmMigrate))];
+    else if (!r && ri.scheduler === 'server') body = [rhythmTop(ri, U.rhythmOn, 'mint'), h('p', { class: 'rh-sub' }, U.rhythmPendingDefault), note, h('div', { class: 'rh-acts' }, h('a', { class: 'btn primary', href: '/proofread.html', id: 'rh-overview' }, U.rhythmToOverview), h('button', { type: 'button', class: 'btn', id: 'rh-stop', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.rhythmStop)), DESK.note('tip', [U.schedServerRule, h('br'), ri.autostart && ri.autostart.enabled ? U.schedAutostartOn : U.schedAutostartOff])];
     else if (!r) body = [rhythmTop(ri, U.rhythmNew), h('p', { class: 'rh-sub' }, U.rhythmNoOverview), h('div', { class: 'rh-acts' }, h('a', { class: 'btn primary', href: '/proofread.html', id: 'rh-overview' }, U.rhythmToOverview))];
     else if (ri.overviewPending) body = [rhythmTop(ri, on ? U.rhythmOn : U.rhythmOff, on ? 'mint' : ''), h('p', { class: 'rh-sub' }, U.overviewPending), note, rhythmFacts(x, ri, runTags), h('div', { class: 'rh-acts' }, h('a', { class: 'btn primary', href: '/proofread.html', id: 'rh-overview' }, U.rhythmToOverview), on ? h('button', { type: 'button', class: 'btn', id: 'rh-stop', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.rhythmStop) : null)];
-    else if (on) body = V.rhythmEdit ? [note, rhythmEditor(x, ri, true)] : [rhythmTop(ri, U.rhythmOn, 'mint', r), h('p', { class: 'rh-sub', id: 'sys-next' }, ri.catchUp ? N.t('rhythmCatchUp', { t: rhythmDayWord(ri.catchUpAt, new Date(x.now)) }) : N.t('rhythmNext', { t: ri.nextRunAt ? rhythmDayWord(ri.nextRunAt, new Date(x.now)) + '（' + rhythmLeft(ri.nextRunAt, x.now) + '）' : U.schedNever })), !x.ai.ready ? h('p', { class: 'rh-sub' }, h('b', null, U.rhythmAiUnset), ' ', h('a', { href: '/#/setup' }, U.goSetup)) : null, note, rhythmFacts(x, ri, runTags), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-change', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = { runCadence: r.runCadence, runTime: r.runTime, interviewWeekday: r.interviewWeekday }; V.rhythmNote = ''; render(true); } }, U.rhythmChange), h('button', { type: 'button', class: 'btn', id: 'rh-stop', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.rhythmStop)), h('p', { class: 'rh-rule' }, U.schedServerRule, h('br'), ri.autostart && ri.autostart.enabled ? U.schedAutostartOn : U.schedAutostartOff)];
-    else body = V.rhythmEdit ? [note, rhythmEditor(x, ri, false)] : [rhythmTop(ri, U.rhythmOff), h('p', { class: 'rh-sub' }, U.rhythmOffNote), note, h('dl', { class: 'kv' }, h('dt', null, U.rhythmAfterOn), h('dd', null, rhythmWhen(r)), h('dt', null, U.rhythmInterview), h('dd', null, N.t('rhythmDay', { d: WD[(r.interviewWeekday || 1) % 7] }))), V.rhythmConfirm ? h('div', { class: 'rh-confirm', id: 'rh-confirm' }, N.t('rhythmConfirmNote', { t: rhythmWhen(r) + ' ' }), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-on-ok', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'on' }, e.target, function () { V.rhythmConfirm = false; }); } }, U.rhythmConfirmStart), h('button', { type: 'button', class: 'btn', id: 'rh-on-no', disabled: V.rhythmBusy, onclick: function () { V.rhythmConfirm = false; render(true); } }, U.rhythmCancel))) : h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-on', disabled: V.rhythmBusy, onclick: function () { V.rhythmConfirm = true; V.rhythmNote = ''; render(true); } }, U.rhythmStart), h('button', { type: 'button', class: 'btn', id: 'rh-change', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = { runCadence: r.runCadence, runTime: r.runTime, interviewWeekday: r.interviewWeekday }; V.rhythmNote = ''; render(true); } }, U.rhythmChange))];
+    else if (on) body = V.rhythmEdit ? [note, rhythmEditor(x, ri, true)] : [rhythmTop(ri, U.rhythmOn, 'mint', r), h('p', { class: 'rh-sub', id: 'sys-next' }, ri.catchUp ? N.t('rhythmCatchUp', { t: rhythmDayWord(ri.catchUpAt, new Date(x.now)) }) : N.t('rhythmNext', { t: ri.nextRunAt ? rhythmDayWord(ri.nextRunAt, new Date(x.now)) + '（' + rhythmLeft(ri.nextRunAt, x.now) + '）' : U.schedNever })), !x.ai.ready ? DESK.note('warn', [U.rhythmAiUnset, ' ', h('a', { href: '/#/setup' }, U.goSetup)]) : null, note, rhythmFacts(x, ri, runTags), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-change', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = { runCadence: r.runCadence, runTime: r.runTime, interviewWeekday: r.interviewWeekday }; V.rhythmNote = ''; render(true); } }, U.rhythmChange), h('button', { type: 'button', class: 'btn', id: 'rh-stop', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'off' }, e.target); } }, U.rhythmStop)), DESK.note('tip', [U.schedServerRule, h('br'), ri.autostart && ri.autostart.enabled ? U.schedAutostartOn : U.schedAutostartOff])];
+    else body = V.rhythmEdit ? [note, rhythmEditor(x, ri, false)] : [rhythmTop(ri, U.rhythmOff), h('p', { class: 'rh-sub' }, U.rhythmOffNote), note, h('dl', { class: 'kv' }, h('dt', null, U.rhythmAfterOn), h('dd', null, rhythmWhen(r)), h('dt', null, U.rhythmInterview), h('dd', null, N.t('rhythmDay', { d: WD[(r.interviewWeekday || 1) % 7] }))), V.rhythmConfirm ? h('div', { class: 'rh-confirm', id: 'rh-confirm' }, DESK.note('tip', N.t('rhythmConfirmNote', { t: rhythmWhen(r) + ' ' })), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-on-ok', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'on' }, e.target, function () { V.rhythmConfirm = false; }); } }, U.rhythmConfirmStart), h('button', { type: 'button', class: 'btn', id: 'rh-on-no', disabled: V.rhythmBusy, onclick: function () { V.rhythmConfirm = false; render(true); } }, U.rhythmCancel))) : h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-on', disabled: V.rhythmBusy, onclick: function () { V.rhythmConfirm = true; V.rhythmNote = ''; render(true); } }, U.rhythmStart), h('button', { type: 'button', class: 'btn', id: 'rh-change', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = { runCadence: r.runCadence, runTime: r.runTime, interviewWeekday: r.interviewWeekday }; V.rhythmNote = ''; render(true); } }, U.rhythmChange))];
     return h('section', { class: 'panel', id: 'sys-rhythm' }, h('div', { class: 'ph' }, h('h2', null, U.rhythmTitle)), body);
   }
   function pageSystem() {
@@ -1987,21 +1987,21 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       x.sim.persona && (x.sim.persona.docs || []).length ? h('ul', { class: 'small' }, x.sim.persona.docs.map(function (t) { return h('li', null, t); })) : h('p', { class: 'muted' }, '未設定。')) : null;
     return [sim, h('div', { class: 'grid2', style: 'margin-top:0' },
       h('section', { class: 'panel' }, h('div', { class: 'ph' }, h('h2', null, D.sysAI)),
-        h('p', null, x.ai.ready ? ['已設定：', h('b', null, x.ai.label), '（認證日期 ' + md(x.ai.certifiedAt) + '）'] : [h('b', null, '未設定'), '：Zero 團隊暫未能開始工作。']),
+        x.ai.ready ? h('p', null, h('b', null, x.ai.label), ' ', tag(U.certPass, 'mint'), ' ', h('span', { class: 'small muted' }, md(x.ai.certifiedAt) + ' ' + U.setupCertified)) : DESK.note('warn', U.sysUnset),
         x.ai.models ? h('p', { class: 'small muted' }, x.ai.models) : null,
-        (x.ai.modelWarnings || []).map(function (w) { return h('p', { class: 'small' }, w); }),
-        h('p', null, h('a', { class: 'btn' + (x.ai.ready ? '' : ' primary'), href: '/#/setup', id: 'sys-setup' }, (x.ai.ready ? '' : '★ ') + D.goSetup), ' ', h('span', { class: 'small muted' }, '選擇 AI 工具與認證，請在 Founder Desk 系統設定頁進行（只限本機）。')),
+        (x.ai.modelWarnings || []).map(function (w) { return DESK.note('warn', w); }),
+        h('p', null, h('a', { class: 'btn' + (x.ai.ready ? '' : ' primary'), href: '/#/setup', id: 'sys-setup' }, D.goSetup), ' ', h('span', { class: 'small muted' }, U.sysLocal)),
         h('h4', null, D.sysNow),
-        h('p', null, x.health && (x.health.pausedByFounder || x.health.autoStopped) ? (x.work.meta.workingSessions ? 'Zero 團隊的日常工作已暫停；另有 ' + x.work.meta.workingSessions + ' 個本機 AI 對話正在進行。' : 'Zero 團隊的日常工作已暫停。') : x.work.meta.workingSessions ? fill(D.workingNow, { n: x.work.meta.workingSessions, m: x.work.meta.activeSubagents }) : x.ai.running ? '工作中：' + x.ai.running.label + '（' + when(x.ai.running.startedAt) + ' 開始）' : '閒置'),
+        h('p', null, x.health && (x.health.pausedByFounder || x.health.autoStopped) ? [tag(U.sysPaused, 'wait'), x.work.meta.workingSessions ? ' ' + N.t('sysOtherSessions', { n: x.work.meta.workingSessions }) : null] : x.work.meta.workingSessions ? [tag(U.sysWorking, 'mint'), ' ', fill(D.workingNow, { n: x.work.meta.workingSessions, m: x.work.meta.activeSubagents })] : x.ai.running ? [tag(U.sysWorking, 'mint'), ' ' + x.ai.running.label + '（' + when(x.ai.running.startedAt) + ' 開始）'] : tag(U.sysIdle)),
         h('h4', null, D.observeFolders),
         observePanel(x.work.observe),
         h('h4', null, U.devices),
-        DESK.devices(x.devices || [], { onRevoke: function (id, btn) { postJSON('/api/setup', { action: 'revoke', id: id }).then(function () { toast(U.deviceRevoked); load(); }).catch(function (e) { btn.disabled = false; toast(why(e)); }); } }),
-        h('p', { class: 'small muted', id: 'sys-data-location' }, '公司資料只存放在這部電腦。其他人要使用，請在這部電腦的瀏覽器開啟。'),
+        h('details', { open: (x.devices || []).some(function (d) { return d.state === 'pending'; }) }, h('summary', null, (function () { var ds = x.devices || [], pending = ds.filter(function (d) { return d.state === 'pending'; }); return pending.length ? N.t('devicePendingSummary', { n: pending.length }) : ds.length ? N.t('deviceSummary', { n: ds.length, name: (ds[0].name || U.deviceBrowser) + (ds[0].current ? '（' + U.deviceThis + '）' : '') }) : U.devicesNone; })()), DESK.devices(x.devices || [], { onRevoke: function (id, btn) { postJSON('/api/setup', { action: 'revoke', id: id }).then(function () { toast(U.deviceRevoked); load(); }).catch(function (e) { btn.disabled = false; toast(why(e)); }); } })),
+        DESK.note('tip', U.sysData, { id: 'sys-data-location' }),
         h('h4', null, D.brain),
-        h('p', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? '未有資料：提交資料並確認公司概覽後，由公司紀錄供料。' : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : '找不到先前指定的參考資料夾。請在 AI 對話說「打開營運監察台」重新開啟。'),
+        h('div', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? U.sysBrainEmpty : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : DESK.note('error', U.sysBrainMissing)),
         h('h4', null, D.sysHealth),
-        (x.health.warnings || []).length ? h('ul', null, x.health.warnings.map(function (w) { return h('li', null, w); })) : h('p', { class: 'muted' }, '沒有。')),
+        (x.health.warnings || []).length ? x.health.warnings.map(function (w) { return DESK.note('warn', w); }) : h('p', { class: 'muted' }, '沒有。')),
       h('div', { class: 'sys-right' }, rhythmPanel(x, ri, runTags),
         h('section', { class: 'panel', id: 'sys-runs' },
           h('div', { class: 'ph' }, h('h2', null, D.sysRuns)),
@@ -2201,8 +2201,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   /* 1 生意體檢：體檢報告（左欄三個弱位，大序號＋證據級橫條；右欄兩張側卡） */
   function pageCheckup(x) {
     var d = x.detail || {};
-    if (!(d.weak || []).length) return itemPage(x, plainBody(x));
-    return itemPage(x, h('div', { class: 'report' },
+    if (!(d.weak || []).length && !(d.unseen || []).length && !(d.notNow || []).length) return itemPage(x, plainBody(x));
+    return itemPage(x, [d.partial ? h('p', { class: 'small muted' }, D.brainPartial) : null, h('div', { class: 'report' },
       h('div', null, h('div', { class: 'h3s', style: 'margin-top:0' }, D.weakest), h('div', { class: 'weaklist' }, d.weak.map(function (c, i) {
         return h('div', { class: 'weak' }, h('span', { class: 'rank' }, String(i + 1)), h('h4', null, c.title, srcTag(c.source)),
           h('div', { class: 'gauge' }, h('span', null, D.evidenceLevel), h('span', { class: 'bar' }, h('b', { style: 'width:' + ((Number(c.evidence) || 0) + 1) * 20 + '%' })), h('span', null, EV[Math.max(0, Math.min(4, Number(c.evidence) || 0))])),
@@ -2210,7 +2210,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       }))),
       h('div', null,
         h('div', { class: 'sidecard' }, h('h4', null, D.unseen), h('ul', null, (d.unseen || []).map(function (u) { return h('li', null, u.text, ' ', srcTag(u.source)); })), fbBar(x.id, 'unseen')),
-        h('div', { class: 'sidecard' }, h('h4', null, D.notNow), h('ul', null, (d.notNow || []).map(function (u) { return h('li', null, u.text, h('small', null, u.why)); })), fbBar(x.id, 'notnow')))));
+        h('div', { class: 'sidecard' }, h('h4', null, D.notNow), h('ul', null, (d.notNow || []).map(function (u) { return h('li', null, u.text, h('small', null, u.why)); })), fbBar(x.id, 'notnow')))), (d.industryCheck || []).length ? h('div', { class: 'sidecard' }, h('h4', null, D.industryCheck), h('ul', null, d.industryCheck.map(function (u) { return h('li', null, u.text, ' ', h('a', { href: u.url, target: '_blank', rel: 'noopener noreferrer' }, u.source), ' ', u.readOn); }))) : null]);
   }
   /* 3 情景演練：人物卡牆（每個會面對象一張名片） */
   function pageScenario(x) {
@@ -2301,6 +2301,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         s.name, h('small', null, ' ' + s.attacks + ' 擊' + (s.hitRate != null ? ' · 命中 ' + pct(s.hitRate) : ''))));
     });
     out.push(bar);
+    if (d.suggestedSeat) out.push(h('p', { class: 'small muted' }, D.suggestedSeat + '：' + d.suggestedSeat.name + (d.suggestedSeat.why ? ' — ' + d.suggestedSeat.why : '')));
     var pain = d.seats.filter(function (s) { return s.hitRate != null; })[0];
     out.push(h('p', { class: 'small muted', style: 'margin:4px 0 0' }, pain ? D.seatPain + '：' + pain.name + '（命中 ' + pct(pain.hitRate) + '）' : D.redHitRate + '：' + D.noHitRate + '（裁判未逐條判定攻擊）'));
     if (cur) {
@@ -2310,6 +2311,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       mine.sort(function (x, y) { return '高中低'.indexOf(x.a.severity) - '高中低'.indexOf(y.a.severity); });
       out.push(h('div', { class: 'seatview', id: 'seat-view' }, h('h4', null, cur + '：' + D.seatView),
         s.cares ? h('p', { class: 'small', style: 'margin:0 0 6px' }, h('b', null, D.seatCares + '：'), s.cares) : null,
+        [['seatInterests', s.interests], ['seatFears', s.fears], ['seatCriteria', s.criteria], ['seatChangeMind', s.changeMind], ['seatSource', s.source]].map(function (f) { return f[1] ? h('p', { class: 'small', style: 'margin:0 0 6px' }, h('b', null, D[f[0]] + '：'), f[1]) : null; }),
         h('ul', { class: 'm-sum' }, mine.map(function (m) { return h('li', null, sevTag(m.a.severity), ' ', m.a.attack, h('small', { class: 'muted', style: 'display:block' }, '攻：「' + clip(m.r.claim.claim, 40) + '」' + (m.r.verdict ? ' → ' + m.r.verdict.verdict : ''))); }))));
     }
     return out;
@@ -2379,7 +2381,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         return h('div', { class: 'rcard', 'data-row': 'risk' + r.rank }, h('h4', null, r.rank + '. ' + r.risk, tag('Zero 解讀', 'src-read')), h('dl', null, h('dt', null, D.cheapestTest), h('dd', null, r.cheapestTest, ' ', testByTag(r.testBy)), h('dt', null, D.stopCondition), h('dd', null, r.stop)), aiCheckedBox('ar-' + d.id + '-' + r.rank, r.aiChecked, r.testBy), fbBar(x.id, 'risk-' + r.rank));
       })),
       s.founderDecisions.length ? h('div', { class: 'decide', id: 'wg-decide', 'data-act': 'judge' }, h('h4', null, D.founderDecide + '（' + s.founderDecisions.length + '）'),
-        h('ul', { class: 'm-sum' }, s.founderDecisions.map(function (q) { return h('li', null, q.question, h('small', { class: 'muted', style: 'display:block' }, '★ 裁判建議：' + q.recommend + ' · ' + q.why + (q.risk ? ' · ' + D.decisionRisk + '：' + q.risk : ''))); })),
+        h('ul', { class: 'm-sum' }, s.founderDecisions.map(function (q, i) { var answer = ((d.founder || {}).decisions || []).filter(function (v) { return v.questionId === 'd' + (i + 1); })[0]; return h('li', null, q.question, answer ? h('small', { class: 'muted', style: 'display:block' }, D.debateChosen.replace('{value}', answer.value)) : null, h('small', { class: 'muted', style: 'display:block' }, '★ 裁判建議：' + q.recommend + ' · ' + q.why + (q.risk ? ' · ' + D.decisionRisk + '：' + q.risk : ''))); })),
         h('p', { style: 'margin:8px 0 0' }, dec ? h('a', { class: 'btn primary', href: '/#/ask/' + dec.packId, id: 'wg-decide-go' }, dec.open ? '★ ' + D.toDeskAsk : '已答 · ' + D.view)
           : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; postJSON('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide', matchId: d.id }).then(function () { toast('正在放上 Founder Desk……'); setTimeout(load, 1500); }).catch(function (er) { e.target.disabled = false; toast('未能放上 Founder Desk：' + why(er)); }); } }, '★ ' + D.putOnDesk))) : null,
       s.assumptionChanges.length ? h('p', { class: 'small', style: 'margin:10px 0 0', 'data-act': 'judge' }, h('b', null, D.assumptionChanges + '：'), s.assumptionChanges.map(function (a) { return [a.change, ' ', tag(N.zeroLabels(a.label || 'Zero 建議 · 未確認'), 'src-ai'), '；']; })) : null);
@@ -2387,7 +2389,9 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function halfDebate(x, d) {
     var op = claimOpen(d);
     return [scoreBoard(d),
-      (d.keyMoments || []).length ? h('div', { class: 'h3s' }, D.keyMoments, h('span', { class: 'muted' }, '（點選一張跳到該論點）')) : null, moments(d), seatBar(d),
+      d.score ? h('details', { class: 'more', id: 'judge-criteria', 'data-keep': 'judge-criteria-' + d.id }, h('summary', null, D.judgeCriteriaTitle), h('p', { class: 'small muted' }, D.judgeCriteria)) : null,
+      (d.keyMoments || []).length || (d.blindAttacks || []).length ? h('div', { class: 'h3s' }, D.keyMoments, (d.keyMoments || []).length ? h('span', { class: 'muted' }, '（點選一張跳到該論點）') : null) : null, moments(d),
+      (d.blindAttacks || []).length ? h('div', { class: 'sidecard', id: 'blind-attacks', 'data-act': 'moments' }, h('h4', null, D.km_unmentioned), h('ul', null, d.blindAttacks.map(function (a) { return h('li', null, typeof a === 'string' ? a : a.text || a.attack || '', a.persona ? '（' + a.persona + '）' : ''); }))) : null, seatBar(d),
       h('div', { class: 'h3s' }, D.claimsL + '（' + d.rows.length + '）', h('span', { class: 'muted' }, '一次展開一條；收起時只顯示論點、證據級、攻擊數與判決'),
         h('span', { class: 'r' }, h('button', { type: 'button', class: 'chipb', id: 'wg-all', 'aria-pressed': op === '*' ? 'true' : 'false', onclick: function () { V.wgOpen = op === '*' ? null : '*'; render(true); } }, op === '*' ? D.showOne : D.showAll))),
       h('div', { class: 'claims', id: 'wargame' }, d.rows.map(function (r) { return claimRow(x, d, r); })),
@@ -2538,13 +2542,15 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   }
   /* 4 商機掃描：時間窗（上方由近至遠嘅時間軸，下方卡按 AI 排嘅緊迫次序） */
   function pageOpp(x) {
-    var list = (x.detail || {}).list || [];
+    var list = ((x.detail || {}).list || []).slice().sort(function (a, b) { return (a.windowDate || '9999').localeCompare(b.windowDate || '9999'); });
+    var prospects = ((brainItem('pipeline').detail || {}).prospects || []);
+    function windowLabel(o) { var dateValue = o.windowDate || o.window; var date = parseDay(dateValue); if (!date) return o.window || '—'; var days = diffDays(today(), date); return (date.getFullYear() !== today().getFullYear() ? date.getFullYear() + ' 年 ' : '') + md(dateValue) + (days >= 0 && days <= 14 ? '（' + D.oppSoon + '）' : ''); }
     if (!list.length) return itemPage(x, plainBody(x));
-    return itemPage(x, [h('div', { class: 'h3s', style: 'margin-top:0' }, D.windowAxis),
-      h('div', { class: 'axis', id: 'opp-axis', style: 'grid-template-columns:repeat(' + Math.min(5, list.length) + ',minmax(0,1fr))' }, list.slice(0, 5).map(function (o, i) { return h('span', null, h('b', null, String(i + 1)), clip(o.window || '—', 16)); })),
+    return itemPage(x, [(x.detail || {}).partial ? h('p', { class: 'small muted' }, D.brainPartial) : null, h('div', { class: 'h3s', style: 'margin-top:0' }, D.windowAxis),
+      h('div', { class: 'axis', id: 'opp-axis', style: 'grid-template-columns:repeat(' + Math.min(5, list.length) + ',minmax(0,1fr))' }, list.slice(0, 5).map(function (o, i) { return h('span', null, h('b', null, String(i + 1)), windowLabel(o)); })),
       h('div', { class: 'opps' }, list.map(function (o, i) {
-        return h('div', { class: 'opp' }, h('span', { class: 'pos' }, (i + 1) + ' · ' + (o.window || '—')), h('h4', null, o.title, tag(o.kind)), h('p', { class: 'small', style: 'margin:0 0 4px' }, o.why),
-          h('dl', null, h('dt', null, D.oppFirst), h('dd', null, o.firstTest)), h('div', { style: 'margin-top:6px' }, o.url ? h('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer', class: 'srclink' }, srcTag(o.source)) : srcTag(o.source)), fbBar(x.id, o.id));
+        return h('div', { class: 'opp' }, h('span', { class: 'pos' }, (i + 1) + ' · ' + windowLabel(o)), h('h4', null, o.title, tag(o.kind)), h('p', { class: 'small', style: 'margin:0 0 4px' }, o.why),
+          h('dl', null, h('dt', null, D.oppFirst), h('dd', null, o.firstTest)), o.counterpartId && prospects.some(function (p) { return p.id === o.counterpartId; }) ? h('p', { class: 'small' }, D.oppInvolves + '：' + prospects.filter(function (p) { return p.id === o.counterpartId; })[0].name) : null, h('div', { style: 'margin-top:6px' }, o.url ? h('a', { href: o.url, target: '_blank', rel: 'noopener noreferrer', class: 'srclink' }, srcTag(o.source)) : srcTag(o.source)), fbBar(x.id, o.id));
       }))]);
   }
   /* 5 路線推演：並排比較表（每條路線一欄；★ 推薦欄琥珀底線；表尾意見列） */
@@ -2552,7 +2558,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var d = x.detail || {}, list = d.routes || [];
     if (!list.length) return itemPage(x, plainBody(x));
     var row = function (label, f) { return h('tr', null, h('th', { class: 'rowh' }, label), list.map(function (r) { return h('td', null, f(r)); })); };
-    return itemPage(x, [h('p', { class: 'small muted', style: 'margin:0 0 8px' }, '路線並排；★ 為裁判推薦；紅隊評分來自紅藍對打，不是證據。'),
+    return itemPage(x, [h('p', { class: 'small muted', style: 'margin:0 0 8px' }, d.chosenRouteId ? D.routeChosen : '路線並排；★ 為裁判推薦；紅隊評分來自紅藍對打，不是證據。'),
       h('div', { style: 'overflow-x:auto' }, h('table', { class: 'cmp routes', id: 'routes-table' },
         h('thead', null, h('tr', null, h('th', { class: 'rowh' }), list.map(function (r) { return h('th', { class: r.recommended ? 'rec' : '' }, (r.recommended ? '★ ' : '') + r.name); }))),
         h('tbody', null,
@@ -2561,7 +2567,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
           row(D.firstTest, function (r) { return r.firstTest || '—'; }),
           row(D.stopCondition, function (r) { return r.stop || '—'; }),
           row(D.yourFeedback, function (r) { return fbBar(x.id, 'route-' + r.id); })))),
-      d.chooseHref ? h('p', { style: 'margin-top:12px' }, h('a', { class: 'btn primary', href: d.chooseHref, id: 'routes-choose' }, '★ ' + D.chooseRoute)) : h('p', { class: 'small muted', style: 'margin-top:12px' }, '紅藍對打的「需要你決定」放上 Founder Desk 後，請在該處選擇。')]);
+      d.decisionsMade ? h('p', { class: 'small muted', style: 'margin-top:12px' }, D.debateDecisionRecorded) : d.chooseHref ? h('p', { style: 'margin-top:12px' }, h('a', { class: 'btn primary', href: d.chooseHref, id: 'routes-choose' }, '★ ' + D.chooseRoute)) : h('p', { class: 'small muted', style: 'margin-top:12px' }, '紅藍對打的「需要你決定」放上 Founder Desk 後，請在該處選擇。')]);
   }
   /* 6 客戶推進追蹤：五格推進板（供應對象左邊框虛線，客戶實線；頂部每格數目） */
   function pagePipe(x) {
@@ -2570,10 +2576,10 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return itemPage(x, [h('div', { class: 'pipehead' }, h('span', null, '只有真實行為才會令對象向右推進；演練與 Zero 推論不計算在內。'), STAGE5.map(function (s, i) { return h('span', null, s + ' ', h('b', null, String(list.filter(function (p) { return p.stage === i; }).length))); })),
       h('div', { class: 'pipe', id: 'pipeline' }, list.map(function (p) {
         var supply = /供應/.test(p.kind || '');
-        return h('div', { class: 'pr' + (supply ? ' supply' : '') }, h('div', { class: 'nm' }, h('b', null, p.name), h('small', null, supply ? D.kindSupply : D.kindCustomer)),
+        return h('div', { class: 'pr' + (supply ? ' supply' : '') }, h('div', { class: 'nm' }, h('b', null, p.label || p.name), h('small', null, supply ? D.kindSupply : D.kindCustomer)),
           h('div', null, h('div', { class: 'track5' }, STAGE5.map(function (s, i) { return h('span', { class: i < p.stage ? 'on' : i === p.stage ? 'cur' : '' }, s); })),
             p.lastReal ? h('small', null, D.lastRealL + '：' + p.lastReal + (p.lastAt ? '（' + md(p.lastAt) + '）' : '')) : null, p.rehearsal ? h('small', null, tag(D.rehearsalTag, 'src-ai'), ' ', p.rehearsal.replace(/^演練：/, '').replace(/（唔計證據）$/, '')) : null),
-          h('div', null, h('small', null, D.nextStepL), p.next, p.nextBy === 'ai' ? [' ', tag('Zero 建議 · 未確認', 'src-ai')] : null, p.practiceId ? h('div', null, h('a', { href: '/#/practice/' + p.practiceId }, '🎭 ' + D.practiceGo + ' →')) : null, p.material ? h('div', null, h('a', { href: '#', onclick: function (e) { e.preventDefault(); showRun(p.material.runId, p.material.title); } }, D.materialL + '：' + p.material.title)) : null, fbBar(x.id, 'pipe-' + p.id)));
+          h('div', null, h('small', null, D.nextStepL), p.next, p.nextBy === 'ai' ? [' ', tag('Zero 建議 · 未確認', 'src-ai')] : null, p.hasOpportunity ? h('div', null, h('a', { href: brainHref('opportunities') }, D.oppAvailable)) : null, p.practiceId ? h('div', null, h('a', { href: '/#/practice/' + p.practiceId }, '🎭 ' + D.practiceGo + ' →')) : null, p.material ? h('div', null, h('a', { href: '#', onclick: function (e) { e.preventDefault(); showRun(p.material.runId, p.material.title); } }, D.materialL + '：' + p.material.title)) : null, fbBar(x.id, 'pipe-' + p.id)));
       }))]);
   }
   // 新出現嘅推進項目亮一下（兩次讀回之間；首次載入唔亮）
@@ -2697,7 +2703,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         try { if (localStorage.getItem(noticeKey) !== notice.id) { toast(notice.text); localStorage.setItem(noticeKey, notice.id); } } catch (_) { if (V.modelNotice !== notice.id) toast(notice.text); }
         V.modelNotice = notice.id;
       }
-      if (status) window.SOS_CELEBRATE.handle(status, { allowed: function () { return tab === 'overview'; } });
+      if (status && window.SOS_CELEBRATE) window.SOS_CELEBRATE.handle(status, { allowed: function () { return tab === 'overview'; } });
       if (changed) { if (V.replaying) V.dirty = true; else render(!!prev); celebrate(prev, j, wasLive); pulses(prev, j, wasLive); }
       else if (workChanged) { if (V.replaying) V.dirty = true; else renderWork(); pulses(prev, j, wasLive); }
     }).catch(function (e) {

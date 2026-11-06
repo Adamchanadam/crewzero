@@ -11,6 +11,12 @@
     "name": "從田間到餐桌",
     "initials": "田桌",
     "oneLiner": "把本地小農的當季蔬菜直送注重來源的中小型餐廳。",
+    "assumptions": [
+      { "id": "H1", "text": "餐廳願意為可追溯來源付較高價錢", "grade": "said" },
+      { "id": "H2", "text": "兩個農場可以每週穩定供貨", "grade": "guess" },
+      { "id": "H3", "text": "中小型餐廳找不到穩定的本地菜源", "grade": "guess" },
+      { "id": "H4", "text": "創辦人親自送貨足以應付首三間餐廳", "grade": "guess" }
+    ],
     "nextExternalAction": {
       "text": "約農場主丙簽供應協議",
       "milestoneId": "m1"

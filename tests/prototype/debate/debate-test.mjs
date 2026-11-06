@@ -49,6 +49,13 @@ try {
   /* ---------- A. 示範：舊場 D1、開場選項、輸入核對 ---------- */
   const DEMO = path.join(OUT, 'demo');
   seedDemo(DEMO, { reset: true });
+  // 辯論示範論點引用的假設及證據級，必須存在於這個隔離測試帳本。
+  { const f = path.join(DEMO, 'ledger', 'state.json'), s = JSON.parse(fs.readFileSync(f, 'utf8')); s.company.assumptions = [
+    { id: 'H1', text: '餐廳願意為可追溯來源付較高價錢', grade: 'said' },
+    { id: 'H2', text: '兩個農場可以每週穩定供貨', grade: 'did' },
+    { id: 'H3', text: '中小型餐廳找不到穩定的本地菜源', grade: 'did' },
+    { id: 'H4', text: '創辦人親自送貨足以應付首三間餐廳', grade: 'guess' }
+  ]; fs.writeFileSync(f, JSON.stringify(s)); }
   { const f = path.join(DEMO, 'brain', 'reveal.json'), r = JSON.parse(fs.readFileSync(f, 'utf8')); r.seededAt = new Date(Date.now() - 900000).toISOString(); fs.writeFileSync(f, JSON.stringify(r)); }
   await kit.certifyDirect(DEMO, PROTO, ADAPTER);
   const B = await startServer(DEMO, Number(PORT)), A = api(B);
@@ -74,7 +81,7 @@ try {
   ok('快打：三個回合做完（冇反駁）、完場', m1 && m1.format === '快打' && m1.rebuttals === 0 && m1.budget.aiStarts === 3 && !fs.existsSync(path.join(DEMO, 'debates', id1, 'rebuttal.json')), m1 && { f: m1.format, b: m1.budget, ph: m1.phase });
   ok('快打：紅方身份全部係今場席位、每個身份有最在意', m1 && m1.rows.every(r => r.attacks.every(a => seats1.includes(a.persona))) && m1.seats.length === 3 && m1.seats.every(s => s.cares), m1 && m1.seats);
   ok('快打：測試 AI 冇角色模型表 → 三方同一模型，標獨立性低', m1 && m1.roles.blue.model === m1.roles.judge.model && m1.warnings.includes('三方同一模型，獨立性低'), m1 && { r: m1.roles, w: m1.warnings });
-  ok('快打：記分、五個關鍵時刻、紅方命中率', m1 && m1.score.standing + m1.score.wounded + m1.score.fallen === 6 && m1.keyMoments.length === 5 && m1.score.redHitRate > 0, m1 && m1.score);
+  ok('快打：記分、四個關鍵時刻、紅方命中率', m1 && m1.score.standing + m1.score.wounded + m1.score.fallen === 6 && m1.keyMoments.length === 4 && m1.score.redHitRate > 0, m1 && m1.score);
   const rp1 = m1 && m1.packs.response;
   const pk1 = rp1 && (await A.get('/api/ask?id=' + rp1)).pack;
   ok('完場：回應包有三條關鍵時刻、證據、證據級、挑戰裁判', pk1 && ['v1', 'v2', 'v3', 'ev', 'evg', 'ch'].every(q => pk1.questions.some(x => x.id === q)) && pk1.debate.kind === 'response', pk1 && pk1.questions.map(q => q.id));
@@ -152,7 +159,7 @@ try {
   await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'milestone', title: '首條送貨路線', seats: ['該站的外部角色', '競爭者', '投資者'] });
   const id3 = await waitFor(() => latestId(A, 4));
   let m3 = await until(A, id3, m => m.phase === 'failed');
-  ok('紅方交唔到格式：標未完成、唔會不停重試', m3 && m3.failed.pass === 'red' && !m3.next, m3 && m3.failed);
+  ok('紅方交唔到格式：標未完成、唔會不停重試', m3 && m3.failed.pass === 'red' && !m3.next && m3.budget.aiStarts === 2, m3 && { failed: m3.failed, budget: m3.budget });
   const runsBefore = (await A.get('/api/status')).runs.length;
   await sleep(2500);
   ok('失敗之後伺服器唔會不停叫外殼', (await A.get('/api/status')).runs.length === runsBefore && !(await A.get('/api/status')).busy);
@@ -230,6 +237,12 @@ try {
   await A.post('/api/intake', { kind: 'note', type: 'debate-action', matchId: id3, action: 'rerun' });
   m3 = await until(A, id3, m => m.failed && m.failed.reason.includes('上限'));
   ok('到上限：唔再開 AI', m3 && m3.budget.aiStarts === 11, m3 && m3.failed);
+  // 紅方兩次均覆蓋不足：額外一次退回計入啟動數，之後保留警告，不再退回。
+  mode(DEMO, 'debate-red:skip-half\ndebate-red:skip-half');
+  await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'pricing', title: '覆蓋退回測試', seats: seats1 });
+  const id5 = await waitFor(() => latestId(A, 6));
+  const m5 = await until(A, id5, m => m.phase === 'done');
+  ok('紅方覆蓋不足最多退回一次，並計入啟動上限', m5 && m5.budget.aiStarts === 4 && m5.budget.redCoverageRetry === 1 && m5.budget.aiStarts <= m5.budget.hardCap && m5.warnings.some(w => w.includes('未被攻擊')), m5 && { budget: m5.budget, warnings: m5.warnings });
 } catch (err) {
   ok('測試冇出錯', false, String(err.stack || err));
 } finally {

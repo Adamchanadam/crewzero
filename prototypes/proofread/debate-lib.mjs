@@ -158,12 +158,14 @@ export function keyMomentsOf(v) {
 function seatsOf(match, red, attacks, avMap) {
   const names = arr(match.roles && match.roles.red && match.roles.red.personas).map(String);
   for (const a of attacks) if (a.persona && !names.includes(a.persona)) names.push(a.persona);
+  const cards = Object.fromEntries(arr(red && red.seats).map(s => [String(s.persona || ''), s]));
   const cares = Object.fromEntries(arr(red && red.seats).map(s => [String(s.persona || ''), txt(s.cares, 200)]));
+  const counterpartIds = Object.fromEntries(arr(red && red.seats).filter(s => s.counterpartId).map(s => [String(s.persona || ''), s.counterpartId]));
   const hasAV = avMap.size > 0;
   return names.map(name => {
     const mine = attacks.filter(a => a.persona === name);
     const hit = mine.filter(a => ['成立', '部分'].includes((avMap.get(a.id) || {}).landed)).length;
-    return { name, attacks: mine.length, high: mine.filter(a => a.severity === '高').length, hitRate: hasAV && mine.length ? Math.round(100 * hit / mine.length) / 100 : null, cares: cares[name] || '' };
+    return { name, interests: cards[name]?.interests || '', fears: cards[name]?.fears || '', criteria: cards[name]?.criteria || '', changeMind: cards[name]?.changeMind || '', source: cards[name]?.source || '', attacks: mine.length, high: mine.filter(a => a.severity === '高').length, hitRate: hasAV && mine.length ? Math.round(100 * hit / mine.length) / 100 : null, cares: cares[name] || '', ...(counterpartIds[name] ? { counterpartId: counterpartIds[name] } : {}) };
   }).sort((a, b) => (b.hitRate ?? -1) - (a.hitRate ?? -1) || b.high - a.high || b.attacks - a.attacks);
 }
 
@@ -182,7 +184,7 @@ export function loadMatch(DIR, src, id, { now = new Date(), reveal = null, prev 
     startedAt: match.startedAt || (legacy ? mtime(path.join(dirs[dirs.length - 1], 'blue.json')) : ''), endedAt: match.endedAt || '',
     roles: match.roles || null, warnings: arr(match.warnings).map(String).slice(0, 8), web: match.web === true, label: 'Zero 建議 · 未確認',
     next: match.next || '', failed: match.failed || null, budget: match.budget || null, packs: match.packs || {}, previousMatchId: match.previousMatchId || '',
-    updatedAt: files.pop() || ''
+    updatedAt: files.pop() || '', chosenRouteId: match.chosenRouteId || ''
   };
   // 舊場只有各隊文件（未有 JSON）：照文件顯示
   if (!blue) {
@@ -212,7 +214,7 @@ export function loadMatch(DIR, src, id, { now = new Date(), reveal = null, prev 
   const v = {
     ...base, stage: !attacks.length ? 1 : !verdicts.length ? 2 : !synth ? 3 : 4,
     thesis: blue.thesis || '', whyNow: blue.whyNow || '', rows, strategies, admittedWeaknesses: admitted, sources: arr(blue.sources),
-    strategyAttacks: arr(red && red.strategyAttacks), missedStrategy: red && red.missedStrategy || null,
+    strategyAttacks: arr(red && red.strategyAttacks), missedStrategy: red && red.missedStrategy || null, blindAttacks: arr(red && red.blindAttacks), suggestedSeat: red && red.suggestedSeat || null,
     extraRoutes: synth ? arr(synth.routes).filter(r => !blueIds.has(r.id)).map(r => ({ ...r, redAdded: !!(red && red.missedStrategy && (red.missedStrategy.name === r.name || !blueIds.has(r.id))) })) : [],
     synthesis: synth ? { topRisks: arr(synth.topRisks), routes: arr(synth.routes), founderDecisions: arr(synth.founderDecisions), assumptionChanges: arr(synth.assumptionChanges), overall: txt(synth.overall, 300) } : null,
     rebuttals: arr(reb && reb.rebuttals).length,
@@ -269,15 +271,19 @@ function result(errors, warnings, data) { return { ok: !errors.length, errors, w
 // AI 先做自己做得到嘅測試（規劃書 3.15）：測試由邊個做；AI 已查結果（外部事實冇網址同查閱日期就當觀察）
 export const TEST_BY = ['ai', 'founder', 'approval'];
 const testByOf = (...xs) => xs.find(x => TEST_BY.includes(x)) || '';
-function aiCheckedOf(list, warnings, where) {
+function roundSourcesOf(list, access) {
+  return arr(list).filter(s => s && typeof s === 'object' && !Array.isArray(s) && txt(s.title, 160) && /^https?:\/\//.test(String(s.url || ''))).slice(0, 30).map((s, i) => ({ n: Number(s.n) || i + 1, title: txt(s.title, 160), url: access === 'none' ? '' : txt(s.url, 400), readOn: txt(s.readOn, 10) }));
+}
+function aiCheckedOf(list, warnings, where, roundSources = [], access = 'search+read') {
   return arr(list).filter(x => x && txt(x.finding, 300)).slice(0, 6).map(x => {
     const sources = arr(x.sources).filter(s => s && txt(s.title, 160)).slice(0, 5).map(s => { const url = /^https?:\/\//.test(String(s.url || '')) ? txt(s.url, 400) : ''; return { title: txt(s.title, 160), url, readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.readOn || '')) ? s.readOn : url ? isoDay(new Date()) : '' }; });
     let label = x.label === 'fact' ? 'fact' : 'observation';
-    if (label === 'fact' && !sources.some(s => s.url && s.readOn)) { label = 'observation'; warnings.push(`${where}：外部事實沒有網址或查閱日期，已改為觀察`); }
+    if (access === 'none') sources.forEach(s => { s.url = ''; });
+    if (label === 'fact' && !sources.some(s => s.url && s.readOn && roundSources.some(r => r.url === s.url))) { label = 'observation'; warnings.push(`${where}：外部事實沒有網址或查閱日期，已改為觀察`); }
     return { finding: txt(x.finding, 300), label, sources, minutes: Math.max(0, Math.min(120, Math.round(Number(x.minutes) || 0))) };
   });
 }
-export function checkBlue(j, { maxClaims = 12 } = {}) {
+export function checkBlue(j, { maxClaims = 12, ledger = null, access = 'search+read' } = {}) {
   const e = [], w = [];
   if (!j || typeof j !== 'object') return result(['藍方未有交出論證'], w, null);
   const claims = arr(j.claims).filter(c => c && /^B\d{1,2}$/.test(String(c.id)) && txt(c.claim, 300));
@@ -290,13 +296,23 @@ export function checkBlue(j, { maxClaims = 12 } = {}) {
     strategies: arr(j.strategies).filter(s => s && /^S\d{1,2}$/.test(String(s.id)) && txt(s.name, 40)).slice(0, 4).map(s => ({ id: s.id, name: txt(s.name, 40), summary: txt(s.summary, 300), upside: txt(s.upside, 200), firstTest: txt(s.firstTest, 200), success: txt(s.success, 200), stop: txt(s.stop, 200) })),
     admittedWeaknesses: arr(j.admittedWeaknesses).slice(0, 6).map(x => x && typeof x === 'object' ? { claimId: String(x.claimId || ''), text: txt(x.text, 300) } : txt(x, 300)).filter(x => x && (typeof x === 'string' || x.text)),
     // 有網址冇查閱日期：用今次回合嘅日子（同日查嘅）
-    sources: arr(j.sources).slice(0, 30).map((s, i) => { const url = /^https?:\/\//.test(String(s && s.url || '')) ? txt(s.url, 400) : ''; const r = /^\d{4}-\d{2}-\d{2}$/.test(String(s && s.readOn || '')) ? s.readOn : url ? isoDay(new Date()) : ''; return { n: Number(s && s.n) || i + 1, title: txt(s && s.title, 160), url, readOn: r }; }).filter(s => s.title)
+    sources: roundSourcesOf(j.sources, access).map(s => ({ ...s, readOn: /^\d{4}-\d{2}-\d{2}$/.test(s.readOn) ? s.readOn : s.url ? isoDay(new Date()) : '' }))
   };
+  data.aiChecked = aiCheckedOf(j.aiChecked, w, '藍方', data.sources, access);
+  if (ledger) {
+    const byId = new Map(arr(ledger.assumptions).map(a => [a.id, a]));
+    for (const c of data.claims) {
+      const original = c.assumptionIds; c.assumptionIds = original.filter(id => byId.has(id));
+      if (original.length !== c.assumptionIds.length) w.push(NAMES.dash.warnClaimMissing.replace('{id}', c.id));
+      if (original.length) { const ceiling = c.assumptionIds.length ? Math.max(...c.assumptionIds.map(id => Math.max(0, NAMES.EV_KEYS.indexOf(byId.get(id).grade)))) : 0; if (c.evidence > ceiling) { c.evidence = ceiling; w.push(NAMES.dash.warnClaimGrade.replace('{id}', c.id)); } }
+    }
+  }
+  if (access === 'none') { data.sources.forEach(s => { s.url = ''; }); w.push(NAMES.dash.warnNoWeb); }
   if (!data.thesis) e.push('藍方未有寫出一句話主張');
   if (data.admittedWeaknesses.length < 1) w.push('藍方未有承認任何弱點');
   return result(e, w, data);
 }
-export function checkRed(j, blue, seats) {
+export function checkRed(j, blue, seats, actorIds = [], { allowIncomplete = false, access = 'search+read' } = {}) {
   const e = [], w = [];
   if (!j || typeof j !== 'object') return result(['紅方未有交出攻擊'], w, null);
   const cids = new Set(arr(blue.claims).map(c => c.id)), sids = new Set(arr(blue.strategies).map(s => s.id));
@@ -308,10 +324,19 @@ export function checkRed(j, blue, seats) {
   });
   if (!attacks.length) e.push('紅方沒有有效攻擊（攻擊須對準藍方論點）');
   if (arr(j.attacks).length > attacks.length) w.push(`有 ${arr(j.attacks).length - attacks.length} 條攻擊格式不正確或未對準論點，已剔除`);
-  const data = { attacks,
+  const missing = [...cids].filter(id => !attacks.some(a => a.claimId === id));
+  if (missing.length) { w.push(NAMES.dash.warnUnattacked.replace('{n}', missing.length)); if (missing.length >= cids.size / 2 && !allowIncomplete) e.push('紅方攻擊覆蓋不足'); }
+  const blindAttacks = arr(j.blindAttacks).map(x => txt(x, 300)).filter(Boolean).slice(0, 3);
+  if (!blindAttacks.length) e.push('紅方未有交出盲攻');
+  const data = { attacks, blindAttacks, suggestedSeat: j.suggestedSeat && txt(j.suggestedSeat.name, 40) ? { name: txt(j.suggestedSeat.name, 40), why: txt(j.suggestedSeat.why, 40) } : null,
     strategyAttacks: arr(j.strategyAttacks).filter(a => a && sids.has(a.strategyId) && txt(a.attack, 300)).slice(0, 8).map(a => ({ strategyId: a.strategyId, attack: txt(a.attack, 300), severity: SEV.includes(a.severity) ? a.severity : '中' })),
     missedStrategy: j.missedStrategy && txt(j.missedStrategy.name, 40) ? { name: txt(j.missedStrategy.name, 40), summary: txt(j.missedStrategy.summary, 300) } : null,
-    seats: arr(j.seats).filter(s => s && txt(s.persona, 40)).slice(0, 6).map(s => ({ persona: txt(s.persona, 40), cares: txt(s.cares, 200) })) };
+    sources: roundSourcesOf(j.sources, access),
+    seats: arr(j.seats).filter(s => s && seats.includes(s.persona)).slice(0, 6).map(s => { const source = /^(你原話|Zero 解讀|外部事實 \[\d+\]|你上次會面紀錄)$/.test(s.source || '') ? s.source : 'Zero 解讀'; if (source !== s.source) w.push(NAMES.dash.warnSeatSource.replace('{id}', s.persona)); return { persona: txt(s.persona, 40), cares: txt(s.cares, 200), interests: txt(s.interests, 200), fears: txt(s.fears, 200), criteria: txt(s.criteria, 200), changeMind: txt(s.changeMind, 200), source, ...(actorIds.includes(s.counterpartId) ? { counterpartId: s.counterpartId } : {}) }; }) };
+  data.aiChecked = aiCheckedOf(j.aiChecked, w, '紅方', data.sources, access);
+  if (seats.some(name => !data.seats.some(s => s.persona === name))) e.push(NAMES.dash.warnSeatMissing);
+  for (const card of data.seats) if (!card.interests || !card.fears || !card.criteria || !card.changeMind) e.push(NAMES.dash.warnSeatIncomplete.replace('{id}', card.persona));
+  if (access === 'none') w.push(NAMES.dash.warnNoWeb);
   return result(e, w, data);
 }
 export function checkRebuttal(j, red) {
@@ -323,19 +348,19 @@ export function checkRebuttal(j, red) {
   if (all.length > rebuttals.length) w.push('反駁只可針對高嚴重攻擊，其餘已剔除');
   return result(highs.size && !rebuttals.length ? ['藍方沒有有效反駁'] : [], w, { rebuttals });
 }
-export function checkJudge(j, blue, red) {
+export function checkJudge(j, blue, red, { ledger = null, access = 'search+read' } = {}) {
   const e = [], w = [];
   if (!j || typeof j !== 'object') return result(['裁判未有交出判定'], w, null);
   const claims = arr(blue.claims), aids = new Set(arr(red.attacks).map(a => a.id));
   const verdicts = claims.map(c => { const v = arr(j.verdicts).find(x => x && x.claimId === c.id); return v && VERDICTS.includes(v.verdict) ? { claimId: c.id, verdict: v.verdict, reason: txt(v.reason, 300) || '未寫理由' } : null; });
   if (verdicts.some(x => !x)) e.push('裁判未判定所有論點');
   const LAND = ['成立', '部分', '不成立'];
-  const decisions = arr(j.founderDecisions);
+  const decisions = arr(j.founderDecisions), roundSources = roundSourcesOf(j.sources, access);
   if (decisions.some(d => !d || !txt(d.risk, 120))) e.push('裁判的創辦人決定缺少風險');
   const data = {
     verdicts: verdicts.filter(Boolean),
     topRisks: arr(j.topRisks).filter(r => r && txt(r.risk, 300)).slice(0, 3).map((r, i) => {
-      const testBy = testByOf(r.testBy, r.by), aiChecked = aiCheckedOf(r.aiChecked, w, `最傷第 ${i + 1} 位`);
+      const testBy = testByOf(r.testBy, r.by), aiChecked = aiCheckedOf(r.aiChecked, w, `最傷第 ${i + 1} 位`, roundSources, access);
       if (testBy === 'ai' && !aiChecked.length) w.push(`最傷第 ${i + 1} 位：Zero 可自行完成的測試尚未進行`);
       return { rank: i + 1, risk: txt(r.risk, 300), cheapestTest: txt(r.cheapestTest, 300), stop: txt(r.stop, 300), testBy, aiChecked };
     }),
@@ -344,8 +369,16 @@ export function checkJudge(j, blue, red) {
     assumptionChanges: arr(j.assumptionChanges).filter(a => a && txt(a.change, 300)).slice(0, 12).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: txt(a.change, 300), label: 'Zero 建議 · 未確認' })),
     attackVerdicts: arr(j.attackVerdicts).filter(x => x && aids.has(x.attackId) && LAND.includes(x.landed)).map(x => ({ attackId: x.attackId, landed: x.landed, note: txt(x.note, 200) })),
     overall: txt(j.overall, 300),
+    sources: roundSources,
     factChecks: arr(j.factChecks).filter(x => x && Number(x.n)).slice(0, 30).map(x => ({ n: Number(x.n), ok: x.ok === true, note: txt(x.note, 200) }))
   };
+  if (ledger) for (const a of data.assumptionChanges) if (a.assumptionId && !arr(ledger.assumptions).some(x => x.id === a.assumptionId)) { w.push(NAMES.dash.warnBadAssumption); a.assumptionId = ''; }
+  const refs = new Set([...data.verdicts.map(v => v.reason), ...data.attackVerdicts.map(v => v.note)].flatMap(t => [...t.matchAll(/外部\s*\[(\d+)\]/g)].map(m => Number(m[1]))));
+  let missing = 0; for (const n of refs) if (!data.factChecks.some(f => f.n === n)) { data.factChecks.push({ n, ok: false, note: '裁判未核對' }); missing++; }
+  if (missing) w.push(NAMES.dash.warnUnchecked.replace('{n}', missing));
+  if (access !== 'search+read') for (const f of data.factChecks) { f.ok = false; f.note = access === 'search' ? '只經搜尋摘要' : '這場未有上網'; }
+  data.aiChecked = aiCheckedOf(j.aiChecked, w, '裁判', data.sources, access);
+  if (access === 'none') w.push(NAMES.dash.warnNoWeb);
   if (!data.topRisks.length) e.push('裁判未有列出最傷三點');
   if (!data.attackVerdicts.length) w.push('裁判未有逐條判定攻擊，紅方命中率不會顯示');
   return result(e, w, data);
@@ -360,13 +393,13 @@ export const askFirstOf = c => arr(c.changes).some(x => x.cell === '收入' || x
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 // 轉強卡機械核對（設計稿 3.4）：唔合格嘅卡退回並記原因
-export function checkStrengthen(j, v, { now = new Date(), matchId = '' } = {}) {
+export function checkStrengthen(j, v, { now = new Date(), matchId = '', ledger = null, access = 'search+read' } = {}) {
   const w = [], rejected = [];
   if (!j || !Array.isArray(j.cards)) return { ...result(['藍方未有交出轉強卡'], w, null), rejected };
   const claims = new Map(v.rows.map(r => [r.claim.id, r])), atk = new Map(v.rows.flatMap(r => r.attacks.map(a => [a.id, a])));
   const votes = new Map(arr(v.founder && v.founder.votes).map(x => [x.ref, x.agree]));
   const last = isoDay(addDays(now, 14));
-  const ids = new Set(), cards = [];
+  const ids = new Set(), cards = [], roundSources = roundSourcesOf(j.sources, access);
   for (const [k, c] of j.cards.slice(0, 12).entries()) {
     const n = k + 1, bad = why => rejected.push({ id: String(c && c.id || '?'), n, why });
     if (!c || !/^T\d{1,2}$/.test(String(c.id)) || ids.has(c.id)) { bad('編號不正確或重複'); continue; }
@@ -393,9 +426,10 @@ export function checkStrengthen(j, v, { now = new Date(), matchId = '' } = {}) {
       handling: c.handling, whyThis: txt(c.whyThis, 300), changes, advantage: c.handling === '反轉做優勢' ? txt(c.advantage, 300) : '',
       assumptionChanges: arr(c.assumptionChanges).filter(a => a && txt(a.text, 300)).slice(0, 4).map(a => ({ assumptionId: txt(a.assumptionId, 10), change: ['改寫', '新增', '拆開', '加限制', '取代'].includes(a.change) ? a.change : '改寫', text: txt(a.text, 300), cheapestTest: txt(a.cheapestTest, 300), supersedes: txt(a.supersedes, 10) })),
       routeImpact: arr(c.routeImpact).filter(r => r && txt(r.milestoneId, 20)).slice(0, 3).map(r => ({ milestoneId: txt(r.milestoneId, 20), change: ['delay', 'retarget', 'add', 'retire', 'trial', 'newLine', 'none'].includes(r.change) ? r.change : 'none', detail: txt(r.detail, 300), value: txt(String(r.value ?? ''), 120) })),
-      test: { what: txt(t.what, 300), by, testBy: testByOf(t.testBy, t.by) || (txt(t.founderAction, 200) ? 'founder' : ''), success: txt(t.success, 300), stop: txt(t.stop, 300), founderAction: txt(t.founderAction, 200), costHours: Math.max(0, Math.min(40, Number(t.costHours) || 0)), aiChecked: aiCheckedOf(t.aiChecked, w, `第 ${n} 張轉強卡`) },
+      test: { what: txt(t.what, 300), by, testBy: testByOf(t.testBy, t.by) || (txt(t.founderAction, 200) ? 'founder' : ''), success: txt(t.success, 300), stop: txt(t.stop, 300), founderAction: txt(t.founderAction, 200), costHours: Math.max(0, Math.min(40, Number(t.costHours) || 0)), aiChecked: aiCheckedOf(t.aiChecked, w, `第 ${n} 張轉強卡`, roundSources, access) },
       reattacks: [], status: '擬議', label: 'Zero 建議 · 未確認', founderNote: ''
     };
+    if (ledger) for (const a of card.assumptionChanges) if (a.assumptionId && !arr(ledger.assumptions).some(x => x.id === a.assumptionId)) { w.push(NAMES.dash.warnBadAssumption); a.assumptionId = ''; }
     // AI 自己做得到嘅測試唔交畀你做；應查而未查嘅照出卡，標「AI 未查」
     if (card.test.testBy === 'ai' && card.test.founderAction) { w.push(`第 ${n} 張轉強卡：Zero 可自行完成的測試不需由你進行，已剔除「你要做」`); card.test.founderAction = ''; }
     if (card.test.testBy === 'ai' && !card.test.aiChecked.length) { card.test.aiNote = /時限/.test(JSON.stringify(t)) ? '時限不足' : '未查'; w.push(`第 ${n} 張轉強卡：Zero 可自行完成的測試尚未進行`); }

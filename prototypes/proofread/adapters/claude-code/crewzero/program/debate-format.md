@@ -22,10 +22,10 @@
 { "attacks": [ { "id": "R1", "claimId": "B1", "persona": "席位名（照 topic.md）", "attack": "一句", "failureScenario": "一句：點樣失敗", "refuteBy": "一句：見到乜證據就推翻呢個攻擊", "severity": "高|中|低" } ],
   "strategyAttacks": [ { "strategyId": "S1", "attack": "一句", "severity": "高|中|低" } ],
   "missedStrategy": { "name": "短名", "summary": "一句：藍方漏咗嘅路線" },
-  "seats": [ { "persona": "席位名", "cares": "一句：呢個身份最在意乜" } ] }
+  "seats": [ { "persona": "席位名", "cares": "一句：呢個身份最在意乜", "interests": "利益", "fears": "怕失去", "criteria": "判斷準則", "changeMind": "甚麼會改變立場", "source": "你原話|Zero 解讀|外部事實 [n]|你上次會面紀錄", "counterpartId": "對象編號或空" } ] }
 ```
 
-上限：攻擊 30 條；每條論點至少一條攻擊；`seats` 係原型多出嘅可選欄。
+上限：攻擊 30 條；每條論點至少一條攻擊；`seats` 必須覆蓋全部席位。
 
 ## rebuttal.json（藍方反駁，只限全場：只對「高」攻擊，每條一句，唔加新論點）
 

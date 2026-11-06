@@ -3,11 +3,11 @@
   "whyNow": "聖誕前餐廳會更換菜單，是邀請主廚試菜的最佳時機。",
   "claims": [
     { "id": "B1", "topic": "付款", "claim": "餐廳願意為可追溯來源付較高價錢", "evidence": 1, "source": "你原話 商業模式第二節", "assumptionIds": ["H1"] },
-    { "id": "B2", "topic": "交付", "claim": "兩個農場可以每週穩定供貨", "evidence": 2, "source": "你原話 每週訪問", "assumptionIds": ["H2"] },
-    { "id": "B3", "topic": "需要", "claim": "中小型餐廳找不到穩定的本地菜源", "evidence": 2, "source": "你原話 每週訪問", "assumptionIds": ["H3"] },
+    { "id": "B2", "topic": "交付", "claim": "兩個農場可以每週穩定供貨", "evidence": 0, "source": "你原話 每週訪問", "assumptionIds": ["H2"] },
+    { "id": "B3", "topic": "需要", "claim": "中小型餐廳找不到穩定的本地菜源", "evidence": 0, "source": "你原話 每週訪問", "assumptionIds": ["H3"] },
     { "id": "B4", "topic": "渠道", "claim": "創辦人親自送貨足以應付首三間餐廳", "evidence": 0, "source": "Zero 解讀", "assumptionIds": ["H4"] },
     { "id": "B5", "topic": "時間窗", "claim": "聖誕前換菜單是邀請主廚試菜的好時機", "evidence": 0, "source": "外部事實 [1]", "assumptionIds": [] },
-    { "id": "B6", "topic": "競爭", "claim": "大型批發商不做小量當日採收", "evidence": 1, "source": "外部事實 [2]", "assumptionIds": [] }
+    { "id": "B6", "topic": "競爭", "claim": "大型批發商不做小量當日採收", "evidence": 0, "source": "外部事實 [2]", "assumptionIds": [] }
   ],
   "strategies": [
     { "id": "S1", "name": "先辦試食會", "summary": "一次請五位主廚試菜，再逐間跟進試單", "upside": "提早十日知道哪幾間願意試", "firstTest": "一星期內約到三位主廚出席", "success": "三位主廚答應出席", "stop": "兩星期內少於兩位答應" },

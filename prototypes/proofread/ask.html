@@ -56,6 +56,8 @@ details.iq-opt summary{cursor:pointer;font-weight:600}
 .file-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:var(--fs-sub)}
 .file-row span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}
 #intake-err{color:var(--red);margin-top:6px}
+.cert-note-error{border-left:3px solid var(--red)}.cert-note-done{border-left:3px solid var(--mint)}.tr-fix{color:var(--red)}
+#zero-think-box{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 #quick-types .btn.cur{border-color:var(--mint);color:var(--mint)}
 #next-action .foot .in{width:auto;flex:0 1 170px}
 #next-action #next-text{flex:1 1 240px}
@@ -320,7 +322,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('span', { class: 'eyebrow' }, st.aiStale ? N.ui.aiStale : N.ui.aiNotSet),
       h('div', { class: 'row' },
         h('div', null, h('div', { class: 't' }, st.aiStale ? N.ui.aiStale : N.ui.aiNotSet, ' ', running ? tag(N.ui.certChecking, 'qn') : null),
-          h('div', { class: 'small muted' }, running ? 'AI 工具正在認證，通常一分鐘內完成。' : st.aiStale ? N.ui.aiStaleNote : 'AI 工具設定完成前，你提交的資料與答案仍會記錄，但 Zero 不會跟進；設定完成後將自動繼續。')),
+          running ? h('div', { class: 'small muted' }, N.ui.aiCheckingNote) : DESK.note('warn', st.aiStale ? N.ui.aiStaleNote : N.ui.aiBlockNote)),
         h('a', { class: 'btn primary', href: '#/setup', id: 'go-setup' }, N.ui.goSetup)));
   }
   function waitingNote(r) {
@@ -527,8 +529,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       V.hubDirty = !!String(V.quickText || '').trim(); V.hubWatching = false;
       setApp(head('pending', st), aiBlock(st), main, next, DESK.feedbackPrompt(st, asks), quietToday, others, snoozedCard, brainLine, sinceRow(home), quickInput(), intakeLink, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, aiCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
-      var cele = window.SOS_CELEBRATE;
-      cele.handle(st, { allowed: function () { return location.hash === '#/' || location.hash === ''; } });
+      // 慶祝只是加分項：讀不到慶祝程式也要照常顯示頁面
+      if (window.SOS_CELEBRATE) window.SOS_CELEBRATE.handle(st, { allowed: function () { return location.hash === '#/' || location.hash === ''; } });
       kept.forEach(function (id) { var d = document.getElementById(id); if (d) d.open = true; });
       // 由月曆跳過嚟：畫好之後捲到對應卡，只做一次，定時更新唔會再跳
       var jump = /^#(next-action|quick-input)$/.exec(location.hash);
@@ -663,16 +665,19 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         if (!done && run.state !== 'failed') PP.timer = setTimeout(function () { if (location.hash === '#/practice/new/' + taskId) showPracticeNew(taskId); }, 2500);
         return;
       }
-      var who = h('input', { class: 'in', id: 'prep-who', placeholder: '例：對方的姓名與身分', maxlength: '200' });
+      var other = h('input', { class: 'in', id: 'prep-other', placeholder: N.ui.practiceWhoName, maxlength: '200', hidden: true });
+      var who = h('select', { class: 'in', id: 'prep-who', onchange: function () { other.hidden = who.value !== '__other'; } }, h('option', { value: '' }, N.ui.practiceChooseWho), (pr.counterparts || []).map(function (p) { return h('option', { value: p.id }, p.name); }), h('option', { value: '__other' }, N.ui.practiceOtherWho));
       var ta = h('textarea', { id: 'prep-text', rows: '3', placeholder: '是次希望爭取甚麼、對方有何背景（可留空，Zero 會參閱準備文件及公司紀錄）', maxlength: '4000' });
       setApp(prHead(st), aiBlock(st), h('section', { class: 'layer', id: 'prep-form' }, h('span', { class: 'eyebrow' }, N.ui.practicePrepare),
         h('h2', { class: 'layer-title' }, act ? act.title : N.ui.practiceFree), act && act.dueAt ? h('p', { class: 'guide' }, dayOf(act.dueAt) + ' ' + hm(act.dueAt)) : null,
         h('p', { class: 'guide' }, 'Zero 會整理對方的身分、背景、立場、利益、決策方式、顧慮及說話風格，逐項標明出處；開始前你可以修改。'),
-        h('label', { class: 'iq-q', for: 'prep-who' }, '對方是誰？'), who, h('label', { class: 'iq-q', for: 'prep-text', style: 'margin-top:10px' }, '補充（可留空）'), ta,
+        h('label', { class: 'iq-q', for: 'prep-who' }, '對方是誰？'), who, other, h('label', { class: 'iq-q', for: 'prep-text', style: 'margin-top:10px' }, '補充（可留空）'), ta,
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/practice' }, N.ui.practiceBack), h('button', { type: 'button', class: 'btn primary big', id: 'prep-send', onclick: function (e) {
-          if (!act && !who.value.trim() && !ta.value.trim()) { toast('請寫下對方是誰。'); return; }
+          var selected = (pr.counterparts || []).filter(function (p) { return p.id === who.value; })[0];
+          var whoName = selected ? selected.name : who.value === '__other' ? other.value.trim() : '';
+          if (!act && !whoName && !ta.value.trim()) { toast('請寫下對方是誰。'); return; }
           e.target.disabled = true;
-          post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: act ? act.id : '', who: who.value, text: ta.value }).then(function (j) { PP.sent = j.id; showPracticeNew(taskId); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + why(er)); });
+          post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: act ? act.id : '', who: whoName, counterpartId: selected ? selected.id : '', text: ta.value }).then(function (j) { PP.sent = j.id; showPracticeNew(taskId); }).catch(function (er) { e.target.disabled = false; toast('未能提交：' + why(er)); });
         } }, N.ui.practicePrepare))));
     }).catch(function (e) { fail(e); });
   }
@@ -682,12 +687,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       PR.scenario = sc;
       DESK.title('pending', N.ui.practice);
       var past = (pr.sessions || []).filter(function (x) { return x.scenarioId === sc.id; });
+      var person = (pr.counterparts || []).filter(function (p) { return sc.counterpartId ? p.id === sc.counterpartId : p.name === sc.counterpart.name; })[0];
       var card = h('dl', { class: 'pcard', id: 'persona' }, PK.map(function (k) {
         var p = sc.persona[k[0]]; if (!p) return null;
         var val = PR.edits[k[0]] != null ? PR.edits[k[0]] : p.text;
         var editing = PR.editing === k[0];
         return [h('dt', null, k[1]), h('dd', null, editing ? h('input', { id: 'pe-' + k[0], value: val, onkeydown: function (e) { if (e.key === 'Enter') { PR.edits[k[0]] = e.target.value; PR.editing = null; showPracticePrep(id); } } })
-          : h('span', { class: 'v' }, val), PR.edits[k[0]] != null ? tag('你已修改', 'mine') : srcTagP(p.source),
+          : h('span', { class: 'v' }, val), PR.edits[k[0]] != null ? tag('你已修改', 'mine') : srcTagP(p.source), person && (person.reviewKeys || []).includes(k[0]) ? h('small', null, N.ui.practiceReviewHint) : null,
           h('button', { type: 'button', class: 'btn small', 'data-edit': k[0], onclick: function () { if (editing) { PR.edits[k[0]] = $('#pe-' + k[0]).value; PR.editing = null; } else PR.editing = k[0]; showPracticePrep(id); } }, editing ? '完成' : '修改'))];
       }));
       setApp(prHead(st), aiBlock(st),
@@ -828,7 +834,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (DB.sent && !run) run = { state: 'running', steps: [{ label: N.ui.stepReqReceived, state: 'done' }, { label: N.ui.stepQueued, state: 'running' }] };
       if (run) {
         var asks = run.result && run.result.asks || [];
-        setApp(prHead(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'debrief-track' }, h('span', { class: 'eyebrow' }, N.ui.practiceDebrief), h('h3', null, run.state === 'done' ? '已記錄；Zero 已擬定跟進問題' : run.state === 'failed' ? N.ui.trackFailed : '已記錄，Zero 正在擬定跟進問題'),
+        setApp(prHead(st), h('section', { class: 'track' + (run.state === 'failed' ? ' bad' : ''), id: 'debrief-track' }, h('span', { class: 'eyebrow' }, N.ui.practiceDebrief), h('h3', null, run.state === 'done' ? (asks.length ? '已記錄；Zero 已擬定跟進問題' : '已記錄；這次沒有需要確認的更新') : run.state === 'failed' ? N.ui.trackFailed : '已記錄，Zero 正在擬定跟進問題'),
           h('ol', { class: 'tr-steps' }, (run.steps || []).map(function (x) { return trRow(x.state, N.fix(x.label), x.detail); })),
           asks.length ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'debrief-answer', href: '#/ask/' + asks[0].id }, '★ ' + T('answerN', { n: Math.min(3, asks[0].count) }))) : null));
         if (run.state !== 'done' && run.state !== 'failed') DB.timer = setTimeout(function () { if (location.hash === '#/practice/debrief/' + id) showDebrief(id); }, 2500);
@@ -901,7 +907,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       if (!DT.title) { var tg = pick.filter(function (x) { return x.id === DT.target; })[0]; DT.title = tg ? tg.name : DT.type === 'business' ? ((d.company && d.company.name) || '') + DD.tp_business : ''; }
       var title = h('input', { class: 'in', id: 'dt-title', maxlength: '120', value: DT.title, placeholder: { pricing: '例：每月收費 300 元，或申請一筆社區資助', partner: '例：請某伙伴負責送貨，按次收費', pitch: '例：給投資者的十頁簡報', strategy: '例：先舉辦試食會', milestone: '例：首條送貨路線', business: '例：' + DD.tp_business }[DT.type] });
       title.addEventListener('input', function () { DT.title = title.value; });
-      var addSeat = h('input', { class: 'in', id: 'dt-seat-add', maxlength: '20', placeholder: '例：發牌機關', style: 'max-width:220px' });
+      var addSeat = h('input', { class: 'in', id: 'dt-seat-add', maxlength: '20', value: d.suggestedSeat ? d.suggestedSeat.name.slice(0, 20) : '', placeholder: '例：發牌機關', style: 'max-width:220px' });
       var nAI = T0.passes + 3;
       setApp(prHead(st), aiBlock(st), h('section', { class: 'layer', id: 'debate-form' }, h('span', { class: 'eyebrow' }, N.ui.debate), h('h2', { class: 'layer-title' }, N.ui.debateNew),
         h('p', { class: 'guide' }, '藍方撰寫最有力而誠實的論證，紅方以數個外部身份逐點攻擊，裁判逐條判定為' + DD.vStand + '、' + DD.vHurt + '或' + DD.vFall + '；完場後你表態，Zero 把批評轉成修正、優勢、測試或觀察。辯論結果不算證據。'),
@@ -969,6 +975,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         debateEta,
         m.score ? h('p', { style: 'margin:12px 0 0' }, '記分：' + DD.vStand + ' ' + m.score.standing + ' · ' + DD.vHurt + ' ' + m.score.wounded + ' · ' + DD.vFall + ' ' + m.score.fallen + (m.score.redHitRate != null ? ' · ' + DD.redHitRate + ' ' + Math.round(m.score.redHitRate * 100) + '%' : ''), h('small', { style: 'display:block;margin-top:4px' }, DD.scoreRules + ' ' + attackStats(m))) : null,
         km.length ? h('ul', { class: 'm-sum', id: 'dm-moments' }, km.map(function (k) { return h('li', null, tag(DD['km_' + ({ '一擊倒下': 'fall', '最傷': 'top', '盲點': 'blind', '反轉': 'flip', '漏咗嘅路': 'missed' }[k.kind])] || k.kind), ' ', k.text); })) : null,
+        (m.blindAttacks || []).length ? h('div', { id: 'dm-blind-attacks' }, h('b', null, DD.km_unmentioned), h('ul', { class: 'm-sum' }, m.blindAttacks.map(function (a) { return h('li', null, typeof a === 'string' ? a : a.text || a.attack || '', a.persona ? '（' + a.persona + '）' : ''); }))) : null,
         s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · Zero 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · Zero 未查' : ''); })) : null,
         running && !debateEta ? h('p', { class: 'guide' }, 'Zero 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
         h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, act, h('a', { class: 'btn', href: stageHref(id), id: 'dm-stage' }, N.ui.debateStage + ' ↗'), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll))));
@@ -1248,7 +1255,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }).catch(function (e) {
         btn.disabled = false; btn.textContent = N.ui.resend;
         if (e.code === 'pack-not-here') { msg.replaceChildren(why(e) + ' ', h('a', { class: 'btn', href: '/#/' }, N.ui.backPending)); return; }
-        msg.textContent = '未能送出：' + why(e);
+        msg.replaceChildren(DESK.note('error', '未能送出：' + why(e)));
       });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
@@ -1344,14 +1351,15 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var current = h('section', { class: 'layer' + (s.cert ? ' accent ok' : ' block') }, h('span', { class: 'eyebrow' }, N.ui.currentAI),
         h('div', { class: 'row' },
           h('div', null, h('div', { class: 't' }, s.cert ? s.cert.label : s.aiStale ? N.ui.aiStale : N.ui.aiNotSet),
-            s.cert ? h('div', { class: 'small muted' }, N.ui.certDate + '：' + dayOf(s.cert.certifiedAt) + ' ' + hm(s.cert.certifiedAt)) : h('div', { class: 'small muted' }, '請選擇一個 AI 工具並通過認證，Zero 才會開始跟進。')),
+            s.cert ? h('div', { class: 'small muted' }, dayOf(s.cert.certifiedAt) + ' ' + hm(s.cert.certifiedAt) + ' ' + N.ui.setupCertified) : DESK.note('warn', N.ui.setupUnsetNote)),
           s.cert ? tag(N.ui.certPass, 'qdone') : tag(N.ui.aiNotSet, 'qn')));
       var result = null;
       if (c) {
         var items = c.items || [];
-        result = h('section', { class: 'track' + (c.state === 'failed' ? ' bad' : c.state === 'running' ? ' off' : ''), id: 'certify', 'aria-live': 'polite' },
+        result = h('section', { class: 'track' + (c.state === 'failed' ? ' bad' : c.state === 'running' ? ' off' : '') + (c.state === 'failed' ? ' cert-note-error' : c.state === 'passed' ? ' cert-note-done' : ''), id: 'certify', 'aria-live': 'polite' },
           h('span', { class: 'eyebrow' }, N.ui.setup),
           h('h3', null, c.state === 'running' ? N.ui.certChecking : c.state === 'passed' ? N.ui.aiReadyTitle : N.ui.certFail),
+          c.state === 'failed' ? DESK.note('error', N.ui.certFail) : null,
           items.length ? h('ol', { class: 'tr-steps' }, items.map(function (it) {
             var k = it.pass === true ? 'done' : it.pass === false ? 'failed' : 'running';
             return h('li', null, h('span', { class: 'tr-ic ' + k }, k === 'done' ? '✓' : k === 'failed' ? '✕' : '…'),
@@ -1359,21 +1367,21 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
                 it.detail ? h('span', { class: 'tr-sub' }, it.detail) : null,
                 it.pass === false && it.fix ? h('span', { class: 'tr-fix' }, N.ui.fixHow + '：' + it.fix) : null));
           })) : h('p', { class: 'tr-sub' }, '正在準備檢查……'),
-          c.state === 'passed' ? h('p', null, 'AI 工具已設定：' + (s.cert ? s.cert.label : '') + '。先前等候 Zero 的工作將自動繼續。') : null,
+          c.state === 'passed' ? DESK.note('done', T('setupPassed', { name: s.cert ? s.cert.label : '' })) : null,
           c.state === 'passed' ? h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '#/', id: 'setup-done' }, N.ui.backPending)) : null);
       }
       var picked = pickHost(hosts);
-      var pickCard = h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.aiTools),
-        h('p', { class: 'guide' }, '請選擇你電腦上已登入的 AI 工具。認證約需兩分鐘，確保 AI 工具只處理 CrewZero 的工作，不會改動你電腦上的其他資料。'),
+      var pickCard = h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, s.cert ? N.ui.setupChange : N.ui.aiTools),
+        h('p', { class: 'guide' }, s.cert ? N.ui.setupChangeGuide : N.ui.setupGuide),
         (hosts.some(function (x) { return x.installed; }) ? hosts.filter(function (x) { return x.installed; }) : hosts).map(function (x) {
           var on = x.id === SET.pick;
-          return h('button', { type: 'button', class: 'opt' + (on ? ' cur' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-host': x.id, disabled: running ? true : null, onclick: function () { SET.pick = x.id; showSetup(); } },
-            h('span', { class: 'dot' }), h('span', null, x.label, ' ', x.installed ? h('span', { class: 'o-note' }, x.version) : tag(N.ui.notInstalled, 'qn'), x.why ? h('span', { class: 'o-note' }, x.why) : null));
+          return h('button', { type: 'button', class: 'opt' + (on ? ' cur' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-host': x.id, title: x.version || '', disabled: running ? true : null, onclick: function () { SET.pick = x.id; showSetup(); } },
+            h('span', { class: 'dot' }), h('span', null, x.label, ' ', x.installed ? null : tag(N.ui.notInstalled, 'qn'), x.why ? h('span', { class: 'o-note' }, x.why) : null));
         }),
-        !hosts.some(function (x) { return x.installed; }) ? h('p', { class: 'note-line' }, '這部電腦尚未安裝並登入可用的 AI 工具。請先安裝並登入 Claude Code、Codex 或 Antigravity 其中一個，再回到此頁認證。') : hosts.some(function (x) { return !x.installed; })
+        !hosts.some(function (x) { return x.installed; }) ? DESK.note('warn', N.ui.setupMissing) : hosts.some(function (x) { return !x.installed; })
           ? h('p', { class: 'note-line' }, '此電腦未能使用：' + hosts.filter(function (x) { return !x.installed; }).map(function (x) { return x.label + '（' + (x.why || '未安裝，或此電腦未支援') + '）'; }).join('、') + '。') : null,
         h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary big', id: 'certify-go', disabled: (running || !picked || !picked.installed) ? true : null, onclick: startCertify },
-          c && c.state === 'failed' ? N.ui.certifyRetry : N.ui.certifyGo)));
+          c && c.state === 'failed' ? N.ui.certifyRetry : s.cert ? N.ui.setupChangeGo : N.ui.certifyGo)));
       // 已配對的瀏覽器與手機（裝置通行證）：撤銷經 /api/setup；撤銷自己呢部之後下一次讀回會見到配對指引
       var devCard = h('section', { class: 'layer', id: 'devices-card' }, h('span', { class: 'eyebrow' }, N.ui.devices),
         DESK.devices(s.devices || [], { onRevoke: function (id) { post('/api/setup', { action: 'revoke', id: id }).then(function () { toast(N.ui.deviceRevoked); showSetup(); }).catch(function (e) { toast(why(e)); showSetup(); }); } }));
@@ -1466,7 +1474,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function readyCard() {
     return h('section', { class: 'layer accent ok' }, h('span', { class: 'eyebrow' }, N.ui.company),
       h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.ui.companyExists),
-        h('div', { class: 'small muted' }, IN.open ? '重新提交資料會令 Zero 重新擬定公司概覽，先前未確認的修改將會失去。' : '如需更新背景資料，可重新提交一次。')),
+        IN.open ? DESK.note('warn', N.ui.intakeReadyWarn) : h('div', { class: 'small muted' }, '如需更新背景資料，可重新提交一次。')),
         h('a', { class: 'btn primary', href: '/proofread.html' }, N.ui.goCompany)),
       IN.open ? null : h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', id: 'reintake', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)));
   }
@@ -1475,15 +1483,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     function qBlock(q) {
       var ta = h('textarea', { rows: q.required ? '3' : '2', id: 'q' + q.n, placeholder: q.example ? '例：' + q.example : '' });
       ta.value = d['q' + q.n] || '';
-      ta.addEventListener('input', function () { var dd = draftLoad(); dd['q' + q.n] = ta.value; pfEdited(dd, 'q' + q.n, ta.value); draftSave(dd); pfRow('q' + q.n); pfBox(); intakeBar(); });
+      ta.addEventListener('input', function () { var dd = draftLoad(); dd['q' + q.n] = ta.value; pfEdited(dd, 'q' + q.n, ta.value); draftSave(dd); pfRow('q' + q.n); pfBox(); intakeBar(); intakeChecks(); });
       return h('div', { class: 'iq' }, h('label', { class: 'iq-q', for: 'q' + q.n }, h('span', { id: 'q-label-' + q.n }, q.n + '. ' + q.ask), q.required ? tag(N.ui.required, 'qn') : null),
-        h('div', { class: 'iq-hint', id: 'q-hint-' + q.n, hidden: q.hint ? null : true }, q.hint || ''), ta, h('div', { class: 'pf-row', id: 'pf-q' + q.n }));
+        h('div', { class: 'iq-hint', id: 'q-hint-' + q.n, hidden: q.hint ? null : true }, q.hint || ''), ta, h('div', { id: 'q-warn-' + q.n, class: 'small', role: 'status', hidden: true }), h('div', { class: 'pf-row', id: 'pf-q' + q.n }));
     }
     var req = qs.filter(function (q) { return q.required; }), opt = qs.filter(function (q) { return !q.required; });
     var input = h('input', { type: 'file', multiple: true, id: 'intake-files', hidden: true, accept: lim.exts.map(function (e) { return '.' + e; }).join(',') });
     input.addEventListener('change', function () { addFiles(input.files); input.value = ''; });
     var drop = h('div', { class: 'drop', id: 'drop' },
-      h('p', null, '可加入會議紀錄、計劃書、報價單等現有文件。'),
+      h('p', null, N.ui.intakeDrop),
+      DESK.note('warn', N.ui.intakeDropWarn),
       h('button', { type: 'button', class: 'btn', onclick: function () { input.click(); } }, N.ui.pickFiles),
       input);
     drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
@@ -1492,16 +1501,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var form = h('section', { class: 'layer', id: 'intake-form' },
       h('span', { class: 'eyebrow' }, N.ui.intake),
       h('h2', { class: 'layer-title' }, N.ui.intakeTitle),
-      h('p', { class: 'guide' }, 'Zero 是你的 AI 隊員，由構思開始陪你一起打拚。每條一兩句即可；未有答案可以留空，Zero 會先建議，之後由你校對。現有文件可直接拖入，按「由文件預填」，Zero 會先填，你逐條確認或改寫即可。'),
+      h('p', { class: 'guide' }, N.ui.intakeGuide),
       h('div', { class: 'iq', id: 'zero-think-box' }),
       h('h3', { class: 'iq-sec' }, N.ui.files),
-      h('div', { class: 'iq', id: 'intake-template' }, h('p', { class: 'small muted' }, N.ui.intakeTemplateNote),
+      drop, h('div', { id: 'file-list' }), h('div', { id: 'doc-check', role: 'status', hidden: true }), h('div', { id: 'intake-err' }), h('div', { class: 'pf-box', id: 'pf-box' }),
+      h('details', null, h('summary', null, N.ui.intakeDetails), DESK.note('tip', N.ui.intakeOnline, { id: 'drop-online-note' }), h('div', { class: 'iq', id: 'intake-template' }, h('p', { class: 'small muted' }, N.ui.intakeTemplateNote),
         h('a', { class: 'btn', id: 'template-get', href: '/startup-background-template.md', download: 'CrewZero-公司背景資料範本.md' }, N.ui.intakeTemplateGet), ' ',
         h('button', { type: 'button', class: 'btn', id: 'template-copy', onclick: function () {
           fetch('/startup-background-template.md').then(function (r) { if (!r.ok) throw new Error('read'); return r.text(); }).then(function (t) { return navigator.clipboard.writeText(t); })
             .then(function () { toast(N.ui.intakeTemplateCopied); }).catch(function () { toast(N.ui.intakeTemplateCopyFailed); });
-        } }, N.ui.intakeTemplateCopy)),
-      drop, h('div', { id: 'file-list' }), h('div', { id: 'intake-err', class: 'small', role: 'alert' }), h('div', { class: 'pf-box', id: 'pf-box' }),
+        } }, N.ui.intakeTemplateCopy))),
       h('h3', { class: 'iq-sec' }, N.ui.required + '（' + req.length + ' 條）'), req.map(qBlock),
       h('h3', { class: 'iq-sec' }, N.ui.intakeOptionalHead), opt.map(qBlock));
     if (!PF.id && d._prefill && d._prefill.id) { PF.id = d._prefill.id; PF.state = 'running'; }
@@ -1514,16 +1523,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     box.replaceChildren();
     var s = IN.meta.ideate;
     if (!s || s.state === 'closed' || s.state === 'failed') {
-      box.append(h('p', { class: 'small muted', role: s && s.state === 'failed' ? 'alert' : null }, s && s.state === 'failed' ? N.ui.ideateFailed + (s.reason ? ' ' + N.fix(s.reason) : '') : N.ui.zeroThinkNote),
+      box.append(s && s.state === 'failed' ? DESK.note('error', N.ui.ideateFailed + (s.reason ? ' ' + N.fix(s.reason) : '')) : h('span', { class: 'small muted' }, N.ui.zeroThinkNote),
         h('button', { type: 'button', class: 'btn', id: 'zero-think', onclick: zeroThinkStart }, s && s.state === 'failed' ? N.ui.ideateRetry : N.ui.zeroThink));
     } else if (s.state === 'running') {
       box.append(h('p', { class: 'small muted', 'aria-live': 'polite' }, N.ui.ideateRunning));
       V.ideateTimer = setTimeout(zeroThinkPoll, 4000);
     } else if (s.state === 'asking') {
-      box.append(h('p', { class: 'small muted' }, T('ideateAsking', { n: s.round })), h('a', { class: 'btn', href: '#/ask/' + s.packId }, N.ui.ideateAnswer));
+      box.append(DESK.note('tip', T('ideateAsking', { n: s.round })), h('a', { class: 'btn', href: '#/ask/' + s.packId }, N.ui.ideateAnswer));
       V.ideateTimer = setTimeout(zeroThinkPoll, 4000);
     } else if (s.state === 'ready') {
-      box.append(h('p', { class: 'small muted' }, N.ui.ideateReady));
+      box.append(DESK.note('done', N.ui.ideateReady));
       if (s.prefillId && PF.id !== s.prefillId) PF = { id: s.prefillId, data: null, err: '' };
       if (!skipPrefill && PF.id && !PF.data && !PF.err) pfPoll();
     }
@@ -1547,6 +1556,64 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     post('/api/intake', { kind: 'note', type: 'ideate', text: d.q1 || '' }).then(function () { IN.err = ''; return zeroThinkPoll(); })
       .catch(function (e) { IN.err = why(e); renderFiles(); if (b) b.disabled = false; });
   }
+  var intakeTexts = new WeakMap();
+  function intakeNames(text) {
+    var matches = String(text || '').match(/[^\s\u3000，。！？、；：,;:!?「」『』（）【】《》〈〉“”‘’"'()\[\]{}<>\\/`*|~]+\.(?:pdf|docx|pptx|xlsx|md|txt|csv|png|jpg|jpeg)(?![A-Za-z0-9_])/gi) || [];
+    return matches;
+  }
+  function intakeUnique(names) {
+    var seen = Object.create(null);
+    return names.filter(function (name) { var key = name.toLowerCase(); if (seen[key]) return false; seen[key] = true; return true; });
+  }
+  function intakeAbsent(names) {
+    return names.filter(function (name) { return !IN.files.some(function (f) { return f.name.toLowerCase() === name.toLowerCase(); }); });
+  }
+  function intakeList() {
+    var names = [], unnamed = [], found = false;
+    IN.files.forEach(function (f) {
+      var text = intakeTexts.get(f); if (text === undefined) return;
+      var section = /(?:^|\n)## 建議一併放入的文件[ \t]*\r?\n([\s\S]*?)(?=\n(?:---[ \t]*(?:\r?\n|$)|##[ \t])|$)/.exec(text);
+      if (!section) return;
+      var list = /(?:^|\n)清單：[ \t]*(?:\r?\n|$)([\s\S]*)/.exec(section[1]);
+      if (!list) return;
+      found = true;
+      list[1].split(/\r?\n/).forEach(function (line) {
+        line = line.replace(/^\s*(?:[-*]\s+|\d+\.\s+)?/, '').trim(); if (!line) return;
+        var files = intakeNames(line); if (files.length) names = names.concat(files); else unnamed.push(line);
+      });
+    });
+    return { found: found, names: names, unnamed: unnamed };
+  }
+  function intakeMissing() {
+    var names = intakeList().names.slice();
+    intakeQuestionsNow().forEach(function (q) { var ta = $('#q' + q.n); if (ta) names = names.concat(intakeNames(ta.value)); });
+    return intakeUnique(intakeAbsent(names));
+  }
+  function intakeChecks() {
+    if (!$('#intake-form')) return;
+    intakeQuestionsNow().forEach(function (q) {
+      var ta = $('#q' + q.n), box = $('#q-warn-' + q.n); if (!ta || !box) return;
+      var lines = [], urls = ta.value.match(/https?:\/\/[^\s<>"'（）「」]+/gi) || [], google = false, online = false;
+      urls.forEach(function (url) {
+        try {
+          var host = new URL(url).hostname.toLowerCase();
+          if (/^(?:docs|drive|sheets|slides)\.google\.com$/.test(host)) google = true;
+          if (/(?:^|\.)(?:sharepoint\.com|onedrive\.live\.com|1drv\.ms|dropbox\.com|notion\.so|notion\.site)$/.test(host)) online = true;
+        } catch (e) { }
+      });
+      if (google) lines.push(N.ui.checkLinkGoogle);
+      if (online) lines.push(N.ui.checkLinkOnline);
+      var missing = intakeUnique(intakeAbsent(intakeNames(ta.value)));
+      if (missing.length) lines.push(T('checkFileMissing', { f: missing.join('、') }));
+      box.replaceChildren(); if (lines.length) box.append(DESK.note('warn', lines)); box.hidden = !lines.length;
+    });
+    var list = intakeList(), box = $('#doc-check'); if (!box) return;
+    box.replaceChildren(); box.hidden = !list.found; if (!list.found) return;
+    var missing = intakeAbsent(list.names), count = list.names.length - missing.length;
+    var lines = [missing.length ? T('checkListCount', { n: list.names.length, k: count, f: missing.join('、') }) : T('checkListAll', { n: list.names.length })];
+    if (list.unnamed.length) lines.push(T('checkListNoName', { f: list.unnamed.slice(0, 5).map(function (line) { return clip(line, 40); }).join('、') }));
+    box.append(DESK.note(missing.length || list.unnamed.length ? 'warn' : 'done', lines));
+  }
   function addFiles(list) {
     var lim = IN.meta.limits, msgs = [];
     Array.prototype.forEach.call(list || [], function (f) {
@@ -1556,7 +1623,14 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       else if (f.size > lim.fileMB * 1048576) msgs.push('「' + f.name + '」太大（' + fmtSize(f.size) + '）：每個檔案須在 ' + lim.fileMB + 'MB 以內。請改選較小的檔案，或把文件分拆後再加入。');
       else if (IN.files.length >= lim.files) msgs.push('「' + f.name + '」未被接納：最多 ' + lim.files + ' 個文件。');
       else if (total > lim.totalMB * 1048576) msgs.push('「' + f.name + '」未被接納：總大小須在 ' + lim.totalMB + 'MB 以內。');
-      else if (!IN.files.some(function (x) { return x.name === f.name && x.size === f.size; })) IN.files.push(f);
+      else if (!IN.files.some(function (x) { return x.name === f.name && x.size === f.size; })) {
+        IN.files.push(f);
+        if ((ext === 'md' || ext === 'txt') && f.size <= 1048576) {
+          var reader = new FileReader();
+          reader.onload = function () { intakeTexts.set(f, String(reader.result || '')); intakeChecks(); };
+          reader.readAsText(f);
+        }
+      }
     });
     IN.err = msgs.join(' ');
     renderFiles();
@@ -1568,8 +1642,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       box.append(h('div', { class: 'file-row' }, h('span', null, f.name), h('span', { class: 'small muted' }, fmtSize(f.size)),
         h('button', { type: 'button', class: 'btn small', onclick: function () { IN.files.splice(i, 1); renderFiles(); } }, N.ui.removeFile)));
     });
-    var e = $('#intake-err'); if (e) e.textContent = IN.err || '';
-    pfBox();
+    var e = $('#intake-err'); if (e) e.replaceChildren.apply(e, IN.err ? [DESK.note('error', IN.err)] : []);
+    pfBox(); intakeChecks();
   }
   /* 由文件預填：每題狀態存喺草稿 _prefill.st[q] = { s, a, alt }
      s：pending（答案係 Zero 預填、未確認）／confirmed（創辦人確認咗呢句）／offer（答案係創辦人自己寫，預填只作建議）；a：嗰句預填（文字、標籤、出處）；alt：再預填時嘅新建議 */
@@ -1580,7 +1654,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function pfTag(a) { return a.source === N.ui.ideateSource ? N.ui.ideateTag : a.label === 'quote' ? N.ui.prefillTagQuote : a.label === 'unverified' ? N.ui.prefillTagUnverified : N.ui.prefillTagInferred; }
   function pfDoneTag(a) { return a.source === N.ui.ideateSource ? N.ui.ideateAdopted : a.label === 'quote' ? T('srcYouDoc', { f: pfDoc(a.source) || '你的文件' }) : a.label === 'unverified' ? N.ui.srcAdoptedUnverified : N.ui.srcAdopted; }
   function pfQs() { return IN.meta.questions.map(function (q) { return 'q' + q.n; }); }
-  function pfPut(q, text, c) { var d = draftLoad(), ta = $('#' + q); if (ta) ta.value = text; d[q] = text; d._prefill = d._prefill || { id: PF.id, st: {} }; d._prefill.st[q] = c; draftSave(d); pfRow(q); pfBox(); intakeBar(); }
+  function pfPut(q, text, c) { var d = draftLoad(), ta = $('#' + q); if (ta) ta.value = text; d[q] = text; d._prefill = d._prefill || { id: PF.id, st: {} }; d._prefill.st[q] = c; draftSave(d); pfRow(q); pfBox(); intakeBar(); intakeChecks(); }
   // 創辦人改字：同預填一樣就仍要確認；唔一樣就係佢自己寫嘅
   function pfEdited(dd, q, v) {
     var c = dd._prefill && dd._prefill.st && dd._prefill.st[q]; if (!c) return;
@@ -1628,17 +1702,18 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       else if (cur.s === 'confirmed') { if (pfNorm(cur.a.text) !== pfNorm(a.text)) cur.alt = a; }
       else if (cur.s === 'offer') cur.a = a;
     });
-    d._prefill.applied = PF.id; draftSave(d);
+    d._prefill.applied = PF.id; draftSave(d); intakeChecks();
   }
   function pfBox() {
     var box = $('#pf-box'); if (!box) return;
     box.replaceChildren();
     var running = !!PF.id && !PF.data && !PF.err;
-    box.append(h('div', { class: 'pf-go' }, h('button', { type: 'button', class: 'btn primary', id: 'pf-go', disabled: !IN.files.length || running ? true : null, onclick: pfStart }, N.ui.prefillGo),
+    box.append(h('div', { class: 'pf-go' }, h('button', { type: 'button', class: 'btn' + (IN.files.length ? ' primary' : ''), id: 'pf-go', disabled: !IN.files.length || running ? true : null, onclick: pfStart }, N.ui.prefillGo),
       h('span', { class: 'small muted' }, N.ui.prefillGoNote)));
     if (running) box.append(h('p', { class: 'small', id: 'pf-state', 'aria-live': 'polite' }, PF.wait ? N.ui.aiNotSet : N.ui.prefillRunning));
-    else if (PF.err) box.append(h('p', { class: 'small', id: 'pf-state', role: 'alert', style: 'color:var(--red)' }, PF.err));
-    else if (PF.data) box.append(h('p', { class: 'small', id: 'pf-state' }, T(PF.data.from === 'ideate' ? 'ideateDone' : 'prefillDone', { n: Object.keys(PF.data.answers || {}).length })));
+    else if (PF.err) box.append(DESK.note('error', PF.err, { id: 'pf-state' }));
+    else if (PF.data) box.append(DESK.note('done', T(PF.data.from === 'ideate' ? 'ideateDone' : 'prefillDone', { n: Object.keys(PF.data.answers || {}).length }), { id: 'pf-state' }));
+    else box.append(h('div', { id: 'pf-state', hidden: true }));
     if (pfPending().length > 1) box.append(h('button', { type: 'button', class: 'btn', id: 'pf-confirm-all', onclick: function () {
       pfPending().forEach(function (q) { var c = pfSt()[q]; pfPut(q, $('#' + q).value, { s: 'confirmed', a: c.a }); });
     } }, N.ui.prefillConfirmAll));
@@ -1657,7 +1732,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var d = draftLoad(), st = (d._prefill && d._prefill.st) || {};
       Object.keys(st).forEach(function (q) { var c = st[q]; if (c.s === 'pending') { if (pfNorm(d[q]) === pfNorm(c.a.text)) { d[q] = ''; var ta = $('#' + q); if (ta) ta.value = ''; } delete st[q]; } });
       d._prefill = { id: j.id, applied: '', st: st }; draftSave(d);
-      PF = { id: j.id, data: null, err: '' }; pfBox(); pfAll(); intakeBar(); pfPoll();
+      PF = { id: j.id, data: null, err: '' }; pfBox(); pfAll(); intakeBar(); intakeChecks(); pfPoll();
     }).catch(function (e) { PF.err = '未能交出文件：' + why(e); pfBox(); PF.err = ''; });
   }
   function pfPoll() {
@@ -1714,13 +1789,13 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.submit; msg.textContent = '未能送出：' + why(e); });
     }
     var dlg = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mt' },
-      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, N.ui.submitIntake), h('p', { class: 'small muted' }, '按確認後即交予 Zero 擬定公司概覽；不會對外發送任何內容。')),
+      h('div', { class: 'm-head' }, h('span', { class: 'eyebrow' }, N.ui.replyBox), h('h3', { id: 'mt' }, N.ui.submitIntake), h('p', { class: 'small muted' }, N.ui.intakeModalNote)),
       h('div', { class: 'm-body' },
         h('div', { class: 'effect', style: 'border-left-color:var(--mint);border-color:rgba(153,215,188,.3);background:transparent' }, h('h4', null, N.ui.intakeTitle),
           h('ul', { class: 'm-sum' }, filled.map(function (q) { return h('li', null, h('b', null, q.n + '. ' + q.ask + '：'), clip(val(q), 80), ' ', tag(pfSource('q' + q.n, val(q)), 'src')); }))),
         IN.files.length ? h('div', { class: 'effect', style: 'border-left-color:var(--mint);border-color:rgba(153,215,188,.3);background:transparent' }, h('h4', null, N.ui.files + '（' + IN.files.length + '）'),
           h('ul', { class: 'm-sum' }, IN.files.map(function (f) { return h('li', null, f.name + '（' + fmtSize(f.size) + '）'); }))) : null,
-        msg),
+        msg, intakeMissing().length ? DESK.note('warn', T('checkSubmitMissing', { f: intakeMissing().join('、') }), { id: 'intake-confirm-missing' }) : null),
       h('div', { class: 'm-foot' }, h('button', { type: 'button', class: 'btn', onclick: closeModal }, N.ui.back), btn));
     var back = h('div', { class: 'backdrop', onclick: function (ev) { if (ev.target === back) closeModal(); } }, dlg);
     $('#modal-root').replaceChildren(back);

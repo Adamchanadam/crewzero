@@ -6,6 +6,11 @@
 (function (g) {
   var N = g.SOS_NAMES, D = N.dash, U = N.ui;
   var CSS = `
+.note{--note-color:var(--blue);border-left:3px solid var(--note-color);padding:9px 12px;margin:8px 0;background:rgba(255,255,255,.035);display:flex;gap:8px;align-items:flex-start;min-width:0;overflow-wrap:anywhere}
+.note.warn{--note-color:var(--wait)}.note.tip{--note-color:var(--blue)}.note.error{--note-color:var(--red)}.note.done{--note-color:var(--mint)}
+.note-mark{color:var(--note-color);flex:none;width:16px;height:16px;line-height:16px}.note-mark svg{display:block;width:16px;height:16px}.note b{color:var(--note-color)}
+html[data-marks="emoji"] .note-icon,html:not([data-marks="emoji"]) .note-emoji{display:none}
+
 :root{
   --bg:#060608; --panel:rgba(14,15,19,.93); --line:rgba(255,255,255,.095);
   --text:#f2f4f8; --muted:#9ca3b3; --amber:#e88d4f; --mint:#99d7bc; --red:#f2a29e;
@@ -125,6 +130,7 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .tag.mine,.tag.mint{border-color:rgba(153,215,188,.65);color:var(--mint)}
 .tag.eff,.tag.red{border-color:rgba(242,162,158,.6);color:var(--red)}
 .tag.ai,.tag.amber{border-color:var(--amber);color:var(--amber)}
+.tag.wait{border-color:var(--wait);color:var(--wait)}
 .tag.qn,.tag.fill{background:var(--amber);border-color:var(--amber);color:#1b1006;font-weight:700}
 .badge-ai{display:inline-flex;align-items:center;font-size:var(--fs-min);line-height:1;padding:3px 6px;margin-left:6px;border:1px solid var(--amber);color:var(--amber);border-radius:5px;white-space:nowrap;vertical-align:1px}
 /* 卡（玻璃層、頂緣高光；外框平時靜止，決定二十六）；進場只喺開頁或轉分頁時播一次 */
@@ -266,6 +272,19 @@ body.paused .bg *{animation:none!important}
       [].concat(c).forEach(function (x) { if (x != null && x !== false) e.append(x.nodeType ? x : document.createTextNode(String(x))); });
     }
     return e;
+  }
+
+  try { var marks = localStorage.getItem('cz-marks'); document.documentElement.setAttribute('data-marks', marks === 'emoji' ? 'emoji' : 'icon'); } catch (e) { document.documentElement.setAttribute('data-marks', 'icon'); }
+  function note(type, content, attrs) {
+    var labels = { warn: U.noteWarn, tip: U.noteTip, error: U.noteError, done: U.noteDone }, emoji = { warn: '⚠️', tip: '💡', error: '❌', done: '✅' };
+    var paths = { warn: '<path d="M8 1.5 15 14H1L8 1.5Z"/><path d="M8 5v4M8 11.5v.1"/>', tip: '<circle cx="8" cy="8" r="6.5"/><path d="M8 7v4M8 4.5v.1"/>', error: '<circle cx="8" cy="8" r="6.5"/><path d="m5.5 5.5 5 5m0-5-5 5"/>', done: '<circle cx="8" cy="8" r="6.5"/><path d="m4.5 8 2.3 2.3 4.7-4.7"/>' };
+    var mark = el('span', { cls: 'note-mark', 'aria-hidden': 'true' }), icon = el('span', { cls: 'note-icon' });
+    icon.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + paths[type] + '</svg>';
+    mark.append(icon, el('span', { cls: 'note-emoji' }, emoji[type]));
+    var a = {}; for (var k in attrs || {}) a[k] = attrs[k]; a.cls = 'note ' + type + (a.cls ? ' ' + a.cls : ''); if (type === 'error') a.role = 'alert';
+    var body = el('div', null, el('b', null, labels[type] + '：'));
+    (Array.isArray(content) ? content : [content]).forEach(function (c, i) { if (i) body.append(document.createElement('br')); if (c != null) body.append(c); });
+    return el('div', a, mark, body);
   }
   function clip(x, n) { x = String(x || ''); return x.length > n ? x.slice(0, n - 1) + '…' : x; }
   var WD = ['日', '一', '二', '三', '四', '五', '六'];
@@ -879,6 +898,7 @@ body.paused .bg *{animation:none!important}
   };
   // 已配對裝置清單：每項有名稱、配對／最後使用／到期日期、「撤銷」（按兩次先真係撤銷，唔彈對話框）；opts.onRevoke(id, button)
   function fullDay(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? (+m[1]) + ' 年 ' + (+m[2]) + ' 月 ' + (+m[3]) + ' 日' : '—'; }
+  function shortDay(iso, year) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? (year ? (+m[1]) + ' 年 ' : '') + (+m[2]) + ' 月 ' + (+m[3]) + ' 日' : '—'; }
   function devices(list, opts) {
     list = list || []; opts = opts || {};
     return el('div', { id: 'devices' },
@@ -889,19 +909,19 @@ body.paused .bg *{animation:none!important}
           return el('li', { 'data-device': d.id, 'data-current': 'false', cls: 'phone-pending' }, el('span', { cls: 'dev-name' }, d.name || U.devicePhone), el('span', { class: 'tag amber' }, U.phonePending), accept, reject, el('span', { cls: 'dev-meta' }, U.phoneCode + '：' + (d.confirmationCode || '—')));
         }
         var btn = el('button', { type: 'button', cls: 'btn small', 'data-revoke': d.id, onclick: function (e) {
-          if (btn.getAttribute('data-arm') !== '1') { btn.setAttribute('data-arm', '1'); btn.textContent = U.deviceRevokeConfirm; return; }
+          if (btn.getAttribute('data-arm') !== '1') { btn.setAttribute('data-arm', '1'); btn.textContent = U.deviceRevokeConfirm; btn.parentNode.append(note('tip', U.deviceNote)); return; }
           btn.disabled = true; if (opts.onRevoke) opts.onRevoke(d.id, btn);
         } }, U.deviceRevoke);
         return el('li', { 'data-device': d.id, 'data-current': d.current ? 'true' : 'false' },
           el('span', { cls: 'dev-name' }, d.name || (d.kind === 'phone' ? U.devicePhone : U.deviceBrowser), d.current ? el('span', { cls: 'tag mint' }, U.deviceThis) : null),
           btn,
-          el('span', { cls: 'dev-meta' }, U.devicePaired + '：' + fullDay(d.createdAt) + ' · ' + U.deviceLastUsed + '：' + fullDay(d.lastUsedAt) + ' · ' + U.deviceExpires + '：' + fullDay(d.expiresAt)));
+          el('span', { cls: 'dev-meta' }, shortDay(d.createdAt, String(d.createdAt || '').slice(0, 4) !== String(d.expiresAt || '').slice(0, 4)) + U.devicePairedShort + ' · ' + shortDay(d.lastUsedAt, String(d.lastUsedAt || '').slice(0, 4) !== String(d.expiresAt || '').slice(0, 4)) + U.deviceLastUsed + ' · ' + fullDay(d.expiresAt) + U.deviceExpires));
       })) : el('p', { cls: 'muted' }, U.devicesNone),
-      el('p', { cls: 'small muted' }, U.deviceNote));
+      null);
   }
 
   g.SOS_DESK = {
-    shell: shell, header: header, devices: devices, title: title, feedbackDialog: feedbackDialog, feedbackPrompt: feedbackPrompt, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
+    shell: shell, header: header, note: note, devices: devices, title: title, feedbackDialog: feedbackDialog, feedbackPrompt: feedbackPrompt, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast, watchHelp: watchHelp,
     send: send, why: why, netError: netError, apiError: apiError,
     paused: function () { return !!ST.paused; }, fx: function () { return !!ST.fx; }, reduced: !!REDUCED,

@@ -54,7 +54,7 @@ try {
 
   /* ---------- A. work 資料契約、觀察資料夾（只存雜湊同顯示名） ---------- */
   let d = await get('/api/dashboard');
-  ok('未登記資料夾：觀測「本機 AI 對話：未登記資料夾」，只有 AI 團隊自己嘅工作', d.work.observe.state === 'unavailable' && d.work.observe.text === '本機 AI 對話：未登記資料夾' && d.work.sessions.every(s => s.host === 'shell'), d.work.observe);
+  ok('未登記資料夾：觀測「本機 AI 對話：未登記資料夾」，只有 AI 團隊自己嘅工作', d.work.observe.state === 'unavailable' && d.work.observe.text === N.dash.observeNoFolders && d.work.sessions.every(s => s.host === 'shell'), d.work.observe);
   ok('示範運行中工作：AI 團隊會話工作中，連住任務 t3', d.work.sessions.some(s => s.host === 'shell' && s.state === 'working' && s.taskIds.includes('t3')) && d.work.tasks.some(t => t.id === 't3' && t.state === 'working'), d.work.sessions);
   const runs0 = runCount();
   let r = await post('/api/setup', { action: 'observe', op: 'add', path: FOLDER, name: 'company-folder' });

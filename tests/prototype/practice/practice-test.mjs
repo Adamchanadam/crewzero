@@ -88,11 +88,59 @@ try {
   const nsc = pr1 && pr1.result && pr1.result.scenarioId ? (await A.get('/api/practice/scenario?id=' + pr1.result.scenarioId)).scenario : null;
   ok('準備練習：AI 準備好場景，連返個行動', nsc && nsc.counterpart.name === '發牌機關職員' && nsc.forTaskId === 'f2' && (await A.get('/api/practice')).actions.find(a => a.id === 'f2').scenarioId === nsc.id, pr1);
   ok('準備練習：冇講明對象唔收', (await A.post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: '', text: '' })).code === 400);
+  // 正式入口：選名單對象時只交紀錄節錄；選其他，即使同名亦不交舊紀錄。
+  const stateFile = path.join(DATA, 'ledger', 'state.json'), ticketState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  ticketState.company.actors = [...(ticketState.company.actors || []), { id: 'ticket-person', name: '測試名單對象', fromMilestoneIds: ['ticket-station'] }];
+  ticketState.company.assumptions = ticketState.company.assumptions || [];
+  ticketState.company.assumptions.push({ id: 'ticket-assumption', text: '測試名單對象的假設標記', grade: 'said' });
+  ticketState.milestones = ticketState.milestones || []; ticketState.events = ticketState.events || [];
+  ticketState.milestones.push({ id: 'ticket-station', short: '站點標記', actorName: '測試名單對象', pathStatus: 'confirmed', order: 99 });
+  ticketState.events.push({ actor: 'founder', type: 'evidence', title: '真事標記', at: '2099-01-01', relatedIds: ['ticket-assumption'] });
+  fs.writeFileSync(stateFile, JSON.stringify(ticketState));
+  const ticketScenario = { ...sc, id: 'ticket-source', counterpartId: 'ticket-person', counterpart: { ...sc.counterpart, name: '測試名單對象' }, persona: Object.fromEntries(['identity','background','stance','interests','decision','concerns','style'].map((k,i) => [k, { text: '舊卡秘密標記' + i, source: '你原話' }])) };
+  fs.writeFileSync(path.join(DATA, 'practice', 'scenarios', 'ticket-source.json'), JSON.stringify(ticketScenario));
+  fs.writeFileSync(path.join(DATA, 'ledger', 'practice-debriefs.json'), JSON.stringify([{ scenarioId: 'ticket-source', text: '會後標記', at: '2099-01-01' }]));
+  fs.writeFileSync(path.join(DATA, 'founder', 'practice', 'ticket-review.json'), JSON.stringify({ scenarioId: 'ticket-source', endedAt: '2099-01-01', review: { why: [{ reason: '覆盤標記' }] } }));
+  async function ticketRequest(body) {
+    const sent = await A.post('/api/intake', { kind: 'note', type: 'practice-prep', ...body });
+    const result = sent.code === 202 && await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === sent.j.id); return r && ['done', 'failed'].includes(r.state) ? r : null; });
+    const file = result && path.join(DATA, 'sandbox', result.id, 'request.md');
+    return { sent, result, request: file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '' };
+  }
+  const selectedTicket = await ticketRequest({ counterpartId: 'ticket-person', who: '測試名單對象' });
+  ok('準備練習正式入口：名單對象的紀錄節錄完整，不含舊人物卡七項', selectedTicket.result?.state === 'done' && ['ticket-person', '推進位置', '真事標記', '站點標記', '假設標記', '會後標記', '覆盤標記'].every(x => selectedTicket.request.includes(x)) && !Array.from({ length: 7 }, (_, i) => '舊卡秘密標記' + i).some(x => selectedTicket.request.includes(x)), selectedTicket);
+  const otherTicket = await ticketRequest({ who: '測試名單對象' });
+  ok('準備練習正式入口：選其他即使同名，只交輸入名字', otherTicket.result?.state === 'done' && otherTicket.request.includes('- 對方：測試名單對象') && !['ticket-person', '真事標記', '站點標記', '假設標記', '會後標記', '覆盤標記', '舊卡秘密標記'].some(x => otherTicket.request.includes(x)), otherTicket);
   // 會後紀錄
   const db = await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'farm-c', sessionId: s.id, text: '丙答應試供一週，下週三開始', commitment: 'partly', followUp: '2026-11-04' });
   const dr = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === db.j.id); return r && (r.state === 'done' || r.state === 'failed') ? r : null; });
-  ok('會後紀錄：記低、AI 擬跟進問題放上待決事項', dr && dr.state === 'done' && dr.result.asks.length === 1 && (await A.get('/api/dashboard')).events.some(e => e.title.startsWith('會後紀錄：農場主丙')), dr);
+  ok('會後紀錄：記低，適用時提出確認問題', dr && dr.state === 'done' && (!dr.result.asks || dr.result.asks.length === 1) && (await A.get('/api/dashboard')).events.some(e => e.title.startsWith('會後紀錄：農場主丙')), dr);
   ok('會後紀錄：冇寫內容唔收', (await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'farm-c', text: '' })).code === 400);
+
+  // 舊場景的顯示、開始、會後確認與失敗重試，均經伺服器及外殼入口。
+  const cardDir = path.join(DATA, 'practice', 'scenarios');
+  const oldCard = { ...sc, id: 'ticket-old', counterpart: { ...sc.counterpart, name: '工作票對象' }, preparedAt: '2026-01-01', persona: { ...sc.persona, concerns: { text: '歷史舊值', source: '你原話' } } };
+  const newCard = { ...oldCard, id: 'ticket-new', preparedAt: '2026-01-02', persona: { ...oldCard.persona, concerns: { text: '較新確認', source: '你原話' } } };
+  delete oldCard.counterpartId; delete newCard.counterpartId;
+  const cardFile = id => path.join(cardDir, id + '.json'), readCard = id => JSON.parse(fs.readFileSync(cardFile(id), 'utf8'));
+  fs.writeFileSync(cardFile(oldCard.id), JSON.stringify(oldCard)); fs.writeFileSync(cardFile(newCard.id), JSON.stringify(newCard));
+  const oldBytes = fs.readFileSync(cardFile(oldCard.id), 'utf8'), newBytes = fs.readFileSync(cardFile(newCard.id), 'utf8');
+  const opened = await A.get('/api/practice/scenario?id=ticket-old');
+  const startedOld = await A.post('/api/practice', { action: 'start', scenarioId: 'ticket-old', edits: { concerns: '練習前新值' } });
+  ok('舊場景用自身人物卡，練習修改只存本次紀錄', opened.scenario.persona.concerns.text === '歷史舊值' && startedOld.code === 200 && startedOld.j.session.persona.concerns.text === '練習前新值' && fs.readFileSync(cardFile('ticket-new'), 'utf8') === newBytes && fs.readFileSync(cardFile('ticket-old'), 'utf8') === oldBytes);
+  const dbOld = await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'ticket-old', text: '對方關注交付時間。', commitment: 'yes' });
+  const drOld = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === dbOld.j.id); return r && ['done','failed'].includes(r.state) ? r : null; });
+  const packId = drOld?.result?.asks?.[0]?.id;
+  const pack = packId && JSON.parse(fs.readFileSync(path.join(DATA, 'asks', packId + '.json'), 'utf8'));
+  ok('會後確認包沒有人物卡題，場景不變', drOld?.state === 'done' && (!pack || !pack.questions.some(q => q.options?.some(o => o.apply?.op === 'updatePersona'))) && fs.readFileSync(cardFile('ticket-old'), 'utf8') === oldBytes && fs.readFileSync(cardFile('ticket-new'), 'utf8') === newBytes, { drOld, pack });
+  fs.writeFileSync(path.join(DATA, 'fake-mode.txt'), 'practice-prep:prep-bad\n');
+  const prepFail = await A.post('/api/intake', { kind: 'note', type: 'practice-prep', who: '工作票對象', text: '重新準備' });
+  const failed = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === prepFail.j.id); return r && ['done','failed'].includes(r.state) ? r : null; });
+  await A.post('/api/retry', { runId: failed?.id });
+  const retried = await waitFor(async () => { const r = await runOf(A, x => x.retryOf === failed?.id); return r && ['done','failed'].includes(r.state) ? r : null; });
+  const retryCard = retried?.result?.scenarioId && readCard(retried.result.scenarioId);
+  ok('準備失敗後重試保存 AI 新場景', failed?.state === 'failed' && retried?.state === 'done' && !('practicePriorScenarioId' in retried) && retryCard?.persona.concerns.text === sc.persona.concerns.text && fs.readFileSync(cardFile('ticket-new'), 'utf8') === newBytes, { failed, retried, retryCard });
+
 } catch (err) {
   ok('測試冇出錯', false, String(err.stack || err));
 } finally {

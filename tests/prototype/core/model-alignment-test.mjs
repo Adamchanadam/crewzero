@@ -29,11 +29,11 @@ try {
   const real = Object.fromEntries(['claude', 'codex', 'agy'].map(id => [id, { ...read(path.join(PROTO, 'adapters', 'hosts', id + '.json')), root: PROTO }]));
   const expected = {
     claude: ['sonnet', 'sonnet', 'sonnet', 'opus'],
-    codex: ['gpt-6.1-terra', 'gpt-6.1-sol', 'gpt-6.1-sol', 'gpt-6.1-sol'],
+    codex: ['gpt-6.1-terra', 'gpt-6.1-sol', 'gpt-6.1-sol', 'gpt-6.1-terra'],
     agy: ['gemini-3.8-flash-medium', 'gemini-4-argon-medium', 'gemini-4-argon-medium', 'gemini-4-argon-high']
   };
-  // 由改動前宿主檔取嘅參數快照；排除模型／思考程度，agy 另排除 print-timeout。
-  const securityHashes = { claude: '69944eef499d3b0cb1e6cb29fb2ba02c5cc4031e4e01db40f99f478d7e79e2c9', codex: '82c9f0d753f03f62aa24e7e72ca7ddbc1f9a8622da0e24334be7330de23a6b97', agy: '55f70add8ae874300ac61988d98aa31850d310c254950d4b79436cbf226661ec' };
+  // 排除模型／思考程度；Codex 快照更新為 web_search=live，agy 另排除 print-timeout。
+  const securityHashes = { claude: '69944eef499d3b0cb1e6cb29fb2ba02c5cc4031e4e01db40f99f478d7e79e2c9', codex: '1ce60f43b851cfe148c42d49288da9ab42bb51d0a2bcae7c95953ba9753378cd', agy: '55f70add8ae874300ac61988d98aa31850d310c254950d4b79436cbf226661ec' };
   const stripped = (args, id) => args.filter((a, i) => a !== '--model' && args[i - 1] !== '--model' && !(id === 'agy' && (a === '--print-timeout' || args[i - 1] === '--print-timeout')) && !a.startsWith('model_reasoning_effort=') && !(a === '-c' && args[i + 1]?.startsWith('model_reasoning_effort=')));
   for (const [id, h] of Object.entries(real)) {
     ok(id + ' 真實宿主通過限制（只讀設定）', H.restrictions(h));
@@ -163,7 +163,7 @@ try {
   process.env.SOS_ADAPTER = AD.fake;
   ok('沒有 models 區：不顯示模型行', !Object.hasOwn(view(), 'models'));
   process.env.SOS_ADAPTER = AD.models;
-  const html = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8'), noticeStart = html.indexOf('      var notice = j.ai'), noticeEnd = html.indexOf('      if (status) window.SOS_CELEBRATE', noticeStart);
+  const html = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8'), noticeStart = html.indexOf('      var notice = j.ai'), noticeEnd = html.indexOf('      if (status && window.SOS_CELEBRATE) window.SOS_CELEBRATE', noticeStart);
   const stored = new Map(), toasts = [], noticeCtx = vm.createContext({ j: { ai: { modelNotice: { id: 'once', text: '更新' } } }, V: {}, localStorage: { getItem: k => stored.get(k), setItem: (k, v) => stored.set(k, v) }, toast: text => toasts.push(text) });
   vm.runInContext(html.slice(noticeStart, noticeEnd), noticeCtx); vm.runInContext(html.slice(noticeStart, noticeEnd), noticeCtx); noticeCtx.V = {}; vm.runInContext(html.slice(noticeStart, noticeEnd), noticeCtx);
   ok('更新提示經輪詢或重開頁面都只出現一次', toasts.length === 1);
@@ -171,7 +171,7 @@ try {
   const runSource = fs.readFileSync(path.join(PROTO, 'run.mjs'), 'utf8');
   const runAISource = runSource.slice(runSource.indexOf('function runAI('), runSource.indexOf('function checkReceipt('));
   let left = 40, startRecords = [];
-  const runCtx = vm.createContext({ certified: () => ({ host: {} }), ROOT: PROTO, DIR: { ledger }, U: A.NAMES.ui, path, STARTS: 'starts', LOCK: 'lock', openUnknowns: () => [], readJSON: () => ({}), localIso: () => '2026-11-04', budgetLeft: () => left, setInterval: () => 0, clearInterval: () => {}, fs: { readFileSync: () => '', existsSync: () => false, appendFileSync: (_f, line) => { startRecords.push(line); left--; } }, execute: async (_h, _s, _p, opts) => { for (let i = 0; i < 2; i++) if (opts.onStart({ attempt: i }) === false) return { ok: false }; return { ok: true }; } });
+  const runCtx = vm.createContext({ certified: () => ({ host: {} }), webAccess: H.webAccess, ROOT: PROTO, DIR: { ledger }, U: A.NAMES.ui, path, STARTS: 'starts', LOCK: 'lock', openUnknowns: () => [], readJSON: () => ({}), localIso: () => '2026-11-04', budgetLeft: () => left, setInterval: () => 0, clearInterval: () => {}, fs: { readFileSync: () => '', existsSync: () => false, appendFileSync: (_f, line) => { startRecords.push(line); left--; } }, execute: async (_h, _s, _p, opts) => { for (let i = 0; i < 2; i++) if (opts.onStart({ attempt: i }) === false) return { ok: false }; return { ok: true }; } });
   vm.runInContext(runAISource, runCtx);
   await vm.runInContext('runAI("sandbox")', runCtx);
   ok('每次後備啟動都經外殼記錄 STARTS', startRecords.length === 2 && left === 38);
@@ -179,8 +179,9 @@ try {
   ok('每日只餘一次時不准後備越過上限', startRecords.length === 1 && left === 0);
   const roleSource = runSource.slice(runSource.indexOf('function roleSetup()'), runSource.indexOf('// 開一場辯論', runSource.indexOf('function roleSetup()')));
   for (const [id, host] of Object.entries(real)) {
-    const role = vm.runInNewContext(roleSource + '\nroleSetup()', { certified: () => ({ host }), modelCandidates: H.modelCandidates, readsWeb: H.readsWeb, ROOT: PROTO, DIR: { ledger } });
-    ok(id + ' 角色警告按模型名稱比較', id === 'claude' ? role.warnings.length === 0 : role.warnings.length === 1 && role.warnings[0] === '三方同一模型，獨立性低', role);
+    const role = vm.runInNewContext(roleSource + '\nroleSetup()', { certified: () => ({ host }), modelCandidates: H.modelCandidates, readsWeb: H.readsWeb, webAccess: H.webAccess, ROOT: PROTO, DIR: { ledger } });
+    // 創辦人 2026-11-05 決定 Codex 裁判改用 Terra（與藍紅兩方不同模型）；只有 Antigravity 仍是三方同一模型
+    ok(id + ' 角色警告按模型名稱比較', id === 'agy' ? role.warnings.length === 1 && role.warnings[0] === '三方同一模型，獨立性低' : role.warnings.length === 0 && role.roles.judge.sameAsBlue === false, role);
   }
   ok('全程已移除紅藍同模型警告', !runSource.includes('紅方與藍方為同一模型'));
   ok('成本上限 2／情景演練 1 及原有模型不變', real.claude.args[real.claude.args.indexOf('--max-budget-usd') + 1] === '2' && real.claude.chat.args[real.claude.chat.args.indexOf('--max-budget-usd') + 1] === '1' && real.claude.chat.fastModel === 'haiku' && real.claude.chat.reviewModel === 'sonnet');

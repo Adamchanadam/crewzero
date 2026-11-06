@@ -113,7 +113,7 @@ export function loadBrain(DIR, { now = new Date(), runs = [], packs = [] } = {})
     const wi = wargameItem(DIR, src, now, null, packs);
     if (wi) Object.assign(it('wargame'), wi);
     const w = wi ? wi.detail : {};
-    if (w.synthesis && w.synthesis.routes.length) Object.assign(it('routes'), { status: 'done', summary: '由紅藍對打得出 ' + w.synthesis.routes.length + ' 條路線，交由你選擇', detail: { routes: w.synthesis.routes.map(r => ({ id: r.id, name: r.name, summary: r.why, redScore: r.redScore, firstTest: r.firstTest, stop: r.stop, recommended: !!r.recommended })) }, updatedAt: w.updatedAt });
+    if (w.synthesis && w.synthesis.routes.length) Object.assign(it('routes'), { status: 'done', summary: '由紅藍對打得出 ' + w.synthesis.routes.length + ' 條路線，交由你選擇', detail: { routes: w.synthesis.routes.map(r => ({ id: r.id, name: r.name, summary: r.why, redScore: r.redScore, firstTest: r.firstTest, stop: r.stop, recommended: w.chosenRouteId ? r.id === w.chosenRouteId : !!r.recommended })), chosenRouteId: w.chosenRouteId || '', decisionsMade: !!(w.founder && (w.founder.decisions || []).length) }, updatedAt: w.updatedAt });
   }
 
   // 等你：揀咗角色／問題包未答；有 AI 跟進就跟住 AI 工作狀態
@@ -160,25 +160,43 @@ function ledgerItems(DIR, it, { now, runs, packs }) {
   const brainRun = k => runs.find(r => (r.steps || []).some(s => s.key === 'brain-' + k));
   for (const k of ['checkup', 'opportunities']) {
     const res = readJSON(brainFile(DIR, k), null), r = brainRun(k), st = r && (r.steps || []).find(s => s.key === 'brain-' + k);
-    if (res) Object.assign(it(k), { status: 'done', summary: res.summary || '', detail: res, updatedAt: res.updatedAt || '' });
+    if (res) Object.assign(it(k), { status: res.partial ? 'partial' : 'done', summary: res.partial && !String(res.summary || '').includes('部分完成') ? '部分完成，只覆蓋已交出的項目。' + (res.summary || '') : res.summary || '', detail: res, updatedAt: res.updatedAt || '' });
     else if (st && st.state === 'running') Object.assign(it(k), { status: 'running', summary: U['brainRun_' + k], progress: { done: 1, total: 2 } });
-    else Object.assign(it(k), { status: 'not_started', summary: st && st.state === 'failed' ? U.brainFailedNext : U['brainNext_' + k] });
+    else Object.assign(it(k), { status: 'not_started', summary: st && ['failed', 'skipped'].includes(st.state) ? U.brainFailedNext : U['brainNext_' + k] });
   }
   const wi = wargameItem(DIR, null, now, null, packs);
   if (wi) Object.assign(it('wargame'), wi); else it('wargame').summary = U.brainNext_wargame;
   const w = wi ? wi.detail : {};
-  if (w.synthesis && w.synthesis.routes.length) Object.assign(it('routes'), { status: 'done', summary: '由紅藍對打得出 ' + w.synthesis.routes.length + ' 條路線，交由你選擇', detail: { routes: w.synthesis.routes.map(r => ({ id: r.id, name: r.name, summary: r.why, redScore: r.redScore, firstTest: r.firstTest, stop: r.stop, recommended: !!r.recommended })) }, updatedAt: w.updatedAt });
+  if (w.synthesis && w.synthesis.routes.length) Object.assign(it('routes'), { status: 'done', summary: '由紅藍對打得出 ' + w.synthesis.routes.length + ' 條路線，交由你選擇', detail: { routes: w.synthesis.routes.map(r => ({ id: r.id, name: r.name, summary: r.why, redScore: r.redScore, firstTest: r.firstTest, stop: r.stop, recommended: w.chosenRouteId ? r.id === w.chosenRouteId : !!r.recommended })), chosenRouteId: w.chosenRouteId || '', decisionsMade: !!(w.founder && (w.founder.decisions || []).length) }, updatedAt: w.updatedAt });
   else it('routes').summary = U.brainNext_routes;
   // 生意體檢之後建議開辯論、商機等你決定（run.mjs 放上 Founder Desk 嘅確認類待決定）：未答就顯示等你
   const offers = readJSON(path.join(DIR.ledger, 'brain-offers.json'), {}) || {};
   for (const [k, o] of [['wargame', offers.debate], ['opportunities', offers.opportunities]]) {
     const x = it(k);
-    if (o && o.packId && packs.some(p => p.id === o.packId) && x.status !== 'running' && x.status !== 'waiting') Object.assign(x, { status: 'waiting', waitHref: '/#/ask/' + o.packId, waitText: U['brainWait_' + k] });
+    if (o && o.packId && packs.some(p => p.id === o.packId) && !x.detail?.partial && x.status !== 'running' && x.status !== 'waiting') Object.assign(x, { status: 'waiting', waitHref: '/#/ask/' + o.packId, waitText: U['brainWait_' + k] });
   }
   const pipe = pipelineOf(DIR);
   if (pipe.prospects.length) Object.assign(it('pipeline'), { status: 'done', summary: U.pipeSummary.replace('{n}', pipe.prospects.length), detail: pipe, updatedAt: pipe.updatedAt });
   else it('pipeline').summary = U.brainNext_pipeline;
   if (it('scenario').status === 'not_started') it('scenario').summary = U.brainNext_scenario;
+}
+// 固定對象名稱；重疊名稱只配最長的完整名稱，避免「陳」配到「陳經理」。
+export function actorMatches(name, text, actors) {
+  return !!(name && text && String(text).includes(name));
+}
+export function deriveActors(page, ms, existing = []) {
+  const entries = ((page && page.detail && page.detail.actors && page.detail.actors.items) || []).filter(a => a && a.label);
+  const raw = entries.length ? entries.map((a, i) => ({ id: 'pr-' + (a.id || i), label: String(a.label), value: String(a.value || '') })) : ms.flatMap(m => String(m.actorName || '').split(/[；;]/)).map(t => t.trim()).filter((t, i, all) => t && all.findIndex(x => x.split(/[（(·：:]/)[0].trim() === t.split(/[（(·：:]/)[0].trim()) === i).map((label, i) => ({ id: 'pr-m' + i, label, value: '' }));
+  const out = existing.map(a => ({ ...a, fromMilestoneIds: [...(a.fromMilestoneIds || [])] }));
+  for (const a of raw) {
+    const name = a.label.split(/[（(·：:]/)[0].trim(); if (!name) continue;
+    const existingActor = out.find(x => entries.length ? x.id === a.id : x.name === name);
+    if (existingActor) { existingActor.name = name; existingActor.label = a.label.trim(); continue; }
+    let id = a.id, n = 1; while (out.some(x => x.id === id)) id = a.id + '-' + n++;
+    out.push({ id, name, label: a.label.trim(), kind: /客戶|付款|付費|顧客/.test(a.label + a.value) ? '客戶' : '供應', fromMilestoneIds: [] });
+  }
+  for (const a of out) { a.fromMilestoneIds = a.fromMilestoneIds.filter(id => !ms.some(m => m.id === id)); for (const m of ms) if (actorMatches(a.name, m.actorName, out)) a.fromMilestoneIds.push(m.id); }
+  return out;
 }
 // 客戶推進：對象＝已確認公司概覽嘅外部角色；格位（0 未接觸 … 4 形成依賴，同證據五級）只由創辦人確認過嘅嘢推進
 export function pipelineOf(DIR) {
@@ -188,21 +206,26 @@ export function pipelineOf(DIR) {
   // 帳本未有里程碑（外殼未同步過）就用公司概覽嘅路線
   const ms = (Array.isArray(s.milestones) && s.milestones.length ? s.milestones : ((page && page.path && page.path.milestones) || []).map((m, i) => ({ id: m.id, short: m.short, actorName: m.actor ? String(vals[m.actor.id] ?? m.actor.value ?? '') : '', event: m.event ? String(vals[m.event.id] ?? m.event.value ?? '') : '', state: 'not_started', pathStatus: 'confirmed', order: i + 1 }))).filter(m => m.pathStatus !== 'retired');
   // 公司概覽冇「公司以外的決策者」清單（舊格式）就由里程碑嘅決策者推出
-  let actors = ((page && page.detail && page.detail.actors && page.detail.actors.items) || []).filter(a => a && a.label);
-  if (!actors.length) { const seen = new Set(); actors = ms.flatMap(m => String(m.actorName || '').split(/[；;]/)).map(t => t.trim()).filter(t => { const k = t.split(/[（(·：:]/)[0].trim(); if (!k || seen.has(k)) return false; seen.add(k); return true; }).map((t, i) => ({ id: 'm' + i, label: t, value: '' })); }
+  const actors = Array.isArray((s.company || {}).actors) ? s.company.actors : deriveActors(page, ms);
   const asm = (s.company || {}).assumptions || [];
   const status = ((page && page.glance && page.glance.status && page.glance.status.items) || []);
   const events = (s.events || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const nea = (s.company || {}).nextExternalAction;
+  const opportunities = readJSON(brainFile(DIR, 'opportunities'), null)?.list || [];
+  const practiceDirs = DIR.data ? { ...DIR, sandbox: DIR.sandbox || path.join(DIR.data, 'sandbox') } : null;
+  const scenarios = practiceDirs ? listScenarios(practiceDirs) : [], sessionDir = DIR.data ? path.join(DIR.data, 'founder', 'practice') : '';
+  const sessions = sessionDir && fs.existsSync(sessionDir) ? fs.readdirSync(sessionDir).filter(f => f.endsWith('.json')).map(f => readJSON(path.join(sessionDir, f), null)).filter(Boolean).sort((x, y) => String(y.endedAt || y.startedAt || '').localeCompare(String(x.endedAt || x.startedAt || ''))) : [];
   let latest = '';
   const prospects = actors.map((a, i) => {
-    const label = String(a.label), name = label.split(/[（(·：:]/)[0].trim();
-    const has = t => !!(name && t && String(t).includes(name));
-    const val = String(vals[a.id] ?? a.value ?? '');
+    const name = a.name, label = a.label || name;
+    const has = t => actorMatches(name, t, actors);
+    const original = (((page || {}).detail || {}).actors || {}).items || [], field = original.find(x => 'pr-' + x.id === a.id) || original.find(x => String(x.label || '').trim() === name);
+    const val = field ? String(vals[field.id] ?? field.value ?? '') : '';
     let stage = 0;
-    const mine = asm.filter(x => has(x.text)), myMs = ms.filter(m => has(m.actorName) || has(m.event));
+    const mine = asm.filter(x => has(x.text)), myMs = ms.filter(m => (a.fromMilestoneIds || []).includes(m.id) || has(m.actorName) || has(m.event));
     for (const x of mine) stage = Math.max(stage, Math.max(0, EV.indexOf(x.grade)));
-    for (const m of myMs) if (m.state === 'done') stage = Math.max(stage, 2);
+    // 0.38.0 的舊完成沒有編號，永久按現時名字計算，不回溯遷移。
+    for (const m of ms) if (m.state === 'done' && (Array.isArray(m.doneCounterpartIds) ? m.doneCounterpartIds.includes(a.id) : myMs.includes(m))) stage = Math.max(stage, 2);
     for (const x of status) if (has(x.label)) stage = Math.max(stage, Math.max(0, EV.indexOf(NAMES.evKey(vals[x.id] ?? x.value))));
     const ids = new Set([...mine.map(x => x.id), ...myMs.map(m => m.id)]);
     // 最近一件真事：只計你確認咗、改到呢個對象嘅假設或站點嗰次（唔計淨係記錄咗、未確認嘅事件）；有原本記錄就用你嘅原話
@@ -211,11 +234,36 @@ export function pipelineOf(DIR) {
     if (ev && ev.at > latest) latest = ev.at;
     const nextM = myMs.filter(m => m.state !== 'done' && m.pathStatus === 'confirmed').sort((x, y) => (x.order || 0) - (y.order || 0))[0];
     // 下一步：AI 上次建議、已做成工作嘅（未完成）優先；冇就用下一個對外動作或者下一站
-    const id = 'pr-' + (a.id || i), tk = (s.tasks || []).find(t => t.prospectId === id && !['done', 'cancelled'].includes(t.status));
-    return { id, name, kind: /客戶|付款|付費|顧客/.test(label + val) ? '客戶' : '供應', stage, lastReal: ev ? String(inp ? inp.title : ev.title).replace(/^[^：]*：/, '') : '', lastAt: ev ? ev.at : '',
+    const id = a.id, tk = (s.tasks || []).find(t => t.prospectId === id && !['done', 'cancelled'].includes(t.status));
+    const myScenarios = scenarios.filter(sc => sc.counterpartId ? sc.counterpartId === id : sc.counterpart?.name === name).sort((x, y) => String(y.preparedAt || y.id).localeCompare(String(x.preparedAt || x.id)));
+    const myIds = new Set(myScenarios.map(sc => sc.id)), review = sessions.find(session => myIds.has(session.scenarioId) && session.review);
+    const materialTask = DIR.work && (s.tasks || []).filter(t => t.prospectId === id && /^R[\w-]{1,40}$/.test(String(t.fromRun || ''))).sort((x, y) => String(y.updatedAt || '').localeCompare(String(x.updatedAt || ''))).find(t => (readJSON(path.join(DIR.work, t.fromRun, 'receipt.json'), null)?.artifacts || []).length);
+    const receipt = materialTask && readJSON(path.join(DIR.work, materialTask.fromRun, 'receipt.json'), null);
+    return { id, name, label, ...(myScenarios.length ? { practiceId: myScenarios[0].id } : {}), ...(review ? { rehearsal: ({ yes: '目標達成', partly: '目標部分達成', no: '目標未達成' }[review.review.goal?.met] || '') } : {}), ...(receipt ? { material: { runId: materialTask.fromRun, title: receipt.artifacts[0].title || materialTask.title } } : {}), hasOpportunity: opportunities.some(o => o.counterpartId && o.counterpartId === id), kind: a.kind || (/客戶|付款|付費|顧客/.test(label + val) ? '客戶' : '供應'), stage, lastReal: ev ? String(inp ? inp.title : ev.title).replace(/^[^：]*：/, '') : '', lastAt: ev ? ev.at : '',
       next: tk ? tk.title : nea && has(nea.text) ? nea.text : nextM ? NAMES.dash.pipeNextStation.replace('{s}', nextM.short) : NAMES.dash.pipeNoNext, ...(tk ? { nextBy: 'ai', nextTaskId: tk.id } : {}), status: val };
   });
   return { prospects, updatedAt: latest || (s.updatedAt || '') };
+}
+
+// 工作資料只整理既有紀錄；人物卡和演練覆盤不作真實證據。
+export function counterpartsOf(DIR) {
+  const s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, actors = (s.company || {}).actors || [];
+  const prospects = pipelineOf(DIR).prospects, scenarios = listScenarios(DIR);
+  const logs = readJSON(path.join(DIR.ledger, 'practice-debriefs.json'), []) || [];
+  const matches = listMatches(DIR, brainSource(DIR));
+  return prospects.map(p => {
+    const actor = actors.find(a => a.id === p.id) || {};
+    const scs = scenarios.filter(sc => sc.counterpartId ? sc.counterpartId === p.id : sc.counterpart && sc.counterpart.name === p.name).sort((a,b) => String(b.preparedAt || b.id).localeCompare(String(a.preparedAt || a.id)));
+    const ids = new Set(scs.map(sc => sc.id));
+    const sessionDir = path.join(DIR.data, 'founder', 'practice');
+    const lastReviewed = fs.existsSync(sessionDir) ? fs.readdirSync(sessionDir).filter(f => f.endsWith('.json')).map(f => readJSON(path.join(sessionDir, f), null)).filter(x => x && ids.has(x.scenarioId) && x.review).sort((a,b) => String(b.endedAt || b.startedAt || '').localeCompare(String(a.endedAt || a.startedAt || '')))[0] : null;
+    const review = Array.isArray(lastReviewed?.review?.why) ? lastReviewed.review.why : [];
+    const debrief = logs.filter(d => ids.has(d.scenarioId)).sort((a,b) => String(b.at).localeCompare(String(a.at)))[0] || null;
+    const seats = matches.flatMap(m => (m.seats || []).filter(x => x.counterpartId ? x.counterpartId === p.id : x.name === p.name || x.name === p.kind).map(x => x.cares && (x.counterpartId ? x.cares : '通用席位觀點：' + x.cares))).filter(Boolean);
+    return { ...p, milestones: (s.milestones || []).filter(m => (actor.fromMilestoneIds || []).includes(m.id)).map(m => ({ name: m.short, actor: m.actorName || '' })),
+      assumptions: ((s.company || {}).assumptions || []).filter(a => actorMatches(p.name, a.text, actors.length ? actors : prospects)).map(a => ({ text: a.text, grade: NAMES.evName(a.grade || 'guess') })),
+      debrief, review, seats };
+  });
 }
 
 /* ---------- 結果卡意見：收件匣入面未處理嘅都計（外殼忙緊都見到已送出）；要改嘅跟住 AI 修改工作嘅狀態；附卡名同項目名（「你的回饋」列表用） ---------- */

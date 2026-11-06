@@ -3,13 +3,17 @@
     "status": "done",
     "updatedAt": "@-6d 21:30",
     "summary": "最薄弱的三處、你可能未想到的事項、現階段不建議做的事",
+    "industryCheck": [
+      { "text": "餐廳採購前可先比較供貨時間與缺貨安排。", "source": "餐飲採購資訊站", "url": "https://farm-dining.example.org/buying/supply", "readOn": "@-6d" },
+      { "text": "小型供應商可先以少量試單了解餐廳需求。", "source": "食材合作資訊站", "url": "https://local-harvest.example.org/guides/trial-orders", "readOn": "@-6d" }
+    ],
     "weak": [
       {
         "id": "weak-1",
         "title": "是否有餐廳願意為來源支付較高價錢",
         "evidence": 1,
         "source": "Zero 解讀",
-        "why": "只有一位主廚口頭表示有興趣，尚未有老闆表態",
+        "why": "只有一位主廚口頭表示願付較高價，尚未有老闆表態",
         "cheapestTest": "就同一張訂單向三間餐廳報兩個價錢",
         "stop": "如兩星期內沒有一間願意試用較高價，便改以穩定供應作賣點"
       },
@@ -84,7 +88,9 @@
         "title": "聖誕前餐廳換菜單",
         "why": "主廚會試用新食材，錯過此時機便要待至春季",
         "firstTest": "本週發三個試食邀請",
-        "window": "12 月第一週前",
+        "window": "未來兩星期內",
+        "windowDate": "@+10d",
+        "counterpartId": "r-a",
         "source": "外部事實 [1]"
       },
       {
@@ -93,7 +99,9 @@
         "title": "批發商不做小量當日採收",
         "why": "小型餐廳需求量太少，批發商不願處理",
         "firstTest": "向兩間小型餐廳查詢現時最低訂購量",
-        "window": "三個月內",
+        "window": "一個月內",
+        "windowDate": "@+30d",
+        "counterpartId": "r-b",
         "source": "外部事實 [2]"
       },
       {
@@ -120,7 +128,8 @@
     "status": "done",
     "updatedAt": "@-2d 21:24",
     "summary": "三條路線，附紅隊評分，供你選擇",
-    "chooseHref": "/#/ask/ask-demo-route",
+    "chosenRouteId": "S1",
+    "decisionsMade": true,
     "routes": [
       {
         "id": "S1",
@@ -204,7 +213,8 @@
           "title": "農場甲供應協議草稿",
           "runId": "R-demo-b"
         },
-        "practiceId": "farm-c"
+        "practiceId": "farm-c",
+        "rehearsal": "目標部分達成"
       },
       {
         "id": "r-c",
@@ -212,7 +222,6 @@
         "kind": "客戶",
         "stage": 0,
         "lastReal": "",
-        "rehearsal": "演練：Zero 扮演主廚表示會試菜（不計作證據）",
         "next": "先請餐廳甲介紹"
       }
     ]

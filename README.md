@@ -33,7 +33,7 @@ Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安�
 | 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
 
-使用 Codex 或 Antigravity 時，Zero 工作不會上網做研究，生意體檢與商機掃描只用你交的資料；情景演練與紅藍對打在 Claude Code 提供。
+三種 AI 工具都可以上網研究、情景演練及紅藍對打。使用 Antigravity 時，Zero 只可網上搜尋，不能開啟網頁全文，所以引用會標明「只經搜尋摘要」。
 
 ## 取得新版
 

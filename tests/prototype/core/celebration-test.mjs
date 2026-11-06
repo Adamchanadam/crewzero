@@ -11,7 +11,8 @@ const part = (start, end) => source.slice(source.indexOf(start), source.indexOf(
 let state, sim = false;
 const context = vm.createContext({ NAMES, randomUUID, isSim: () => sim, stamp: () => '20261105-000000', localIso: () => '2026-11-05T00:00:00+00:00', clip: (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s,
   loadState: () => state, saveState: () => {}, finish: () => {}, ensureActive: () => {}, replySubmittedAt: () => '', founderUpdatedAfter: () => false,
-  dayText: x => x, todayIso: () => '2026-11-05', writeInterviewRecord: () => {}, step: () => {}, U: { interviewTitle: '訪問' }, ADVANCED: false });
+  dayText: x => x, todayIso: () => '2026-11-05', writeInterviewRecord: () => {}, step: () => {}, U: { interviewTitle: '訪問' }, ADVANCED: false,
+  readJSON: (_f, fallback) => fallback, DIR: { company: '' }, path: { join: (...parts) => parts.join('/') }, deriveActors: () => [], loadPage: () => null });
 vm.runInContext(part('const EV_RANK =', 'async function handleEvent('), context);
 vm.runInContext(part('function handleEventConfirm(', '/* ---------- 深化站點'), context);
 vm.runInContext(part('function handleInterviewAnswer(', 'function writeInterviewRecord('), context);

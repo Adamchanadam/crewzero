@@ -73,7 +73,7 @@ try {
   ok('待決事項頁的 AI 工作次數使用短句而沒有「啟動」', String(teleText || '').includes(N.dash.startsTodayL.split('{a}')[0]) && String(teleText || '').includes('次') && !String(teleText || '').includes('啟動'), teleText);
   await chrome.go(BASE + '/dashboard/system');
   const systemText = await waitFor(() => chrome.ev(`document.body.innerText`));
-  ok('系統頁說明公司資料只存放在這部電腦', String(systemText || '').includes('公司資料只存放在這部電腦。其他人要使用，請在這部電腦的瀏覽器開啟。'), systemText);
+  ok('系統頁說明公司資料只存放在這部電腦', String(systemText || '').includes(N.ui.sysData) && N.ui.sysData.includes('公司資料只存放在這部電腦'), systemText);
 
   await chrome.go(BASE + '/#/setup');
   await waitFor(() => chrome.ev(`!!document.querySelector('#tool-more')`));

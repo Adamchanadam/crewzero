@@ -16,7 +16,7 @@
     "-c",
     "approval_policy=\"never\"",
     "-c",
-    "web_search=\"disabled\"",
+    "web_search=\"live\"",
     "-c",
     "project_doc_max_bytes=0",
     "-c",
@@ -61,6 +61,24 @@
     "{prompt}"
   ],
   "prompt": "請先讀呢個資料夾入面嘅 task.md，然後完全照入面嘅指示做；所有產出只可以寫入 out 資料夾。",
+  "chat": {
+    "protocol": "per-turn",
+    "args": [
+      "exec", "--ignore-user-config", "--ignore-rules",
+      "-c", "windows.sandbox=\"unelevated\"", "-C", "{cwd}", "-s", "read-only",
+      "-c", "approval_policy=\"never\"", "-c", "web_search=\"disabled\"",
+      "-c", "project_doc_max_bytes=0", "-c", "skills.include_instructions=false",
+      "--disable", "apps", "--disable", "browser_use", "--disable", "browser_use_external",
+      "--disable", "computer_use", "--disable", "plugins", "--disable", "remote_plugin",
+      "--disable", "image_generation", "--disable", "multi_agent", "--disable", "goals",
+      "--disable", "memories", "--disable", "hooks", "--disable", "in_app_browser",
+      "--disable", "shell_tool", "--disable", "unified_exec",
+      "--model", "{model}", "-c", "model_reasoning_effort=\"low\"",
+      "--skip-git-repo-check", "--ephemeral", "--json", "-o", "{outfile}", "{prompt}"
+    ],
+    "fastModel": "gpt-6.1-terra",
+    "reviewModel": "gpt-6.1-sol"
+  },
   "timeoutMinutes": 10,
   "versionArgs": [
     "--version"
@@ -122,10 +140,13 @@
       "-s",
       "workspace-write",
       "approval_policy=\"never\"",
-      "web_search=\"disabled\"",
+      "web_search=\"live\"",
       "--ignore-user-config",
       "--ignore-rules",
       "--json"
+    ],
+    "mustNotHave": [
+      "sandbox_workspace_write.network_access=true"
     ],
     "pairs": [
       [
@@ -142,7 +163,7 @@
       ],
       [
         "-c",
-        "web_search=\"disabled\""
+        "web_search=\"live\""
       ],
       [
         "-c",
@@ -272,13 +293,13 @@
     ],
     "judge": [
       {
-        "model": "gpt-6.1-sol",
-        "label": "GPT-6.1 Sol",
+        "model": "gpt-6.1-terra",
+        "label": "GPT-6.1 Terra",
         "effort": "high"
       },
       {
-        "model": "gpt-6.1-terra",
-        "label": "GPT-6.1 Terra",
+        "model": "gpt-6.1-sol",
+        "label": "GPT-6.1 Sol",
         "effort": "high"
       }
     ],

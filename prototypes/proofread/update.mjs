@@ -71,19 +71,25 @@ function restoreFrom(backup, dir, known) {
 }
 
 /* ---------- 開緊嘅伺服器、進行中嘅 AI 工作 ---------- */
+// 示範頁面（--demo）由同一份程式運行，只是資料夾不同；不一併關閉，舊程式便會讀到新頁面而失常
+const DEMO = path.join(target, 'demo-data');
+const isDemo = root => root === rootId(DEMO) || root === legacyRootId(DEMO);
+const openName = list => list.every(s => s.demo) ? '示範頁面' : list.some(s => s.demo) ? 'Founder Desk 及示範頁面' : 'Founder Desk';
+const spaced = s => s.replace(/([\u4e00-\u9fff])([A-Za-z])/g, '$1 $2').replace(/([A-Za-z])([\u4e00-\u9fff])/g, '$1 $2');
 async function runningServers() {
-  const found = [], want = rootId(DATA);
+  const found = [];
+  const ours = (j, p) => j.root === rootId(DATA) || j.root === rootId(DEMO) || (j.root === legacyRootId(DATA) || j.root === legacyRootId(DEMO)) && serverOwnership(p, Number(j.pid), target) !== 'other';
   for (let p = BASE_PORT; p < BASE_PORT + 10; p++) {
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && (j.root === want || j.root === legacyRootId(DATA) && serverOwnership(p, Number(j.pid), target) !== 'other')) { found.push({ port: p, pid: Number(j.pid) || 0, busy: !!j.busy, version: String(j.version || ''), legacy: false }); continue; }
+      if (j && ours(j, p)) { found.push({ demo: isDemo(j.root), port: p, pid: Number(j.pid) || 0, busy: !!j.busy, version: String(j.version || ''), legacy: false }); continue; }
     } catch { }
     // 舊版只公開 /api/status；必須同樣列入忙碌判斷及關閉名單，不能遺留無通行證入口。
     try {
       const response = await fetch(`http://127.0.0.1:${p}/api/status`, { signal: AbortSignal.timeout(800) });
       const j = response.ok ? await response.json() : null;
-      if (j && Number(j.pid) > 0 && (j.root === want || j.root === legacyRootId(DATA) && serverOwnership(p, Number(j.pid), target) !== 'other')) found.push({ port: p, pid: Number(j.pid), busy: !!j.busy, version: String(j.version || 'legacy-no-pass'), legacy: true });
+      if (j && Number(j.pid) > 0 && ours(j, p)) found.push({ demo: isDemo(j.root), port: p, pid: Number(j.pid), busy: !!j.busy, version: String(j.version || 'legacy-no-pass'), legacy: true });
     } catch { }
   }
   return found;
@@ -102,19 +108,19 @@ function takeRunLock() {
 const servers = await runningServers();
 if (servers.some(s => s.busy) || runLockHeld()) { say('Zero 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
 if (APPLY && servers.some(s => s.pid && !ownsServerPort(s.port, s.pid))) {
-  say('今次未有更新：Founder Desk 正在開着，系統未能安全關閉它。請重新開機後再更新一次。項目沒有任何改動。');
-  tech('無法獨立核對開着的 Founder Desk 程序身份，已停止換版，沒有終止任何程序或改動任何檔案。');
+  say(spaced(`今次未有更新：${openName(servers)}正在開着，系統未能安全關閉。請重新開機後再更新一次。項目沒有任何改動。`));
+  tech(spaced(`無法獨立核對開着的${openName(servers)}程序身份，已停止換版，沒有終止任何程序或改動任何檔案。`));
   process.exit(4);
 }
 function closeServers() {
-  let closed = 0, unverified = 0;
+  const closed = [], unverified = [];
   for (const s of servers) if (s.pid) {
-    if (!ownsServerPort(s.port, s.pid)) { unverified++; continue; }
-    try { process.kill(s.pid); closed++; } catch { }
+    if (!ownsServerPort(s.port, s.pid)) { unverified.push(s); continue; }
+    try { process.kill(s.pid); closed.push(s); } catch { }
   }
-  if (closed) say('已關閉開着的 Founder Desk（舊版程式）；下次打開便是現在的版本。');
-  if (unverified) say('Founder Desk 正在開着，系統未能安全關閉它；請重新開機，下次打開便是現在的版本。');
-  return unverified === 0;
+  if (closed.length) say(spaced(`已關閉開着的${openName(closed)}（舊版程式）；下次打開便是現在的版本。`));
+  if (unverified.length) say(spaced(`${openName(unverified)}正在開着，系統未能安全關閉；請重新開機，下次打開便是現在的版本。`));
+  return unverified.length === 0;
 }
 
 /* ---------- 還原上一個版本 ---------- */
@@ -128,7 +134,7 @@ if (ROLLBACK) {
   if (!APPLY) {
     say(`將把 CrewZero 還原到版本 ${bVersion}；現時版本 ${cur} 的程式會被取代，公司資料不會改動。`);
     tech(`備份位置：${backup}；程式檔數量：${bFiles.length}；公司資料：${DATA}`);
-    if (servers.length) say('Founder Desk 目前開着（沒有工作進行中）：還原後會把它關閉，下次打開便是還原後的版本。');
+    if (servers.length) say(spaced(`${openName(servers)}目前開着（沒有工作進行中）：還原後會把它關閉，下次打開便是還原後的版本。`));
     process.exit(3);
   }
   const release = takeRunLock();
@@ -175,7 +181,7 @@ for (let i = 2; fs.existsSync(backup); i++) backup = path.join(target, `.backup-
 if (!APPLY) {
   tech(`程式檔數量：${changed.length + stale.length}；備份位置：${backup}`);
   say(`將把 CrewZero 由版本 ${oldLabel} 更新至 ${newVersion}；舊版會先備份，公司資料不會改動。好嗎？`);
-  if (servers.length) say('Founder Desk 目前開着（沒有工作進行中）：更新後會把它關閉，下次打開便是新版。');
+  if (servers.length) say(spaced(`${openName(servers)}目前開着（沒有工作進行中）：更新後會把它關閉，下次打開便是新版。`));
   process.exit(3);
 }
 

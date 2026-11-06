@@ -12,14 +12,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { hosts, version, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
+import { hosts, version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply } from './ask-lib.mjs';
+import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, overviewIsCurrent } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
-import { brainSource } from './brain-lib.mjs';
+import { brainSource, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -311,6 +311,7 @@ function loginState(h) {
   if (!lp || !Array.isArray(lp.args)) return null;
   const key = h.file || h.id, prior = loginCache.get(key), fresh = prior && Date.now() - prior.at < 60000;
   if (fresh || prior?.running) return prior?.value ?? null;
+  clearCliTrust(h);
   const c = resolveCommand(h.command);
   if (c.why || !restrictions(h)) return null;
   const rec = { at: Date.now(), value: prior?.value ?? null, running: true };
@@ -602,7 +603,7 @@ function receiveNote(body) {
     const m = { taskId: /^[\w-]{1,60}$/.test(String(body.taskId || '')) ? body.taskId : '', scenarioId: /^[\w-]{1,60}$/.test(String(body.scenarioId || '')) ? body.scenarioId : '', sessionId: /^[\w-]{1,60}$/.test(String(body.sessionId || '')) ? body.sessionId : '' };
     const say = typeof body.text === 'string' ? body.text.trim() : '';
     if (say.length > 4000) return fail('最多 4000 字。');
-    if (body.type === 'practice-prep') { m.who = typeof body.who === 'string' ? body.who.trim().slice(0, 200) : ''; if (!m.taskId && !say && !m.who) return fail('請說明要練習哪一個會面。'); }
+    if (body.type === 'practice-prep') { m.who = typeof body.who === 'string' ? body.who.trim().slice(0, 200) : ''; m.counterpartId = /^[\w-]{1,60}$/.test(String(body.counterpartId || '')) ? body.counterpartId : ''; if (m.counterpartId && !counterpartsOf(DIR).some(p => p.id === m.counterpartId)) return fail('請重新選擇對方。'); if (!m.taskId && !say && !m.who && !m.counterpartId) return fail('請說明要練習哪一個會面。'); }
     else { if (!say) return fail('請記錄對方實際說了甚麼。'); m.commitment = ['yes', 'partly', 'no'].includes(body.commitment) ? body.commitment : 'no'; m.followUp = /^\d{4}-\d{2}-\d{2}$/.test(String(body.followUp || '')) ? body.followUp : ''; }
     const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
     fs.writeFileSync(path.join(DIR.inbox, `${id}-note-${body.type}.md`), `kind: note\ntype: ${body.type}\nat: ${localIso()}\n\n${say || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify(m)}\n\`\`\`\n`, { flag: 'wx' });
@@ -1243,7 +1244,7 @@ const handler = async (req, res) => {
       if (p === '/api/practice') {
         const st = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
         const actions = (st.tasks || []).filter(t => t.owner === 'founder' && t.status !== 'done' && t.status !== 'cancelled').map(t => ({ id: t.id, title: t.title, dueAt: t.dueAt || '', scenarioId: t.scenarioId || '' }));
-        return send(res, 200, { ok: true, scenarios: listScenarios(DIR).map(s => ({ id: s.id, title: s.title, counterpart: s.counterpart, date: s.date || '', forTaskId: s.forTaskId || '' })), sessions: listSessions(DIR), actions, ai: !!certified(ROOT, DIR.ledger).host, preparing: preparingPractice() });
+        return send(res, 200, { ok: true, counterparts: counterpartsOf(DIR).map(p => ({ id: p.id, name: p.name, reviewKeys: [...new Set(p.review.map(w => w.personaKey).filter(Boolean))] })), scenarios: listScenarios(DIR).map(s => ({ id: s.id, title: s.title, counterpart: s.counterpart, date: s.date || '', forTaskId: s.forTaskId || '' })), sessions: listSessions(DIR), actions, ai: !!certified(ROOT, DIR.ledger).host, preparing: preparingPractice() });
       }
       // 紅藍對打：開一場要嘅選項、全部場次；一場嘅舞台資料（同監察台同一套計法）
       if (p === '/api/debate' || p === '/api/debate/match') {
@@ -1254,7 +1255,7 @@ const handler = async (req, res) => {
         const routes = [...new Map(all.filter(v => v.synthesis).flatMap(v => v.synthesis.routes).map(r => [r.id, { id: r.id, name: r.name }])).values()];
         const starting = fs.readdirSync(DIR.inbox).filter(f => /-note-debate-start\.md$/.test(f)).length;
         return send(res, 200, { ok: true, types: TOPIC_TYPES.map(t => ({ id: t, seats: SEATS[t], format: formatFor(t), passes: passesFor(formatFor(t)).length })), levels: LEVELS,
-          matches: all.map(summaryOf), routes, milestones: (st.milestones || []).filter(m => m.pathStatus === 'confirmed').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short || m.title })),
+          matches: all.map(summaryOf), suggestedSeat: [...all].reverse().find(m => m.suggestedSeat)?.suggestedSeat || null, routes, milestones: (st.milestones || []).filter(m => m.pathStatus === 'confirmed').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short || m.title })),
           ai: !!certified(ROOT, DIR.ledger).host, company: companyStatus(), starting });
       }
       if (p === '/api/practice/scenario') { const s = loadScenario(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, scenario: s }) : send(res, 404, { error: 'not found' }); }
@@ -1318,12 +1319,14 @@ const handler = async (req, res) => {
         return send(res, 200, { ok: true });
       }
       const reply = typeof body.text === 'string' ? parseFounderReply(body.text) : null;
+      if (body.kind === 'ask-answer' && (!reply?.ok || reply.head.kind !== body.kind || reply.head.ref !== body.ref)) { say('拒收問題包答案：header-or-format'); return send(res, 400, { error: 'answer-identity', message: NAMES.ui.errAnswerIdentity }); }
       if (!KINDS.includes(body.kind) || !/^[\w-]{1,80}$/.test(String(body.ref || '')) || !reply?.ok ||
         reply.head.kind !== body.kind || reply.head.ref !== body.ref) return send(res, 400, { error: 'invalid' });
       // 手機可以採用預設，但不得藉一般回覆改寫 G7 權限或 G8 經營節奏。
       if (phone && changesLocalOnly(body, reply)) return send(res, 403, { error: 'local' });
       // 收之前先核對：問題包要喺呢度（舊分頁、測試分頁送嚟嘅唔收，免得收咗先失敗）
       if (body.kind === 'ask-answer' && !loadPack(DIR, body.ref)) return send(res, 404, { error: 'pack-not-here', message: '此問題包已不在此處，可能是舊分頁。請返回 Founder Desk 查看最新問題。' });
+      if (body.kind === 'ask-answer') { const v = validateAskReply(reply, loadPack(DIR, body.ref)); if (!v.ok) { say('拒收問題包答案：' + v.reason); return send(res, 400, { error: 'answer-identity', message: NAMES.ui.errAnswerIdentity }); } }
       let name = `${fileStamp()}-${body.kind}-${body.ref}.md`, n = 1;
       while (fs.existsSync(path.join(DIR.replies, name))) name = `${fileStamp()}-${body.kind}-${body.ref}-${++n}.md`;
        const via = pass.kind === 'phone' ? `device:${pass.id}` : `browser:${pass.id.slice(0, 6)}`;

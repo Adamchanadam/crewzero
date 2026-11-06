@@ -101,6 +101,7 @@ try {
   for (const w of [1440, 1024, 390]) { await go('dashboard/brain/checkup', w); await shot('b06-feedback-done', '#b-checkup'); }
   // 有用（商機掃描分頁）
   await go('dashboard/brain/opportunities');
+  ok('日期格式：時間軸及卡片一致並標示兩星期內', await ev(`(()=>{const a=[...document.querySelectorAll('#opp-axis span')].map(x=>x.innerText.replace(/^\\d+\\s*/,''));const c=[...document.querySelectorAll('#b-opportunities .opp .pos')].map(x=>x.innerText.replace(/^\\d+\\s*·\\s*/,''));return a.length===4&&a.every((x,i)=>x===c[i]&&!/\\d{4}-\\d{2}-\\d{2}|★/.test(x))&&a.slice(0,2).every(x=>/\\d+ 月 \\d+ 日/.test(x))&&a[2].includes('11 月底截止')&&a[0].includes('兩星期內')})()`));
   await click('[data-card="opp-1"] [data-fb="useful"]');
   await click('#fb-send');
   ok('有用：卡上顯示你的意見', await waitFor(async () => (await text('[data-card="opp-1"]')).includes('你的意見：有用')));

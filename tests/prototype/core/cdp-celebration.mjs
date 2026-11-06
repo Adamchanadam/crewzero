@@ -51,6 +51,13 @@ try {
   a = entry(3); seed([a]); await chrome.go(BASE + '/dashboard', 1440, 500); ok('監察台播放', !!await waitFor(stage)); await skip(); await close(); await chrome.go(BASE + '/#/', 1440, 500); ok('已在監察台看過不重播', !await stage() && !await card());
   a = entry(3); seed([a]); await home(); await waitFor(stage); await skip(); await close(); await chrome.go(BASE + '/dashboard', 1440, 500); ok('Founder Desk 已看過監察台不重播', !await stage() && !await card());
   a = entry(2); seed([a]); await home(); await waitFor(card); const body = await ev("document.body.innerText"); ok('頁面文字沒有禁用詞和金額符號', !/勝利|贏|擊敗|經驗值|連擊|[$£€¥￥]/.test(body), body);
+  // 舊伺服器不提供新檔案：讀不到慶祝程式時，頁面照常顯示、不播慶祝，也不可以當成斷線
+  await chrome.send('Network.enable'); await chrome.send('Network.setBlockedURLs', { urls: ['*/celebration.js'] });
+  a = entry(3); seed([a]); await home();
+  ok('讀不到慶祝程式：Founder Desk 照常顯示，沒有慶祝', await ev('!window.SOS_CELEBRATE') && !!await waitFor(() => ev("!!document.querySelector('#quick-input')")) && !await stage() && !await card());
+  await chrome.go(BASE + '/dashboard', 1440, 2500);
+  ok('讀不到慶祝程式：監察台照常顯示，連線正常', await ev('!window.SOS_CELEBRATE') && !!await waitFor(() => ev("!!document.querySelector('#conn') && !document.querySelector('#conn').classList.contains('offline')"), 6000) && await sleep(3000) === undefined && await ev("!document.querySelector('#conn').classList.contains('offline')"), await ev("document.querySelector('#conn')?.outerHTML || document.body.innerText.slice(0, 300)"));
+  await chrome.send('Network.setBlockedURLs', { urls: [] });
 } catch (e) { ok('驗收中斷', false, String(e.stack || e)); }
 ok('播放期間沒有程式錯誤', !!chrome && !chrome.errors.length, chrome?.errors);
 chrome?.close(); server.kill();

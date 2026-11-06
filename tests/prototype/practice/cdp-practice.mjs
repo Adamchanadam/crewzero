@@ -114,7 +114,7 @@ try {
     await ev(`document.querySelector('#db-date').value='2026-11-04'`);
     await shot('p06-debrief', true);
     await jsClick('#db-send');
-    ok('會後紀錄：記低、AI 擬好跟進問題、一按去作答', await waitFor(() => has('#debrief-answer'), REAL ? 240000 : 30000));
+    ok('會後紀錄：完成後有確認入口或清楚顯示無需更新', await waitFor(async () => (await has('#debrief-answer')) || (await text('#debrief-track')).includes('這次沒有需要確認的更新'), REAL ? 240000 : 30000));
     await shot('p07-debrief-done');
     // 再練：清單見到紀錄
     await go('#/practice/farm-c');

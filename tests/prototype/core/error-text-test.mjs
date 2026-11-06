@@ -169,6 +169,7 @@ try {
 
   // 營運監察台：真伺服器拒絕嘅中文原因；連唔到時頁頂提示用監察台嘅叫法
   await cdp.go(BASE + '/dashboard/system', 1440, 3000);
+  await cdp.ev(`document.querySelector('#obs-path').closest('details').open = true`);
   await cdp.type('#obs-path', 'not-a-full-path');
   await cdp.ev(`document.getElementById('obs-path').dispatchEvent(new Event('input',{bubbles:true}));1`);
   await cdp.ev(`document.getElementById('toast').hidden=true;1`);

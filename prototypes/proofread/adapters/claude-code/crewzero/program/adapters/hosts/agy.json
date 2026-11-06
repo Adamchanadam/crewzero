@@ -2,6 +2,7 @@
   "id": "agy",
   "label": "Antigravity",
   "name": "Antigravity",
+  "webAccess": "search",
   "command": "agy",
   "args": [
     "-p",
@@ -20,6 +21,17 @@
     "{model}"
   ],
   "prompt": "請先讀呢個資料夾入面嘅 task.md，然後完全照入面嘅指示做；所有產出只可以寫入 out 資料夾。命令列喺呢度用唔到，請用讀檔、寫檔同列資料夾工具。",
+  "chat": {
+    "protocol": "agy-stream",
+    "args": [
+      "--input-format", "stream-json", "--output-format", "stream-json",
+      "--mode", "accept-edits", "--sandbox", "--settings",
+      "{\"permissions\":{\"deny\":[\"command(*)\",\"read_url(*)\",\"execute_url(*)\",\"mcp(*)\",\"unsandboxed(*)\",\"read_file({agyHome}/)\",\"write_file(*)\",\"read_file(*)\",\"search_web(*)\"]},\"allowNonWorkspaceAccess\":false,\"enableTerminalSandbox\":true}",
+      "--disable-slash-commands", "--model", "{model}"
+    ],
+    "fastModel": "gemini-3.8-flash-medium",
+    "reviewModel": "gemini-4-argon-medium"
+  },
   "certify": {
     "neutral": true,
     "role": "everyday"

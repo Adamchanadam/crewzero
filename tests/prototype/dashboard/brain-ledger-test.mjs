@@ -211,6 +211,12 @@ try {
   /* 「等你處理」同待決事項同源 */
   const bp = { format: 'startup-os.ask/0.1', id: 'ask-test-brain', title: '紅藍對打：需要你決定的事（測試）', askedBy: 'AI', askedAt: lib.localIso(), todoType: 'decision', brainItem: 'wargame', questions: [{ id: 'd1', ask: '先跟進哪一方？', kind: 'choice', options: [{ text: '綠野物流', rec: true }, { text: '食材周報' }], value: '綠野物流', effect: 'now', priority: 1, why: '測試理由' }] };
   fs.writeFileSync(path.join(DATA, 'asks', bp.id + '.json'), JSON.stringify(bp));
+  const repliesDir = path.join(DATA, 'founder', 'replies'), answersDir = path.join(DATA, 'ledger', 'answers'), personaDir = path.join(DATA, 'practice', 'scenarios');
+  const filesSnapshot = dir => fs.existsSync(dir) ? fs.readdirSync(dir).sort().map(f => [f, fs.readFileSync(path.join(dir, f), 'utf8')]) : [];
+  const beforeMismatch = JSON.stringify({ state: state(), replies: filesSnapshot(repliesDir), answers: filesSnapshot(answersDir), personas: filesSnapshot(personaDir) });
+  const wrongReply = ['kind: ask-answer', 'ref: ' + bp.id, 'hash: ' + lib.fnv(JSON.stringify(bp)), '', '```json', JSON.stringify({ format: 'startup-os.ask-reply/0.1', pack: 'another-pack', answers: [{ id: 'd1', value: bp.questions[0].value }] }), '```'].join('\n');
+  const rejected = await post('/api/submit', { kind: 'ask-answer', ref: bp.id, text: wrongReply });
+  ok('HTTP 拒收跨包同題號，帳本、人物卡、答案及回覆不變', rejected.code === 400 && JSON.stringify({ state: state(), replies: filesSnapshot(repliesDir), answers: filesSnapshot(answersDir), personas: filesSnapshot(personaDir) }) === beforeMismatch, rejected);
   const d2 = await get('/api/dashboard'), asks = await get('/api/asks');
   const tb = d2.todo.filter(t => t.brain), ab = asks.todo.filter(t => t.brain), lane = d2.brainTodo || [];
   ok('要拍板的裁判決定包留主線；辯論回應包留生意大腦；監察台同 Founder Desk 同一份', tb.length === 2 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.decisions) && lane.some(t => t.id === dm.packs.response) && !tb.some(t => t.id === dm.packs.response) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
@@ -224,16 +230,25 @@ try {
   const waits = await ev(`[...document.querySelectorAll('#wait-strip li')].map(l=>({item:l.dataset.item,href:(l.querySelector('a')||{}).getAttribute&&l.querySelector('a').getAttribute('href'),t:l.innerText}))`);
   ok('等你處理：同待決事項同一份、同一次序（唔重複列）', JSON.stringify(waits.map(w => w.href)) === JSON.stringify(lane.map(t => t.href)) && waits.every(w => w.item === 'wargame'), { waits, lane: lane.map(t => t.href) });
   await shot('brain-overview.png');
+  for (const kind of ['checkup', 'opportunities']) { const file = path.join(DATA, 'ledger', 'brain', kind + '.json'), result = JSON.parse(fs.readFileSync(file, 'utf8')); result.partial = true; fs.writeFileSync(file, JSON.stringify(result)); }
   await go('/dashboard/brain/checkup');
   ok('生意體檢頁：顯示公司紀錄嘅弱位', (await ev(`document.querySelectorAll('.weak').length`)) === brainOf('checkup').weak.length, await ev(`document.querySelectorAll('.weak').length`));
+  ok('生意體檢頁：部分完成顯示在體檢頁', (await text('#b-checkup')).includes(N.dash.brainPartial), await text('#b-checkup'));
   await go('/dashboard/brain/opportunities');
   ok('商機掃描頁：出處有網址就做連結，網址唔直接顯示', (await ev(`document.querySelectorAll('a.srclink').length`)) === 1 && !(await text('main')).includes('example.com'), await ev(`document.querySelectorAll('a.srclink').length`));
+  ok('商機掃描頁：部分完成顯示在商機頁', (await text('#b-opportunities')).includes(N.dash.brainPartial), await text('#b-opportunities'));
   await go('/dashboard/brain/pipeline');
   ok('客戶推進頁：五個對象，綠野物流已推進', (await ev(`document.querySelectorAll('#pipeline .pr').length`)) === 5 && (await text('#pipeline')).includes('綠野物流'), await text('#pipeline'));
   await shot('brain-pipeline.png');
   const hits = N.styleIssues((await text('#pipeline')).replace(/（測試）[^\n]*/g, ''));
   ok('客戶推進頁文字：用字檢查零命中', !hits.length, hits);
   ok('頁面冇程式錯誤', !errors.length, errors);
+  const numberPack = { ...bp, id: 'ask-test-numeric', questions: [{ ...bp.questions[0], id: 1 }] };
+  fs.writeFileSync(path.join(DATA, 'asks', numberPack.id + '.json'), JSON.stringify(numberPack));
+  const numberSeen = await seenIds(), numberReply = await answer(numberPack);
+  const numberRun = await newRun(numberSeen, r => r.kind === 'ask' && r.ref === numberPack.id);
+  const numberAnswers = await waitFor(() => { const f = path.join(answersDir, numberPack.id + '.json'); return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null; });
+  ok('數字題號經 HTTP 及外殼正式入口記錄答案', (numberReply.code === 202 || numberReply.code === 200) && numberRun?.state === 'done' && numberAnswers?.answers?.['1']?.value === numberPack.questions[0].value, { numberReply, state: numberRun?.state });
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {

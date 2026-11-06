@@ -7,6 +7,8 @@
 - `confirmed-page.md`（如有）或者 `company-page.json`：公司概覽，入面有公司以外嘅決策者。
 - `example-scenario.json`：格式例子（虛構公司）。
 
+- `counterparts.md`：公司以外對象的紀錄。
+
 ## 要做
 
 寫 `out/scenario.json`，格式照 `example-scenario.json`：

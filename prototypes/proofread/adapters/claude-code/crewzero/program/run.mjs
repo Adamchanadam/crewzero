@@ -6,16 +6,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { certified, execute, modelCandidates, readsWeb } from './host-lib.mjs';
+import { certified, execute, modelCandidates, webAccess } from './host-lib.mjs';
 import { checkCompanyPage, normalizePage, ROW_PLANS, RULE_PLANS, CELLS } from './company-page-check.mjs';
 import { scanOutput, fixOutput } from './style-check.mjs';
-import { loadBrain, cardText, brainSource, brainFile, pipelineOf, ledgerAssumptions } from './brain-lib.mjs';
+import { loadBrain, cardText, brainSource, brainFile, pipelineOf, ledgerAssumptions, deriveActors, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeRewriteJSON, mergeRewriteMd, deCodeInfo, deCodeJSONInfo, folderAssumptions, displayDir, displayPath, displayIndex } from './plain-lib.mjs';
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
 import { fileURLToPath } from 'node:url';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply } from './ask-lib.mjs';
+import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
+import { listScenarios } from './practice-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps, overviewIsCurrent } from './dash-lib.mjs';
 const U = NAMES.ui;
@@ -197,7 +198,7 @@ function writeBizContext(sb, selected = null) {
 /* ---------- 帳本種子（規劃書 3.1 成頁確認、附錄 A）：里程碑同假設清單由已確認公司概覽寫入帳本，之後每次確認只更新文字同次序 ----------
    進度（state、doneAt、doneEvidence）同假設級別（grade、status、sourceId）只由你確認真實事件時寫入，同步永遠唔覆寫。
    舊安裝（已確認公司概覽但帳本未有里程碑）喺下一次工作開始時自動補種子。換咗新公司概覽：同名嘅站同假設先保留進度。 */
-const MS_KEEP = ['state', 'doneAt', 'doneEvidence', 'doneInputId', 'watchItems', 'trial', 'retiredReason', 'retiredDecisionId', 'supersededBy', 'parallelConfirmedAt'];
+const MS_KEEP = ['state', 'doneAt', 'doneEvidence', 'doneInputId', 'doneCounterpartIds', 'watchItems', 'trial', 'retiredReason', 'retiredDecisionId', 'supersededBy', 'parallelConfirmedAt'];
 const AS_KEEP = ['grade', 'status', 'sourceId', 'changedAt'];
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 function syncLedger() {
@@ -212,7 +213,7 @@ function syncLedger() {
   const founder = {};
   for (const pm of page.path.milestones) { const o = keepOf(pm); if (o) founder[pm.id] = (o.depthAnswers || []).map(a => a && typeof a === 'object' ? { text: a.founderText || '', adopted: !!a.adopted } : { text: '' }); }
   const kinds = c.kinds || {};
-  const before = JSON.stringify([s.milestones || [], (s.company || {}).assumptions || [], s.intake || {}, s.tasks || [], (s.company || {}).nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]);
+  const before = JSON.stringify([s.milestones || [], (s.company || {}).assumptions || [], (s.company || {}).actors || [], s.intake || {}, s.tasks || [], (s.company || {}).nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]);
   const ms = milestonesFromPage(page, c, { founder }).map(m => { const o = keepOf(m), kind = kinds[m.id] || m.kind || 'real'; return o ? { ...m, kind, ...pick(o, MS_KEEP) } : { ...m, kind }; });
   // 經試行採用、唔喺公司概覽嘅站（3.12）：同步時照留
   for (const o of s.milestones || []) if (o.trial && !ms.some(m => m.id === o.id)) ms.push(o);
@@ -234,7 +235,7 @@ function syncLedger() {
   }
   const oldAs = (s.company && s.company.assumptions) || [];
   // 生意體檢寫嘅最便宜測試：公司概覽冇寫測試就照留（公司概覽有就以公司概覽為準）
-  const as = assumptionsFromPage(page).map(a => { const o = oldAs.find(x => same ? x.pageRef === a.pageRef : x.text === a.text); return !o ? a : { ...a, ...pick(o, AS_KEEP), ...(o.cheapestTestBy === 'checkup' && !String(a.cheapestTest || '').trim() ? pick(o, ['cheapestTest', 'cheapestTestBy', 'cheapestTestAt']) : {}) }; });
+  const as = assumptionsFromPage(page).map(a => { const o = oldAs.find(x => same ? x.pageRef === a.pageRef : x.text === a.text); return !o ? a : { ...a, ...pick(o, AS_KEEP), ...(o.cheapestTestBy === 'checkup' && !String(a.cheapestTest || '').trim() ? pick(o, ['cheapestTest', 'cheapestTestBy', 'cheapestTestAt', 'cheapestTestPartial']) : {}) }; });
   const reg = registry(page), vals = c.values || {}, edited = new Set((c.edits || []).map(e => e.id));
   const v = f => String(vals[f.id] ?? f.value ?? '');
   // 「目前去到哪裏」（G4）推導站點起始狀態：某項連住一站、已實際發生，而且有文件出處或者由你改過 → 嗰站完成（證明＝交資料嘅封存文件）
@@ -270,7 +271,9 @@ function syncLedger() {
   for (const t of tasks) if (t.firstBatch && t.status !== 'done' && !want.some(w => w.id === t.id)) { t.status = 'done'; t.updatedAt = localIso(); }
   // 下一個對外動作（G5）：公司概覽嘅值有改先同步（真實事件確認改過嘅唔會被舊值蓋走）
   const g5f = fieldsByPlan.G5, g5 = g5f ? { text: v(g5f), milestoneId: c.nextActionMilestone || g5f.flagTo || '' } : null;
-  s.company = { ...(s.company || {}), assumptions: as };
+  const oldActors = (s.company || {}).actors || [];
+  s.company = { ...(s.company || {}), assumptions: as, actors: deriveActors(page, ms, oldActors) };
+  for (const m of ms) if (m.state === 'done' && oldMs[m.id]?.state !== 'done') m.doneCounterpartIds = s.company.actors.filter(a => (a.fromMilestoneIds || []).includes(m.id)).map(a => a.id);
   const founderNext = (s.company || {}).nextExternalAction;
   if (g5 && !founderNext?.founderUpdatedAt && JSON.stringify(g5) !== JSON.stringify(s.ledgerG5 || null)) { s.company.nextExternalAction = g5; s.ledgerG5 = g5; }
   // 經營節奏（附錄 A rhythm）：開局確認時按「經營節奏」答案寫入一次，之後只經系統頁改；第一次訪問日＝之後第一個訪問星期
@@ -281,7 +284,7 @@ function syncLedger() {
   s.milestones = ms;
   s.intake = { ...(s.intake || {}), state: missing.length ? 'incomplete' : 'complete', confirmedAt: c.confirmedAt, answers, missing };
   s.ledgerFrom = page.page.id;
-  if (before === JSON.stringify([ms, as, s.intake, tasks, s.company.nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]) && same && !seeded) return false;
+  if (before === JSON.stringify([ms, as, s.company.actors, s.intake, tasks, s.company.nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]) && same && !seeded) return false;
   saveState(s);
   log(`帳本已按公司概覽同步：${ms.length} 個站、${as.length} 條假設、未答齊 ${missing.length} 欄`);
   return true;
@@ -398,6 +401,10 @@ function writeConfirmedPage(sb) {
 function runAI(sandbox, opts) {
   const checked = certified(ROOT, DIR.ledger);
   if (!checked.host) return Promise.resolve({ ok: false, waiting: true, reason: checked.reason });
+  const actualAccess = webAccess(checked.host);
+  const webNotice = { 'search+read': '本次可以上網搜尋及讀網頁', search: '本次只可以網上搜尋，不能開啟網頁全文；只見過搜尋摘要的來源，標題後寫「（只經搜尋摘要）」', none: '本次不可上網；外部事實一律寫「查唔到」，不得寫網址' }[actualAccess];
+  const taskFile = path.join(sandbox, 'task.md');
+  if (fs.existsSync(taskFile)) { const task = fs.readFileSync(taskFile, 'utf8').replace(/^> 本次(?:可以上網搜尋及讀網頁|只可以網上搜尋[^\r\n]*|不可上網[^\r\n]*)\r?\n/gm, ''); fs.writeFileSync(taskFile, /^> 今日日期：[^\r\n]*\r?\n/.test(task) ? task.replace(/^(> 今日日期：[^\r\n]*\r?\n)/, '$1> ' + webNotice + '\n') : '> ' + webNotice + '\n' + task); }
   // 每份 AI 工作都加「寫給創辦人看的文字」規矩（唯一出處 ai-plain.md）
   try { const tf = path.join(sandbox, 'task.md'), rules = fs.readFileSync(path.join(ROOT, 'ai-plain.md'), 'utf8'); if (fs.existsSync(tf) && !fs.readFileSync(tf, 'utf8').includes('## 寫給創辦人看的文字')) fs.appendFileSync(tf, '\n' + rules); } catch { }
   // 創辦人答咗「不知道／稍後提供」嘅事：每份工作都列出，到期前唔好再問（規劃書 3.1、4.10）
@@ -409,7 +416,7 @@ function runAI(sandbox, opts) {
     if (budgetLeft() <= 0 || opts?.onStart?.(info) === false) return false;
     try { fs.appendFileSync(STARTS, `${localIso()}\t${(readJSON(path.join(sandbox, 'job.json'), {}) || {}).type || 'ai'}\t${path.basename(sandbox)}\n`); } catch { }
     return true;
-  } }).finally(() => clearInterval(beat));
+  } }).then(result => ({ ...result, webAccess: actualAccess })).finally(() => clearInterval(beat));
 }
 
 function checkReceipt(outDir, allowEmpty) {
@@ -487,7 +494,7 @@ function markRequest(run, raw, packs) {
   if (run.noteType === 'adhoc' && typeof raw.taskTitle === 'string' && raw.taskTitle.trim()) upsertTask({ id: 'a-' + run.ref, title: clip(raw.taskTitle.trim(), 30) });
 }
 // 改次序／加一站、臨時工作：AI 要擬問題包；生意大腦意見嘅修改唔使
-const isRequest = run => run.kind === 'note' && (run.noteType === 'order' || run.noteType === 'adhoc' || run.noteType === 'help' || run.noteType === 'debrief');
+const isRequest = run => run.kind === 'note' && (run.noteType === 'order' || run.noteType === 'adhoc' || run.noteType === 'help');
 async function runAIStep(run, sb, label, allowEmpty) {
   if (pausedNow() && run.kind !== 'intake') { run.waitingFor = 'paused'; step(run, 'ai', label, 'waiting', U.skip_pausedByFounder); return finish(run, 'waiting'); }
   const ad = certified(ROOT, DIR.ledger);
@@ -506,7 +513,7 @@ async function runAIStep(run, sb, label, allowEmpty) {
   }
   const styleWarnings = await rewriteOnce(sb, run);
   if (run.ideateId) return finishIdeate(run, sb, label, styleWarnings);
-  if (run.noteType === 'event' || run.noteType === 'doc') return finishEvent(run, sb, label, styleWarnings);
+  if (run.noteType === 'event' || run.noteType === 'doc' || run.noteType === 'debrief') return finishEvent(run, sb, label, styleWarnings);
   const chk = checkReceipt(path.join(sb, 'out'), allowEmpty);
   if (!chk.ok) { step(run, 'ai', label, 'failed', chk.reason); return finish(run, 'failed', chk.reason); }
   fs.cpSync(path.join(sb, 'out'), path.join(DIR.work, run.id), { recursive: true });
@@ -768,7 +775,7 @@ function reviseTask(sb, card, say) {
   writeJSON(path.join(sb, 'job.json'), { type: 'revise' });
 }
 // 紅藍對打嘅「需要你決定」：外殼照裁判寫嘅選項機械出問題包（唔使 AI），放上 Founder Desk
-function placeFounderDecisions(key, ds) {
+function placeFounderDecisions(key, ds, matchId = '') {
   if (!key || !ds || !ds.length) return { ok: false, reason: U.debateDecisionMissing };
   const file = path.join(DIR.ledger, 'brain-decisions.json'), map = readJSON(file, {}) || {};
   if (map[key]) return { ok: true, placed: [], packId: map[key], existing: true };
@@ -777,16 +784,20 @@ function placeFounderDecisions(key, ds) {
       return { id: 'd' + (i + 1), priority: i + 1, ask: String(d.question), kind: 'choice', effect: 'now', options: opts.map(o => ({ text: o, rec: o === rec })), value: rec, why: String(d.why || U.debateDecisionWhy), ...(String(d.risk || '').trim() ? { risk: clip(String(d.risk), 120) } : {}), ...(String(d.conflict || '').trim() ? { conflict: clip(String(d.conflict), 120) } : {}) }; }) };
   const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: null, strictTitle: false, system: true });
   if (!prep.ok || !prep.packs.length) return { ok: false, reason: prep.ok ? U.debateDecisionAnswered : U.debateDecisionInvalid };
-  for (const p of prep.packs) { p.todoType = 'decision'; p.brainItem = 'wargame'; }
+  for (const p of prep.packs) { p.todoType = 'decision'; p.brainItem = 'wargame'; if (matchId && viewOf(matchId)) p.debate = { matchId, kind: 'decision' }; }
   const placed = placePacks(DIR, prep.packs);
   map[key] = placed[0].id;
   writeJSON(file, map);
   return { ok: true, placed, packId: placed[0].id, existing: false };
 }
 function handleBrainDecide(run, m) {
-  const view = /^[\w-]{1,40}$/.test(String(m.matchId || '')) && readMatch(m.matchId) ? viewOf(m.matchId) : null;
+  const view = /^[\w-]{1,40}$/.test(String(m.matchId || '')) ? viewOf(m.matchId) : null;
   const w = view || (loadBrain(DIR).items.find(x => x.id === 'wargame') || {}).detail;
-  const result = placeFounderDecisions(view ? m.matchId : m.cardId, w && w.synthesis ? w.synthesis.founderDecisions : []);
+  if (view && m.cardId) {
+    const file = path.join(DIR.ledger, 'brain-decisions.json'), map = readJSON(file, {}) || {};
+    if (Object.hasOwn(map, m.cardId) && map[m.cardId] && !Object.hasOwn(map, m.matchId)) { map[m.matchId] = map[m.cardId]; writeJSON(file, map); }
+  }
+  const result = placeFounderDecisions(view ? m.matchId : m.cardId, w && w.synthesis ? w.synthesis.founderDecisions : [], view ? m.matchId : '');
   if (!result.ok && result.reason === U.debateDecisionAnswered) {
     step(run, 'applied', U.stepReqRegistered, 'done', result.reason);
     run.result = { summary: result.reason, artifacts: [], founderNext: [] };
@@ -798,14 +809,33 @@ function handleBrainDecide(run, m) {
   run.result = { summary: said, artifacts: [], founderNext: [], ...(result.placed.length ? { asks: result.placed } : {}) };
   return finish(run, 'done');
 }
+function writeCounterparts(sb) {
+  const rows = counterpartsOf(DIR), lines = ['# 公司以外的對象紀錄', ''];
+  for (const p of rows) {
+    lines.push('## ' + p.name, '- 對象編號：' + p.id, '- 類別：' + p.kind, '- 推進位置：' + (NAMES.evName(NAMES.EV_KEYS[p.stage]) || ''), '- 最近真事：' + (p.lastReal || '沒有紀錄'));
+    for (const m of p.milestones) lines.push('- 所屬站點：' + m.name + '；' + m.actor);
+    for (const a of p.assumptions) lines.push('- 假設：' + a.text + '（' + a.grade + '）');
+    if (p.debrief) lines.push('- 上次會後紀錄：' + (p.debrief.text || '') + '；' + (p.debrief.commitment || ''));
+    for (const why of p.review) lines.push('- 練習覆盤：' + (why.text || why.reason || ''));
+    for (const care of p.seats) lines.push('- 辯論席位關注：' + care);
+    lines.push('');
+  }
+  if (!rows.length) lines.push('（沒有對象紀錄）');
+  fs.writeFileSync(path.join(sb, 'counterparts.md'), lines.join('\n') + '\n');
+}
 /* ---------- 情景演練：準備場景（AI 由準備文件同你嘅行動擬人物卡）、會後紀錄（AI 擬跟進問題） ---------- */
 const PRACTICE_DIR = path.join(DIR.data, 'practice', 'scenarios');
 async function handlePracticePrep(run, m, say) {
   const task = m.taskId ? getTask(m.taskId) : null;
   run.practiceTaskId = m.taskId || '';
+  const actors = (loadState().company || {}).actors || [];
+  run.practiceCounterpartId = ((m.counterpartId ? actors.find(a => a.id === m.counterpartId) : !Object.hasOwn(m, 'counterpartId') ? actors.find(a => a.name === String(m.who || '').trim()) : null) || {}).id || '';
   step(run, 'applied', U.stepReqRegistered, 'done', task ? task.title : '');
   const sb = newSandbox(run);
-  fs.writeFileSync(path.join(sb, 'request.md'), ['# 想練習嘅會面', '', task ? `- 現實行動：${task.title}` : '', task && task.dueAt ? `- 日期：${task.dueAt}` : '', m.who ? `- 對方：${m.who}` : '', say ? `- 創辦人補充：${say}` : ''].filter(Boolean).join('\n') + '\n');
+  const counterpart = counterpartsOf(DIR).find(p => p.id === run.practiceCounterpartId);
+  const excerpt = counterpart ? ['## ' + counterpart.name, '- 對象編號：' + counterpart.id, '- 推進位置：' + (NAMES.evName(NAMES.EV_KEYS[counterpart.stage]) || ''), '- 最近真事：' + (counterpart.lastReal || '沒有紀錄'), ...counterpart.milestones.map(x => '- 所屬站點：' + x.name + '；' + x.actor), ...counterpart.assumptions.map(x => '- 相關假設：' + x.text + '（' + x.grade + '）'), ...(counterpart.debrief ? ['- 上次會後紀錄：' + (counterpart.debrief.text || '')] : []), ...counterpart.review.map(x => '- 覆盤重點：' + (x.reason || x.text || ''))] : [];
+  fs.writeFileSync(path.join(sb, 'counterparts.md'), '# 對方紀錄\n\n' + excerpt.join('\n') + '\n');
+  fs.writeFileSync(path.join(sb, 'request.md'), ['# 想練習嘅會面', '', task ? `- 現實行動：${task.title}` : '', task && task.dueAt ? `- 日期：${task.dueAt}` : '', (counterpart || m.who) ? `- 對方：${counterpart ? counterpart.name : m.who}` : '', say ? `- 創辦人補充：${say}` : '', ...excerpt].filter(Boolean).join('\n') + '\n');
   // 準備文件：生意大腦指定嘅本機資料夾入面同會面有關嘅文件（只複製入工作資料夾）
   const src = brainSource(DIR);
   if (src && src.kind === 'folder') {
@@ -825,9 +855,13 @@ function finishPracticePrep(run, sb, label) {
   const okSc = sc && sc.counterpart && txt(sc.counterpart.name, 60) && sc.persona && ['identity', 'stance', 'interests'].every(k => sc.persona[k] && txt(sc.persona[k].text, 400)) && sc.goal && txt(sc.goal.text, 200) && Array.isArray(sc.questions) && sc.questions.length && Array.isArray(sc.objections) && sc.objections.length;
   if (!okSc) { const why = 'Zero 這次準備的場景內容不完整，系統未有採用。請按「重試」，Zero 會重新準備。'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
   const task = run.practiceTaskId ? getTask(run.practiceTaskId) : null;
+  const personaWarnings = [];
+  const counterpartText = fs.existsSync(path.join(sb, 'counterparts.md')) ? fs.readFileSync(path.join(sb, 'counterparts.md'), 'utf8') : '';
+  const hasDebrief = !!run.practiceCounterpartId && counterpartText.split(/\r?\n## /).some(block => block.includes('- 對象編號：' + run.practiceCounterpartId + '\n') && block.includes('- 上次會後紀錄：'));
+  const personaSource = (source, key) => { const s = txt(source, 60); if (/^(你原話|Zero 解讀|外部事實 \[\d+\]|你上次會面紀錄)$/.test(s) && (s !== '你上次會面紀錄' || hasDebrief)) return s; personaWarnings.push(NAMES.dash.warnPersonaSource.replace('{id}', key)); return 'Zero 解讀'; };
   const id = 'S' + stamp();
-  const clean = { id, title: txt(sc.title, 60) || '練習：' + txt(sc.counterpart.name, 30), forTaskId: task ? task.id : '', date: task && task.dueAt || '', counterpart: { name: txt(sc.counterpart.name, 60), role: txt(sc.counterpart.role, 120) },
-    persona: Object.fromEntries(['identity', 'background', 'stance', 'interests', 'decision', 'concerns', 'style'].filter(k => sc.persona[k] && txt(sc.persona[k].text, 400)).map(k => [k, { text: txt(sc.persona[k].text, 400), source: txt(sc.persona[k].source, 60) || 'Zero 解讀' }])),
+  const clean = { id, ...(run.practiceCounterpartId ? { counterpartId: run.practiceCounterpartId } : {}), title: txt(sc.title, 60) || '練習：' + txt(sc.counterpart.name, 30), forTaskId: task ? task.id : '', date: task && task.dueAt || '', counterpart: { name: txt(sc.counterpart.name, 60), role: txt(sc.counterpart.role, 120) },
+    persona: Object.fromEntries(['identity', 'background', 'stance', 'interests', 'decision', 'concerns', 'style'].filter(k => sc.persona[k] && txt(sc.persona[k].text, 400)).map(k => [k, { text: txt(sc.persona[k].text, 400), source: personaSource(sc.persona[k].source, k) }])),
     hidden: (sc.hidden || []).slice(0, 3).map((h, i) => ({ id: 'H' + (i + 1), text: txt(h.text, 300) })).filter(h => h.text),
     goal: { text: txt(sc.goal.text, 200), fallback: txt(sc.goal.fallback, 200) },
     questions: sc.questions.slice(0, 8).map((q, i) => ({ id: 'Q' + (i + 1), text: txt(q.text || q, 200) })).filter(q => q.text),
@@ -837,7 +871,7 @@ function finishPracticePrep(run, sb, label) {
   fs.mkdirSync(PRACTICE_DIR, { recursive: true });
   writeJSON(path.join(PRACTICE_DIR, id + '.json'), clean);
   if (task) upsertTask({ id: task.id, scenarioId: id });
-  run.result = { summary: '練習場景準備好：' + clean.title, artifacts: [], founderNext: [], scenarioId: id };
+  run.result = { summary: '練習場景準備好：' + clean.title, artifacts: [], founderNext: [], scenarioId: id, warnings: personaWarnings };
   step(run, 'ai', label, 'done', clean.counterpart.name);
   return finish(run, 'done');
 }
@@ -850,9 +884,14 @@ async function handleDebrief(run, m, say) {
   addEvent({ actor: 'founder', type: 'input', title: '會後紀錄：' + (sc ? sc.counterpart.name : '真實會面') + '（' + (CM[m.commitment] || '') + '）', relatedIds: [m.scenarioId || ''], moduleIds: ['inputs', 'evidence'] });
   step(run, 'applied', U.stepReqRegistered, 'done', CM[m.commitment] || '');
   const sb = newSandbox(run);
+  writeCounterparts(sb);
   fs.writeFileSync(path.join(sb, 'debrief.md'), ['# 會後紀錄（真實會面）', '', `- 對方：${sc ? sc.counterpart.name : '（未有場景）'}`, `- 有冇承諾：${CM[m.commitment] || ''}`, m.followUp ? `- 跟進日期：${m.followUp}` : '', '', '## 對方真係講咗乜', '', say].filter(x => x !== '').join('\n') + '\n');
   if (sc) writeJSON(path.join(sb, 'scenario.json'), sc);
-  writeConfirmedPage(sb);
+  const s = loadState(), date = localIso().slice(0, 10), inputId = 'in-' + run.ref;
+  s.inputs = (s.inputs || []).filter(i => i.id !== inputId);
+  s.inputs.push({ id: inputId, kind: 'inbox', via: 'debrief', title: '會後紀錄：' + (sc ? sc.counterpart.name : '真實會面') + '：' + clip(say, 50), file: '', files: [], eventDate: date, receivedAt: localIso(), status: 'unprocessed', effects: [] });
+  saveState(s);
+  eventTask(sb, s, { text: say, date, files: [], ref: run.ref });
   fs.copyFileSync(path.join(ROOT, 'ai-debrief.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'debrief' });
   await runAIStep(run, sb, U.practiceDebriefAI, true);
@@ -1011,6 +1050,7 @@ function checkEvent(out) {
   });
   if (errors.length) return { ok: false, errors };
   if (items.length > 3) log(`真實事件建議多過三項，只問頭三項：${items.slice(3).map(x => x.kind + ':' + x.id).join('、')}`);
+
   return { ok: true, ev, items: items.slice(0, 3) };
 }
 function eventPack(run, s, input, items) {
@@ -1050,6 +1090,7 @@ async function finishEvent(run, sb, label, styleWarnings) {
   }
   const s = loadState(), input = (s.inputs || []).find(i => i.id === 'in-' + run.ref);
   if (!chk.ok || !input) { step(run, 'ai', label, 'failed', U.eventFailed); return finish(run, 'failed', U.eventFailed); }
+  if (Object.hasOwn(chk.ev, 'personaUpdate')) { delete chk.ev.personaUpdate; writeJSON(path.join(out, 'event.json'), chk.ev); }
   fs.cpSync(out, path.join(DIR.work, run.id), { recursive: true });
   writeJSON(path.join(DIR.work, run.id, 'run.json'), { id: run.id, kind: run.kind, ref: run.ref, label, startedAt: run.startedAt, aiCost: run.aiCost || null });
   input.summary = clip(chk.ev.summary.trim(), 300);
@@ -1059,7 +1100,8 @@ async function finishEvent(run, sb, label, styleWarnings) {
     run.result = { summary: input.summary + ' ' + U.eventNoChange, artifacts: [], founderNext: [], styleWarnings };
     step(run, 'ai', label, 'done', U.eventNoChange); return finish(run, 'done');
   }
-  const placed = placePacks(DIR, [eventPack(run, s, input, chk.items)]);
+  const pack = eventPack(run, s, input, chk.items);
+  const placed = placePacks(DIR, [pack]);
   input.status = 'awaitingFounder'; input.awaitingFounderText = U.eventAwaiting; input.packId = placed[0].id;
   saveState(s);
   run.result = { summary: input.summary, artifacts: [], founderNext: [], asks: placed, styleWarnings };
@@ -1105,7 +1147,7 @@ function handleEventConfirm(run, pack, store) {
       const m = (s.milestones || []).find(x => x.id === ap.id);
       if (!m || m.state === 'done') continue;
       noteCelebration(s, { milestone: m, batch: celebrations });
-      m.state = 'done'; m.doneAt = date; m.doneEvidence = [input.file, ...(input.files || [])].filter(Boolean); m.doneInputId = input.id; doneIds.push(m.id); ADVANCED = true;
+      m.state = 'done'; m.doneAt = date; m.doneEvidence = [input.file, ...(input.files || [])].filter(Boolean); m.doneInputId = input.id; m.doneCounterpartIds = deriveActors(loadPage(), s.milestones || [], (s.company || {}).actors || []).filter(a => (a.fromMilestoneIds || []).includes(m.id)).map(a => a.id); doneIds.push(m.id); ADVANCED = true;
       const t = '站點「' + m.short + '」已完成（' + dayText(date) + '，經你確認）';
       input.effects.push({ targetKind: 'decision', targetId: pack.id, change: t });
       ev('milestone', '站點完成：' + m.short + '（' + dayText(date) + '）', [m.id, input.id], ['now', 'paths', 'evidence']); said.push(t);
@@ -1127,10 +1169,11 @@ function handleEventConfirm(run, pack, store) {
       const conf = s.milestones.filter(m => m.pathStatus === 'confirmed' && m.state !== 'done').sort((a, b) => (a.order || 0) - (b.order || 0));
       const nx = conf.find(m => m.state === 'active') || conf[0], m0 = s.milestones.find(m => m.id === nea.milestoneId);
       const sug = nx ? clip(String(nx.event || nx.short).trim(), 100) : '';
-      pack.questions.push({ id: 'nad', priority: pack.questions.length + 1, about: U.nextActionAsk, ask: NAMES.t('nextAfterDone', { s: m0.short }), kind: 'choice', effect: 'now',
+      const nextQuestion = { id: 'nad', priority: pack.questions.length + 1, about: U.nextActionAsk, ask: NAMES.t('nextAfterDone', { s: m0.short }), kind: 'choice', effect: 'now',
         options: (sug ? [{ text: sug, rec: true, apply: { op: 'setNextExternalAction', text: sug, milestoneId: nx.id } }] : []).concat([{ text: U.unknownLater, ...(sug ? {} : { rec: true }), apply: { op: 'keep' } }]),
-        value: sug || U.unknownLater, why: U.nextAfterDoneWhy + (sug ? '建議按「' + nx.short + '」這一站要發生的事填寫。' : '') });
-      writeJSON(path.join(DIR.asks, pack.id + '.json'), pack);
+        value: sug || U.unknownLater, why: U.nextAfterDoneWhy + (sug ? '建議按「' + nx.short + '」這一站要發生的事填寫。' : '') };
+      if (pack.questions.length < 3) { pack.questions.push(nextQuestion); writeJSON(path.join(DIR.asks, pack.id + '.json'), pack); }
+      else input.pendingNextQuestion = nextQuestion;
       s.company.nextExternalAction = { ...nea, pendingUpdate: true };
       said.push('下一站「' + (nx ? nx.short : '') + '」已開始；下一個對外動作待你確認');
     }
@@ -1138,7 +1181,15 @@ function handleEventConfirm(run, pack, store) {
   input.appliedQids = [...applied];
   const left = pack.questions.filter(q => !store.answers[q.id]).length;
   input.status = left ? 'awaitingFounder' : 'processed';
-  if (!left) { input.processedAt = localIso(); delete input.awaitingFounderText; }
+  if (!left) {
+    input.processedAt = localIso(); delete input.awaitingFounderText;
+    if (input.pendingNextQuestion) {
+      const next = eventPack(run, s, input, []);
+      next.questions.push(input.pendingNextQuestion); delete input.pendingNextQuestion;
+      const placed = placePacks(DIR, [next]);
+      input.status = 'awaitingFounder'; input.packId = placed[0].id; input.awaitingFounderText = U.eventAwaiting; delete input.processedAt;
+    }
+  }
   finishCelebration(s, celebrations);
   saveState(s);
   run.result = { summary: said.length ? '已更新：' + said.join('；') + '。' : '已記錄；證據級及站點進度維持不變。', artifacts: [], founderNext: [] };
@@ -1361,30 +1412,59 @@ function newSandbox(run, selectedBiz = null) {
 /* ---------- 生意大腦：生意體檢（規劃書 4.6 供料與觸發表；結果只係 AI 解讀或建議，唔改任何級別） ----------
    公司概覽成頁確認嗰次工作做第一次；每月覆核（距上次 28 日或以上）再做。同一次工作入面做，唔會令自動停多計一次。
    供料：已確認公司概覽、帳本假設清單同里程碑、創辦人上次對結果卡嘅意見。 */
-const BRAIN_JOBS = { checkup: { task: 'ai-checkup.md', out: 'checkup.json', check: (raw, L, at) => checkCheckup(raw, L, at) }, opportunities: { task: 'ai-opportunities.md', out: 'opportunities.json', check: (raw, L, at) => checkOpportunities(raw, at) } };
+const BRAIN_JOBS = { checkup: { task: 'ai-checkup.md', out: 'checkup.json', check: (raw, L, at) => checkCheckup(raw, L, at) }, opportunities: { task: 'ai-opportunities.md', out: 'opportunities.json', check: (raw, L, at) => checkOpportunities(raw, at, L) } };
 // 商機掃描：已確認、已有生意體檢、距上次 6 日或以上，而且係訪問日前一日或訪問日
 function opportunitiesDue(s, today) {
   const o = readJSON(brainFile(DIR, 'opportunities'), null), nextOn = s.interviews && s.interviews.nextOn;
   return !!(readJSON(CONFIRMED, null) && fs.existsSync(brainFile(DIR, 'checkup')) && nextOn && today >= addDays(nextOn, -1) && (!o || !o.updatedAt || (clockNow() - new Date(o.updatedAt)) / 86400000 >= 6));
 }
 const OPP_KINDS = ['政策', '資助', '時間窗', '競爭空隙'];
-function checkOpportunities(raw, at) {
+// 只可按編號或正規化標題攔截；AI 改寫標題後的同一機會無法機械辨認，須依靠 AI 指示。
+const opportunityTitle = title => String(title || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+const opportunityMatch = (id, title, priorId, prior) => !!((id && id === priorId) || (opportunityTitle(title) && opportunityTitle(title) === opportunityTitle(prior.title)));
+function rejectedOpportunities(decisions) {
+  const rejected = new Map();
+  for (const [id, d] of Object.entries(decisions)) {
+    if (d.answer !== U.oppDrop && (Number(d.laterCount) || (d.answer === U.oppLater ? 1 : 0)) < 2) continue;
+    let current = id;
+    const visited = new Set();
+    while (current && decisions[current] && !visited.has(current)) {
+      visited.add(current);
+      const entry = decisions[current];
+      rejected.set(current, { id: current, title: entry.title });
+      current = entry.previousId;
+    }
+  }
+  return [...rejected.values()];
+}
+function checkOpportunities(raw, at, L) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.list)) return { ok: false, reason: '商機掃描的格式不正確' };
   const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n), tag = at.replace(/\D/g, '').slice(0, 12);
   // 外部事實一定要有出處（標題同查閱日期）；網址另放，畫面以連結顯示
   // as：AI 建議做成臨時工作（task）定係路徑選項（path，會改到已確認嘅站）；兩樣都要你決定先做
-  const list = raw.list.slice(0, 5).map((o, i) => ({ id: 'opp-' + tag + '-' + (i + 1), kind: OPP_KINDS.includes(o && o.kind) ? o.kind : '時間窗', as: o && o.as === 'path' ? 'path' : 'task', title: txt(o && o.title, 80), why: txt(o && o.why, 300), firstTest: txt(o && o.firstTest, 200), window: txt(o && o.window, 60), source: txt(o && o.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(o && o.url || '')) ? String(o.url) : '' })).filter(o => o.title && o.why && o.firstTest && o.source);
+  const rejected = (L.rejectedOpportunities || []);
+  const knownIds = new Set([...(L.knownOpportunityIds || []), ...rejected.map(x => x.id)]);
+  const previousId = o => { const id = txt(o?.previousId, 100); return knownIds.has(id) ? id : ''; };
+  const list = raw.list.filter(o => !rejected.some(x => opportunityMatch(previousId(o), txt(o?.title, 80), x.id, x))).slice(0, 5).map((o, i) => ({ id: 'opp-' + tag + '-' + (i + 1), ...(previousId(o) ? { previousId: previousId(o) } : {}), kind: OPP_KINDS.includes(o && o.kind) ? o.kind : '時間窗', as: o && o.as === 'path' ? 'path' : 'task', title: txt(o && o.title, 80), why: txt(o && o.why, 300), firstTest: txt(o && o.firstTest, 200), window: txt(o && o.window, 60), windowDate: txt(o && o.windowDate, 10), counterpartId: ((L.counterparts || []).some(a => a.id === o?.counterpartId) ? o.counterpartId : ''), source: txt(o && o.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(o && o.url || '')) ? String(o.url) : '' })).filter(o => { if (o.windowDate && (!/^\d{4}-\d{2}-\d{2}$/.test(o.windowDate) || Number.isNaN(Date.parse(o.windowDate)) || new Date(o.windowDate).toISOString().slice(0, 10) !== o.windowDate || o.windowDate < at.slice(0, 10))) return false; return o.title && o.why && o.firstTest && o.source; });
   if (!list.length) return { ok: false, reason: '商機掃描未有寫出附出處的機會' };
-  return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_opportunities, list } };
+  return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_opportunities, partial: raw.partial === true, list } };
 }
-const checkupStale = () => { const c = readJSON(brainFile(DIR, 'checkup'), null); return !c || !c.updatedAt || (clockNow() - new Date(c.updatedAt)) / 86400000 >= 28; };
+const checkupStale = () => { const c = readJSON(brainFile(DIR, 'checkup'), null); return !c || !c.updatedAt || (clockNow() - new Date(c.updatedAt)) / 86400000 >= (c.partial === true ? 7 : 28); };
 function brainLedger() {
   const s = loadState();
-  return { assumptions: ((s.company || {}).assumptions || []).filter(a => a.status !== 'retired').map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '' })),
+  const active = ((s.company || {}).assumptions || []).filter(a => a.status !== 'retired');
+  const nextStations = (s.milestones || []).filter(m => m.pathStatus === 'confirmed' && m.state !== 'done').sort((a, b) => (a.order || 0) - (b.order || 0)).slice(0, 2);
+  const relevant = active.filter(a => (a.milestoneIds || []).some(id => nextStations.some(m => m.id === id)));
+  const minGrade = relevant.length ? Math.min(...relevant.map(a => Math.max(0, NAMES.EV_KEYS.indexOf(a.grade || 'guess')))) : -1;
+  const hints = { lowestForNextStations: relevant.filter(a => Math.max(0, NAMES.EV_KEYS.indexOf(a.grade || 'guess')) === minGrade).map(a => a.id), unchanged28Days: active.filter(a => a.changedAt && (clockNow() - new Date(a.changedAt)) / 86400000 > 28).map(a => a.id) };
+  const adopted = listMatches(DIR, brainSource(DIR)).flatMap(m => (m.strengthen?.cards || []).filter(c => c.status === '已採用' || c.status === '已改處理').map(c => ({ title: c.test?.what || c.critique || '', matchId: m.id })).filter(c => c.title));
+  const existingTests = { assumptions: active.filter(a => a.cheapestTest).map(a => ({ assumptionId: a.id, test: a.cheapestTest })), adopted };
+  return { assumptions: ((s.company || {}).assumptions || []).filter(a => a.status !== 'retired').map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '', ...(a.cheapestTestPartial ? { cheapestTestSource: '生意體檢部分完成，只覆蓋已交出的項目' } : {}) })),
+    hints, existingTests,
     // 已確認值（規劃書出題規則第 8 條）：路線次序、邊站已確認、進度、本季目標，AI 建議唔可以同佢哋矛盾
     milestones: (s.milestones || []).filter(m => m.pathStatus !== 'retired').sort((a, b) => (a.order || 0) - (b.order || 0)).map((m, i) => ({ id: m.id, order: i + 1, name: m.short, event: m.event || '', actor: m.actorName || '', confirmed: m.pathStatus === 'confirmed', state: m.state || 'not_started', done: m.state === 'done' })),
     quarterGoal: (s.goals && s.goals.quarter && s.goals.quarter.text) || ((s.intake && s.intake.answers && s.intake.answers.G1) || {}).value || '',
-    nextExternalAction: (s.company || {}).nextExternalAction || null };
+    nextExternalAction: (s.company || {}).nextExternalAction || null, counterparts: ((s.company || {}).actors || []).map(a => ({ id: a.id, name: a.name })) };
 }
 // 創辦人上次對呢一項結果卡嘅意見（有用／沒有用／要修改＋一句）：寫入下一次工作說明
 function feedbackFor(item, prev) {
@@ -1397,12 +1477,14 @@ function checkCheckup(raw, L, at) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.weak)) return { ok: false, reason: '生意體檢的格式不正確' };
   const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
   const byId = Object.fromEntries(L.assumptions.map(a => [a.id, a])), tag = at.replace(/\D/g, '').slice(0, 12);
+  if (raw.weak.slice(0, 3).some(w => !w || !byId[w.assumptionId])) return { ok: false, invalidAssumption: true, reason: '弱位指向不存在的假設' };
   // 證據級由帳本假設讀，唔係 AI 寫
   const weak = raw.weak.slice(0, 3).map((w, i) => { const a = byId[w && w.assumptionId]; return { id: 'weak-' + tag + '-' + (i + 1), title: txt(w && w.title, 80), assumptionId: a ? a.id : '', evidence: a ? Math.max(0, NAMES.EV_KEYS.indexOf(a.grade)) : 0, source: 'Zero 解讀', why: txt(w && w.why, 300), cheapestTest: txt(w && w.cheapestTest, 200), stop: txt(w && w.stop, 200) }; }).filter(w => w.title && w.why && w.cheapestTest);
-  if (!weak.length) return { ok: false, reason: '生意體檢未有寫出最弱的環節' };
   const unseen = (Array.isArray(raw.unseen) ? raw.unseen : []).slice(0, 3).map((u, i) => ({ id: 'unseen-' + tag + '-' + (i + 1), text: txt(u && (u.text || u), 200), source: 'Zero 解讀' })).filter(u => u.text);
   const notNow = (Array.isArray(raw.notNow) ? raw.notNow : []).slice(0, 3).map((u, i) => ({ id: 'notnow-' + tag + '-' + (i + 1), text: txt(u && (u.text || u), 200), why: txt(u && u.why, 200) })).filter(u => u.text);
-  return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_checkup, weak, unseen, notNow } };
+  const industryCheck = L.webAccess === 'none' ? [] : (Array.isArray(raw.industryCheck) ? raw.industryCheck : []).slice(0, 5).map(x => ({ text: txt(x?.text, 300), source: txt(x?.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(x?.url || '')) ? String(x.url) : '', readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(x?.readOn || '')) ? x.readOn : '' })).filter(x => x.text && x.source && x.url && x.readOn).map(x => ({ ...x, source: x.source + (L.webAccess === 'search' && !x.source.includes('只經搜尋摘要') ? '（只經搜尋摘要）' : '') }));
+  if (!weak.length && !(raw.partial === true && (unseen.length || notNow.length))) return { ok: false, reason: '生意體檢未有寫出可用的環節' };
+  return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_checkup, partial: raw.partial === true, weak, unseen, notNow, industryCheck } };
 }
 // 一次工作入面加一步生意大腦工作（唔結束成次工作）；成功回 true
 async function brainStep(run, item, opts = {}) {
@@ -1412,31 +1494,47 @@ async function brainStep(run, item, opts = {}) {
   if (!ad.host) return false;
   const sb = path.join(DIR.sandbox, run.id + '-' + item);
   fs.mkdirSync(path.join(sb, 'out'), { recursive: true });
+  writeCounterparts(sb);
   writeBizContext(sb);
   writeConfirmedPage(sb);
   const L = brainLedger(), prev = readJSON(brainFile(DIR, item), null), fb = feedbackFor(item, prev);
+  L.webAccess = webAccess(ad.host);
+  const decisions = readJSON(path.join(DIR.ledger, 'opportunity-decisions.json'), {}) || {};
+  for (const [id, f] of Object.entries(readJSON(path.join(DIR.ledger, 'brain-feedback.json'), {}) || {})) if (!decisions[id] && f?.item === 'opportunities' && f.verdict === 'useless' && f.text === U.oppDropNote) decisions[id] = { title: f.title || '', answer: U.oppDrop, at: f.at || '' };
+  if (item === 'opportunities') L.rejectedOpportunities = rejectedOpportunities(decisions);
   writeJSON(path.join(sb, 'ledger.json'), L);
-  if (prev) writeJSON(path.join(sb, 'previous.json'), prev);
+  if (item === 'opportunities') L.knownOpportunityIds = [...Object.keys(decisions), ...(prev?.list || []).map(o => o.id)];
+  if (prev) writeJSON(path.join(sb, 'previous.json'), item === 'opportunities' ? { ...prev, list: (prev.list || []).map(o => ({ ...o, answer: decisions[o.id]?.answer || '' })) } : prev);
   fs.writeFileSync(path.join(sb, 'feedback.md'), '# 創辦人上次對結果卡的意見\n\n' + (fb.length ? fb.map(f => `- 「${f.card}」：${f.verdict}${f.text ? '——' + f.text : ''}`).join('\n') : '（沒有）') + '\n');
   datedTask(sb, job.task);
-  writeJSON(path.join(sb, 'job.json'), { type: item, today: todayIso(), feedback: fb.length });
+  writeJSON(path.join(sb, 'job.json'), { type: item, today: todayIso(), feedback: fb.length, ...(opts.timeoutMinutes ? { timeoutMinutes: opts.timeoutMinutes } : {}) });
   step(run, key, label, 'running', 'Zero 處理中');
   const r = await runAI(sb, opts.timeoutMinutes ? { timeoutMinutes: opts.timeoutMinutes } : undefined);
   if (r.meta) run.aiCost = { usd: ((run.aiCost && run.aiCost.usd) || 0) + (r.meta.total_cost_usd || 0), ms: ((run.aiCost && run.aiCost.ms) || 0) + (r.meta.duration_ms || 0) };
-  if (!r.ok || r.waiting) { step(run, key, label, 'failed', r.reason || 'Zero 未能完成'); return false; }
-  const chk = job.check(readJSON(path.join(sb, 'out', job.out), null), L, localIso());
-  if (!chk.ok) { step(run, key, label, 'failed', chk.reason); return false; }
+  const interrupted = !r.waiting && !r.childError && (r.timedOut === true || r.budgetExceeded === true) && !(r.meta?.permission_denials || []).length && !/(permission.denied|access.denied|unauthori[sz]ed|not permitted|\bdenied\b|"permission_denials"\s*:\s*\[\s*(?!\])|"state"\s*:\s*"(?:denied|rejected)"|安全|權限)/i.test(String(r.reason || '') + ' ' + String(r.stderr || '') + ' ' + String(r.safetyOutput || ''));
+  if ((!r.ok || r.waiting) && !interrupted) { step(run, key, label, 'failed', r.reason || 'Zero 未能完成'); return false; }
+  if (item === 'checkup' && !interrupted) await rewriteOnce(sb, run);
+  let raw = readJSON(path.join(sb, 'out', job.out), null);
+  let chk = job.check(interrupted && raw && typeof raw === 'object' ? { ...raw, partial: true } : raw, L, localIso());
+  if (item === 'checkup' && chk.invalidAssumption && !interrupted) {
+    fs.writeFileSync(path.join(sb, 'task.md'), '# 修正生意體檢\n\n每個弱位必須指向以下假設，修正後覆寫 out/checkup.json：\n' + L.assumptions.map(a => '- ' + a.id + '：' + a.text).join('\n') + '\n');
+    writeJSON(path.join(sb, 'job.json'), { type: 'checkup', repair: true });
+    const retry = await runAI(sb, opts.timeoutMinutes ? { timeoutMinutes: opts.timeoutMinutes } : undefined);
+    if (retry.ok) { await rewriteOnce(sb, run); raw = readJSON(path.join(sb, 'out', job.out), null); chk = job.check(raw, L, localIso()); }
+  }
+  if (!chk.ok) { step(run, key, label, interrupted || raw?.partial ? 'skipped' : 'failed', interrupted || raw?.partial ? '未完成，未有可用內容' : chk.reason); return false; }
+  if (chk.result.partial) { chk.result.status = 'partial'; chk.result.summary = '部分完成，只覆蓋已交出的項目。' + (chk.result.summary || ''); }
   chk.result.feedbackUsed = fb.length;
   fs.mkdirSync(path.dirname(brainFile(DIR, item)), { recursive: true });
   writeJSON(brainFile(DIR, item), chk.result);
-  if (item !== 'checkup') { addEvent({ actor: 'ai', type: 'brain', title: NAMES.dash['brainDone_' + item] + '：' + clip((chk.result.list[0] || {}).title || '', 30), relatedIds: [], moduleIds: ['ai-week'] }); step(run, key, label, 'done', chk.result.summary); offerOpportunities(run, chk.result); return true; }
+  if (item !== 'checkup') { addEvent({ actor: 'ai', type: 'brain', title: (chk.result.partial ? '商機掃描部分完成' : NAMES.dash['brainDone_' + item]) + '：' + clip((chk.result.list[0] || {}).title || '', 30), relatedIds: [], moduleIds: ['ai-week'] }); step(run, key, label, chk.result.partial ? 'partial' : 'done', chk.result.summary); if (!chk.result.partial) offerOpportunities(run, chk.result); return true; }
   // 弱位寫成假設清單嘅最便宜測試（規劃書 4.6）：未有測試、或者上次由生意體檢寫嘅，用今次嘅；其他來源寫嘅（例如創辦人自己寫）唔郁；唔改級別
   const s = loadState(); let filled = 0;
-  for (const w of chk.result.weak) { const a = ((s.company || {}).assumptions || []).find(x => x.id === w.assumptionId); if (a && (!String(a.cheapestTest || '').trim() || a.cheapestTestBy === 'checkup') && a.cheapestTest !== w.cheapestTest) { a.cheapestTest = w.cheapestTest; a.cheapestTestBy = 'checkup'; a.cheapestTestAt = chk.result.updatedAt; filled++; } }
+  for (const w of chk.result.weak) { const a = ((s.company || {}).assumptions || []).find(x => x.id === w.assumptionId); if (a && (!String(a.cheapestTest || '').trim() || a.cheapestTestBy === 'checkup') && (a.cheapestTest !== w.cheapestTest || !!a.cheapestTestPartial !== !!chk.result.partial)) { a.cheapestTest = w.cheapestTest; a.cheapestTestBy = 'checkup'; a.cheapestTestPartial = !!chk.result.partial; a.cheapestTestAt = chk.result.updatedAt; filled++; } }
   if (filled) saveState(s);
-  offerDebate(run, chk.result);
-  addEvent({ actor: 'ai', type: 'brain', title: NAMES.dash.brainDone_checkup + '：' + clip(chk.result.weak[0].title, 30), relatedIds: chk.result.weak.map(w => w.assumptionId).filter(Boolean), moduleIds: ['ai-week'] });
-  step(run, key, label, 'done', chk.result.summary);
+  if (!chk.result.partial) offerDebate(run, chk.result);
+  addEvent({ actor: 'ai', type: 'brain', title: (chk.result.partial ? '生意體檢部分完成' : NAMES.dash.brainDone_checkup) + '：' + clip(chk.result.weak[0]?.title || chk.result.unseen[0]?.text || chk.result.notNow[0]?.text || '', 30), relatedIds: chk.result.weak.map(w => w.assumptionId).filter(Boolean), moduleIds: ['ai-week'] });
+  step(run, key, label, chk.result.partial ? 'partial' : 'done', chk.result.summary);
   return true;
 }
 // 生意大腦放上 Founder Desk 嘅建議（每份結果最多一包）：ledger/brain-offers.json 記低邊份結果出過、問題包編號
@@ -1475,7 +1573,7 @@ function offerOpportunities(run, res) {
   const placed = placePacks(DIR, [rhythmPack('op', { title: U.oppOfferTitle, context: U.oppOfferContext, afterConfirm: U.oppOfferAfter, todoType: 'decision', brainItem: 'opportunities', fromRun: run.id,
     rhythm: { kind: 'opportunity', resultAt: res.updatedAt, ids: list.map(o => o.id) },
     questions: list.map((o, i) => { const rec = o.as === 'path' ? U.oppRoute : U.oppTask;
-      return { id: 'o' + (i + 1), priority: i + 1, opp: o.id, oppData: { title: o.title, why: o.why, firstTest: o.firstTest, source: o.source }, ask: NAMES.t('oppAsk', { t: clip(o.title, 60) }), kind: 'choice', effect: 'now', options: [U.oppTask, U.oppRoute, U.oppLater, U.oppDrop].map(t => ({ text: t, ...(t === rec ? { rec: true } : {}) })), value: rec, why: clip(NAMES.t('oppWhy', { w: o.why + (/[。！？.!?]$/.test(o.why) ? '' : '。'), f: o.firstTest }), 300) }; }) })])[0];
+      return { id: 'o' + (i + 1), priority: i + 1, opp: o.id, oppData: { title: o.title, why: o.why, firstTest: o.firstTest, source: o.source, ...(o.previousId ? { previousId: o.previousId } : {}) }, ask: NAMES.t('oppAsk', { t: clip(o.title, 60) }), kind: 'choice', effect: 'now', options: [U.oppTask, U.oppRoute, U.oppLater, U.oppDrop].map(t => ({ text: t, ...(t === rec ? { rec: true } : {}) })), value: rec, why: clip(NAMES.t('oppWhy', { w: o.why + (/[。！？.!?]$/.test(o.why) ? '' : '。'), f: o.firstTest }), 300) }; }) })])[0];
   if (placed) { noteOffer('opportunities', res.updatedAt, placed.id); log(`${run.id} 商機放上待決事項：${placed.id}`); }
   return placed;
 }
@@ -1512,15 +1610,27 @@ async function handleHelpAnswer(run, pack, store) {
 // 機會內容喺問題包入面（之後再掃描、結果檔換咗都照用得）
 function handleOpportunityAnswer(run, pack, store) {
   const said = [], fb = readJSON(FEEDBACK, {}) || {};
+  const decisionsFile = path.join(DIR.ledger, 'opportunity-decisions.json'), decisions = readJSON(decisionsFile, {}) || {};
+  const previousResult = readJSON(brainFile(DIR, 'opportunities'), null);
   for (const q of pack.questions) {
     const a = store.answers[q.id], o = q.oppData && { id: q.opp, ...q.oppData };
     if (!a || !o) continue; // 必須先問：未答唔做
+    if ([U.oppTask, U.oppRoute, U.oppLater, U.oppDrop].includes(a.value)) {
+      const validPreviousId = o.previousId && (Object.hasOwn(decisions, o.previousId) || (previousResult?.list || []).some(item => item.id === o.previousId)) ? o.previousId : '';
+      const prior = Object.entries(decisions).filter(([id, d]) => id !== o.id && opportunityMatch(validPreviousId, o.title, id, d));
+      const earlier = Math.max(0, ...prior.map(([, d]) => Number(d.laterCount) || (d.answer === U.oppLater ? 1 : 0)));
+      const existing = decisions[o.id];
+      const previousId = validPreviousId || prior.sort((a, b) => (Number(b[1].laterCount) || 0) - (Number(a[1].laterCount) || 0))[0]?.[0] || '';
+      const laterCount = existing ? Number(existing.laterCount) || (existing.answer === U.oppLater ? 1 : 0) : earlier + (a.value === U.oppLater ? 1 : 0);
+      decisions[o.id] = { title: o.title, answer: a.value, at: localIso(), laterCount, ...(previousId ? { previousId } : {}) };
+    }
     const from = 'opportunity ' + pack.id + ' ' + o.id;
     if (a.value === U.oppTask) { founderNote('adhoc', NAMES.t('oppNoteTask', { t: o.title, f: o.firstTest, s: o.source }), from); said.push('「' + clip(o.title, 20) + '」' + U.oppTask); }
     else if (a.value === U.oppRoute) { founderNote('order', NAMES.t('oppNoteRoute', { t: o.title, w: o.why, f: o.firstTest, s: o.source }), from); said.push('「' + clip(o.title, 20) + '」' + U.oppRoute); }
     else if (a.value === U.oppDrop) { fb[o.id] = { item: 'opportunities', verdict: 'useless', text: U.oppDropNote, title: o.title, at: localIso(), packId: pack.id }; said.push('「' + clip(o.title, 20) + '」' + U.oppDrop); }
   }
   if (said.some(t => t.endsWith(U.oppDrop))) writeJSON(FEEDBACK, fb);
+  writeJSON(decisionsFile, decisions);
   run.result = { summary: said.length ? '已記錄：' + said.join('；') + '。' : '已記錄：暫不跟進這些機會。', artifacts: [], founderNext: [] };
   return finish(run, 'done');
 }
@@ -1658,8 +1768,18 @@ async function handleAsk(run, file) {
   else if (!parsed.ok) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (head.kind !== 'ask-answer' || !machine) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (!pack) why = '找不到此問題包';
+  else if (!validateAskReply(parsed, pack).ok) { log('拒收問題包答案：' + validateAskReply(parsed, pack).reason); why = U.errAnswerIdentity; }
   else if (head.hash !== fnv(JSON.stringify(pack))) why = '問題包已經更改，請重新開啟頁面再作答';
   if (why) { archive([file]); step(run, 'applied', U.stepApplyAns, 'failed', why); return finish(run, 'failed', why); }
+  if (!pack.debate) {
+    const mapping = readJSON(path.join(DIR.ledger, 'brain-decisions.json'), {}) || {};
+    const matchId = Object.keys(mapping).find(id => {
+      if (mapping[id] !== pack.id || !/^[\w-]{1,40}$/.test(id)) return false;
+      const decisions = viewOf(id)?.synthesis?.founderDecisions;
+      return Array.isArray(decisions) && pack.questions.length > 0 && pack.questions.every((q, i) => q.ask === String(decisions[i]?.question || '') && JSON.stringify((q.options || []).map(o => o.text)) === JSON.stringify((decisions[i]?.options || []).slice(0, 3).map(String)));
+    });
+    if (matchId) pack.debate = { matchId, kind: 'decision' };
+  }
   const store = loadAnswers(DIR, pack.id);
   const qs = Object.fromEntries(pack.questions.map(q => [q.id, q]));
   const at = localIso(), entries = [], acceptedAnswers = [];
@@ -1763,11 +1883,11 @@ function ensureMatch(id) {
 function roleSetup() {
   const c = certified(ROOT, DIR.ledger), h = c.host || {};
   const ms = ['blue', 'red', 'judge'].map(r => { const m = modelCandidates(h, r)[0]; return m?.label || m?.model || 'default'; });
-  const web = readsWeb(h);
+  const access = webAccess(h), web = access !== 'none';
   const label = {}; let k = 0;
   for (const m of ms) if (!(m in label)) label[m] = '甲乙丙'[k++] || '丁';
   const warnings = ms[0] === ms[2] ? ['三方同一模型，獨立性低'] : [];
-  return { roles: { blue: { model: label[ms[0]], adapter: 'same', ok: null }, red: { model: label[ms[1]], adapter: 'same', ok: null }, judge: { model: label[ms[2]], adapter: 'same', ok: null, sameAsBlue: ms[0] === ms[2] } }, warnings, web };
+  return { roles: { blue: { model: label[ms[0]], adapter: 'same', ok: null }, red: { model: label[ms[1]], adapter: 'same', ok: null }, judge: { model: label[ms[2]], adapter: 'same', ok: null, sameAsBlue: ms[0] === ms[2] } }, warnings, web, access };
 }
 // 開一場辯論（創辦人按「開一場辯論」，或者答「開始」回應生意體檢之後嘅建議）：只係排好第一回合，外殼之後逐回合做
 function openMatch(m, from) {
@@ -1777,7 +1897,7 @@ function openMatch(m, from) {
   const format = formatFor(m.topicType);
   const rs = roleSetup();
   rs.roles.red.personas = m.seats;
-  const match = { id, topic: { type: m.topicType, title: m.title, targetId: m.targetId || '' }, startedAt: localIso(), endedAt: '', status: 'preparing', format, level: m.level, web: rs.web,
+  const match = { id, topic: { type: m.topicType, title: m.title, targetId: m.targetId || '' }, startedAt: localIso(), endedAt: '', status: 'preparing', format, level: m.level, web: rs.web, webAccess: rs.access,
     roles: rs.roles, budget: { aiStarts: 0, hardCap: HARD_CAP, reruns: 0, rejudged: 0, reattackRounds: 0 }, files: {}, founder: null, packs: {}, warnings: rs.warnings, label: 'Zero 建議 · 未確認',
     previousMatchId: prev ? prev.id : '', next: 'blue', queuedAt: localIso(), ...from };
   saveMatch(match);
@@ -1841,10 +1961,12 @@ function placeDebatePacks(raws) {
 // 回合嘅沙盒：題目、公司概覽、文件、上一場、前面回合嘅產出、格式同例子
 function debateSandbox(run, m, pass) {
   const sb = newSandbox(run);
+  writeCounterparts(sb);
+  writeJSON(path.join(sb, 'ledger.json'), brainLedger());
   const src = brainSource(DIR);
   const seats = (m.roles && m.roles.red && m.roles.red.personas) || [];
   fs.writeFileSync(path.join(sb, 'topic.md'), ['# 今次辯論', '', `- 題目：${m.topic.title}`, `- 題目類型：${NAMES.dash['tp_' + m.topic.type] || m.topic.type}`, m.topic.targetId ? `- 對象編號：${m.topic.targetId}` : '',
-    `- 紅方席位：${seats.join('、')}`, `- 紅方力度：${LEVELS[m.level] || '一般'}`, `- 回合：${m.format}（${passesFor(m.format).map(p => U['dp_' + p]).join(' → ')}）`, `- 今日：${localIso().slice(0, 10)}`].filter(Boolean).join('\n') + '\n');
+    `- 上網能力：${m.webAccess || (m.web === false ? 'none' : 'search+read')}`, `- 紅方席位：${seats.join('、')}`, `- 紅方力度：${LEVELS[m.level] || '一般'}`, `- 回合：${m.format}（${passesFor(m.format).map(p => U['dp_' + p]).join(' → ')}）`, `- 今日：${localIso().slice(0, 10)}`].filter(Boolean).join('\n') + '\n');
   writeConfirmedPage(sb);
   if (!fs.existsSync(path.join(sb, 'confirmed-page.md')) && fs.existsSync(path.join(DIR.company, 'page.json'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
   { const ck = readJSON(brainFile(DIR, 'checkup'), null); if (ck) writeJSON(path.join(sb, 'checkup.json'), ck); }
@@ -1917,17 +2039,41 @@ async function runDebatePass(run, m) {
   if (r.waiting) return fail(r.reason, true);
   m.budget.usd = Math.round(((m.budget.usd || 0) + (r.meta && r.meta.total_cost_usd || 0)) * 10000) / 10000;
   if (!r.ok) return fail(r.reason || 'Zero 未做完');
-  const out = readJSON(path.join(sb, 'out', PASS_OUT[pass]), null);
+  let out = readJSON(path.join(sb, 'out', PASS_OUT[pass]), null);
   const src = brainSource(DIR), dir = matchDir(DIR, m.id);
   fs.mkdirSync(dir, { recursive: true });
   const blue = readMatchFile(DIR, src, m.id, 'blue.json'), red = readMatchFile(DIR, src, m.id, 'red.json');
   let chk;
-  if (pass === 'blue') chk = checkBlue(out);
-  else if (pass === 'red') chk = checkRed(out, blue, (m.roles && m.roles.red && m.roles.red.personas) || []);
+  const ledger = readJSON(path.join(sb, 'ledger.json'), { assumptions: [] });
+  const levels = ['none', 'search', 'search+read'];
+  const effectiveAccess = actual => {
+    const host = levels.includes(actual) ? actual : 'none';
+    const opening = m.webAccess === undefined ? host : levels.includes(m.webAccess) ? m.webAccess : 'none';
+    return levels[Math.min(levels.indexOf(host), levels.indexOf(opening))];
+  };
+  let access = effectiveAccess(r.webAccess);
+  if (pass === 'blue') chk = checkBlue(out, { ledger, access });
+  else if (pass === 'red') {
+    const seats = (m.roles && m.roles.red && m.roles.red.personas) || [], actors = ((loadState().company || {}).actors || []).map(a => a.id);
+    chk = checkRed(out, blue, seats, actors, { access });
+    if (chk.errors.length === 1 && chk.errors[0] === '紅方攻擊覆蓋不足' && !m.budget.redCoverageRetry && (m.budget.aiStarts || 0) < HARD_CAP) {
+      m.budget.redCoverageRetry = 1; saveMatch(m);
+      fs.writeFileSync(path.join(sb, 'task.md'), '# 修正紅方攻擊\n\n請補足每條藍方論點的攻擊，保留所有席位卡，覆寫 out/red.json。\n');
+      writeJSON(path.join(sb, 'job.json'), { type: 'debate-red', seats, repair: true });
+      const retry = await runAI(sb, { role, onStart: () => { if ((m.budget.aiStarts || 0) >= HARD_CAP) return false; m.budget.aiStarts++; saveMatch(m); return true; } });
+      if (retry.meta) {
+        m.budget.usd = Math.round(((m.budget.usd || 0) + (retry.meta.total_cost_usd || 0)) * 10000) / 10000;
+        run.aiCost = { usd: Math.round(((run.aiCost?.usd || 0) + (retry.meta.total_cost_usd || 0)) * 10000) / 10000, ms: (run.aiCost?.ms || 0) + (retry.meta.duration_ms || 0) };
+      }
+      if (!retry.ok) return fail(retry.reason || '紅方修正未完成');
+      access = effectiveAccess(retry.webAccess);
+      out = readJSON(path.join(sb, 'out', PASS_OUT[pass]), null); chk = checkRed(out, blue, seats, actors, { access, allowIncomplete: true });
+    }
+  }
   else if (pass === 'rebuttal') chk = checkRebuttal(out, red);
-  else if (pass === 'judge') chk = checkJudge(out, blue, red);
+  else if (pass === 'judge') chk = checkJudge(out, blue, red, { ledger, access });
   else if (pass === 'rejudge') chk = checkRejudge(out, ((m.founder && m.founder.challenges) || []).some(c => c.claimId) ? m.founder.challenges.map(c => c.claimId).filter(Boolean) : (blue.claims || []).map(c => c.id));
-  else if (pass === 'strengthen') chk = checkStrengthen(out, viewOf(m.id), { matchId: m.id });
+  else if (pass === 'strengthen') chk = checkStrengthen(out, viewOf(m.id), { matchId: m.id, ledger, access });
   else if (pass === 'reattack-red') chk = checkReattackRed(out, (readMatchFile(DIR, src, m.id, 'strengthen.json') || {}).cards || []);
   else chk = checkReattackJudge(out, (readJSON(path.join(dir, `reattack-red-${m.round || 1}.json`), null) || {}).attacks || []);
   m.warnings = [...new Set([...(m.warnings || []), ...chk.warnings])].slice(0, 12);
@@ -1977,7 +2123,7 @@ async function runDebatePass(run, m) {
     const placed = placeDebatePacks([responsePack(viewOf(m.id))]);
     m.packs.response = placed[0] ? placed[0].id : '';
     const synth = (viewOf(m.id) || {}).synthesis;
-    const decisions = placeFounderDecisions(m.id, synth ? synth.founderDecisions : []);
+    const decisions = placeFounderDecisions(m.id, synth ? synth.founderDecisions : [], m.id);
     if (decisions.ok && decisions.packId) m.packs.decisions = decisions.packId;
     const asks = placed.concat(decisions.ok ? decisions.placed : []);
     run.result = { summary: '辯論完結：等待你回應三個關鍵時刻', artifacts: [], founderNext: [], asks, matchId: m.id };
@@ -1999,11 +2145,32 @@ function handleDebateAnswer(run, pack, store) {
   if (!m) { run.result = { summary: '已記錄；找不到此場辯論。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
   const val = id => { const a = store.answers[id], q = pack.questions.find(x => x.id === id); return a ? a.value : q ? q.value : ''; };
   const k = pack.debate.kind;
+  if (k === 'decision') {
+    m.founder = m.founder || {};
+    m.founder.decisions = m.founder.decisions || [];
+    const view = viewOf(m.id), routes = view && view.synthesis ? view.synthesis.routes : [];
+    for (const q of pack.questions) {
+      const answer = store.answers[q.id];
+      if (!answer) continue;
+      const option = (q.options || []).find(o => o.text === answer.value);
+      const index = (q.options || []).indexOf(option);
+      const value = index >= 0 ? String.fromCharCode(65 + index) : String(answer.value || '');
+      const decision = { questionId: q.id, question: q.ask, value, answer: answer.value, at: answer.at };
+      const old = m.founder.decisions.findIndex(d => d.questionId === q.id);
+      if (old >= 0) m.founder.decisions[old] = decision; else m.founder.decisions.push(decision);
+      const matching = routes.filter(r => option && (option.text === r.name || option.text.replace(/^[A-C][.、：:\s]+/, '').trim() === r.name));
+      if (matching.length === 1) { m.chosenRouteId = matching[0].id; m.chosenRouteDecisionId = q.id; }
+      else if (m.chosenRouteDecisionId === q.id) { delete m.chosenRouteId; delete m.chosenRouteDecisionId; }
+    }
+    saveMatch(m);
+    run.result = { summary: NAMES.dash.debateDecisionRecorded, artifacts: [], founderNext: [], matchId: m.id };
+    return finish(run, 'done');
+  }
   if (k === 'response') {
     if (m.founder && m.founder.respondedAt) { run.result = { summary: '已記錄；此場已開始轉強，今次答案只作紀錄。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
     const v = viewOf(m.id);
     const votes = Object.entries(pack.debate.refs || {}).map(([qid, ref]) => ({ ref, agree: val(qid) !== '不同意' }));
-    const f = { respondedAt: localIso(), votes, evidence: [], challenges: [], adoptedCardIds: [], rejectedCardIds: [] };
+    const f = { ...(m.founder || {}), respondedAt: localIso(), votes, evidence: [], challenges: [], adoptedCardIds: [], rejectedCardIds: [] };
     const ev = String(val('ev') || '').trim(), ch = String(val('ch') || '').trim();
     if (!NONE(ev)) {
       // 證據級：記錄機器值（said／did／paid；規劃書 3.3），選項顯示五級名稱；舊字眼、舊名稱照收
@@ -2822,7 +2989,7 @@ async function rhythmRun() {
   const run = { id: lr.id, kind: 'rhythm', ref: type, startedAt: lr.startedAt, state: 'running', replyFiles: [], steps: [], trigger: RUN_TRIGGER };
   step(run, 'received', U['runType_' + type], 'done', U['trig_' + RUN_TRIGGER]);
   // 已確認但未做過生意體檢（升級前已確認嘅公司）：日常工作先補做
-  if (!fs.existsSync(brainFile(DIR, 'checkup')) && readJSON(CONFIRMED, null)) await brainStep(run, 'checkup');
+  if (readJSON(CONFIRMED, null) && (!fs.existsSync(brainFile(DIR, 'checkup')) || ((readJSON(brainFile(DIR, 'checkup'), null) || {}).partial === true && checkupStale()))) await brainStep(run, 'checkup');
   if (opportunitiesDue(s0, today)) await brainStep(run, 'opportunities', { timeoutMinutes: Math.max(3, Math.floor((r.runCapMinutes || 30) / 3)) });
   const sb = newSandbox(run);
   writeConfirmedPage(sb);
@@ -2944,7 +3111,7 @@ async function main() {
         // 要求重做：用返上次登記好嘅要求（喺上次嘅工作資料夾）
         if (prev.noteType === 'practice-prep' || prev.noteType === 'debrief') {
           // 準備場景／會後紀錄重做：用返上次工作資料夾嘅資料
-          run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.practiceTaskId = prev.practiceTaskId || '';
+          run.kind = 'note'; run.ref = prev.ref; run.noteType = prev.noteType; run.practiceTaskId = prev.practiceTaskId || ''; run.practiceCounterpartId = prev.practiceCounterpartId || '';
           const old = path.join(DIR.sandbox, prev.id), sb = newSandbox(run);
           for (const f of fs.readdirSync(old).filter(f => f !== 'out' && f !== 'biz.md' && !f.endsWith('.txt'))) fs.cpSync(path.join(old, f), path.join(sb, f), { recursive: true });
           step(run, 'received', U.stepReqReceived, 'done', '重試上一次');

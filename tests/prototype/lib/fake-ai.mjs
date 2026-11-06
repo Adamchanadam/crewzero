@@ -161,14 +161,16 @@ if (type === 'work' && outputMode === 'agy') {
   const who = (/對方：(.+)/.exec(req) || [])[1] || '測試對象';
   sc.title = '測試練習：' + who.slice(0, 20); sc.counterpart = { name: who.slice(0, 30), role: '測試身分' };
   sc.docsSeen = fs.existsSync('docs') ? fs.readdirSync('docs') : [];
+  if (M === 'source-bad') sc.persona.stance.source = '我估';
   if (M !== 'prep-bad') fs.writeFileSync('out/scenario.json', JSON.stringify(sc));
   fs.writeFileSync('out/receipt.json', JSON.stringify({ summary: '測試 AI：準備好場景。', artifacts: [], founderNext: [] }));
   done();
 } else if (type === 'debrief') {
-  fs.writeFileSync('out/ask.json', JSON.stringify({ format: 'startup-os.ask/0.1', title: '會後跟進：測試', questions: [
-    { id: 'lv', priority: 1, ask: '對方目前的證據程度是甚麼？（' + fs.readFileSync('debrief.md', 'utf8').split(/\r?\n/).filter(Boolean).pop().slice(0, 16) + '）', options: [{ text: '升到實際行動', rec: true }, { text: '維持口頭表示' }], value: '升到實際行動', why: '測試理由' },
-    { id: 'next', priority: 2, ask: '下一步何時跟進？', kind: 'date', value: '2026-11-12', why: '測試理由' }] }));
-  fs.writeFileSync('out/receipt.json', JSON.stringify({ summary: '測試 AI：擬好會後問題。', artifacts: [], founderNext: [] }));
+  const L = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));
+  const a = L.assumptions.find(x => x.grade === 'guess') || L.assumptions[0];
+  const ev = { summary: '測試：已記錄會面。', grade: 'did', items: a ? [{ kind: 'assumption', id: a.id, grade: 'did', why: '對方已經作出行動。' }] : [] };
+  if (M === 'auto-grade') { fs.writeFileSync('state.json', JSON.stringify({ company: { assumptions: [{ id: a && a.id, grade: 'did' }] } })); }
+  fs.writeFileSync('out/event.json', JSON.stringify(ev));
   done();
 } else if (type === 'event' || type === 'event-repair') {
   // 真實事件：揀第一條仲係「假設」嘅假設升一級到實際行動、第一個未完成嘅站標完成。模式：event-bad 第一次交錯格式（修正一次後改好）、event-none 冇影響、event-pick-<站 id> 指定標完成嘅站
@@ -249,6 +251,8 @@ if (type === 'work' && outputMode === 'agy') {
   const L = JSON.parse(fs.readFileSync('ledger.json', 'utf8')), fbN = job.feedback || 0;
   const weak = L.assumptions.filter(a => a.grade === 'guess').slice(0, 2).map(a => ({ title: '（測試）未有證據：' + a.text, assumptionId: a.id, why: '測試理由：公司紀錄未有對方做過任何事的證據。', cheapestTest: M === 'checkup-new' ? '（測試新）本週請對方試用一次' : '（測試）本週約對方見面，請對方書面答覆', stop: '（測試）兩星期內沒有答覆就改做法' }));
   const ck = { summary: '（測試）按紀錄找出 ' + weak.length + ' 個最弱環節' + (fbN ? '；已考慮你的 ' + fbN + ' 條意見' : ''), weak, unseen: [{ text: '（測試）送貨時間未有人負責' }], notNow: [{ text: '（測試）暫時不做網上零售', why: '測試理由：本季未有客戶' }] };
+  if (M === 'bad-assumption' && ck.weak.length) ck.weak[0].assumptionId = 'H99';
+  if (M === 'partial-one') { ck.weak = ck.weak.slice(0, 1); ck.partial = true; }
   fs.writeFileSync('out/checkup.json', M === 'checkup-bad' ? '{"weak": 1' : JSON.stringify(ck, null, 2));
   done();
 } else if (type === 'opportunities') {
@@ -257,6 +261,7 @@ if (type === 'work' && outputMode === 'agy') {
   const op = { summary: '（測試）找到 2 個時間窗' + (fbN ? '；已考慮你的 ' + fbN + ' 條意見' : ''), list: [
     { kind: '時間窗', as: 'task', title: '（測試）換季菜單前一個月', why: M === 'opp-code' ? '測試理由：同 H1 有關。' : '測試理由：主廚會試用新食材。', firstTest: '（測試）本週發三個試食邀請', window: '下個月前', source: '（測試）外部事實：測試資料，查閱日期 ' + job.today },
     { kind: '資助', as: 'path', title: '（測試）本地農業資助計劃', why: '測試理由：可抵銷冷藏成本。', firstTest: '（測試）下載申請指引', window: '未定', source: '（測試）外部事實：測試資料', url: 'https://example.com/test' }] };
+  if (M === 'past-window') op.list[0].windowDate = '2000-01-01';
   fs.writeFileSync('out/opportunities.json', M === 'opp-bad' ? '{"list": 1' : JSON.stringify(op, null, 2));
   done();
 } else if (type === 'revise') {
@@ -304,10 +309,23 @@ if (type === 'work' && outputMode === 'agy') {
   const seats = job.seats && job.seats.length ? job.seats : ['測試身份'];
   const w = (n, o) => fs.writeFileSync(path.join('out', n), JSON.stringify(o, null, 2));
   if (M === 'debate-bad') { w(pass + '.json', { nothing: true }); done(); process.exit(0); }
-  if (pass === 'blue') w('blue.json', { ...ex('blue.json'), thesis: '測試主張：' + (fs.readFileSync('topic.md', 'utf8').match(/題目：(.+)/) || [])[1] });
-  else if (pass === 'red') { const r = ex('red.json'); r.attacks.forEach((a, i) => { a.persona = seats[i % seats.length]; }); r.seats = seats.map(s => ({ persona: s, cares: '測試：' + s + '最在意成本' })); w('red.json', r); }
+  if (pass === 'blue') {
+    const b = { ...ex('blue.json'), thesis: '測試主張：' + (fs.readFileSync('topic.md', 'utf8').match(/題目：(.+)/) || [])[1] };
+    const assumptions = JSON.parse(fs.readFileSync('ledger.json', 'utf8')).assumptions || [];
+    const grades = ['guess', 'said', 'did', 'paid', 'stuck'];
+    b.claims.forEach(c => {
+      if (!c.assumptionIds?.length) return;
+      const a = assumptions.find(x => x.id === c.assumptionIds[0] && x.text === c.claim);
+      c.assumptionIds = a ? [a.id] : [];
+      if (a) c.evidence = Math.min(c.evidence, Math.max(0, grades.indexOf(a.grade)));
+    });
+    if (M === 'evidence-high') { b.claims[0].assumptionIds = [(assumptions.find(a => a.grade === 'guess') || {}).id || 'H99']; b.claims[0].evidence = 3; }
+    if (M === 'fact-offline') { b.sources = [{ n: 1, title: '測試', url: 'https://example.com/', readOn: job.today || '2026-01-01' }]; b.aiChecked = [{ finding: '測試', label: 'fact', sources: [b.sources[0]] }]; }
+    w('blue.json', b);
+  }
+  else if (pass === 'red') { const r = ex('red.json'); r.blindAttacks = ['未被考慮的風險']; r.attacks.forEach((a, i) => { a.persona = seats[i % seats.length]; }); r.seats = seats.map(s => ({ persona: s, cares: '測試：' + s + '最在意成本', interests: '穩定收入', fears: '失去客戶', criteria: '成本', changeMind: '試行成功', source: M === 'seat-source-bad' ? '網上' : 'Zero 解讀' })); if (M === 'skip-half') { const b = JSON.parse(fs.readFileSync('blue.json', 'utf8')); const keep = new Set(b.claims.slice(0, Math.floor(b.claims.length / 2)).map(c => c.id)); r.attacks = r.attacks.filter(a => keep.has(a.claimId)); } w('red.json', r); }
   else if (pass === 'rebuttal') w('rebuttal.json', ex('rebuttal.json'));
-  else if (pass === 'judge') w('judge.json', ex('judge.json'));
+  else if (pass === 'judge') { const j = ex('judge.json'); if (M === 'uncited-fact') { j.verdicts[0].reason += ' 外部 [99]'; j.factChecks = j.factChecks.filter(f => f.n !== 99); } w('judge.json', j); }
   else if (pass === 'rejudge') {
     const ids = (fs.readFileSync('challenge.md', 'utf8').match(/^- (B\d+)/gm) || ['- B2']).map(s => s.slice(2)).slice(0, 3);
     w('rejudge.json', { verdicts: ids.map(id => ({ claimId: id, verdict: '受傷', reason: '測試：聽完創辦人原話，改判受傷' })) });
