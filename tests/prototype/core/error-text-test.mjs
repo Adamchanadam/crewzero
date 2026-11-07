@@ -47,19 +47,19 @@ try {
       if (/\+\s*(?:e|er|e2|err)\.message\b|\$\{\s*(?:e|er)\.message|(?:e|er)\.message\s*\|\||(?:error|err)\s*\|\|\s*'未知'/.test(l)) leaks.push(f + ':' + (i + 1) + ' ' + l.trim().slice(0, 100));
     });
   }
-  ok('Founder Desk、公司概覽、營運監察台、共用殼：冇將 e.message 或「未知」放上畫面', !leaks.length, leaks);
+  ok('首頁、公司概覽、營運進展頁、共用殼：冇將 e.message 或「未知」放上畫面', !leaks.length, leaks);
 
   // 外殼寫入失敗原因嘅字句、命令開唔到嘅字句：舊句（技術字、冇做法）唔可以再出現
   const srcOf = f => fs.readFileSync(path.join(PROTO, f), 'utf8');
   const oldRun = ['工作收據', '無法套用', '系統出錯', '請在營運監察台再按一次'].filter(w => srcOf('run.mjs').includes(w));
   ok('外殼嘅失敗原因：冇舊句（工作收據、無法套用、系統出錯）', !oldRun.length, oldRun);
-  const askSrc = srcOf('ask.mjs');
-  ok('打開頁面失敗嘅句：冇「本機伺服器」、冇狀態碼；開唔到會講原因同點做（只查原始碼，測試唔會真係開唔到伺服器）', !/本機伺服器|HTTP \$\{/.test(askSrc) && /未能打開：這部電腦暫時未能啟動 CrewZero/.test(askSrc) && /再說一次/.test(askSrc), askSrc.match(/.*未能打開.*/)?.[0]);
+  const askSrc = srcOf('ask.mjs'), LF = String.fromCharCode(10), askUserText = askSrc.split(LF).filter(l => !l.trim().startsWith('//')).join(LF); // 註解不是創辦人看到的文字
+  ok('打開頁面失敗嘅句：冇「本機伺服器」、冇狀態碼；開唔到會講原因同點做（只查原始碼，測試唔會真係開唔到伺服器）', !/本機伺服器|HTTP \$\{/.test(askUserText) && /未能打開：這部電腦暫時未能啟動 CrewZero/.test(askSrc) && /再說一次/.test(askSrc), askSrc.match(/.*未能打開.*/)?.[0]);
   /* ---- 對話側：SKILL.md ---- */
   const skill = n => srcOf(path.join('adapters', 'claude-code', 'crewzero', 'skills', n, 'SKILL.md'));
-  const noRule = ['desk', 'dashboard', 'install', 'update'].filter(n => !/## 命令出錯時點講/.test(skill(n)) || !/唔好照抄/.test(skill(n)));
+  const noRule = ['dashboard', 'discuss', 'install', 'update'].filter(n => !/## 命令出錯時點講/.test(skill(n)) || !/唔好照抄/.test(skill(n)));
   ok('四份 SKILL.md：都有「命令出錯時點講」（英文、路徑、命令唔照抄，用白話講原因同下一步）', !noRule.length, noRule);
-  ok('desk、dashboard SKILL.md：有「打開失敗」分支（照印出嘅中文句講原因同點做，唔好自己試其他方法）', ['desk', 'dashboard'].every(n => /## 打開失敗/.test(skill(n)) && /唔好自己再試其他方法/.test(skill(n))));
+  ok('dashboard、discuss SKILL.md：有「打開失敗」分支（照印出嘅中文句講原因同點做，唔好自己試其他方法）', ['dashboard', 'discuss'].every(n => /## 打開失敗/.test(skill(n)) && /唔好自己再試其他方法/.test(skill(n))));
   ok('install SKILL.md：登記排程失敗唔再叫創辦人自己執行命令', !/交俾創辦人決定要唔要自己執行/.test(skill('install')) && /唔好叫創辦人自己執行檔案/.test(skill('install')));
   /* ---- 命令：安裝、排程失敗（只用暫存資料夾同假排程器；唔開伺服器、唔郁電腦排程） ---- */
   const cliEnv = { ...process.env }; delete cliEnv.SOS_DATA;
@@ -71,7 +71,7 @@ try {
     fs.writeFileSync(fake, "console.error('Register-ScheduledTask : Access is denied. C:\\\\Windows\\\\System32'); process.exit(1);\n");
     const S = path.join(P2, 'crewzero', 'adapters', 'scheduler', 'install-schedule.mjs');
     const reg = spawnSync(process.execPath, [S, '--register', '--autostart'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
-    ok('登入啟動登記失敗：每日自動開工照樣保留，印中文原因同做法；英文錯誤同命令全文只去 stderr', reg.status === 0 && /登入啟動未能設定/.test(reg.stdout) && /打開一次 Founder Desk/.test(reg.stdout) && !/Access is denied|Register-ScheduledTask|PowerShell|[A-Za-z]:\\/.test(reg.stdout) && /Access is denied/.test(reg.stderr), { out: reg.stdout, err: reg.stderr.slice(0, 200) });
+    ok('登入啟動登記失敗：每日自動開工照樣保留，印中文原因同做法；英文錯誤同命令全文只去 stderr', reg.status === 0 && /登入啟動未能設定/.test(reg.stdout) && /打開一次 CrewZero/.test(reg.stdout) && !/Access is denied|Register-ScheduledTask|PowerShell|[A-Za-z]:\\/.test(reg.stdout) && /Access is denied/.test(reg.stderr), { out: reg.stdout, err: reg.stderr.slice(0, 200) });
     const legacyMark = path.join(P2, 'crewzero', 'data', 'ledger', 'schedule.json'); fs.writeFileSync(legacyMark, JSON.stringify({ name: 'crewzero-old', os: 'windows', runTime: '21:00' }));
     const rm = spawnSync(process.execPath, [S, '--remove'], { encoding: 'utf8', env: { ...cliEnv, SOS_SCHED_CMD: fake } });
     ok('排程移除失敗：同樣只印中文原因同做法，原設定保留', rm.status === 1 && /未能完全移除/.test(rm.stdout) && fs.existsSync(legacyMark) && !/Access is denied|工作排程器|[A-Za-z]:\\/.test(rm.stdout), { out: rm.stdout });
@@ -103,29 +103,34 @@ try {
   /* ---- 4. 頁面 ---- */
   cdp = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
   await usePass(BASE, cdp);
-  const toastAfter = async (fakeJs, sel) => {
-    await cdp.ev(`(()=>{window.__rf=window.__rf||window.fetch;window.fetch=function(u,o){var s=String(u);${fakeJs};return window.__rf.apply(this,arguments);};document.getElementById('toast').hidden=true;return 1})()`);
-    await cdp.click(sel);
+  // 0.40.0：首頁「告訴 Zero 一件事」送出失敗時，原因寫在送出鍵旁的提示行（#quick-note），不再用浮動提示
+  const noteAfter = async fakeJs => {
+    await cdp.ev(`(()=>{window.__rf=window.__rf||window.fetch;window.fetch=function(u,o){var s=String(u);${fakeJs};return window.__rf.apply(this,arguments);};document.getElementById('quick-note').textContent='';return 1})()`);
+    await cdp.click('#quick-send');
     let t = '';
-    for (let i = 0; i < 20 && !t; i++) { await sleep(150); t = await cdp.ev(`(()=>{const e=document.getElementById('toast');return e&&!e.hidden?e.textContent:''})()`); }
+    for (let i = 0; i < 20 && (!t || t === U.sending); i++) { await sleep(150); t = await cdp.ev(`(document.getElementById('quick-note')||{}).textContent||''`); }
     await cdp.ev('window.fetch=window.__rf;1');
     return t;
   };
-  await cdp.go(BASE + '/#/request/adhoc', 1440, 2500);
-  const form = await cdp.ev(`!!document.getElementById('req-text')`);
-  ok('交要求頁有表格（公司概覽已備）', form, await cdp.ev('document.body.innerText.slice(0,300)'));
-  await cdp.type('#req-text', '測試要求：整理下星期的會面');
-  const t1 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'invalid',message:'尚未有公司概覽：請先按「前往告訴 Zero」提交公司背景資料。'}),{status:400,headers:{'Content-Type':'application/json'}}))`, '#req-send');
-  ok('送出被拒、伺服器有中文原因：照顯示中文原因，唔顯示代號', t1 === '未能提交：尚未有公司概覽：請先按「前往告訴 Zero」提交公司背景資料。' && !RAW.test(t1), t1);
-  const t2 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'busy'}),{status:409,headers:{'Content-Type':'application/json'}}))`, '#req-send');
-  ok('送出被拒、只有代號：按代號講中文原因同做法', t2 === '未能提交：' + U.err_busy && !RAW.test(t2), t2);
-  const t3 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.reject(new TypeError('Failed to fetch'))`, '#req-send');
-  ok('連唔到電腦上嘅 CrewZero：講中文原因、資料完好同點做，冇 Failed to fetch', t3 === '未能提交：' + U.errNet && /資料完好/.test(t3) && !RAW.test(t3), t3);
-  const t4 = await toastAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response('<html>oops</html>',{status:500,headers:{'Content-Type':'text/html'}}))`, '#req-send');
-  ok('伺服器回應唔係 JSON：用通用中文句，冇 SyntaxError', t4 === '未能提交：' + U.errGeneric && !RAW.test(t4), t4);
+  // 「告訴 Zero 一件事」盒要公司概覽已確認才出現：只在這一節暫時標記為已確認，之後還原（公司概覽節要看未確認的畫面）
+  const confirmedFile = path.join(DATA, 'ledger', 'confirmed.json'); fs.mkdirSync(path.dirname(confirmedFile), { recursive: true }); fs.writeFileSync(confirmedFile, JSON.stringify({ confirmedAt: new Date().toISOString() }));
+  await cdp.go(BASE + '/#/', 1440, 2500);
+  const form = await cdp.ev(`!!document.getElementById('quick-adhoc')&&!!document.getElementById('quick-text')`);
+  ok('首頁有「告訴 Zero 一件事」盒（公司概覽已備）', form, await cdp.ev('document.body.innerText.slice(0,300)'));
+  await cdp.click('#quick-adhoc');
+  await cdp.type('#quick-text', '測試要求：整理下星期的會面');
+  const t1 = await noteAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'invalid',message:'尚未有公司概覽：請先按「前往告訴 Zero」提交公司背景資料。'}),{status:400,headers:{'Content-Type':'application/json'}}))`);
+  ok('送出被拒、伺服器有中文原因：照顯示中文原因，唔顯示代號', t1 === '尚未有公司概覽：請先按「前往告訴 Zero」提交公司背景資料。' && !RAW.test(t1), t1);
+  const t2 = await noteAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response(JSON.stringify({error:'busy'}),{status:409,headers:{'Content-Type':'application/json'}}))`);
+  ok('送出被拒、只有代號：按代號講中文原因同做法', t2 === U.err_busy && !RAW.test(t2), t2);
+  const t3 = await noteAfter(`if(s.indexOf('/api/intake')>=0)return Promise.reject(new TypeError('Failed to fetch'))`);
+  ok('連唔到電腦上嘅 CrewZero：講中文原因、資料完好同點做，冇 Failed to fetch', t3 === U.errNet && /資料完好/.test(t3) && !RAW.test(t3), t3);
+  const t4 = await noteAfter(`if(s.indexOf('/api/intake')>=0)return Promise.resolve(new Response('<html>oops</html>',{status:500,headers:{'Content-Type':'text/html'}}))`);
+  ok('伺服器回應唔係 JSON：用通用中文句，冇 SyntaxError', t4 === U.errGeneric && !RAW.test(t4), t4);
+  ok('送出失敗後輸入的字仍保留，可以再按送出', (await cdp.ev(`document.getElementById('quick-text').value`)) === '測試要求：整理下星期的會面' && !(await cdp.ev(`document.getElementById('quick-send').disabled`)));
   const real = await cdp.ev(`SOS_DESK.send('/api/intake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'note',type:'nope'})}).then(()=>'ok',e=>SOS_DESK.why(e))`);
   ok('真伺服器拒絕（要求類型不正確）：頁面取到伺服器嘅中文原因', real === '要求類型不正確。', real);
-  await cdp.shot(path.join(OUT, 'request-error-1440.png'));
+  await cdp.shot(path.join(OUT, 'request-error-1440.png')); fs.rmSync(confirmedFile, { force: true });
 
   // 整頁讀取失敗：搵唔到（404）→ 講搵唔到同點做，有「返回待決事項」
   await cdp.go(BASE + '/#/practice/s/no-such-session', 1440, 2200);
@@ -138,7 +143,7 @@ try {
   await cdp.ev(`(()=>{window.__rf=window.fetch;window.fetch=function(u){return String(u).indexOf('/api/')>=0&&String(u).indexOf('/api/shell')<0?Promise.reject(new TypeError('Failed to fetch')):window.__rf.apply(this,arguments)};location.hash='#/log';return 1})()`);
   await sleep(1200);
   const f2 = await cdp.ev(`(()=>{const f=document.getElementById('fail');return f?{kind:f.getAttribute('data-kind'),text:f.textContent,reload:!!document.getElementById('fail-reload')}:null})()`);
-  ok('連唔到：顯示「未能連上 CrewZero」、資料完好、在 AI 對話說「打開 Founder Desk」，有「重新載入」', f2 && f2.kind === 'net' && f2.text.includes(U.failNetTitle) && f2.text.includes(U.failNet) && f2.reload && !RAW.test(f2.text), f2);
+  ok('連唔到：顯示「未能連上 CrewZero」、資料完好、在 AI 對話說「打開 CrewZero」，有「重新載入」', f2 && f2.kind === 'net' && f2.text.includes(U.failNetTitle) && f2.text.includes(U.failNet) && f2.reload && !RAW.test(f2.text), f2);
   await cdp.ev('window.fetch=window.__rf;1');
 
   // CrewZero 停咗而頁面開住：頁頂提示（約 10 秒內出現），重新開返就消失
@@ -146,7 +151,7 @@ try {
   srv.kill(); await sleep(400);
   let bar = null;
   for (let i = 0; i < 40 && !bar; i++) { await sleep(500); bar = await cdp.ev(`(()=>{const b=document.getElementById('stopped');return b?b.innerText:null})()`); }
-  ok('CrewZero 停咗：頁頂講已停止、資料完好、點樣重新開啟', bar === U.stoppedDesk && /未能連接/.test(bar) && !/已停止|資料完好/.test(bar) && /打開 Founder Desk/.test(bar), bar);
+  ok('CrewZero 停咗：頁頂講已停止、資料完好、點樣重新開啟', bar === U.stoppedDesk && /未能連接/.test(bar) && !/已停止|資料完好/.test(bar) && /打開 CrewZero/.test(bar), bar);
   await cdp.shot(path.join(OUT, 'stopped-banner-1440.png'));
   start();
   let gone = false;
@@ -178,7 +183,7 @@ try {
   ok('監察台操作被真伺服器拒絕：顯示伺服器中文原因', d1 === '未能更改：' + N.dash.observePathInvalid && !RAW.test(d1), d1);
   await cdp.ev(`(()=>{window.__rf=window.fetch;window.fetch=function(u){return String(u).indexOf('/api/dashboard')>=0?Promise.reject(new TypeError('Failed to fetch')):window.__rf.apply(this,arguments)};return 1})()`);
   let db = null; for (let i = 0; i < 50 && !db; i++) { await sleep(500); db = await cdp.ev(`(()=>{const b=document.getElementById('stopped');return b?b.innerText:null})()`); }
-  ok('監察台連唔到：頁頂講已停止、資料完好、在 AI 對話說「打開營運監察台」', db === U.stoppedDashboard, db);
+  ok('監察台連唔到：頁頂講已停止、資料完好、在 AI 對話說「打開 CrewZero」', db === U.stoppedDashboard, db);
   await cdp.ev('window.fetch=window.__rf;1');
   ok('頁面冇程式錯誤', !cdp.errors.length, cdp.errors);
 } catch (e) {

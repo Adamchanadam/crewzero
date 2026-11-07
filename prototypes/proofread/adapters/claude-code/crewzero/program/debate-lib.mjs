@@ -272,7 +272,7 @@ function result(errors, warnings, data) { return { ok: !errors.length, errors, w
 export const TEST_BY = ['ai', 'founder', 'approval'];
 const testByOf = (...xs) => xs.find(x => TEST_BY.includes(x)) || '';
 function roundSourcesOf(list, access) {
-  return arr(list).filter(s => s && typeof s === 'object' && !Array.isArray(s) && txt(s.title, 160) && /^https?:\/\//.test(String(s.url || ''))).slice(0, 30).map((s, i) => ({ n: Number(s.n) || i + 1, title: txt(s.title, 160), url: access === 'none' ? '' : txt(s.url, 400), readOn: txt(s.readOn, 10) }));
+  return arr(list).filter(s => s && typeof s === 'object' && !Array.isArray(s) && txt(s.title, 160) && /^https?:\/\//.test(String(s.url || ''))).slice(0, 30).map((s, i) => { const full = s.fullText === true && access !== 'search', t = txt(s.title, 160); return { n: Number(s.n) || i + 1, title: full || t.includes('只經搜尋摘要') ? t : t + '（只經搜尋摘要）', fullText: full, url: access === 'none' ? '' : txt(s.url, 400), readOn: txt(s.readOn, 10) }; });
 }
 function aiCheckedOf(list, warnings, where, roundSources = [], access = 'search+read') {
   return arr(list).filter(x => x && txt(x.finding, 300)).slice(0, 6).map(x => {

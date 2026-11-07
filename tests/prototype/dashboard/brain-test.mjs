@@ -1,4 +1,4 @@
-// 生意大腦後端測試（假 AI）：六項狀態、紅藍對打按時間推進、意見三種、要你決定放上 Founder Desk、情景演練作答後 AI 跟進、本機試驗資料夾讀法
+// 生意大腦後端測試（假 AI）：六項狀態、紅藍對打按時間推進、意見三種、要你決定放上 CrewZero、情景演練作答後 AI 跟進、本機試驗資料夾讀法
 // 用法：node brain-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -44,16 +44,16 @@ try {
   ok('示範：六項都有', d.brain.source.kind === 'demo' && d.brain.items.length === 6 && d.brain.items.map(x => x.name).join() === '生意體檢,紅藍對打,情景演練,商機掃描,路線推演,對象推進追蹤');
   ok('四種狀態都出現：已完成、AI 進行中、等你處理、未開始', ['done', 'running', 'waiting', 'not_started'].every(s => d.brain.items.some(x => x.status === s)), d.brain.items.map(x => x.id + ':' + x.status));
   ok('紅藍對打：開頭只有藍隊（推進 6／19）', item(d, 'wargame').detail.stage === 1 && item(d, 'wargame').progress.done === 6 && item(d, 'wargame').progress.total === 19, item(d, 'wargame').progress);
-  ok('情景演練等你：深連 Founder Desk 練習，兩個對象', item(d, 'scenario').waitHref === '/#/practice/farm-c' && item(d, 'scenario').practice.length === 2);
+  ok('情景演練等你：深連 CrewZero 練習，兩個對象', item(d, 'scenario').waitHref === '/#/practice/farm-c' && item(d, 'scenario').practice.length === 2);
   ok('生意體檢：三個弱位都有證據級、最平測試、停止條件、來源', item(d, 'checkup').detail.weak.length === 3 && item(d, 'checkup').detail.weak.every(w => w.evidence >= 0 && w.cheapestTest && w.stop && w.source));
-  ok('客戶推進：五個對象、演練另外標明', item(d, 'pipeline').detail.prospects.length === 5 && item(d, 'pipeline').detail.prospects.some(p => p.rehearsal));
+  ok('客戶推進：七個對象（名單）、演練另外標明', item(d, 'pipeline').detail.prospects.length === 7 && item(d, 'pipeline').detail.prospects.some(p => p.rehearsal));
   // 推進（真時間）：紅隊攻擊逐條出現
   const t1 = await waitFor(async () => { const x = item(await A.get('/api/dashboard'), 'wargame').detail; return x.stage === 2 ? x : null; }, 30000);
   ok('真時間推進：紅隊開始攻擊（第二階段）', t1 && t1.rows.some(r => r.attacks.length), t1 && t1.stage);
   shiftSeed(DEMO, 100);
   d = await A.get('/api/dashboard');
   ok('裁判判緊：部分論點有判定、部分未判', item(d, 'wargame').detail.stage === 3 && item(d, 'wargame').detail.rows.some(r => r.verdict) && item(d, 'wargame').detail.rows.some(r => !r.verdict));
-  // 未整合好就放上 Founder Desk：講明原因
+  // 未整合好就放上 CrewZero：講明原因
   const pre = await A.post('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide' });
   const r0 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === pre.j.id); return r && (r.state === 'failed' || r.state === 'done') ? r : null; });
   ok('未整合好：放唔上並講原因', r0 && r0.state === 'failed' && r0.error.includes('未整合好'), r0);
@@ -66,11 +66,11 @@ try {
   ok('路線推演完成：每條有紅隊評分、第一個測試、停止條件', item(await A.get('/api/dashboard'), 'routes').status === 'done' && item(await A.get('/api/dashboard'), 'routes').detail.routes.every(r => r.redScore && r.firstTest && r.stop));
   // 要你決定 → 外殼機械出問題包 → 深連
   const p1 = await A.post('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide' });
-  ok('放上 Founder Desk：收到', p1.code === 202, p1);
+  ok('放上 CrewZero：收到', p1.code === 202, p1);
   const r1 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === p1.j.id); return r && r.state === 'done' ? r : null; });
   d = await A.get('/api/dashboard');
   const dec = d.brain.decided.decide;
-  ok('要你決定：放咗上 Founder Desk（兩條即時生效、AI 建議打星）', r1 && dec && dec.open && (await A.get('/api/ask?id=' + dec.packId)).pack.questions.every(q => q.effect === 'now' && q.options.some(o => o.rec)), dec);
+  ok('要你決定：放咗上 CrewZero（兩條即時生效、AI 建議打星）', r1 && dec && dec.open && (await A.get('/api/ask?id=' + dec.packId)).pack.questions.every(q => q.effect === 'now' && q.options.some(o => o.rec)), dec);
   ok('待你處理出現呢個問題包', d.todo.some(t => t.id === dec.packId));
   await answer(A, dec.packId, {});
   await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === dec.packId); return r && r.state === 'done'; });
@@ -120,11 +120,11 @@ try {
   ok('試驗資料夾：紅隊檔出現 → 紅隊攻擊', item(await A2.get('/api/dashboard'), 'wargame').detail.stage === 2);
   fs.writeFileSync(path.join(TRIAL, 'wargame', 'judge.json'), JSON.stringify({ verdicts: [{ claimId: 'B1', verdict: '受傷', reason: '測試' }, { claimId: 'B2', verdict: '倒下', reason: '測試' }], topRisks: [{ rank: 1, risk: '測試風險', cheapestTest: '測試', stop: '測試' }], routes: [{ id: 'S1', name: '測試路線', recommended: true, why: '測試', redScore: '中', firstTest: '測試', stop: '測試' }], founderDecisions: [{ question: '測試決定？', options: ['A 甲', 'B 乙'], recommend: 'A', why: '測試', risk: '測試決定可能造成延誤。' }], assumptionChanges: [] }));
   e = await A2.get('/api/dashboard');
-  ok('試驗資料夾：裁判檔出現 → 完場等你回應（去 Founder Desk 場次頁），路線推演由裁判路線得出', item(e, 'wargame').status === 'waiting' && item(e, 'wargame').waitHref === '/#/debate/W1' && item(e, 'routes').status === 'done' && item(e, 'routes').detail.routes[0].name === '測試路線');
+  ok('試驗資料夾：裁判檔出現 → 完場等你回應（去 CrewZero 場次頁），路線推演由裁判路線得出', item(e, 'wargame').status === 'waiting' && item(e, 'wargame').waitHref === '/#/debate/W1' && item(e, 'routes').status === 'done' && item(e, 'routes').detail.routes[0].name === '測試路線');
   ok('試驗資料夾：伺服器冇寫入試驗資料夾', fs.readdirSync(TRIAL).sort().join() === '01-生意體檢.md,wargame' && fs.readdirSync(path.join(TRIAL, 'wargame')).length === 4);
   const p2 = await A2.post('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide' });
   await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'note' && x.ref === p2.j.id); return r && r.state === 'done'; });
-  ok('試驗資料夾：要你決定都放得上 Founder Desk（冇公司概覽都得）', !!(await A2.get('/api/dashboard')).brain.decided.decide);
+  ok('試驗資料夾：要你決定都放得上 CrewZero（冇公司概覽都得）', !!(await A2.get('/api/dashboard')).brain.decided.decide);
 } catch (err) {
   ok('測試冇出錯', false, String(err.stack || err));
 } finally {

@@ -1,4 +1,4 @@
-// CrewZero Founder Desk：所有畫面名稱嘅唯一定義。改名只改呢度；頁面、外殼（run.mjs）同測試都由呢度讀。
+// CrewZero：所有畫面名稱嘅唯一定義。改名只改呢度；頁面、外殼（run.mjs）同測試都由呢度讀。
 // 規則：名稱（頁名、分頁、標題、按鈕、標記、欄名、步驟名）一律書面語，唔可以有口語字（COLLOQUIAL）；
 // 說明句可以白話。公司概覽嘅欄名由格式（資料嘅 plan 欄）決定，唔用 AI 寫入資料嘅 label。
 (function (g) {
@@ -6,8 +6,10 @@
   // 主線真機核對補：連住、盤生意、成盤、講盤、個位、最平。作連接詞用嘅「同」機械判斷唔到，固定字串靠人手覆核）
   var COLLOQUIAL = /[嘅咗乜唔喺啲咁冇佢嚟哋嗰呢噉嘢啱撳睇揀仲畀晒咩搵諗俾啦喇囉咪]|(?<![關聯維])係|而家|點樣|點解|點先|同埋|邊個|邊度|邊類|邊部分|幾時|幾耐|幾多|頂住|連住|盤生意|成盤|講盤|個位(?!數)|最平|(?:做|擬|寫|備|改|讀|等|判|攻|排|理|開|跑|查|試|整|講|行|跟|傾|放)緊/g;
 
+  // 重新打開 CrewZero 的唯一說法（按工具顯示打法；指令名不改）
+  var OPEN = '請在 AI 對話輸入 /crewzero:dashboard（Codex：$crewzero:dashboard；Antigravity：/dashboard），或說「打開 CrewZero」';
   var ui = {
-    brand: 'Founder Desk',
+    brand: 'CrewZero',
     // 分頁（導航）
     pending: '待決事項',
     company: '公司概覽',
@@ -81,31 +83,31 @@
     practicePrepAI: 'Zero 準備練習場景',
     practiceDebrief: '會後紀錄',
     practiceDebriefAI: 'Zero 按會後紀錄擬跟進問題',
-    // 記錄真實事件（規劃書 3.10、3.3）：AI 擬確認問題，你逐項確認後先改證據級同站點進度
-    reqEvent: '記錄真實事件',
+    // 記錄真實事件（規劃書 3.10、3.3）：AI 擬確認問題，你逐項確認後先改對方做到哪一步同站點進度
+    reqEvent: '發生了一件事',
     eventDate: '事件日期',
     eventFiles: '證明文件（可選）',
-    stepEventAI: 'Zero 擬定證據級及站點進度的確認問題',
-    eventConfirm: '確認真實事件',
+    stepEventAI: 'Zero 擬定對方做到哪一步及站點進度的確認問題',
+    eventConfirm: '確認發生了一件事',
     evKeep: '維持',
     evChange: '改為',
     msDoneYes: '已完成，以這次紀錄作證明',
     msDoneNo: '未完成，維持現狀',
     evJudge: '只計對方的行動：對方表示有需要或興趣為「口頭表示」；對方安排會面、提供資料等為「實際行動」；對方付出金錢、時間或承諾為「付出成本」；對方已依賴、停用會有損失為「形成依賴」。',
     msJudge: '完成標準：{c}。證明須為對方的書面回覆、會議紀錄或收據一類；只有記憶而沒有紀錄時，建議先不標示完成。',
-    eventAwaiting: '請確認這件事對證據級及站點進度的影響',
-    eventNoChange: 'Zero 判斷這件事不改變任何假設的證據級或站點進度，已記錄。',
+    eventAwaiting: '請確認這件事對對方做到哪一步及站點進度的影響',
+    eventNoChange: 'Zero 判斷這件事不改變任何假設對方做到哪一步，也不改變站點進度，已記錄。',
     eventFailed: 'Zero 未能整理這件事的影響，紀錄未有更新。請按「重試」。',
-    eventNeedOverview: '請先確認公司概覽，才可記錄真實事件。',
+    eventNeedOverview: '請先確認公司概覽，才可告訴 Zero 發生了甚麼事。',
     aiNextSkip: '已更新公司概覽；改動不影響下一個對外動作，Zero 毋須另作準備。',
     // 公司概覽就緒清單（規劃書 3.1）、暫定值來源同限期、里程碑四格、真事／工作判定（7.4）
     readinessMissing: '尚未問齊：{list}',
     tentUntil: '暫定 · 至 {d}',
     tent_ai: 'Zero 建議', tent_actor: '對方提出', tent_founder: '你暫定',
     fourCells: '四項資料 {n}／4', fourMissing: '尚欠：{list}',
-    kindReal: '真事', kindTask: '工作',
+    kindReal: '對外成果', kindTask: '內部準備',
     kindAI: 'Zero 判斷：{k}', kindYou: '你判斷：{k}', kindFlip: '改為「{k}」',
-    kindHint: '真事：公司以外有人做了某件事，有人見證、有紀錄；工作：我方自己做的事，例如寫好一份文件。',
+    kindHint: '對外成果：公司以外有人做了某件事，有人見證、有紀錄；內部準備：我方自己做的事，例如寫好一份文件。',
     // 深化站點（規劃書 3.3 深度檢查五問；透鏡追問）
     depthQ1: '對方為何會點頭？', depthQ2: '對方如何決定、需要多久？', depthQ3: '要先具備甚麼？', depthQ4: '最常見會怎樣失敗？', depthQ5: '為何是這個數字或日期？',
     depthTitle: '深化站點：{s}',
@@ -138,7 +140,7 @@
     interviewF6: '待你確認的事項之中，有沒有已經有答案的？',
     interviewNone: '沒有', interviewWhyNone: '預設「沒有」，不是 Zero 推斷；有新消息就按「自訂答案」寫一兩句。', interviewWhyNow: '預填公司紀錄的現值；有變化才改。', interviewResultPlaceholder: '請直接填寫；沒有成果可填「沒有」。', interviewRecordAnswer: '記錄答案',
     noteWarn: '重要', noteTip: '提示', noteError: '錯誤', noteDone: '完成',
-    intakeGuide: '每條一兩句即可；未有答案可留空，Zero 會先建議。', intakeDrop: '拖入會議紀錄、計劃書、報價單等現有文件，或按「選擇文件」。', intakeDropWarn: 'Zero 只讀這裏的文件，請在提交前一併加入。', intakeOnline: 'Google Doc、Google Slides 等網上文件，請先下載成 PDF、Word 或 PowerPoint 再加入；只貼連結，Zero 未必讀到。', intakeDetails: '網上文件、範本及其他 AI 工具', intakeModalNote: '確認後即交 Zero 擬公司概覽，不會對外發送。', intakeReadyWarn: '重新提交會由 Zero 重擬公司概覽，未確認的修改會失去。', aiBlockNote: '設定完成前，答案會先記錄，Zero 不會跟進；設定後自動繼續。', aiCheckingNote: 'AI 工具正在認證，通常一分鐘內完成。', setupUnsetNote: '選擇並認證一個 AI 工具，Zero 才會開始工作。', setupGuide: '選擇電腦上已登入的 AI 工具。認證約需兩分鐘，確保它只處理 CrewZero 的工作。', setupChange: '更換 AI 工具', setupChangeGuide: '選擇另一個已登入的 AI 工具並認證；認證約需兩分鐘，確保它只處理 CrewZero 的工作。', setupChangeGo: '認證並改用', setupMissing: '這部電腦未有已登入的 AI 工具。請安裝並登入 Claude Code、Codex 或 Antigravity 其中一個，再回來認證。', setupPassed: '已設定 {name}；等候中的工作會自動繼續。', setupCertified: '認證', sysLocal: '只限本機', sysUnset: 'AI 工具未設定，Zero 未能開工。', sysData: '公司資料只存放在這部電腦，請在這部電腦的瀏覽器開啟。', sysBrainEmpty: '未有資料：確認公司概覽後由公司紀錄供料。', sysBrainMissing: '找不到先前指定的參考資料夾。請在 AI 對話說「打開營運監察台」重新開啟。', sysIdle: '閒置', sysWorking: '工作中', sysPaused: '已暫停', sysOtherSessions: '另有 {n} 個本機 AI 對話進行中。', deviceSummary: '{n} 部：{name}', devicePendingSummary: '{n} 部手機等待確認',
+    intakeGuide: '每條一兩句即可；未有答案可留空，Zero 會先建議。', intakeDrop: '拖入會議紀錄、計劃書、報價單等現有文件，或按「選擇文件」。', intakeDropWarn: 'Zero 只讀這裏的文件，請在提交前一併加入。', intakeOnline: 'Google Doc、Google Slides 等網上文件，請先下載成 PDF、Word 或 PowerPoint 再加入；只貼連結，Zero 未必讀到。', intakeDetails: '網上文件、範本及其他 AI 工具', intakeModalNote: '確認後即交 Zero 擬公司概覽，不會對外發送。', intakeReadyWarn: '重新提交會由 Zero 重擬公司概覽，未確認的修改會失去。', aiBlockNote: '設定完成前，答案會先記錄，Zero 不會跟進；設定後自動繼續。', aiCheckingNote: 'AI 工具正在認證，通常一分鐘內完成。', setupUnsetNote: '選擇並認證一個 AI 工具，Zero 才會開始工作。', setupGuide: '選擇電腦上已登入的 AI 工具。認證約需兩分鐘，確保它只處理 CrewZero 的工作。', setupChange: '更換 AI 工具', setupChangeGuide: '選擇另一個已登入的 AI 工具並認證；認證約需兩分鐘，確保它只處理 CrewZero 的工作。', setupChangeGo: '認證並改用', setupMissing: '這部電腦未有已登入的 AI 工具。請安裝並登入 Claude Code、Codex 或 Antigravity 其中一個，再回來認證。', setupPassed: '已設定 {name}；等候中的工作會自動繼續。', setupCertified: '認證', sysLocal: '只限本機', sysUnset: 'AI 工具未設定，Zero 未能開工。', sysData: '公司資料只存放在這部電腦，請在這部電腦的瀏覽器開啟。', sysBrainEmpty: '未有資料：確認公司概覽後由公司紀錄供料。', sysBrainMissing: '找不到先前指定的參考資料夾。' + OPEN + '重新開啟。', sysIdle: '閒置', sysWorking: '工作中', sysPaused: '已暫停', sysOtherSessions: '另有 {n} 個本機 AI 對話進行中。', deviceSummary: '{n} 部：{name}', devicePendingSummary: '{n} 部手機等待確認',
     intakeOptionalHead: '其餘可留空，Zero 會先建議', intakeTemplateNote: '想先用其他 AI 工具準備？下載或複製範本交給它，填好後存成 .md 檔，連同它列出的文件一併拖入上面。', intakeTemplateGet: '下載範本', intakeTemplateCopy: '複製範本', intakeTemplateCopied: '已複製範本', intakeTemplateCopyFailed: '未能複製，請改按「下載範本」。', zeroThink: '和 Zero 一起想', zeroThinkNote: '未想清楚？Zero 會逐步問你。',
     checkLinkGoogle: '答案內的 Google 文件連結 Zero 未必讀到。請把重點寫在答案內，文件下載成 PDF、Word 或 PowerPoint 後加入。',
     checkLinkOnline: '答案內的網上連結 Zero 未必讀到。請把重點寫在答案內，文件下載後加入。',
@@ -152,7 +154,7 @@
     ideateAsking: 'Zero 有問題想問你（第 {n} 步，共 3 步）', ideateAnswer: '回答 Zero 的問題',
     ideateReady: '已按討論填好答案，請逐條確認或改寫。',
     ideateRetry: '再試一次', ideateFailed: 'Zero 這次未能完成，已回答的內容會保留。',
-    ideateHasOverview: '公司概覽已就緒，請先查看公司概覽；如需補充資料，可在「告訴 Zero」頁補充。',
+    ideateHasOverview: '公司概覽已就緒。想和 Zero 一起想，請在 AI 對話輸入 /crewzero:discuss（Codex：$crewzero:discuss；Antigravity：/discuss），或說「和 Zero 討論」；要補充資料，可在「告訴 Zero」頁補充。',
     ideateTooLong: '初步想法最多 1000 字，請先縮短第 1 題的內容再試。',
     ideateSource: '與 Zero 的討論', ideateSuggest: 'Zero 按討論建議：', ideateFrom: '根據與 Zero 的討論',
     ideateTag: 'Zero 按討論預填 · 待確認 · 不是原句', ideateAdopted: 'Zero 建議 · 你已認同 · 根據討論',
@@ -175,9 +177,9 @@
     retireTitle: '撤回一站：{s}', retireAsk: '「{s}」不再做：從路線撤回這一站嗎？', retireYes: '撤回這一站', retireNo: '保留這一站',
     retireWhy: '你在每週訪問答「不再做」；撤回後這一站留在紀錄並標「已撤」，路線由下一站接上。',
     // 告訴 Zero「由文件預填」（規劃書 3.1）
-    reqDoc: '放入文件', docNeedOverview: '公司概覽確認後，才可放入文件交 Zero 閱讀。', docDrop: '把會議紀錄、筆記、證明等文件拖入此處，或按「選擇文件」。Zero 只按文件寫明、公司以外已發生的事擬確認題，經你確認後才更新紀錄。',
-    docSent: '已收到文件，Zero 稍後閱讀', openFolder: '開啟資料夾', openFolderNote: '開啟收件匣資料夾，查看已收到的檔案；要 Zero 閱讀新文件，請用上方「放入文件」。', openFolderDone: '已開啟收件匣資料夾', openFolderNoWin: '此環境不會開啟資料夾視窗',
-    runNow: '立即開始 Zero 工作', runNowNote: '等同手動開工一次；連續兩次開工都沒有你的輸入或現實進展，Zero 會自動暫停。', runNowBusy: 'Zero 工作進行中，完成後才可再開始。', runNowSent: '已請 Zero 開始工作',
+    reqDoc: '發生了一件事', docNeedOverview: '公司概覽確認後，才可放入文件交 Zero 閱讀。', docDrop: '把會議紀錄、筆記、證明等文件拖入此處，或按「選擇文件」。Zero 只按文件寫明、公司以外已發生的事擬確認題，經你確認後才更新紀錄。',
+    docSent: '已收到文件，Zero 稍後閱讀', openFolder: '開啟資料夾', openFolderNote: '開啟接收文件的資料夾；要 Zero 閱讀新文件，請用首頁「告訴 Zero 一件事」。', openFolderDone: '已開啟資料夾', openFolderNoWin: '此環境不會開啟資料夾視窗',
+    runNow: '現在開工', runNowNote: '連續兩次開工都沒有你的輸入或現實進展，Zero 會自動暫停。', runNowBusy: 'Zero 工作進行中，完成後才可再開始。', runNowSent: '已請 Zero 開始工作',
     brainJob_checkup: 'Zero 生意體檢', brainJob_opportunities: 'Zero 商機掃描',
     todayTitle: '今日要做的事', todayNotAuto: '不會自動發生：', firstWeekGuide: '第一星期指引', todayNotOpen: '每週訪問於 {d} 開放',
     prefillGo: '由文件預填', prefillGoNote: '預填後每條要你確認或改寫。',
@@ -189,7 +191,11 @@
     // 未能讀取附件的原因及建議只用固定字句（按副檔名，由 unreadReason() 取出，{page} 由 intakeTitle 填入）；AI 寫的原因只保存作紀錄，不上畫面。
     // 每句自帶句號，接在「未能讀取：{f}。」之後；按檔案類型寫：Office 檔另存為 PDF 有用，PDF 本身讀不到則分拆或移除密碼，不可叫人把 PDF 另存為 PDF
     unreadDefaultReason: 'Zero 目前無法讀取這種檔案。請改交 PDF，或在「{page}」頁直接寫下文件重點。',
-    unreadReasonOffice: 'Zero 目前無法直接讀取 Word、Excel、PowerPoint 檔案。請另存為 PDF 再交，或在「{page}」頁直接寫下文件重點。', unreadReasonPdf: '這份 PDF 未能讀取，常見原因是超過 100 頁或設有密碼。請分拆為每份 100 頁以內、移除密碼後再交，或在「{page}」頁直接寫下文件重點。',
+    unreadReasonOffice: 'Zero 未能讀取舊版 Office 格式。請另存為新版格式（例如 .docx）或 PDF 再交，或在「{page}」頁直接寫下文件重點。',
+    unreadReasonConvert: '這份文件未能轉成文字。請另存為 PDF 再交，或在「{page}」頁直接寫下文件重點。',
+    unreadReasonTooBig: '這份文件太大，未能轉成文字。請分拆後再交，或在「{page}」頁直接寫下文件重點。',
+    unreadReasonCorrupt: '這份文件可能已損壞，未能轉成文字。請重新另存後再交，或在「{page}」頁直接寫下文件重點。',
+    unreadReasonPassword: '這份文件設有密碼，未能轉成文字。請移除密碼後再交，或在「{page}」頁直接寫下文件重點。', unreadReasonPdf: '這份 PDF 未能讀取，常見原因是超過 100 頁或設有密碼。請分拆為每份 100 頁以內、移除密碼後再交，或在「{page}」頁直接寫下文件重點。',
     prefillNoneUnread: '文件未能讀取，請自行填寫', prefillNoneSome: '可讀取的文件未有這項資料，請自行填寫',
     prefillBad: 'Zero 這次交出的預填內容不完整，系統未有採用。請再按一次「由文件預填」，或直接填寫。',
     prefillTagQuote: 'Zero 按文件預填 · 待確認', prefillTagInferred: 'Zero 按文件預填 · 待確認 · 按文件推斷，不是原句', prefillTagUnverified: 'Zero 按文件預填 · 待確認 · 未能核對原句',
@@ -206,17 +212,17 @@
     debateOfferTitle: '生意體檢建議：開一場紅藍對打', debateOfferAsk: '要就「{t}」開一場紅藍對打嗎？', debateOfferTopic: '生意體檢最弱的環節：{t}',
     debateOfferContext: '生意體檢找出最弱的環節；Zero 建議就此開一場紅藍對打：由外部身份逐點攻擊，再把批評變成轉強卡。辯論結果不算證據。',
     debateOfferAfter: '你答「開始」後，Zero 會逐回合進行辯論', debateOfferYes: '開始', debateOfferNo: '暫不', debateOfferWhy: '這是生意體檢找出的最弱環節。',
-    debateOfferNoted: '已記錄：暫不開辯論。', debateOfferBusy: '已記錄你的答案；目前已有一場辯論未完結，完結後可在 Founder Desk 按「開一場辯論」。',
+    debateOfferNoted: '已記錄：暫不開辯論。', debateOfferBusy: '已記錄你的答案；目前已有一場辯論未完結，完結後可在 CrewZero 按「開一場辯論」。',
     oppOfferTitle: '商機掃描：要跟進哪些機會？', oppAsk: '「{t}」：要跟進嗎？',
     oppOfferContext: '商機掃描找到以下機會（Zero 建議，不算證據；每項附出處）。你選擇跟進，才會成為工作或交 Zero 草擬路線改動。',
-    oppOfferAfter: '答案即時生效；做成臨時工作或考慮改路線，Zero 會先擬好範圍或選項再問你。',
-    oppTask: '做成臨時工作', oppRoute: '考慮因此改路線', oppLater: '暫不', oppDrop: '不再提', oppWhy: '{w}第一個測試：{f}',
+    oppOfferAfter: '答案即時生效；做成臨時工作或考慮改計劃，Zero 會先擬好範圍或選項再問你。',
+    oppTask: '做成臨時工作', oppRoute: '考慮因此改計劃', oppLater: '暫不', oppDrop: '不再提', oppWhy: '{w}第一個測試：{f}',
     prospectWhy: '推進「{n}」', prospectEvent: 'Zero 更新了 {n} 個對象的下一步',
-    oppNoteTask: '跟進商機「{t}」：{f}（出處：{s}）', oppNoteRoute: '因應商機「{t}」考慮改路線：{w} 第一個測試：{f}（出處：{s}）', oppDropNote: '你選擇不再提這個機會',
+    oppNoteTask: '跟進商機「{t}」：{f}（出處：{s}）', oppNoteRoute: '因應商機「{t}」考慮改計劃：{w} 第一個測試：{f}（出處：{s}）', oppDropNote: '你選擇不再提這個機會',
     flagPending: '待更新', nextAfterDone: '「{s}」已完成；下一個對外動作改為甚麼？',
-    nextAfterDoneWhy: '小旗原本掛在已完成的一站；Zero 按下一站的真事建議，你確認後小旗才移動。',
+    nextAfterDoneWhy: '小旗原本掛在已完成的一站；Zero 按下一站的對外成果建議，你確認後小旗才移動。',
     schedSim: '模擬計時器（按模擬時鐘）', 
-     schedServerRule: '電腦開着並已打開 CrewZero 時會按時開工；錯過後 6 小時內補做一次。暫時不想 Zero 開工（例如去旅行），可以按「停止自動開工」，回來再開啟，時間設定會保留。', schedAutostartOn: '開機時會自動打開 CrewZero', schedAutostartOff: '電腦重新開啟後，要打開一次 Founder Desk 才會恢復',
+     schedServerRule: '電腦開着並已打開 CrewZero 時會按時開工；錯過後 6 小時內補做一次。暫時不想 Zero 開工（例如去旅行），可以按「停止自動開工」，回來再開啟，時間設定會保留。', schedAutostartOn: '開機時會自動打開 CrewZero', schedAutostartOff: '電腦重新開啟後，要打開一次 CrewZero 才會恢復',
        runUnfinished: '未完成', runWorking: 'Zero 工作中', schedCleanupPending: '每日自動開工已停用；開機時自動打開尚未完全移除。請在系統頁再次移除。', schedCleanupTodo: '開機時自動打開尚未完全移除：請到系統頁再次移除。', schedRemoveAgain: '再次移除',  schedLegacyTodo: '舊式排程要更新：請到系統頁更新自動開工設定。', schedRecertifyTodo: 'AI 工具已更新：請重新認證', schedRecertify: '重新認證',
      
     
@@ -225,7 +231,7 @@
     cad_daily: '每日', cad_weekdays: '平日（星期一至五）', cad_weekly: '每星期一次',
       schedNever: '未有',
     rhythmPendingDefault: '預設每日 21:00；確認公司概覽後就可以更改時間。', rhythmAiUnset: 'AI 工具未設定：到時間也不會開工。',
-    rhythmWorking: '處理中…', rhythmLegacyUnknown: '舊版自動開工狀態未明', rhythmOsMissing: '每日排程已失效，電腦上找不到這項設定；請按「更新自動開工設定」。', rhythmPickTime: '請選擇開工時間。', rhythmAfterOn: '開啟後', rhythmSavedOn: '已儲存：{t}開工。', rhythmCad_daily: '每日', rhythmCad_weekdays: '平日（星期一至五）', rhythmCad_weekly: '每星期一次', rhythmTitle: '自動開工', rhythmOn: '已開啟', rhythmOff: '未開啟', rhythmNew: '未開始', rhythmDemo: '示範（虛構）', rhythmLegacy: '舊版自動開工仍在用', rhythmLegacyMissing: '舊版自動開工已失效', rhythmNext: '下次開工：{t}', rhythmCatchUp: '{t} 的工作即將補做', rhythmInterview: '每週訪問', rhythmInterviewHelp: 'Zero 會問你近況', rhythmLast: '上次實際開工',  rhythmDay: '星期{d}', rhythmInterviewNext: '（下次 {d}）', rhythmWeeklyWhen: '逢星期{d} {t}', rhythmDate: '{m} 月 {d} 日', rhythmTodayWhen: '今日 {t}', rhythmTomorrowWhen: '明日（{d}） {t}', rhythmDateWhen: '{d}（星期{w}） {t}', rhythmChange: '更改時間', rhythmStop: '停止自動開工', rhythmStart: '開啟自動開工', rhythmConfirmStart: '確認開啟', rhythmSave: '儲存', rhythmCancel: '取消', rhythmMigrate: '更新自動開工設定', rhythmToOverview: '前往公司概覽', rhythmReadonlyDemo: '示範資料不會自動開工，也不能在這裏更改。', rhythmReadonlySim: '模擬實例按模擬時鐘開工，這裏不能更改。', rhythmReadonlyPhone: '開關和更改時間，只可在執行 CrewZero 的電腦上進行。', rhythmNoOverview: '確認公司概覽後即可開啟，預設每日 21:00。', overviewPending: '新的公司概覽待你確認，確認後才會開工', rhythmAfterOverview: '確認後如要更改，請到營運監察台的系統頁。', rhythmOffNote: 'Zero 只會在你提交答案或要求時開始工作。',  rhythmConfirmNote: '開啟後，Zero 會於{t}自己開工，並使用你 AI 工具的用量。今日已過的時段不會補做。', rhythmLegacyNote: '更新後由 CrewZero 自己定時，不再用電腦的排程工作。', rhythmEditCadence: '開工頻率', rhythmEditTime: '開工時間', rhythmEditInterview: '每週訪問日', rhythmWeeklyHint: '每星期一次＝只在訪問日開工。', rhythmInterviewHint: '訪問日當日，Zero 會先問你近況。', rhythmPreviewOn: '儲存後：{t}開工。', rhythmPreviewOff: '之後開啟時：{t}開工。自動開工未開啟，更改時間不會令 Zero 開工。', rhythmPreviewPast: '今日 {t} 已過，不會立刻開工；下次是{n}。', rhythmPreviewRan: '今日已有開工紀錄，不會再開；下次是{n}。', rhythmPreviewNext: '下次是{n}。', rhythmSaved: '已儲存。',   rhythmInvalid: '資料格式不正確，請重新輸入。', rhythmNeedOverview: '請先確認公司概覽。', rhythmBusy: '正在處理，請稍候。', rhythmDemoDenied: '示範資料不能更改自動開工。', rhythmSchedulerMissing: '找不到自動開工所需程式，請重新安裝 CrewZero。', rhythmScheduleFailed: '未能完成設定，請稍後再試。', founderTargetNewer: '「{s}」目標日已按你較新的更改保留為 {d}。',
+    rhythmWorking: '處理中…', rhythmLegacyUnknown: '舊版自動開工狀態未明', rhythmOsMissing: '每日排程已失效，電腦上找不到這項設定；請按「更新自動開工設定」。', rhythmPickTime: '請選擇開工時間。', rhythmAfterOn: '開啟後', rhythmSavedOn: '已儲存：{t}開工。', rhythmCad_daily: '每日', rhythmCad_weekdays: '平日（星期一至五）', rhythmCad_weekly: '每星期一次', rhythmTitle: '自動開工', rhythmOn: '已開啟', rhythmOff: '未開啟', rhythmNew: '未開始', rhythmDemo: '示範（虛構）', rhythmLegacy: '舊版自動開工仍在用', rhythmLegacyMissing: '舊版自動開工已失效', rhythmNext: '下次開工：{t}', rhythmCatchUp: '{t} 的工作即將補做', rhythmInterview: '每週訪問', rhythmInterviewHelp: 'Zero 會問你近況', rhythmLast: '上次實際開工',  rhythmDay: '星期{d}', rhythmInterviewNext: '（下次 {d}）', rhythmWeeklyWhen: '逢星期{d} {t}', rhythmDate: '{m} 月 {d} 日', rhythmTodayWhen: '今日 {t}', rhythmTomorrowWhen: '明日（{d}） {t}', rhythmDateWhen: '{d}（星期{w}） {t}', rhythmChange: '更改時間', rhythmStop: '停止自動開工', rhythmStart: '開啟自動開工', rhythmConfirmStart: '確認開啟', rhythmSave: '儲存', rhythmCancel: '取消', rhythmMigrate: '更新自動開工設定', rhythmToOverview: '前往公司概覽', rhythmReadonlyDemo: '示範資料不會自動開工，也不能在這裏更改。', rhythmReadonlySim: '模擬實例按模擬時鐘開工，這裏不能更改。', rhythmReadonlyPhone: '開關和更改時間，只可在執行 CrewZero 的電腦上進行。', rhythmNoOverview: '確認公司概覽後即可開啟，預設每日 21:00。', overviewPending: '新的公司概覽待你確認，確認後才會開工', rhythmAfterOverview: '確認後如要更改，請到 CrewZero 的系統頁。', rhythmOffNote: 'Zero 只會在你提交答案或要求時開始工作。',  rhythmConfirmNote: '開啟後，Zero 會於{t}自己開工，並使用你 AI 工具的用量。今日已過的時段不會補做。', rhythmLegacyNote: '更新後由 CrewZero 自己定時，不再用電腦的排程工作。', rhythmEditCadence: '開工頻率', rhythmEditTime: '開工時間', rhythmEditInterview: '每週訪問日', rhythmWeeklyHint: '每星期一次＝只在訪問日開工。', rhythmInterviewHint: '訪問日當日，Zero 會先問你近況。', rhythmPreviewOn: '儲存後：{t}開工。', rhythmPreviewOff: '之後開啟時：{t}開工。自動開工未開啟，更改時間不會令 Zero 開工。', rhythmPreviewPast: '今日 {t} 已過，不會立刻開工；下次是{n}。', rhythmPreviewRan: '今日已有開工紀錄，不會再開；下次是{n}。', rhythmPreviewNext: '下次是{n}。', rhythmSaved: '已儲存。',   rhythmInvalid: '資料格式不正確，請重新輸入。', rhythmNeedOverview: '請先確認公司概覽。', rhythmBusy: '正在處理，請稍候。', rhythmDemoDenied: '示範資料不能更改自動開工。', rhythmSchedulerMissing: '找不到自動開工所需程式，請重新安裝 CrewZero。', rhythmScheduleFailed: '未能完成設定，請稍後再試。', founderTargetNewer: '「{s}」目標日已按你較新的更改保留為 {d}。',
     simClock: '模擬時鐘', simAdvance: '推前一日', simAI: '模擬用 AI 工具', simFake: '模擬工具（零費用）', simReal: '真實 AI 工具（按次收費）',
     simPersona: 'Zero 扮創辦人', simPersonaNote: '扮演者由試走腳本經頁面操作，只讀以下文件；要創辦人判斷的事一律留待創辦人。',
     // 只有你知道的事：AI 未能建議時的選項（規劃書 3.1「未有細節」、4.10 每題必有建議）
@@ -330,27 +336,27 @@
     currentAI: '目前使用',
     hostNotLoggedIn: '已安裝但尚未登入：請先在此工具登入，再進行認證。',
     // 重新打開頁面嘅指示（工具中性：三種 AI 工具都認呢句；各工具嘅指令只喺未配對頁 noPass 列出）
-    reopenDesk: '請在 AI 對話說「打開 Founder Desk」',
-    reopenDashboard: '請在 AI 對話說「打開營運監察台」',
+    reopenDesk: OPEN,
+    reopenDashboard: OPEN,
     // 出錯提示（2026-11-02 產品負責人定）：每句一個簡單原因加一個做法；畫面永遠唔顯示英文代號、錯誤原文、路徑。
     // 頁面一律經 SOS_DESK.why(錯誤) 取句：伺服器有中文原因就用伺服器嘅；否則按代號對照（err_<代號>）；連唔到用 errNet；其他用 errGeneric。
-    errNet: '未能連上電腦上的 CrewZero：CrewZero 可能已停止運作，你的資料完好。請在 AI 對話說「打開 Founder Desk」，再按一次。',
-    errGeneric: '電腦上的 CrewZero 未能處理這次要求。請按「重新載入」再試一次；仍然失敗，請在 AI 對話說「打開 Founder Desk」。',
+    errNet: '未能連上電腦上的 CrewZero：CrewZero 可能已停止運作，你的資料完好。' + OPEN + '，再按一次。',
+    errGeneric: '電腦上的 CrewZero 未能處理這次要求。請按「重新載入」再試一次；仍然失敗，' + OPEN + '。',
     errAnswerIdentity: '答案與此問題包不相符，未有記錄。請重新開啟問題包再作答。',
     err_invalid: '送出的內容與目前紀錄不一致，可能此頁已過時。請按「重新載入」，檢查後再送出。',
     err_busy: 'Zero 正在處理另一項工作。請等一兩分鐘，再按一次。',
-    err_local: '這項操作只可在電腦上進行。請在電腦打開 Founder Desk 再按。',
+    err_local: '這項操作只可在電腦上進行。請在電腦打開 CrewZero 再按。',
     err_notFound: '找不到這項內容，可能已在另一頁完成或已刪除。請按「返回待決事項」查看最新內容。',
     err_ai: 'AI 工具尚未設定。請先到「系統設定」選擇 AI 工具並完成認證。',
     err_tooLarge: '送出的內容太多。請刪減部分文字，或把較長的內容改為文件附上，再送出。',
     err_badBody: '送出的內容未能讀取。請按「重新載入」，再送出一次。',
     err_cut: '送出途中連線中斷。請再送出一次。',
-    err_server: '電腦上的 CrewZero 處理時出錯，這次要求未有完成。請按「重新載入」再試一次；仍然失敗，請在 AI 對話說「打開 Founder Desk」重新開啟。',
-    err_origin: '這次要求來自未配對的頁面，未有處理。請在 AI 對話說「打開 Founder Desk」，在新開的頁面再按。',
+    err_server: '電腦上的 CrewZero 處理時出錯，這次要求未有完成。請按「重新載入」再試一次；仍然失敗，' + OPEN + '重新開啟。',
+    err_origin: '這次要求來自未配對的頁面，未有處理。' + OPEN + '，在新開的頁面再按。',
     err_open: '未能開啟資料夾。請稍後再按一次。',
-    // 整頁讀取失敗（Founder Desk 各頁）：分清連唔到、搵唔到、頁面本身出錯；每種都有掣
+    // 整頁讀取失敗（CrewZero 各頁）：分清連唔到、搵唔到、頁面本身出錯；每種都有掣
     failNetTitle: '未能連上 CrewZero',
-    failNet: 'CrewZero 已停止運作，你的資料完好。請在 AI 對話說「打開 Founder Desk」即可重新開啟；已重新開啟，請按「重新載入」。',
+    failNet: 'CrewZero 已停止運作，你的資料完好。' + OPEN + '即可重新開啟；已重新開啟，請按「重新載入」。',
     failMissingTitle: '找不到這項內容',
     failInternalTitle: '此頁未能顯示',
     failInternal: '此頁讀取時出錯，你的資料沒有改動。請按「重新載入」；仍然未能顯示，請按「返回待決事項」。',
@@ -362,14 +368,14 @@
     fileUnread: '未能讀取「{f}」：檔案可能已移動或損壞，請重新選擇。',
     practiceTagsStuck: '建議說法未能準備好。請按「重新載入」；你之前的發言已記錄。',
     // 已開住嘅頁面，CrewZero 停咗：頁頂提示（重新連上就自動消失）
-    stoppedDesk: '目前未能連接 CrewZero。請確認電腦已開機；用手機時請連接與電腦相同的 Wi-Fi。如仍未恢復，請在 AI 對話說「打開 Founder Desk」。',
-    stoppedDashboard: '目前未能連接 CrewZero。請確認電腦已開機；用手機時請連接與電腦相同的 Wi-Fi。如仍未恢復，請在 AI 對話說「打開 Founder Desk」。',
+    stoppedDesk: '目前未能連接 CrewZero。請確認電腦已開機；用手機時請連接與電腦相同的 Wi-Fi。如仍未恢復，' + OPEN + '。',
+    stoppedDashboard: '目前未能連接 CrewZero。請確認電腦已開機；用手機時請連接與電腦相同的 Wi-Fi。如仍未恢復，' + OPEN + '。',
     // AI 工作失敗卡：原因空白、按「重試」失敗
     failNoReason: 'Zero 未能完成這項工作，原因未有記錄。請按「重試」；仍然失敗，請到「系統設定」重新認證 AI 工具。',
     retryFailed: '未能重試',
     // 裝置通行證（設計 2026-10-31 第 3 節）：未配對嘅瀏覽器讀回收到 403 就全頁顯示；系統設定頁列出已配對裝置
-    noPassTitle: '此瀏覽器未與 Founder Desk 配對',
-    noPassDesk: '請在 AI 對話輸入 /crewzero:desk（Claude Code）、$crewzero:desk（Codex）或 /desk（Antigravity），系統會重新打開已配對的頁面。',
+    noPassTitle: '此瀏覽器未與 CrewZero 配對',
+    noPassDesk: '請在 AI 對話輸入 /crewzero:dashboard（Claude Code）、$crewzero:dashboard（Codex）或 /dashboard（Antigravity），系統會重新打開已配對的頁面。',
     noPassDashboard: '請在 AI 對話輸入 /crewzero:dashboard（Claude Code）、$crewzero:dashboard（Codex）或 /dashboard（Antigravity），系統會重新打開已配對的頁面。',
     noPassWhy: '只有你自己配對過的瀏覽器才可以查看公司資料及作出決定；AI 工具不會取得通行證。配對不需輸入任何密碼，30 日後會自動再配對一次。',
     devices: '已配對的瀏覽器與手機',
@@ -384,9 +390,9 @@
     deviceRevokeConfirm: '撤銷後此裝置須重新配對，確定撤銷？',
     deviceRevoked: '已撤銷',
     deviceGone: '找不到此裝置，可能已撤銷。',
-    deviceNote: '撤銷後，下次由 AI 對話打開 Founder Desk 會自動重新配對。',
+    deviceNote: '撤銷後，下次由 AI 對話打開 CrewZero 會自動重新配對。',
     phoneOpen: '用手機開',
-    phoneOpenTitle: '用手機開 Founder Desk',
+    phoneOpenTitle: '用手機開 CrewZero',
     phoneOpenHint: '手機只可在與這部電腦相同的家中或辦公室 Wi-Fi 使用。開啟後如電腦詢問是否允許連線，請按允許，再用手機相機掃描二維碼。',
     phoneEnable: '開啟',
     phoneClose: '關閉手機連線',
@@ -402,7 +408,7 @@
     phoneGone: '找不到這部手機，可能已逾時、被拒絕或已撤銷。',
     logoChange: '更換公司標誌',
     logoTitle: '公司標誌',
-    logoHint: '選擇一張圖片作為公司標誌，系統會自動調整大小；正方形或接近正方形的圖片效果最佳。標誌會在 Founder Desk 及營運監察台頁頂顯示。',
+    logoHint: '選擇一張圖片作為公司標誌，系統會自動調整大小；正方形或接近正方形的圖片效果最佳。標誌會在 CrewZero 每一頁頂顯示。',
     logoNone: '目前未有標誌，頁頂顯示公司名稱首兩個字。',
     logoPick: '選擇圖片',
     logoRemove: '移除標誌',
@@ -531,6 +537,9 @@
     assumptionsTitle: 'Zero 假設',
     unverified: '未經證實',
     sourcesTitle: 'Zero 依據',
+    srcOpenFile: '開啟存檔', srcReadOn: '讀取日期：{d}', srcFixLink: '更正連結', srcAddLink: '加入連結', srcSave: '儲存', srcCancel: '取消',
+    srcFixed: '已更正（{d}）', srcUrlLabel: '資料來源連結', srcUrlPlaceholder: '貼上以 https 開頭的網址', srcUrlBad: '連結須以 https 開頭，並且是公開網址；請檢查後再儲存。', srcUrlSaved: '連結已更正。',
+    sourceUrlFixed: '更正資料來源連結：{t}',
     previewOwners: '各里程碑負責人與目標日期',
     previewDepth: '各里程碑深度檢查',
     missingN: '缺少資料 {n} 項',
@@ -546,10 +555,10 @@
     nextStep: '下一步',
     routeName: '路線',
     changedItems: '已修改項目',
-    // 兩個產品互相嘅入口；Founder Desk 交要求
-    toDash: '營運監察台',
-    reqOrder: '我想改次序／加一站',
-    reqAdhoc: '交一件臨時工作',
+    // 兩個產品互相嘅入口；CrewZero 交要求
+    toDash: 'CrewZero',
+    reqOrder: '想改計劃',
+    reqAdhoc: '請 Zero 做一件事',
     reqHelp: '求助',
     reqTitle: '交要求',
     reqSend: '交給 Zero',
@@ -587,22 +596,91 @@
     snoozedUntil: '暫緩至 {d}',
     snoozeEffect: '暫緩期間，相關工作會維持等待。',
     brainPendingN: '生意大腦待處理：{n}',
-    quickInputTitle: '寫下新情況',
+    quickInputTitle: '告訴 Zero 一件事',
     quickInputPlaceholder: '用一句話說明新情況或需要。',
-    quickEvent: '真實事件',
-    quickAdhoc: '要 Zero 做一件事',
-    quickOrder: '改路線',
+    quickEvent: '發生了一件事',
+    quickAdhoc: '請 Zero 做一件事',
+    quickOrder: '想改計劃',
     quickHelp: '求助',
     quickSend: '送出',
     quickNeedType: '請先選擇類型。',
     quickNeedText: '請先寫下內容。',
     quickReceived: '已收到，正在處理。',
     quickTrack: '查看進度',
+    // 0.40.0 告訴 Zero 一件事（首頁一個盒）
+    tellIntro: '選一項，寫一兩句就可以；文件可以一併附上。送出後 Zero 會先讀，再在上方「接下來」問你確認，未經你確認不會改動任何紀錄。',
+    tellEventWhat: '公司以外有人做了或說了甚麼：見面結果、對方答應或拒絕、收到回覆。可附對方回覆、會議紀錄或收據；只附文件、不寫字也可以。',
+    tellEventAfter: '→ Zero 擬確認題，你確認後才更新對方做到哪一步及站點進度',
+    tellAdhocWhat: '想 Zero 準備或製作甚麼、何時要，例如一張推廣單張、一份見面簡介。',
+    tellAdhocAfter: '→ Zero 先擬範圍問你，確認後開始，完成後請你驗收',
+    tellOrderWhat: '哪一站提前或押後、想新增一站、目標要改。',
+    tellOrderAfter: '→ Zero 擬成一條確認題，你確認後路線才會更改',
+    tellLabelEvent: '發生了甚麼事（與哪個機構哪一位、對方說了或做了甚麼）',
+    tellLabelAdhoc: '想請 Zero 做甚麼（交付甚麼、何時要）',
+    tellLabelOrder: '想怎樣改（哪一站提前或押後、想新增哪一站）',
+    tellPhEvent: '例：與甲公司的陳經理會面，對方答應介紹兩間餐廳，並約定下星期再談分帳。',
+    tellPhAdhoc: '例：請擬一張聖誕節餐廳推廣單張，下星期五前交付。',
+    tellPhOrder: '例：牌照與保險須於任何送貨前辦妥；另想新增一站「廚師試食會」。',
+    tellFiles: '附件（可選）：對方書面回覆、會議紀錄、收據或其他文件',
+    tellPick: '選擇文件',
+    tellLinkLabel: 'Google 連結（可選）',
+    tellLinkPlaceholder: '貼上 Google 文件、試算表或簡報的連結',
+    tellLinkAdd: '加入連結',
+    tellLinkHint: '連結須設為「知道連結的任何人可檢視」，任何拿到連結的人都可查看；不想這樣，請下載後放入。',
+    tellLinkBad: '這不是 Google 文件、試算表或簡報的連結，請檢查後再貼。',
+    tellLinkLine: '附連結：{u}',
+    tellRemove: '移除',
+    tellAfterEvent: '送出後：Zero 會讀你的原話和附件，對照公司紀錄的站點和假設，最多擬 3 條確認題放在「接下來」。每項經你確認才生效；沒有影響的話，Zero 會寫明原因。',
+    tellAfterAdhoc: '送出後：Zero 會先擬範圍和期限兩三條問題放在「接下來」，你確認後才開始做，完成後請你驗收。',
+    tellAfterOrder: '送出後：Zero 會擬成一條確認題放在「接下來」。你確認後路線才會更改，否則一切不變。',
+    tellSend: '送出給 Zero', tellCancel: '取消',
+    tellNeedEventText: '請寫下發生了甚麼事，或附上文件。',
+    tellReceived: '已收到。Zero 稍後會讀，再在「接下來」問你確認。',
+    tellNeedOverview: '確認公司概覽後，就可以告訴 Zero 發生的事。',
+    tellDiscuss: '想先和 Zero 討論？在 AI 對話輸入 {cmd}，或直接說「和 Zero 討論」。',
+    tellHelpLine: '卡住或不明白？按右上角「需要幫助」，Zero 會按你目前的情況解釋。',
+    discussClaude: '/crewzero:discuss', discussCodex: '$crewzero:discuss', discussAgy: '/discuss',
+    discussAll: '/crewzero:discuss（Codex：$crewzero:discuss；Antigravity：/discuss）',
+    // 最近交給 Zero 的事
+    recentTitle: '最近交給 Zero 的事', recentNone: '還沒有交給 Zero 的事。送出第一件後，這裏會列出 Zero 處理到哪一步。', recentAll: '全部記錄 →',
+    inStWorking: 'Zero 處理中', inStFailed: 'Zero 未能處理', inStAwaiting: '等你確認', inStUpdated: '已更新紀錄', inStNoEffect: '沒有影響',
+    inFeedback: '查看回饋', inRetry: '請 Zero 重試', inFromChat: '來自與 Zero 的討論', inTyDebrief: '會後紀錄', inTextless: '（只附文件，沒有文字）',
+    inLineWorking: 'Zero 已收到，正在處理。', inLineApplying: '你的答案已收到，Zero 正在更新紀錄。', inLinePackGone: '先前擬的問題已更新，Zero 會重新擬題。',
+    inLineAiWait: '已收到；AI 工具設定完成後，Zero 會自動開始處理。', inLineFailed: 'Zero 這次未能處理，可請 Zero 重試。',
+    inLineAwaiting: 'Zero 已讀，擬了 {n} 條確認題，還有 {m} 條未答。', inLineAwaitingAll: 'Zero 已讀，擬了 {n} 條確認題。', inFilesN: '附件 {n} 份',
+    inOldNote: '（這件事在更新前送出，沒有詳細回饋）',
+    // 回饋卡
+    fbEyebrow: '告訴 Zero · 回饋', fbCrumb: '回饋', fbSentAt: '你在 {t} 送出', fbNoAttach: '沒有附件',
+    fbS1: '已收到', fbS2: 'Zero 讀了甚麼', fbS3: '要你確認甚麼', fbS4: '確認後改變了甚麼', fbS5: '沒有影響的原因', fbSAfter: '確認後',
+    fbWaitRead: 'Zero 尚未讀完；完成後，這裏會列出讀到的內容。', fbReadDefault: 'Zero 已讀過你交來的內容。',
+    fbFailedRead: 'Zero 這次未能讀完這件事。', fbAfterAdhoc: 'Zero 開始製作；完成後會在待決事項請你驗收。', fbAfterOrder: '確認後路線才會更改；未確認則一切不變。',
+    fbHighlights: '文件重點', fbPage: '（第 {p} 頁）', fbAttRead: '已讀', fbAttUnread: '未能讀取', fbAttNotRead: 'Zero 尚未讀這份附件',
+    fbAnswerYou: '你答：{a}', fbConfirmedAt: '{t} 確認', fbNotAnswered: '未作答',
+    fbChange: '{w}：{b} → {a}', fbOnPath: '在業務路徑查看', fbRecorded: '已寫入決定紀錄。', fbFollowUp: '已加入日程：{d} {t}',
+    fbSuggest: 'Zero 建議：{a}', fbReason: '原因：{r}', fbMissed: '覺得 Zero 看漏了？補充一句再送', fbMissedLabel: '補充一句（會連同原話再送給 Zero）', fbMissedSend: '再送給 Zero', fbMissedPrefix: '補充：{t}',
+    fbBack: '返回待決事項', fbNotFound: '找不到這件事的回饋；可能已被移除。', fbRetryAsked: '已請 Zero 重新處理。',
+    // 附件
+    attOpen: '按此開啟', attOpenSnap: '開啟存檔', attOpenText: '文字版', attOrigin: '原連結', attReread: '重新讀取', attRereadAsked: '已記下要重新讀取這個連結。',
+    attGoogle: '{n}（{k} · {d}讀取）', gk_doc: 'Google 文件', gk_sheet: 'Google 試算表', gk_slides: 'Google 簡報',
+    attJudgeFull: 'Zero 會閱讀全文', attJudgeNew: 'Zero 會閱讀文字及表格；圖片不會讀到',
+    attJudgeOld: 'Zero 未能讀取舊版 Office 格式：請另存為新版格式（例如 .docx）或 PDF 再交', attJudgeImg: 'Zero 會看這張圖', attJudgeOther: 'Zero 未必讀到這種檔案',
+    linkErr_notShared: '未能讀取這個連結：文件沒有設為「知道連結的任何人可檢視」。請改設分享，或下載後放入。',
+    linkErr_notFound: '未能讀取這個連結：找不到這份文件，請檢查連結。',
+    linkErr_tooBig: '未能讀取這個連結：文件太大，請下載後分拆再放入。',
+    linkErr_timeout: '未能讀取這個連結：等候逾時，請稍後再試。',
+    linkErr_blocked: '未能讀取這個連結：連結轉到不受支援的位址。',
+    linkErr_network: '未能讀取這個連結：電腦暫時連不上網絡。',
+    // 現在開工（首頁 Zero 近期工作卡）
+    runPreviewTitle: '現在開工會做甚麼：', runPreviewUnread: '先處理你交來、Zero 未讀的 {n} 件事',
+    runPreviewDaily: '再做一次日常工作：準備下一個對外動作「{t}」要用的資料', runPreviewDailyOnly: '做一次日常工作：準備下一個對外動作「{t}」要用的資料',
+    runPreviewGeneric: '再做一次日常工作：補齊公司紀錄中缺少的資料，並準備進行中的站點', runPreviewGenericOnly: '做一次日常工作：補齊公司紀錄中缺少的資料，並準備進行中的站點',
+    // 署名（需要幫助對話框底部）
+    helpCredit: 'CrewZero（零號隊員）由 Adam Chan 製作，以 Apache License 2.0 授權，任何人可免費使用。', helpSupportLine: '覺得有用？歡迎支持 CrewZero：',
     founderDemoDenied: '示範資料不能修改。',
     founderOpInvalid: '這項操作已不適用，請重新讀取頁面。',
     founderOpBusy: '正在記錄另一項操作，請稍後再試。',
     founderOpSaved: '已記錄，會立即更新。',
-    changeDateTitle: '更改日期',   changeCurrentDate: '現在日期', changePickDate: '新日期', changeSave: '儲存日期', changeCancel: '取消', changeMore: '不只是改日期？', changeMoreLink: '在 Founder Desk 寫下新情況', changeTargetHint: 'Zero 下次工作時會按新日期安排。', changeTaskHint: '原有時間會保留；Zero 下次工作時會按新日期安排。', changeGone: '這項安排已完成、已撤回或找不到，未能更改日期。', changeBackPath: '返回業務路徑', changeSaving: '儲存中…',
+    changeDateTitle: '更改日期',   changeCurrentDate: '現在日期', changePickDate: '新日期', changeSave: '儲存日期', changeCancel: '取消', changeMore: '不只是改日期？', changeMoreLink: '告訴 Zero 一件事', changeTargetHint: 'Zero 下次工作時會按新日期安排。', changeTaskHint: '原有時間會保留；Zero 下次工作時會按新日期安排。', changeGone: '這項安排已完成、已撤回或找不到，未能更改日期。', changeBackPath: '返回業務路徑', changeSaving: '儲存中…',
     founderNewerNext: '你其後已在首頁更新，這項改動沒有套用',
     founderRescheduled: '創辦人已把下一個對外動作改期至 {d}',
     founderCancelled: '創辦人已取消下一個對外動作',
@@ -650,9 +728,9 @@
     debateDecisionWhy: '裁判建議',
     debateDecisionMissing: '紅藍對打未整合好，未有要你決定的事',
     debateDecisionAnswered: '這幾條先前已經回答',
-    debateDecisionInvalid: '裁判提供的選項格式不正確，未能放上 Founder Desk',
-    debateDecisionPlaced: '裁判決定已放上 Founder Desk',
-    debateDecisionAlready: '裁判決定已在 Founder Desk',
+    debateDecisionInvalid: '裁判提供的選項格式不正確，未能放上待決事項',
+    debateDecisionPlaced: '裁判決定已放上待決事項',
+    debateDecisionAlready: '裁判決定已在待決事項',
     help_pending: '在這裏查看待你決定或回答的事項。逐項作答後，系統才會記錄你的選擇。',
     help_inputs: '在這裏交代要處理的要求，或記錄已發生的事情。內容會先交由 Zero 整理，再由你確認。',
     help_company: '在這裏查看和確認生意資料。確認後，後續安排會按這些資料進行。',
@@ -662,7 +740,7 @@
     help_team: '在這裏查看工作分工和進度。',
     help_log: '在這裏查看已記錄的決定和事件。',
     help_system: '在這裏設定 AI 工具和查看系統狀態。',
-    // 情景演練（Founder Desk）
+    // 情景演練（CrewZero）
     practice: '情景演練', practiceTitle: '練習下一次會面', practiceLabel: '練習 · 不算證據', yourActions: '你要做', practiceAll: '全部練習',
     practiceGo: '練習', practiceAgain: '再練一次', practicePrepare: '準備練習', practiceFree: '練習其他會面', practiceHistory: '練習紀錄', practiceReview: '覆盤', practiceContinue: '繼續練習', practiceChooseWho: '選擇對方', practiceOtherWho: '其他', practiceWhoName: '請輸入對方姓名及身分', practiceReviewHint: '上次練習顯示此項影響對方反應',
     practiceSeeCard: '查看對方人物卡', practiceBack: '返回情景演練', practicePrepStep: '準備', personaCard: '對方人物卡', goal: '會議目標', practiceQuestions: '要問的問題', practiceObjections: '預計反對意見',
@@ -670,7 +748,7 @@
     practiceSend: '送出', practiceHint: '提示', practiceRedo: '重講這句', practiceEnd: '完結',
     practiceSummary: '對方反應摘要', practiceWhy: '對方為何這樣反應', practiceHidden: '對方心底的顧慮', practiceFixes: '要改的地方', practiceBetter: '可以改講',
     practiceCard: '會面卡', practiceDebrief: '會後紀錄', practiceReviewAgain: '重新生成覆盤', cardOpening: '開場一句', cardObjections: '反對應對', cardClosing: '收尾一句',
-    // 紅藍對打（Founder Desk）
+    // 紅藍對打（CrewZero）
     debate: '紅藍對打', debateNew: '開一場辯論', debateStart: '開打', debateType: '題目類型', debateTopic: '題目', debateSeats: '紅方席位', debateAddSeat: '加一席',
     debateLevel: '紅方力度', debateFormat: '回合', debateCost: '預計', debateStage: '查看辯論舞台', debateAll: '全部場次', debateBack: '返回紅藍對打',
     debateRespond: '回應這場', debateAdopt: '採用轉強', debateReattack: '紅方再攻第二輪', debateRerun: '重跑未完成的一方', debateRematch: '再打一場',
@@ -678,10 +756,67 @@
     dp_blue: '藍方論證', dp_red: '紅方攻擊', dp_rebuttal: '藍方反駁', dp_judge: '裁判判定', dp_rejudge: '裁判重判', dp_strengthen: '轉強出卡', 'dp_reattack-red': '紅方再攻', 'dp_reattack-judge': '裁判判卡'
   };
 
-  // 營運監察台：畫面名稱（書面語）；狀態、欄名、圖例都由呢度讀
+  // ── 0.40.0 後台新鍵 ──
+  Object.assign(ui, {
+    runEnd_asked: '已交你確認',
+    pbOwnNone: '目前沒有人接手：{s}', pbOwnPaused: '暫停中', pbOwnLine: '{n}（{r}）：{w}',
+    pbErr_notFound: '找不到這個對象。', pbErr_invalid: '這項更正的內容不正確。', pbErr_duplicateName: '名單內已有另一個對象用這個名稱，請改用合併。', pbErr_contactInfo: '名單不記電郵、電話等聯絡方式。',
+    pbErr_merged: '這個對象已併入另一個對象。', pbErr_needRole: '改為團隊成員前，請先寫下他的角色。', pbErr_useTeam: '團隊成員請在團隊頁改變狀態。', pbErr_notTeam: '只有團隊成員可以這樣更正。',
+    pbErr_self: '不能把對象併入自己。', pbErr_teamMismatch: '團隊成員只能和團隊成員合併。', pbErr_invalidOwner: '這位成員目前不能接手工作。', pbErr_unknownOp: '這項更正不正確。',
+    linkBroken: '連結未能開啟',
+    reqAwaiting: '請確認 Zero 擬定的內容',
+    needOverviewAll: '請先確認公司概覽，才可告訴 Zero 一件事。',
+    eventAwaitingNone: 'Zero 讀完了，這件事沒有需要你確認的項目。',
+    followUpAsk: '{d}要「{a}」，是否加入日程？',
+    followUpYes: '加入日程', followUpNo: '不加入',
+    followUpJudge: '加入後會出現在你的日程清單和月曆，並成為你的一項行動。',
+    followUpDebrief: '跟進與{n}的會面',
+    followUpDebriefWhy: '你在會後紀錄寫了跟進日期。',
+    fxFollowUpBefore: '未排入日程',
+    fxMsBefore: '未完成', fxMsAfter: '已完成（{d}）',
+    fxNextNone: '未設定',
+    sourceUrlUnverified: '原文網址未能核對',
+    sourceSearchOnly: '（只經搜尋摘要）',
+    linkNotShared: '這份 Google 文件未開放「知道連結的任何人可檢視」，或暫時讀不到。請在 Google 改分享設定，或下載後加入。',
+    textSidecarNote: '文字版：{f}（圖片及版面不包括）',
+    googleNote: '來自 Google 連結：{u}（{d} 讀取）',
+    tellNoOverview: '公司概覽尚未確認，未能交給 Zero。請先確認公司概覽。',
+    tellDone: '已交給 Zero：{t}。可在 CrewZero 首頁「最近交給 Zero 的事」查看。',
+    tellBadDraft: '草稿不符合要求：{why}。',
+    tellNoServer: '未能連上 CrewZero，未有交給 Zero。請稍等十秒，再說一次。',
+    briefNone: '目前還沒有可供討論的公司資料。請先在 CrewZero 完成「告訴 Zero」。',
+    rereadBusy: '這份文件剛剛才重新讀取過，請一分鐘後再試。',
+    rereadFailed: '這次未能重新讀取，已保留原本的版本。',
+    rereadOk: '已重新讀取，原本的版本仍然保留。'
+  });
+
+  // ── 0.40.0 狀態邏輯新鍵 ──
+  Object.assign(ui, {
+    clearedToZero: '已清除你的修改，恢復 Zero 建議',
+    clearedToConfirmed: '已清除你的修改，改回 Zero 已確認的內容',
+    interruptedNoApply: '處理中途中斷，Zero 未必已收到你確認的內容'
+  });
+
+  // ── 0.40.0 名單新鍵 ──
+  Object.assign(ui, {
+    peopleMentioned: '提到的對象：{list}', peopleMentionedNew: '{n}（名單內沒有）', peopleMentionedIn: '{n}（名單內）',
+    newActorAsk: '這件事提到{who}：加入名單？', newActorJudge: '名單只記名稱、角色和你寫過的接觸，不記聯絡方式。',
+    newActorSug: 'Zero 建議類別：{k}', newActorSugNote: '加入後可在名單更正類別或名稱。', newActorSimilar: '名單內已有「{n}」，兩個名稱可能是同一個人。',
+    newActorYes: '加入名單（{k}）', newActorNo: '不加入', newActorAlias: '是「{n}」本人，記為別名', newActorOther: '另一個對象，加入名單（{k}）',
+    peopleAdded: '已加入名單：{n}（{k}）', peopleAliased: '已記為「{n}」的另一個稱呼', peopleSkipped: '沒有加入名單：{n}',
+    contactAsk: '{n}已 {d} 日沒有接觸，下一步是？', contactWhy: '最近一次接觸是 {d}：{t}', contactWhyNone: '{d}加入名單後還沒有接觸',
+    contactYes: '一星期內聯絡{n}', contactSnooze: '暫時維持，兩星期後再問', contactClose: '不再接觸', contactTaskTitle: '聯絡{n}',
+    contactWhyYes: '選這一項，Zero 會把「聯絡{n}」記入日程，{d}前完成。',
+    actorRenamed: '更正名單：「{a}」改為「{b}」', actorKinded: '更正名單：{n}的類別改為{k}', actorMerged: '更正名單：把「{a}」併入「{b}」',
+    actorClosed: '更正名單：{n}標為不再接觸', actorReopened: '更正名單：恢復與{n}接觸', actorTeamed: '更正名單：更新團隊成員{n}', taskOwnerChanged: '更正工作負責人：「{t}」改由{n}負責',
+    chgOwner: '負責人', chgOwnerMe: '我自己', chgOwnerSaved: '已更改負責人',
+    g6FromTeam: '由團隊成員的分工自動整理，不需另寫。', g6EditTeam: '到團隊頁更正'
+  });
+
+  // CrewZero：畫面名稱（書面語）；狀態、欄名、圖例都由呢度讀
   var dash = {
-    brand: '營運監察台',
-    toDesk: 'Founder Desk',
+    brand: 'CrewZero',
+    toDesk: 'CrewZero',
     // 九個分頁其中七個（另外兩個係 ui.pending、ui.company）
     overview: '公司現況', path: '業務路徑', inputs: '真實進展', team: '團隊', log: '紀錄', system: '系統',
     // 一個殼、三組導航（決定二十五）；工具列
@@ -690,10 +825,10 @@
     refreshNow: '立即讀回', fxOn: '特效 開', fxOff: '特效 關', readNow: '已讀回', readAgo: '讀回 {n} 秒前', reducedNote: '系統已設定減少動態；頁面保留靜態閱讀',
     logDecisions: '決定', logAll: '全部事件', logWork: '全部工作', setupInSystem: 'AI 工具設定', setupInSystemHint: '選擇 AI 工具並完成認證；未設定時 Zero 團隊不會開始工作。',
     // 頁首指標
-    mQuarter: '目前目標', mPending: '待決事項', mInputs: '真實進展', mNextInterview: '下次訪問',
+    mQuarter: '目前目標', mPending: '待決事項', mInputs: '交給 Zero 的事', mNextInterview: '下次訪問',
     since: '上次離開之後', sinceRuns: 'Zero 完成了 {n} 次工作（{m} 次有新產出）', sinceWaiting: '有 {k} 條等你回答', sinceLatest: '最近發生：{t}', sinceNone: '沒有新事項',
     sample: '示範資料 · 虛構公司 · 日期按今日推算',
-    live: '即時更新中', workRunning: 'Zero 工作中 · 已用 {time}', workQueued: '· 另有 {n} 項排隊', offline: '連線中斷：請在 AI 對話說「打開 Founder Desk」。', rejected: '連線中斷：請在 AI 對話說「打開 Founder Desk」。',
+    live: '即時更新中', workRunning: 'Zero 工作中 · 已用 {time}', workQueued: '· 另有 {n} 項排隊', offline: '連線中斷：' + OPEN + '。', rejected: '連線中斷：' + OPEN + '。',
     pause: '暫停動效', resume: '恢復動效',
     // 路徑圖
     pathMap: '業務路徑圖', legendConfirmed: '已確認', legendTrial: '試行', legendProposed: 'Zero 建議', legendRetired: '已撤', legendFlag: '下一個對外動作',
@@ -701,9 +836,9 @@
     trialLeft: '試行 · 剩 {n} 日', trialNotStarted: '試行 · 未開始', trialDue: '到期待結論',
     aiSuggest: 'Zero 建議：{name}', compare: '比較', adopt: '採用', deepen: '待深化',
     // 待你處理同日程
-    todo: '待你處理', allTodo: '全部 {n} 項 →', noTodo: '目前沒有待你處理的事項',
+    todo: '待決事項', allTodo: '全部 {n} 項 →', noTodo: '目前沒有待決事項',
     schedule: '未來兩星期', noSchedule: '未來兩星期沒有排定事項', overdueDays: '已逾期 {n} 日', waitedDays: '已等 {n} 日', today: '今日', tomorrow: '明日',
-    calList: '清單', calMonth: '月曆', calView: '日程檢視', calPrev: '上月', calNext: '下月', calToday: '今日', calScheduled: '預計開工', calScheduledLegend: '預計開工（要電腦開着）', calDone: 'Zero 完成', calSkipped: 'Zero 跳過', calUnfinished: 'Zero 未完成', calRunning: 'Zero 工作中', calPaused: '暫停', calHasItems: '有事項，點一下看', calMore: '還有 {n} 項', calItemCount: '{n} 項事項', calNoItems: '沒有事項', calNoDay: '這一天沒有已排定的事項。', calInterview: '每週訪問', calInterviewDone: '已作答的每週訪問', calTrial: '試行到期：{t}', calTarget: '目標日：{t}', calMonthCheck: '短期目標檢查：{t}', calDecision: '決定期限：{t}', calExternal: '下一個對外動作：{t}', calAiWork: 'Zero 按節奏開工 {t}', calChangeTime: '改時間', calChangeVisit: '改訪問日', calGoAnswer: '去作答', calChangeDate: '改日期', calViewPath: '看業務路徑', calExternalAction: '改期或取消', calEmpty: '提告訴 Zero並確認公司概覽後，目標日、訪問日與決定期限會在此列出。', calPausedNote: 'Zero 已按你的指示暫停；要恢復，請到待決事項按「繼續」。', calNoScheduler: '自動開工未開啟：只顯示紀錄和有日期的事項。', calRhythm: '自動開工 {c} {t} · 訪問日 星期{d}', calQuarter: '目前目標：{t}（到期 {d}）', calQuarterNoDate: '目前目標：{t}（未設到期日）', calDayItems: '當日安排', calOther: '其他改動或新情況：', calWrite: '在 Founder Desk 寫下新情況', calViewRecord: '看紀錄',
+    calList: '清單', calMonth: '月曆', calView: '日程檢視', calPrev: '上月', calNext: '下月', calToday: '今日', calScheduled: '預計開工', calScheduledLegend: '預計開工（要電腦開着）', calDone: 'Zero 完成', calSkipped: 'Zero 跳過', calUnfinished: 'Zero 未完成', calRunning: 'Zero 工作中', calPaused: '暫停', calHasItems: '有事項，點一下看', calMore: '還有 {n} 項', calItemCount: '{n} 項事項', calNoItems: '沒有事項', calNoDay: '這一天沒有已排定的事項。', calInterview: '每週訪問', calInterviewDone: '已作答的每週訪問', calTrial: '試行到期：{t}', calTarget: '目標日：{t}', calMonthCheck: '短期目標檢查：{t}', calDecision: '決定期限：{t}', calExternal: '下一個對外動作：{t}', calAiWork: 'Zero 按節奏開工 {t}', calChangeTime: '改時間', calChangeVisit: '改訪問日', calGoAnswer: '去作答', calChangeDate: '改日期', calViewPath: '看業務路徑', calExternalAction: '改期或取消', calEmpty: '提告訴 Zero並確認公司概覽後，目標日、訪問日與決定期限會在此列出。', calPausedNote: 'Zero 已按你的指示暫停；要恢復，請到待決事項按「繼續」。', calNoScheduler: '自動開工未開啟：只顯示紀錄和有日期的事項。', calRhythm: '自動開工 {c} {t} · 訪問日 星期{d}', calQuarter: '目前目標：{t}（到期 {d}）', calQuarterNoDate: '目前目標：{t}（未設到期日）', calDayItems: '當日安排', calOther: '其他改動或新情況：', calWrite: '告訴 Zero 一件事', calViewRecord: '看紀錄',
     scopeAll: '全部',
     // 十格模組
     mod_now: '目前工作', mod_evidence: '進度證據', mod_decisions: '待決事項', mod_paths: '試行與建議路線', 'mod_ai-week': '本週 Zero 進展',
@@ -724,7 +859,7 @@
     undated: '未定日期', timelineToday: '今日', compareTitle: '路線比較',
     cardRows: '假設|事件鏈|前置與資源|最早可達日期|兩週內首個訊號|失敗訊號與停止條件|回退|對現有里程碑的影響',
     currentPath: '現有路徑', afterAdopt: '採用後會',
-    reqOrder: '我想改次序／加一站', reqAdhoc: '交一件臨時工作', reqEvent: '記錄真實事件',
+    reqOrder: '想改計劃', reqAdhoc: '請 Zero 做一件事', reqEvent: '發生了一件事',
     // 進度證據底部一行假設總覽（規劃書 4.5）
     assumptionsLine: '假設清單：{n} 條仍是假設級 · {m} 條已有實際行動',
     // 看板
@@ -734,15 +869,17 @@
     roleCards: '角色卡', capabilities: '能力建設',
     // 真實進展
     interview: '每週訪問', startInterview: '開始訪問', lastInterview: '上次訪問', changedBy: '因此改了甚麼',
-    inbox: '收件匣', unprocessed: '未處理', awaiting: '等你回覆', answer: '回答', recentInputs: '最近已處理', processed: '已處理', evCol: '真實事件', evRecent: '最近記錄',
+    inbox: '交給 Zero 的事', unprocessed: 'Zero 未讀', awaiting: '等你回覆', answer: '回答', recentInputs: '最近已處理', processed: '已處理', evCol: '發生了一件事', evRecent: '最近記錄',
+    recNote: '這裏只看紀錄。要交給 Zero 的新事，請按下方按鈕。', tellGo: '告訴 Zero 一件事 →', recMonth: '{y} 年 {m} 月（{n} 件）', recNone: '還沒有交給 Zero 的事。',
+    recWork: 'Zero 的工作', recAuto: '自動開工', recNoWork: '暫無。', recFeedback: '查看回饋', recAttach: '附件：', recRunsNone: '還沒有工作紀錄。', recMore: '更多', recOpenFolder: '開啟資料夾',
     // 紀錄
     logEvents: '全部事件', logTasks: '全部工作', search: '搜尋', filterType: '類型', prevPage: '上一頁', nextPage: '下一頁', pageOf: '第 {p}／{n} 頁',
     // 系統
-    warnClaimMissing: '論點 {id} 有不存在的假設，已剔除', warnClaimGrade: '論點 {id} 的證據級高於公司紀錄，已按紀錄調低', warnNoWeb: '這場未有上網，外部事實一律作推測', warnUnattacked: '有 {n} 條論點未被攻擊', warnSeatSource: '席位 {id} 的來源已改為 Zero 解讀', warnSeatMissing: '紅方未有交出所有席位卡', warnSeatIncomplete: '席位 {id} 的資料未完整', warnBadAssumption: '假設編號不存在，已清空', warnUnchecked: '有 {n} 條影響判決的來源未核對', warnPersonaSource: '人物卡的來源已改為 Zero 解讀',
-    oppInvolves: '涉及', oppAvailable: '有一個機會', seatInterests: '利益', seatFears: '擔心失去', seatCriteria: '判斷準則', seatChangeMind: '甚麼會改變立場', seatSource: '來源', suggestedSeat: '紅方建議下場加席', industryCheck: '行業參考', judgeCriteriaTitle: '判決準則', judgeCriteria: '企得住：證據級至少 2 或攻擊全部不成立；受傷：有成立攻擊，但有可測試的反駁條件；倒下：成立攻擊而無反駁，或證據級 0 且已有替代方案。',
+    warnClaimMissing: '論點 {id} 有不存在的假設，已剔除', warnClaimGrade: '論點 {id} 所寫對方做到哪一步高於公司紀錄，已按紀錄調低', warnNoWeb: '這場未有上網，外部事實一律作推測', warnUnattacked: '有 {n} 條論點未被攻擊', warnSeatSource: '席位 {id} 的來源已改為 Zero 解讀', warnSeatMissing: '紅方未有交出所有席位卡', warnSeatIncomplete: '席位 {id} 的資料未完整', warnBadAssumption: '假設編號不存在，已清空', warnUnchecked: '有 {n} 條影響判決的來源未核對', warnPersonaSource: '人物卡的來源已改為 Zero 解讀',
+    oppInvolves: '涉及', oppAvailable: '有一個機會', seatInterests: '利益', seatFears: '擔心失去', seatCriteria: '判斷準則', seatChangeMind: '甚麼會改變立場', seatSource: '來源', suggestedSeat: '紅方建議下場加席', industryCheck: '行業參考', judgeCriteriaTitle: '判決準則', judgeCriteria: '企得住：對方做到哪一步至少到「實際行動」，或攻擊全部不成立；受傷：有成立攻擊，但有可測試的反駁條件；倒下：成立攻擊而無反駁，或對方做到哪一步仍是「假設」且已有替代方案。',
     sysAI: 'AI 工具', goSetup: '前往設定', sysNow: 'Zero 現況', sysRuns: '最近 Zero 工作', sysRhythm: '經營節奏', sysHealth: '健康提示', sysVersion: '版本資料', sysFresh: '連線',
     // 通用
-    view: '查看', open: '開啟', close: '關閉', toDeskAsk: '到 Founder Desk 作答', toOverview: '到公司概覽確認',
+    view: '查看', open: '開啟', close: '關閉', toDeskAsk: '到待決事項作答', toOverview: '到公司概覽確認',
     blockNoAI: 'AI 工具未設定', blockNoCompany: '尚未告訴 Zero', blockProofread: '公司概覽待確認', goIntake: '前往告訴 Zero', goProofread: '前往校對',
     milestoneDone: '里程碑完成', trialPromoted: '試行轉正',
     // 工作卡：可進行／等候中、等候乜、優先原因、你嘅現實行動、兩站並行
@@ -759,14 +896,14 @@
     clayMember: 'Zero 團隊成員：一項正在進行的工作。', clayMemberOf: 'Zero 團隊成員：正在做{item}。',
     bs_not_started: '未開始', bs_running: 'Zero 進行中', bs_waiting: '等你處理', bs_done: '已完成', bs_partial: '部分完成',
     stageBlue: '藍隊論證', stageRed: '紅隊攻擊', stageJudge: '裁判判定', stageSynth: '整合',
-    replay: '重播推進', notEvidence: '演練及紅隊結果不算證據；只有公司以外真實的人採取行動，證據級才會提升',
-    evidenceLevel: '證據級', sourceLabel: '來源', cheapestTest: '最低成本測試', stopCondition: '停止條件', weakWhy: '弱點所在',
+    replay: '重播推進', notEvidence: '演練及紅隊結果不算證據；只有公司以外真實的人採取行動，對方做到哪一步才會提升',
+    evidenceLevel: '對方做到哪一步', sourceLabel: '來源', cheapestTest: '最低成本測試', stopCondition: '停止條件', weakWhy: '弱點所在',
     weakest: '最薄弱的三個環節', unseen: '你可能未想到', notNow: '目前不建議做', thesis: '主張', whyNowL: '為何是現在',
     topRisks: '最大風險', recRoute: '推薦路線', founderDecide: '需要你決定', decisionRisk: '風險', assumptionChanges: '假設變動', redScore: '紅隊評分', firstTest: '第一個測試',
-    missedRoute: '藍隊遺漏的路線', admitted: '藍隊承認的弱點', strategyAttack: '紅隊對路線的攻擊', putOnDesk: '放上 Founder Desk 作答', chooseRoute: '到 Founder Desk 選擇',
+    missedRoute: '藍隊遺漏的路線', admitted: '藍隊承認的弱點', strategyAttack: '紅隊對路線的攻擊', putOnDesk: '放上待決事項作答', chooseRoute: '到待決事項選擇',
     fbUseful: '有用', fbUseless: '沒有用', fbRevise: '要修改', fbPlaceholder: '一句意見（可留空；要修改請寫改甚麼）', fbSend: '記錄', fbSendRevise: '交給 Zero 修改', yourFeedback: '你的意見',
     fbRecorded: '已記錄', runRecordOnly: '只記錄（Zero 毋須處理）', fbToAI: '已交 Zero 修改', fbQueued: '排隊等候 Zero',
-    // 證據級（創辦人 2026-10-28 定）：畫面一律顯示名稱，唔顯示級數數字；每級附一句白話解釋
+    // 對方做到哪一步（創辦人 2026-10-28 定）：畫面一律顯示名稱，唔顯示級數數字；每級附一句白話解釋
     ev_0: '假設', ev_1: '口頭表示', ev_2: '實際行動', ev_3: '付出成本', ev_4: '形成依賴',
     evd_0: '只是假設，未有任何人表示或行動。', evd_1: '有人表示有需要或有興趣。', evd_2: '有人已採取實際行動，例如安排會面、提供資料。', evd_3: '有人付出金錢、時間或承諾，例如落單、報名、捐款或簽約。', evd_4: '對方已經依賴，停用會造成損失。',
     pipe_0: '未接觸',
@@ -780,19 +917,38 @@
     waitStrip: '等你處理（最多三項）',
     sourceFolder: '來源：試驗資料夾 · 未入公司概覽', sourceLedger: '已改由公司紀錄供料：公司概覽確認後，試驗資料夾停用',
     brainRun_checkup: 'Zero 正按已確認的公司概覽做生意體檢', brainRun_opportunities: 'Zero 正掃描政策、資助與時間窗',
-    brainNext_checkup: '公司概覽確認後的首次 Zero 工作會做生意體檢', brainNext_opportunities: '生意體檢完成後，每星期掃描一次', brainNext_wargame: '在 Founder Desk 按「開一場辯論」開始',
-    brainNext_routes: '紅藍對打完成後，由裁判整合路線', brainNext_pipeline: '公司概覽列出公司以外的決策者後，按你確認的真實事件推進', brainNext_scenario: '有日期的會面行動後，Zero 準備練習',
+    brainNext_checkup: '公司概覽確認後的首次 Zero 工作會做生意體檢', brainNext_opportunities: '生意體檢完成後，每星期掃描一次', brainNext_wargame: '在 CrewZero 按「開一場辯論」開始',
+    brainNext_routes: '紅藍對打完成後，由裁判整合路線', brainNext_pipeline: '公司概覽列出公司以外的決策者後，按你確認發生的事推進', brainNext_scenario: '有日期的會面行動後，Zero 準備練習',
     brainFailedNext: '上次未完成，下一次 Zero 工作會再做', brainDone_checkup: '已完成生意體檢', brainDone_opportunities: '已完成商機掃描', brainPartial: '部分完成，下次補做', debateChosen: '你已選：{value}', debateDecisionRecorded: '已記錄你的選擇。', routeChosen: '★ 為你的選擇；紅隊評分來自紅藍對打。',
-    pipeSummary: '{n} 個對象；格位只按你確認的真實事件推進', pipeNextStation: '下一站：{s}', pipeNoNext: '未有下一步',
+    pipeSummary: '{n} 個對象；格位只按你確認發生的事推進', pipeNextStation: '下一站：{s}', pipeNoNext: '未有下一步',
     brainWait_wargame: '生意體檢建議開一場紅藍對打，等你決定', brainWait_opportunities: '商機等你決定是否跟進',
     legendL: '圖例',
     blockNoCompanyBrain: '尚未告訴 Zero · 生意大腦正讀取試驗資料夾',
-    blockNoCompanyBrainText: 'Zero 未有你公司的正式資料，路徑圖、待你處理及日程暫時只有空架構；生意大腦顯示的是試驗資料夾的內容，未經公司概覽確認。交了資料之後，兩者會合而為一。',
+    blockNoCompanyBrainText: 'Zero 未有你公司的正式資料，路徑圖、待決事項及日程暫時只有空架構；生意大腦顯示的是試驗資料夾的內容，未經公司概覽確認。交了資料之後，兩者會合而為一。',
     halfDebate: '上半場 · 辯論', halfStrengthen: '下半場 · 轉強',
     claimsL: '論點逐張', attacksN: '{n} 次攻擊', highN: '高 {n}', expand: '展開', collapseL: '收起', jumpToClaim: '查看這條',
     showAll: '全部展開', showOne: '逐張查看',
     feedbackLog: '你的意見紀錄', feedbackRecent: '最近 {n} 條', feedbackAll: '全部 {n} 條', feedbackNone: '尚未有意見',
     windowAxis: '時間窗由近至遠', kindSupply: '供應', kindCustomer: '服務對象',
+    // ── 0.40.0 名單（人物及機構、團隊成員） ──
+    ppl_title: '人物及機構', ppl_next: '下一步', ppl_eyebrow: '生意大腦 · 對象推進追蹤', ppl_intro: 'Zero 從你記下的事整理這份名單。名稱或類別不對，按「更正」自己改；新的人或機構由 Zero 建議，你確認才加入。',
+    ppl_all: '全部', ppl_count: '{n} 個', ppl_filterL: '名單類別', ppl_toTeam: '團隊成員',
+    ppl_kind_customer: '客戶', ppl_kind_partner: '供應或合作方', ppl_kind_investor: '投資者或資助方', ppl_kind_advisor: '顧問或協助者', ppl_kind_team: '團隊成員',
+    ppl_fix: '更正', ppl_fixRename: '改名稱', ppl_fixKind: '改類別', ppl_fixMerge: '合併到其他對象', ppl_fixClose: '標為不再接觸', ppl_fixReopen: '恢復接觸',
+    ppl_justAdded: '剛加入', ppl_noContact: '尚未接觸（{d}加入）', ppl_noRecord: '未有你寫下的接觸紀錄', ppl_noContactIntro: '尚未接觸（{d}加入，{who}）', ppl_gap: '已 {n} 日沒有接觸', ppl_docs: '相關文件 {n} 份', ppl_noDocs: '相關文件：沒有',
+    ppl_closedTitle: '已不再接觸（{n}）', ppl_lastContact: '最近接觸', ppl_empty: '公司概覽列出公司以外的決策者，或你記下與某個人有關的事後，Zero 會在這裏整理名單。',
+    ppl_renameTitle: '更正名稱', ppl_renameBody: '輸入新的名稱。舊名稱會保留為另一個稱呼，已經寫下的事不會改動。', ppl_renameField: '新名稱',
+    ppl_kindTitle: '更正類別', ppl_kindBody: '改類別不會影響關係進度和已有的紀錄。',
+    ppl_mergeTitle: '把「{a}」併入「{b}」？', ppl_mergePick: '「{a}」要併入哪一個對象？', ppl_mergeBody: '兩邊的紀錄會合在一起，「{a}」之後會記為「{b}」的另一個稱呼。已經寫下的事不會改動。', ppl_mergeDo: '合併', ppl_mergeBack: '重新選擇', ppl_mergeNone: '沒有可以合併的對象。',
+    ppl_closeTitle: '{n}不再接觸？', ppl_closeBody: '名單主區不再列出，也不再提醒跟進；已有的紀錄全部保留，之後可以恢復。', ppl_closeDo: '標為不再接觸',
+    ppl_save: '儲存', ppl_cancel: '取消', ppl_saved: '已更正', ppl_errDuplicate: '已有同名的對象。要合在一起，請用「合併」。', ppl_errContact: '名稱不能包含電郵或電話號碼。', ppl_errNeedRole: '改為團隊成員前，需要先有角色。', ppl_errMerged: '這個對象已經併入其他對象。', ppl_errGeneric: '這項更正未能儲存，請再試一次。',
+    ppl_teamTitle: '團隊成員', ppl_teamEyebrow: '團隊 · 團隊成員', ppl_teamIntro: '共同創辦人、全職、兼職和外判成員。Zero 從你記下的事建議加入，你確認才記入；狀態和分工在這裏更正。', ppl_teamEmpty: '記下團隊成員加入或分工的事，Zero 會建議加入名單。',
+    team_cofounder: '共同創辦人', team_fulltime: '全職', team_parttime: '兼職', team_contractor: '外判', ts_active: '在職', ts_paused: '暫停', ts_left: '已離開',
+    ppl_stations: '負責的站', ppl_works: '負責的工作', ppl_worksN: '{n} 項', ppl_worksNext: '{n} 項（下一項：{d}）', ppl_noWorks: '沒有未完成的工作', ppl_noStations: '尚未分配',
+    ppl_setActive: '改為在職', ppl_setPaused: '改為暫停', ppl_setLeft: '標為已離開', ppl_leftTitle: '已離開（{n}）', ppl_leftTasks: '他名下 {n} 項工作未完成，已歸到你名下顯示：', ppl_reassignMe: '改派給我自己', ppl_reassignTo: '改派給{n}',
+    ppl_ownEyebrow: '團隊 · 分工', ppl_ownTitle: '已有人負責的事', ppl_ownIntro: '由團隊成員的分工自動整理；要更正，請改上面的成員卡。', ppl_ownWho: '負責人', ppl_ownWhat: '站點及工作', ppl_ownNobody: '目前沒有人接手', ppl_ownMore: '另有 {n} 項', ppl_pausedTag: '暫停中',
+    ppl_workEyebrow: '團隊 · 工作', ppl_workTitle: '工作（按負責人）', ppl_workMe: '我自己', ppl_workMeLeft: '{n} 項，其中 {m} 項原由{o}負責', ppl_workN: '{n} 項',
+    ppl_whoMe: '負責：我自己', ppl_whoMember: '負責：{n}', ppl_whoLeft: '負責人已離開，現在歸你',
     // 作業現場（公司現況第一屏）
     workNet: '運作環', eyebrowHuman: '方向與決定', eyebrowAI: '統籌',
     // 運作環第三版（設計稿 2026-10-30）：強度表、節點、對話框、壓縮條、慶祝
@@ -825,7 +981,7 @@
     observeRemove: '移除', observeOff: '關閉觀測', observeOn: '開啟觀測', observePending: '有 {n} 項更改等待套用', observeSaved: '已收到，稍後生效',
     hostShell: 'Zero 團隊', processingL: '處理中',
     // 慶祝特效三級（只由創辦人確認過的真實事件觸發）
-    taskDelivered: '交付確認', objectiveDone: '條件達成', stageClear: '里程碑達成', celebrateL: '你確認的真實事件',
+    taskDelivered: '交付確認', objectiveDone: '條件達成', stageClear: '里程碑達成', celebrateL: '你確認發生的事',
     revising: 'Zero 修改中', revised: '修改版', revisedFail: '未能修改 · 請再按「交給 Zero 修改」', runGone: '這份產出可能已移動，請按「立即讀回」更新頁面後再試。', fbFailed: '未能記錄你的意見（內容仍在框內）',
     oppKind: '類別', oppWindow: '時間窗', oppFirst: '第一步測試', nextStepL: '本週建議', materialL: '準備材料', lastRealL: '最近真實行為', rehearsalTag: '演練 · 不算證據',
     brainEmpty: '未有生意大腦資料', brainOverview: '六項總覽', brainProgress: '推進', viewBrain: '查看生意大腦',
@@ -836,7 +992,7 @@
     ph_preparing: '準備中', ph_blue: '藍方發言', ph_red: '紅方攻擊', ph_rebuttal: '藍方反駁', ph_judge: '裁判判定', ph_done: '完場', ph_strengthening: '轉強中', ph_reattack: '再攻中', ph_adopt: '待你採用', ph_adopted: '已採用', ph_failed: '未完成',
     tp_business: '整體生意', tp_strategy: '策略或路線', tp_pricing: '收費或資助', tp_partner: '伙伴提案', tp_pitch: '簡報', tp_milestone: '里程碑',
     scoreboard: '記分牌', vStand: '站得住腳', vHurt: '被找到弱點', vFall: '被推翻', scoreRules: '計分：站得住腳計 2 分、被找到弱點計 1 分、被推翻計 0 分。', attackStats: '攻擊：高 {high} · 中 {medium} · 低 {low}', blueRate: '藍方論點經得起質疑的比例', redHitRate: '紅方質疑成立的比例', noHitRate: '未有命中紀錄',
-    evDist: '證據級分佈', overallL: '裁判總評', deltaL: '較上場', verifiedL: '外部事實核實', verifiedNone: '未有核實紀錄', verifiedOffline: '這場辯論未有上網查證，外部事實未經核實',
+    evDist: '對方做到哪一步分佈', overallL: '裁判總評', deltaL: '較上場', verifiedL: '外部事實核實', verifiedNone: '未有核實紀錄', verifiedOffline: '這場辯論未有上網查證，外部事實未經核實',
     keyMoments: '關鍵時刻', km_unmentioned: '藍方沒提的事', oppSoon: '兩星期內', km_fall: '一擊倒下', km_top: '最傷', km_blind: '盲點', km_flip: '反轉', km_missed: '遺漏的路線',
     seatAll: '全部身份', seatView: '這個身份如何看你的生意', seatCares: '最在意', seatPain: '攻擊最痛的身份',
     refuteByL: '見到甚麼證據會推翻', failureL: '失敗情境', landedOk: '攻擊成立', landedPart: '部分成立', landedNo: '不成立',
@@ -886,7 +1042,7 @@
   var AI_TONE = /(?:^|\n)[ \t>#*-]*(?:(?:好的|當然)[，,！!：:。]|以下是|以下係)|很高興|總結來說|總括而言|綜上所述|總而言之|希望對你有幫助|希望以上|如有需要|如有任何問題|隨時告訴我|隨時話我知|我可以幫你|需要我[^。！？?\n]{0,20}[嗎?？]|全方位|一站式|無縫|賦能|極致|革命性|顛覆|打造|助力|引領|卓越|領先|創新驅動|生態圈|閉環|抓手|痛點|賽道/g;
   // 創辦人睇到嘅文字（2026-10-28 創辦人定）：唔可以有內部代號、章節符號、不完整日期、英文欄位名、級數數字
   // 自足檢查（規劃書 3.1 (7)、4.10）：英文字母同數字按整詞比對，所以 4G、英文字片段唔算；完整日期（2026-10-27）、選項標號（A／B／C、1／2／3）唔算。
-  // 證據級：級數數字（零級、2 級）同機器值（guess、said、did、paid、stuck）都唔可以出現喺畫面文字。
+  // 對方做到哪一步：級數數字（零級、2 級）同機器值（guess、said、did、paid、stuck）都唔可以出現喺畫面文字。
   var CODE = /\b[BRSHTMDCP]\d{1,3}\b|\b[tmfa]\d{1,3}\b/g, SECTION = /§/g, PART_DATE = /(?<![\d\/-])(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?![\d-])/g,
     FIELD = /\b[a-z]+[A-Z][A-Za-z]*\b|\b[a-z]+_[a-z_]+\b/g, LEVEL = /[零一二三四][級级](?!方程|別)|\b[0-4]\s*級(?!別)|\b(?:guess|said|did|paid|stuck)\b|未有人講過|有人講過|有人做過|有人付出代價|冇咗會痛/g;
   // 名稱表例外清單：普通英文字（品牌、產品名），英文欄位名比對唔計
@@ -918,7 +1074,7 @@
     COLLOQUIAL_ALIAS.forEach(function (p) { s = s.split(p[0]).join(p[1]); });
     return s.replace(/(?<![關聯維])係/g, '是');
   }
-  // 證據級（規劃書 3.3）：帳本存機器值 guess|said|did|paid|stuck、辯論檔存數字 0–4；畫面只顯示五級名稱。舊紀錄嘅舊字眼照認。
+  // 對方做到哪一步（規劃書 3.3）：帳本存機器值 guess|said|did|paid|stuck、辯論檔存數字 0–4；畫面只顯示五級名稱。舊紀錄嘅舊字眼照認。
   var EV_KEYS = ['guess', 'said', 'did', 'paid', 'stuck'], EV_OLD = { none: 0, '未發生': 0, '未有人講過': 0, '有人講過': 1, '有人做過': 2, '有人付出代價': 3, '冇咗會痛': 4 };
   function evIndex(v) {
     if (v == null || v === '') return -1;
@@ -944,11 +1100,26 @@
   };
   feedback.view = feedback.response.replace(/formResponse$/, 'viewform');
   var N = {
-    celebration: { firstFlag: '第一面旗', date: '{month} 月 {day} 日', grade: '證據級：', nextGrade: ' → 下一步：', nextStage: ' → 下一站：', quote: 'Zero 陪你走到這裏了。下一步繼續。', close: '關閉', track: '證據級進度' },
+    celebration: { firstFlag: '第一面旗', date: '{month} 月 {day} 日', grade: '對方做到哪一步：', nextGrade: ' → 下一步：', nextStage: ' → 下一站：', quote: 'Zero 陪你走到這裏了。下一步繼續。', close: '關閉', track: '對方做到哪一步的進度' },
     feedback: feedback,
     TODO_ICON: TODO_ICON, ui: ui, dash: dash, field: field, legacy: legacy, JARGON: JARGON, AI_TONE: AI_TONE, styleIssues: styleIssues, evName: evName, evKey: evKey, EV_KEYS: EV_KEYS, CLAIM_WORDS: CLAIM_WORDS, isPlaceholder: isPlaceholder, deColloquial: deColloquial, COLLOQUIAL_ALIAS: COLLOQUIAL_ALIAS, EV_OLD_NAMES: ['未有人講過', '有人講過', '有人做過', '有人付出代價', '冇咗會痛'],
     // 只有 Word、Excel、PowerPoint 的檔案算 Office（字句只寫這三種）；.pages、.numbers、.key、.odt、.rtf 等歸入「其他」
-    unreadReason: function (file) { var m = /\.([A-Za-z0-9]+)\s*$/.exec(String(file == null ? '' : file)), e = m ? m[1].toLowerCase() : ''; return fmt(/^(docx?|docm|dotx?|dotm|xlsx?|xlsm|xlsb|xltx?|xltm|pptx?|pptm|potx?|potm|ppsx?|ppsm)$/.test(e) ? ui.unreadReasonOffice : e === 'pdf' ? ui.unreadReasonPdf : ui.unreadDefaultReason, { page: ui.intakeTitle }); },
+    // 附件判定與未能讀取的固定字句（只在這裏定義）：新格式（docx、xlsx、pptx 及其變體）由本機程式轉成文字；舊格式（doc、xls、ppt 及其變體）讀不到
+    fileExt: function (file) { var m = /.([A-Za-z0-9]+)s*$/.exec(String(file == null ? '' : file)); return m ? m[1].toLowerCase() : ''; },
+    fileJudge: function (file) {
+      var e = N.fileExt(file);
+      if (/^(docx|docm|dotx|dotm|xlsx|xlsm|xltx|xltm|pptx|pptm|potx|potm|ppsx|ppsm)$/.test(e)) return ui.attJudgeNew;
+      if (/^(doc|dot|xls|xlt|xlsb|ppt|pot|pps)$/.test(e)) return ui.attJudgeOld;
+      if (/^(pdf|md|txt|csv)$/.test(e)) return ui.attJudgeFull;
+      if (/^(png|jpe?g|webp|gif)$/.test(e)) return ui.attJudgeImg;
+      return ui.attJudgeOther;
+    },
+    // code：轉換失敗的原因代碼（too-big、corrupt、encrypted、其他）；舊格式固定提示另存為新格式
+    unreadReason: function (file, code) {
+      var e = N.fileExt(file), v = { page: ui.intakeTitle };
+      if (/^(docx|docm|dotx|dotm|xlsx|xlsm|xltx|xltm|pptx|pptm|potx|potm|ppsx|ppsm)$/.test(e)) return fmt(code === 'too-big' ? ui.unreadReasonTooBig : code === 'corrupt' ? ui.unreadReasonCorrupt : code === 'encrypted' ? ui.unreadReasonPassword : ui.unreadReasonConvert, v);
+      return fmt(/^(doc|dot|xls|xlt|xlsb|ppt|pot|pps)$/.test(e) ? ui.unreadReasonOffice : e === 'pdf' ? ui.unreadReasonPdf : ui.unreadDefaultReason, v);
+    },
     t: function (key, v) { return fmt(ui[key] != null ? ui[key] : key, v); },
     d: function (key, v) { return fmt(dash[key] != null ? dash[key] : key, v); },
     zeroLabels: function (s) { return String(s == null ? '' : s).replace(/\bAI (建議|解讀|推斷|估計|判斷)/g, 'Zero $1'); },

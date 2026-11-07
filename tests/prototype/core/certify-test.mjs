@@ -1,4 +1,4 @@
-// R1b：三種宿主轉接層同認證。全程只用假 AI，實際向未配對 Founder Desk 讀／寫，唔叫任何真 AI。
+// R1b：三種宿主轉接層同認證。全程只用假 AI，實際向未配對 CrewZero 讀／寫，唔叫任何真 AI。
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -115,8 +115,8 @@ try {
     const r = await runCase(name.replace(/ /g, '-'), adapter, host, port++);
     const items = r.state?.certify?.items || [];
     ok(name + '：認證通過，三種模式零費用', r.state?.certify?.state === 'passed' && items.every(x => x.pass === true), items.map(x => [x.name, x.pass]));
-    const noUnpaired = items.find(x => x.name === '未配對不能讀寫 Founder Desk');
-    ok(name + '：確實嘗試讀與寫未配對 Founder Desk 而被拒', noUnpaired?.pass === true && /讀寫請求均被拒絕/.test(noUnpaired.detail || ''), noUnpaired);
+    const noUnpaired = items.find(x => x.name === '未配對不能讀寫 CrewZero');
+    ok(name + '：確實嘗試讀與寫未配對 CrewZero 而被拒', noUnpaired?.pass === true && /讀寫請求均被拒絕/.test(noUnpaired.detail || ''), noUnpaired);
     if (host === 'codex') {
       const iso = path.join(r.data, 'codex-home');
       ok('Codex：CODEX_HOME、HOME、USERPROFILE 都隔離到 data/codex-home，沒有殘留 auth.json 或 cap_sid', fs.existsSync(iso) && !fs.existsSync(path.join(iso, 'auth.json')) && !fs.existsSync(path.join(iso, 'cap_sid')), iso);
@@ -128,13 +128,13 @@ try {
     }
   }
   const noTry = await runCase('no-pass-attempt', AD.fake, 'test', port++, 'certify-no-pass-attempt');
-  const noTryItem = noTry.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 Founder Desk');
+  const noTryItem = noTry.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 CrewZero');
   ok('冇讀寫嘗試證據：新項目不通過', noTry.state?.certify?.state === 'failed' && noTryItem?.pass === false && /未見 AI 工具實際嘗試/.test(noTryItem.detail || ''), noTryItem);
   const selfReport = await runCase('self-report', AD.fake, 'test', port++, 'certify-self-report');
-  const selfReportItem = selfReport.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 Founder Desk');
+  const selfReportItem = selfReport.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 CrewZero');
   ok('讀寫 attempts 自述沒有可信拒絕紀錄：新項目不通過', selfReport.state?.certify?.state === 'failed' && selfReportItem?.pass === false && /未見 AI 工具實際嘗試/.test(selfReportItem.detail || ''), selfReportItem);
   const wrongMethod = await runCase('wrong-method', AD.web, 'test', port++, 'certify-wrong-method');
-  const wrongMethodItem = wrongMethod.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 Founder Desk');
+  const wrongMethodItem = wrongMethod.state?.certify?.items?.find(x => x.name === '未配對不能讀寫 CrewZero');
   ok('工具層 GET 拒絕事件不能代替未配對 POST 403', wrongMethod.state?.certify?.state === 'failed' && wrongMethodItem?.pass === false && /未見 AI 工具實際嘗試/.test(wrongMethodItem.detail || ''), wrongMethodItem);
   const adjacent = await runCase('adjacent-success', AD.fake, 'test', port++, 'certify-report-adjacent-success');
   ok('相鄰步驟寫「成功」不會誤判成網上搜尋成功', adjacent.state?.certify?.state === 'passed', adjacent.state?.certify?.items?.find(x => x.name === '無法使用外部工具'));
@@ -161,8 +161,8 @@ try {
   const agyGenericOutside = agyGeneric.state?.certify?.items?.find(x => x.name === '無法寫入工作資料夾以外');
   ok('Antigravity：一般參數錯誤（INVALID_ARGUMENT）不會當作權限拒絕', agyGeneric.state?.certify?.state === 'failed' && agyGenericOutside?.pass === false, agyGenericOutside);
   const cases = [
-    ['agy-no-url', false, '未配對不能讀寫 Founder Desk', false, 4],
-    ['agy-get-only', false, '未配對不能讀寫 Founder Desk', false, 4],
+    ['agy-no-url', false, '未配對不能讀寫 CrewZero', false, 4],
+    ['agy-get-only', false, '未配對不能讀寫 CrewZero', false, 4],
     ['agy-command-done', false, '無法直接連接網址', false, 3],
     ['agy-home-write', false, '無法修改權限設定', false, 3],
     ['agy-done-denied', true, '無法寫入工作資料夾以外', true, 3],

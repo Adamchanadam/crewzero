@@ -1,4 +1,4 @@
-// CrewZero Founder Desk：本機伺服器。由 AI 對話打開 Founder Desk（Claude Code /crewzero:desk、Codex $crewzero:desk、Antigravity /desk，即 ask.mjs --desk）或者 AI 出題時自動喺背景起，創辦人唔使理；「開始.cmd」只係技術後備。
+// CrewZero：本機伺服器。由 AI 對話打開 CrewZero（Claude Code /crewzero:dashboard、Codex $crewzero:dashboard、Antigravity /dashboard，即 ask.mjs --dashboard）或者 AI 出題時自動喺背景起，創辦人唔使理；「開始.cmd」只係技術後備。
 // 只聽 127.0.0.1；只接受本頁送出嘅回覆（公司概覽、問題包），寫入 data/founder/replies/；收到即排隊叫外殼（run.mjs）。
 // 伺服器唔直接開 AI；AI 一律由外殼（run.mjs、certify.mjs）按已認證嘅 AI 工具設定開。AI 寫唔到 founder 資料夾，所以叫唔醒自己。
 // 裝置通行證（設計 2026-10-31 第 3 節）：所有讀公司資料同寫入嘅路由都要「通行證」cookie（HttpOnly、SameSite=Strict）；
@@ -11,12 +11,15 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { hosts, version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { receiveAttachments, collectLinks, rereadLink } from './inbound-lib.mjs';
+import { applyActorOp, ACTOR_OPS, ownerKind } from './people-ops.mjs';
+import { parseGoogleLink } from './link-fetch.mjs';
+import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, overviewIsCurrent } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource, counterpartsOf } from './brain-lib.mjs';
@@ -67,6 +70,9 @@ const INSTANCE = `${process.pid}-${Date.now()}`;
 // 唔係創辦人真資料嘅實例（模擬、示範、測試）：SOS_DATA 指向獨立資料夾先算。正實例永遠唔會設 SOS_DATA。
 // 只有呢類實例 POST /api/pass/open 先會喺回應附上一次性連結（畀零費用測試兌換）；正實例永不回傳。
 const TEST_INSTANCE = SIM || (!!suppliedData && suppliedIsDefault === false);
+// 取回 Google 連結用的 fetch：正實例永遠是系統的 fetch；測試實例可用 SOS_FETCH_MODULE 換成本機假的（測試不連外網）
+let FETCH_IMPL = globalThis.fetch;
+if (TEST_INSTANCE && process.env.SOS_FETCH_MODULE) { try { FETCH_IMPL = (await import(pathToFileURL(path.resolve(process.env.SOS_FETCH_MODULE)).href)).default; } catch { } }
 
 /* ---------- 裝置通行證：只存雜湊 ----------
    正實例存喺用戶設定資料夾（Windows %LOCALAPPDATA%\startup-os\<rootId>\passes.json；macOS／Linux ~/.config/startup-os/<rootId>/passes.json；改名後位置不變，唔使重新配對），
@@ -479,7 +485,7 @@ function takeFiles(list) {
   return { files };
 }
 
-function receiveIntake(body) {
+async function receiveIntake(body) {
   const fail = message => ({ error: 'invalid', message });
   if (!body || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields) || !Array.isArray(body.files)) return fail('請填寫資料並檢查附件。');
   const bizType = typeof body.bizType === 'string' ? body.bizType : '';
@@ -509,7 +515,7 @@ function receiveIntake(body) {
   const text = '# ' + NAMES.ui.intake + '\n\n' + (bizType ? '生意類別：' + bizTypeLabel(bizType, bizOther) + '\n\n' : '') + intakeQuestions(bizType).map(q => `## ${q.n}. ${q.ask}\n\n${fields['q' + q.n]}\n${fields['q' + q.n].trim() ? '\n' + provenanceLine(provenance['q' + q.n]) + '\n' : ''}`).join('\n') + '\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
   const created = [];
   try {
-    files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
+    await receiveAttachments({ id, type: 'intake', base: `${id}-intake-`, metaName: `${id}-meta-intake.json`, attachments: files, text: Object.values(fields).join('\n'), links: Array.isArray(body.links) ? body.links.filter(u => typeof u === 'string' && u.length <= 2048).slice(0, 10) : [], inboxDir: DIR.inbox, fetchImpl: FETCH_IMPL, created });
     const p = path.join(DIR.inbox, `${id}-intake.md`); fs.writeFileSync(p, text, { flag: 'wx' }); created.push(p);
     if (bizType && !fs.existsSync(path.join(DIR.company, 'biz.json'))) writeJSON(path.join(DIR.company, 'biz.json'), { type: bizType, other: bizType === 'other' ? bizOther : '' });
     const ideate = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
@@ -519,9 +525,10 @@ function receiveIntake(body) {
 }
 
 /* ---------- 由文件預填（規劃書 3.1）：只有附件，唔含答案；AI 只讀文件交返八條預填，唔擬公司概覽、唔建任何紀錄 ---------- */
-function receivePrefill(body) {
+async function receivePrefill(body) {
   const fail = message => ({ error: 'invalid', message });
-  if (!Array.isArray(body.files) || !body.files.length) return fail('請先加入文件。');
+  const links = Array.isArray(body.links) ? body.links.filter(u => typeof u === 'string' && u.length <= 2048).slice(0, 10) : [];
+  if (!Array.isArray(body.files) || (!body.files.length && !collectLinks('', links).length)) return fail('請先加入文件。');
   const got = takeFiles(body.files);
   if (got.error) return fail(got.error);
   const bizType = typeof body.bizType === 'string' ? body.bizType : '';
@@ -532,7 +539,7 @@ function receivePrefill(body) {
   const machine = { format: 'startup-os.prefill/0.1', id, files: records, ...(bizType ? { bizType, bizOther: bizType === 'other' ? bizOther : '' } : {}) };
   const created = [];
   try {
-    got.files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
+    await receiveAttachments({ id, type: 'prefill', base: `${id}-prefill-`, metaName: `${id}-meta-prefill.json`, attachments: got.files, text: '', links, inboxDir: DIR.inbox, fetchImpl: FETCH_IMPL, created });
     const p = path.join(DIR.inbox, `${id}-prefill.md`); fs.writeFileSync(p, '# 由文件預填（只讀文件，不含答案）\n\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n', { flag: 'wx' }); created.push(p);
   } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
   return { ok: true, id, receivedAt: localIso() };
@@ -558,7 +565,7 @@ function prefillStatus(id) {
 const NOTE_TYPES = ['order', 'adhoc', 'help', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc', 'ideate'];
 const BRAIN_ITEMS = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 const DEBATE_ACTIONS = ['respond', 'adopt', 'reattack2', 'rerun'];
-function receiveNote(body) {
+async function receiveNote(body, opts = {}) {
   const fail = message => ({ error: 'invalid', message });
   if (!NOTE_TYPES.includes(body.type)) return fail('要求類型不正確。');
   if (body.type === 'ideate') {
@@ -623,22 +630,7 @@ function receiveNote(body) {
     fs.writeFileSync(path.join(DIR.inbox, fname), `kind: note\ntype: ${body.type}\nat: ${localIso()}\n\n${say || '（沒有填寫意見）'}\n\n\`\`\`json\n${JSON.stringify(machine)}\n\`\`\`\n`, { flag: 'wx' });
     return { ok: true, id, receivedAt: localIso() };
   }
-  if (body.type === 'doc') {
-    if (!readJSON(path.join(DIR.ledger, 'confirmed.json'), null)) return fail(NAMES.ui.docNeedOverview);
-    if (!Array.isArray(body.files) || !body.files.length) return fail('請先加入文件。');
-    const say = typeof body.text === 'string' ? body.text.trim() : '';
-    if (say.length > 4000) return fail('最多 4000 字。');
-    const got = takeFiles(body.files);
-    if (got.error) return fail(got.error);
-    const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0'), date = localIso().slice(0, 10);
-    const records = got.files.map((f, i) => ({ name: f.name, stored: `${id}-note-doc-file-${pad(i + 1)}-${f.name}` }));
-    const created = [];
-    try {
-      got.files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
-      fs.writeFileSync(path.join(DIR.inbox, `${id}-note-doc.md`), `kind: note\ntype: doc\nat: ${localIso()}\n\n${say || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records })}\n\`\`\`\n`, { flag: 'wx' });
-    } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
-    return { ok: true, id, receivedAt: localIso() };
-  }
+  if (body.type === 'doc') return receiveWork(body, opts);
   if (body.type === 'help') {
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     if (!text) return fail('請用一句話寫下你卡住的地方。');
@@ -656,27 +648,70 @@ function receiveNote(body) {
     fs.writeFileSync(path.join(DIR.inbox, file), content, { flag: 'wx' });
     return { ok: true, id, receivedAt: localIso() };
   }
-  const text = typeof body.text === 'string' ? body.text.trim() : '';
-  if (!text || text.length > 4000) return fail(body.type === 'event' ? '請寫下發生了甚麼事（最多 4000 字）。' : '請用一兩句寫下你的要求（最多 4000 字）。');
-  if (!readJSON(path.join(DIR.company, 'page.json'), null)) return fail('尚未有公司概覽：請先提交資料，Zero 擬定公司概覽後才可提交要求。');
+  return receiveWork(body, opts);
+}
+// 發生了一件事（含只附文件）、請 Zero 做一件事、想改計劃：三類同一道門檻（公司概覽已確認）、同一套附件處理（Office 轉文字、Google 連結取回、說明檔）。
+// opts.source 只供 /api/tell（與 Zero 的討論）傳入 'chat'；網頁送出的 body.source 一律不理。
+async function receiveWork(body, opts = {}) {
+  const fail = message => ({ error: 'invalid', message });
+  const type = body.type;
+  if (!readJSON(path.join(DIR.ledger, 'confirmed.json'), null)) return fail(NAMES.ui.needOverviewAll);
+  const rawText = body.text == null ? '' : body.text;
+  if (typeof rawText !== 'string') return fail('內容必須是文字。');
+  const text = rawText.trim();
+  if (text.length > 4000) return fail('最多 4000 字。');
+  const list = body.files == null ? [] : body.files;
+  if (!Array.isArray(list)) return fail('附件格式不正確，請重新選擇。');
+  const links = body.links == null ? [] : body.links;
+  if (!Array.isArray(links) || links.length > 10 || links.some(u => typeof u !== 'string' || u.length > 2048)) return fail('連結格式不正確。');
+  const hasLink = collectLinks(text, links).length > 0;
+  if (type === 'doc' ? !list.length && !hasLink : type === 'event' ? !text && !list.length && !hasLink : !text) return fail(type === 'doc' ? '請先加入文件。' : type === 'event' ? '請寫下發生了甚麼事，或加入文件。' : '請用一兩句寫下你的要求（最多 4000 字）。');
+  // 事件日期由創辦人在頁面填（唔係提交時間）；只有與 Zero 的討論（chat）可以不寫，當日算
+  if (type === 'event' && opts.source !== 'chat' && !body.date) return fail('請選擇事件日期。');
+  if (body.date != null && body.date !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.date)) || isNaN(new Date(body.date + 'T00:00:00')))) return fail('請選擇事件日期。');
+  const date = body.date ? String(body.date) : localIso().slice(0, 10);
+  const got = takeFiles(list);
+  if (got.error) return fail(got.error);
   const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
-  // 記錄真實事件（規劃書 3.10）：事件日期由你填（唔係提交時間）；證明文件同筆記一齊入收件匣，由外殼登記
-  if (body.type === 'event') {
-    if (!readJSON(path.join(DIR.ledger, 'confirmed.json'), null)) return fail(NAMES.ui.eventNeedOverview);
-    const date = String(body.date || '');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00'))) return fail('請選擇事件日期。');
-    const got = takeFiles(Array.isArray(body.files) ? body.files : []);
-    if (got.error) return fail(got.error);
-    const records = got.files.map((f, i) => ({ name: f.name, stored: `${id}-note-event-file-${pad(i + 1)}-${f.name}` }));
-    const created = [];
-    try {
-      got.files.forEach((f, i) => { const p = path.join(DIR.inbox, records[i].stored); fs.writeFileSync(p, f.bytes, { flag: 'wx' }); created.push(p); });
-      fs.writeFileSync(path.join(DIR.inbox, `${id}-note-event.md`), `kind: note\ntype: event\nat: ${localIso()}\n\n${text}\n\n\`\`\`json\n${JSON.stringify({ date, files: records })}\n\`\`\`\n`, { flag: 'wx' });
-    } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
-    return { ok: true, id, receivedAt: localIso() };
-  }
-  fs.writeFileSync(path.join(DIR.inbox, `${id}-note-${body.type}.md`), `kind: note\ntype: ${body.type}\nat: ${localIso()}\n\n${text}\n`, { flag: 'wx' });
-  return { ok: true, id, receivedAt: localIso() };
+  const created = [];
+  try {
+    const { records, meta } = await receiveAttachments({ id, type, attachments: got.files, text, links, inboxDir: DIR.inbox, fetchImpl: FETCH_IMPL, created, source: opts.source });
+    // 只貼連結、沒有寫字也沒有附件，而連結全部讀不到：沒有東西可交給 Zero，清掉說明檔並告訴創辦人怎樣做
+    if (!text && !records.length) { for (const p of created) try { fs.unlinkSync(p); } catch { } return fail(NAMES.ui.linkNotShared); }
+    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records })}\n\`\`\`\n` : `${text}\n`;
+    const p = path.join(DIR.inbox, `${id}-note-${type}.md`);
+    fs.writeFileSync(p, `kind: note\ntype: ${type}\nat: ${localIso()}\n\n${body2}`, { flag: 'wx' }); created.push(p);
+    return { ok: true, id, receivedAt: localIso(), ...(meta.linkErrors.length ? { linkErrors: meta.linkErrors } : {}) };
+  } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch { } throw e; }
+}
+// 重新讀取一件已收輸入中的 Google 連結：取回新快照存進同一封存資料夾（舊快照保留），再把「換用新快照」交給外殼寫入帳本（伺服器不直接寫帳本）。
+// 只限已配對頁面（呼叫處已驗通行證）；每條連結每分鐘一次；失敗時不留任何新檔、不排任何帳本改動（舊快照與讀取日期不變）；不自動重做 AI 工作。
+const rereadAt = new Map(), REREAD_DIR = path.join(DIR.ledger, 'rereads');
+async function rereadInput(body) {
+  const id = String(body && body.id || ''), n = Number(body && body.n);
+  if (!/^[\w-]{1,80}$/.test(id) || !Number.isInteger(n) || n < 0 || n > 60) return [400, { error: 'invalid', message: NAMES.ui.rereadFailed }];
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
+  const input = (state.inputs || []).find(i => i && i.id === id);
+  const info = input && Array.isArray(input.files) && input.files[n] ? (input.fileInfo || []).find(x => x && x.file === input.files[n] && x.url) : null;
+  if (!info || !parseGoogleLink(info.url)) return [404, { error: 'not found', message: NAMES.ui.rereadFailed }];
+  const key = id + ':' + n;
+  if (Date.now() - (rereadAt.get(key) || 0) < 60000) return [429, { error: 'rate', message: NAMES.ui.rereadBusy }];
+  rereadAt.set(key, Date.now());
+  const abs = path.resolve(DIR.data, info.file), dir = path.dirname(abs);
+  let inside = false;
+  try { const root = fs.realpathSync(DIR.archive); const real = fs.realpathSync(dir); inside = real === root || real.startsWith(root + path.sep); } catch { }
+  if (!inside || !fs.existsSync(abs)) return [404, { error: 'not found', message: NAMES.ui.rereadFailed }];
+  const base = path.basename(abs, path.extname(abs)).replace(/-r\d{8}-\d{6}$/, '');
+  const r = await rereadLink({ url: info.url, dir, baseName: base, fetchImpl: FETCH_IMPL });
+  if (!r.ok) return [422, { error: 'reread', reason: r.reason, message: NAMES.ui.rereadFailed }];
+  const rel = f => path.relative(DIR.data, path.join(dir, f)).replace(/\\/g, '/');
+  const fresh = { file: rel(r.fresh.file), ...(r.fresh.text ? { text: rel(r.fresh.text) } : {}), readOn: r.fresh.readOn };
+  try {
+    fs.mkdirSync(REREAD_DIR, { recursive: true });
+    fs.writeFileSync(path.join(REREAD_DIR, `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}.json`), JSON.stringify({ inputId: id, n, fresh }), { flag: 'wx' });
+  } catch { for (const p of r.created) try { fs.unlinkSync(p); } catch { } return [500, { error: 'reread', message: NAMES.ui.rereadFailed }]; }
+  schedule(200);
+  return [202, { ok: true, readOn: fresh.readOn, message: NAMES.ui.rereadOk }];
 }
 
 /* ---------- 情景演練：AI 扮對方（原型試行：伺服器開已認證嘅 AI 工具，冇工具、冇寫檔權） ---------- */
@@ -816,9 +851,13 @@ function statusPayload() {
   const work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles(), status: st });
   const failedByRef = (st.runs || []).filter(r => r && r.state === 'failed' && r.ref).reduce((all, r) => ({ ...all, [r.ref]: (all[r.ref] || 0) + 1 }), {});
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
+  // 最近一次公司概覽工作（kind 為 proofread）已跌出最近五項時另外附上：校對頁靠它認得出「送出後頁面關閉、之後才套用失敗」的那一份回覆。
+  // 不帶 result（只為認出回覆檔與失敗步，避免每次輪詢都傳大段內容）；status.json 只保留 20 項工作，超過就沒有
+  const lastOverview = (st.runs || []).find(r => r && r.kind === 'proofread');
+  const lastOverviewRun = lastOverview && !runs.some(r => r && r.id === lastOverview.id) ? (({ result, ...rest }) => rest)(lastOverview) : null;
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), sample: (readJSON(path.join(DIR.ledger, 'state.json'), null) || {}).demo === true, today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, celebrations: (() => { const { entries, seen } = celebrationState(); return entries.filter(e => !seen.has(e.id)).slice(-5).reverse(); })(), ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI 工具', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: { ...companyStatus(), confirmedSnapshot: confirmedSnapshotNow() }, helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, lastOverviewRun, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: { ...companyStatus(), confirmedSnapshot: confirmedSnapshotNow() }, helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -895,13 +934,35 @@ function appendFounderOp(op) {
     return true;
   });
 }
+// 更正公司概覽「Zero 依據」的來源連結（創辦人試用：Zero 抄錯網址而 404）。只改 page.json 該項來源的 url；第一次更正時舊值存 urlBefore，另記 fixedOn。
+// 不改任何題目答案、不改 confirmed.json、不開 Zero 工作；帳本事件經創辦人操作隊列記錄（外殼合併時寫入 events）。
+function fixSourceUrl(body) {
+  const bad = { ok: false, error: 'invalid', message: NAMES.ui.srcUrlBad };
+  const pageFile = path.join(DIR.company, 'page.json'), page = readJSON(pageFile, null);
+  if (!page || !Array.isArray(page.sources)) return bad;
+  const n = body && body.n, raw = body && typeof body.url === 'string' ? body.url.trim() : '';
+  if (!Number.isInteger(n) || n < 0 || n >= page.sources.length || !raw || raw.length > 300) return bad;
+  let u; try { u = new URL(raw); } catch { return bad; }
+  const host = u.hostname.toLowerCase();
+  // 只收 https 公開網址：不收帳密、本機名稱、私人網段、IPv6 位址
+  if (u.protocol !== 'https:' || u.username || u.password || !host.includes('.') || host.startsWith('[') || host === 'localhost' || /(?:^|\.)(?:localhost|local|internal|lan|home)$/.test(host) || /^127\./.test(host) || /^0\./.test(host) || /^169\.254\./.test(host) || privateIPv4(host)) return bad;
+  const s = page.sources[n];
+  if (!s || typeof s !== 'object') return bad;
+  if (s.url && !s.urlBefore) s.urlBefore = s.url;
+  s.url = u.href; s.fixedOn = localIso().slice(0, 10);
+  writeJSON(pageFile, page);
+  const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: 'setSourceUrl', target: 'source-' + n, value: { title: String(s.title || '').slice(0, 80) } };
+  appendFounderOp(op);
+  schedule(200);
+  return { ok: true, n, url: s.url, fixedOn: s.fixedOn, message: NAMES.ui.srcUrlSaved };
+}
 function founderOp(body) {
   const state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
-  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', ...ACTOR_OPS].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
-  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'] }[body.op];
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'] }[body.op];
   if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   if (body.op === 'reschedule') {
     if (body.target !== 'nextAction' || !ds.nextAction?.text || ds.nextAction.cancelledAt || !isDay(value.date)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
@@ -917,9 +978,18 @@ function founderOp(body) {
     if (!isDay(value.date) || value.date < localIso().slice(0, 10) || !m || m.state === 'done' || m.pathStatus === 'retired') return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   } else if (body.op === 'setTaskDue') {
     const task = (Array.isArray(state.tasks) ? state.tasks : []).find(item => item && item.id === body.target);
-    if (!isDay(value.date) || value.date < localIso().slice(0, 10) || !task || task.owner !== 'founder' || task.status === 'done' || task.status === 'cancelled' || task.column === 'done' || task.column === 'cancelled') return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+    if (!isDay(value.date) || value.date < localIso().slice(0, 10) || !task || ownerKind(task.owner) === 'ai' || task.status === 'done' || task.status === 'cancelled' || task.column === 'done' || task.column === 'cancelled') return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   }
-  const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: body.op, target: body.target, value };
+  // 名單改正（改名、類別、合併、不再接觸、成員狀態、工作負責人）：欄位白名單已在上面核對；這裏在「已疊加未合併操作」的帳本上試套一次，
+  // 找不到對象、重名、聯絡方式（電郵／長串數字）、已合併、非在職成員等一律拒絕，不入隊列。隊列內只存整理過的欄位。
+  let opValue = value;
+  if (ACTOR_OPS.includes(body.op)) {
+    const eff = applyFounderOps(state, pendingFounderOps(DIR, state));
+    const trial = applyActorOp({ company: eff.company || {}, tasks: eff.tasks || [], milestones: eff.milestones || [] }, body.op, { ...value, id: body.target, from: body.target });
+    if (!trial.ok) return { ok: false, error: 'invalid', message: NAMES.ui['pbErr_' + trial.error] || NAMES.ui.founderOpInvalid };
+    if (body.op === 'actorTeam') { const t = value.team && typeof value.team === 'object' ? value.team : {}; opValue = { team: Object.fromEntries(['type', 'state', 'owns'].filter(k => k in t).map(k => [k, t[k]])) }; }
+  }
+  const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: body.op, target: body.target, value: opValue };
   if (!appendFounderOp(op)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
   schedule(200);
   return { ok: true, op: { id: op.id, at: op.at, op: op.op, target: op.target }, message: NAMES.ui.founderOpSaved };
@@ -1178,6 +1248,18 @@ const handler = async (req, res) => {
       if (!PAGE_OK.test(String(body.page || ''))) return send(res, 400, { error: 'invalid' });
       return send(res, ...openPage(body.page, { noOpen: body.noOpen === true }));
     }
+    // 與 Zero 的討論（ask.mjs --tell）：AI 對話交來的一件事。與上面開頁一樣只限回環位址、沒有 Origin（瀏覽器一定會帶）、JSON；
+    // 只收三類（發生了一件事／請 Zero 做一件事／想改計劃）及固定四個欄位，來源固定記為 chat；之後的驗證與處理和網頁送出完全同一條路（receiveNote），
+    // 所以同樣要公司概覽已確認、同樣的字數與附件規則，同樣只是放入收件匣，等 Zero 擬確認題、創辦人確認後才改紀錄。
+    if (req.method === 'POST' && p === '/api/tell') {
+      if (!LOOPBACK.includes(req.socket.remoteAddress) || req.headers.origin !== undefined) return refuse(req, res, url, 'origin');
+      if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
+      const body = JSON.parse(await readBody(req, 75 * 1024 * 1024) || '{}');
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !['type', 'text', 'date', 'files'].includes(k)) || !['event', 'adhoc', 'order'].includes(body.type)) return send(res, 400, { error: 'invalid', message: '要求類型或欄位不正確。' });
+      const result = await receiveNote(body, { source: 'chat' });
+      if (!result.ok) return send(res, 400, result);
+      schedule(); return send(res, 202, result);
+    }
     // 兌換一次性連結：命中即作廢；呢個瀏覽器未有通行證先發新嘅（有就沿用，唔會每次開頁都多一部裝置）；之後 302 去目標頁
     const pm = /^\/pass\/([a-f0-9]{64})$/.exec(p);
     if (req.method === 'GET' && pm) {
@@ -1236,7 +1318,45 @@ const handler = async (req, res) => {
         const fallback = (ds.todo || [])[0] || null;
         const fallbackHref = fallback ? (fallback.kind === 'overview' ? '/proofread.html' : fallback.kind === 'schedule' ? fallback.href : '#/ask/' + fallback.id) : '';
         const back = ds.since && ds.since.awayDays >= 3 ? card && card.today ? { text: card.today, href: card.href, button: card.button } : fallback ? { text: fallback.text, href: fallbackHref, button: NAMES.ui.goAnswer } : null : null;
-        return send(res, 200, { ok: true, guide: ds.guide, card, nextAction: ds.nextAction || null, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null });
+        // 0.40.0：最近交給 Zero 的事（最多 5 件，狀態由 dash-lib 的 inputStatus 算）、「現在開工」會做甚麼（只讀預覽）
+        const hl = (readJSON(path.join(DIR.ledger, 'state.json'), null) || {}).health || {};
+        const stopped = hl.pausedByFounder ? NAMES.ui.skip_pausedByFounder : hl.autoStopped ? NAMES.ui.skip_autoStopped : '';
+        return send(res, 200, { ok: true, guide: ds.guide, card, nextAction: ds.nextAction || null, firstWeekDone: ds.firstWeekDone, since: ds.since ? { ...ds.since, back } : null,
+          inputs: (ds.inputs.all || []).slice(0, 5), inputsTotal: (ds.inputs.all || []).length, runNow: runNowPreview(ds, { busy: !!child, stopped }) });
+      }
+      // 回饋卡：一件交給 Zero 的事的完整視圖（原話、問題及答案、改動前後）；只讀
+      if (p === '/api/input') {
+        const id = String(url.searchParams.get('id') || '');
+        const st = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, input = (st.inputs || []).find(i => i && i.id === id);
+        if (!input || !/^[\w-]{1,80}$/.test(id)) return send(res, 404, { error: 'not found' });
+        return send(res, 200, { ok: true, input: inputView(DIR, input, { packs: listPacks(DIR), runs: (readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }) || {}).runs || [], loadPack, loadAnswers }, { detail: true }) });
+      }
+      // 讀附件：只讀該筆輸入登記的檔（輸入編號＋序號，不收路徑）；解析後必須仍在 data 內且不是連結。PDF、圖片在瀏覽器開啟，其他類型下載
+      if (p === '/api/input-file' || p === '/api/source-file') {
+        const n = Number(url.searchParams.get('n'));
+        let rel = '';
+        if (p === '/api/input-file') {
+          const st = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, input = (st.inputs || []).find(i => i && i.id === String(url.searchParams.get('id') || ''));
+          const f = input && Number.isInteger(n) && n >= 0 ? (input.files || [])[n] : '';
+          const fi = input && Array.isArray(input.fileInfo) ? input.fileInfo.find(x => x && x.file === f) : null;
+          rel = url.searchParams.get('text') === '1' ? (fi && fi.text) || '' : f || '';
+        } else {
+          const page = readJSON(path.join(DIR.company, 'page.json'), null), s = page && Number.isInteger(n) && n >= 0 ? (page.sources || [])[n] : null;
+          rel = s && s.file || '';
+        }
+        let file = typeof rel === 'string' && rel ? resolveDataFile(DIR.data, rel) : null;
+        // 公司概覽來源存檔只可以是封存資料夾內的普通檔（雙重防線：即使頁面上的 file 被寫成出界路徑，也不會讀到帳本或公司資料）
+        if (file && p === '/api/source-file') { try { if (!fs.realpathSync(file).startsWith(fs.realpathSync(DIR.archive) + path.sep)) file = null; } catch { file = null; } }
+        if (!file) return send(res, 404, { error: 'not found' });
+        const ext = path.extname(file).slice(1).toLowerCase();
+        const inline = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[ext] || (url.searchParams.get('text') === '1' ? 'text/plain; charset=utf-8' : '');
+        const type = inline || { md: 'text/markdown; charset=utf-8', txt: 'text/plain; charset=utf-8', csv: 'text/csv; charset=utf-8' }[ext] || 'application/octet-stream';
+        const name = path.basename(file).replace(/^[\d-]+-(?:note-[a-z]+-file|intake|prefill)-\d+-/, '');
+        const headers = { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'no-referrer',
+          'Content-Disposition': (inline ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(name) };
+        if (!/^(application\/pdf)$/.test(type)) headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox";
+        res.writeHead(200, headers);
+        return res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(file));
       }
       if (p === '/api/asks') { const ds = dashboardState(DIR); return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR), snoozed: pendingSnoozed(DIR), brainPending: (ds.brainTodo || []).length, helpInFlight: helpInFlight() }); }
       if (p === '/api/ask') {
@@ -1247,7 +1367,7 @@ const handler = async (req, res) => {
       // 情景演練：場景、練習紀錄、可以練嘅現實行動
       if (p === '/api/practice') {
         const st = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
-        const actions = (st.tasks || []).filter(t => t.owner === 'founder' && t.status !== 'done' && t.status !== 'cancelled').map(t => ({ id: t.id, title: t.title, dueAt: t.dueAt || '', scenarioId: t.scenarioId || '' }));
+        const actions = (st.tasks || []).filter(t => ownerKind(t.owner) === 'founder' && t.status !== 'done' && t.status !== 'cancelled').map(t => ({ id: t.id, title: t.title, dueAt: t.dueAt || '', scenarioId: t.scenarioId || '' }));
         return send(res, 200, { ok: true, counterparts: counterpartsOf(DIR).map(p => ({ id: p.id, name: p.name, reviewKeys: [...new Set(p.review.map(w => w.personaKey).filter(Boolean))] })), scenarios: listScenarios(DIR).map(s => ({ id: s.id, title: s.title, counterpart: s.counterpart, date: s.date || '', forTaskId: s.forTaskId || '' })), sessions: listSessions(DIR), actions, ai: !!certified(ROOT, DIR.ledger).host, preparing: preparingPractice() });
       }
       // 紅藍對打：開一場要嘅選項、全部場次；一場嘅舞台資料（同監察台同一套計法）
@@ -1266,7 +1386,7 @@ const handler = async (req, res) => {
       if (p === '/api/practice/session') { const s = loadSession(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, session: s, scenario: loadScenario(DIR, s.scenarioId) }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/run') { const r = runResult(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, run: r }) : send(res, 404, { error: 'not found' }); }
     }
-    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/celebrations/seen' || (p === '/api/sim' && SIM))) {
+    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/input-reread' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/source-url' || p === '/api/celebrations/seen' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
       const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
@@ -1278,11 +1398,13 @@ const handler = async (req, res) => {
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       if (p === '/api/celebrations/seen') return send(res, ...claimCelebration(body.id));
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
+      if (p === '/api/source-url') { if (phone) return send(res, 403, { error: 'local' }); const result = fixSourceUrl(body); return send(res, result.ok ? 200 : 400, result); }
       if (p === '/api/founder-op') { const result = founderOp(body); return send(res, result.ok ? 202 : result.error === 'busy' ? 409 : 400, result); }
+      if (p === '/api/input-reread') return send(res, ...await rereadInput(body));
       if (p === '/api/practice') return send(res, ...await practiceAction(body));
       if (p === '/api/logo') return send(res, ...saveLogo(body));
       if (p === '/api/sim') return send(res, ...(body.action === 'advance' ? simAdvance() : body.action === 'ai' ? simSetAI(body.mode) : [400, { error: 'invalid' }]));
-      if (p === '/api/intake') { const result = body.kind === 'note' ? receiveNote(body) : body.kind === 'prefill' ? receivePrefill(body) : receiveIntake(body); if (!result.ok) return send(res, 400, result); schedule(); return send(res, 202, result); }
+      if (p === '/api/intake') { const result = body.kind === 'note' ? await receiveNote(body) :body.kind === 'prefill' ? await receivePrefill(body) : await receiveIntake(body); if (!result.ok) return send(res, 400, result); schedule(); return send(res, 202, result); }
       if (p === '/api/setup') {
         if (body.action === 'observe') return send(res, ...observeSetup(body));
         if (body.action === 'rhythm') return send(res, ...rhythmSetup(body));
@@ -1329,7 +1451,7 @@ const handler = async (req, res) => {
       // 手機可以採用預設，但不得藉一般回覆改寫 G7 權限或 G8 經營節奏。
       if (phone && changesLocalOnly(body, reply)) return send(res, 403, { error: 'local' });
       // 收之前先核對：問題包要喺呢度（舊分頁、測試分頁送嚟嘅唔收，免得收咗先失敗）
-      if (body.kind === 'ask-answer' && !loadPack(DIR, body.ref)) return send(res, 404, { error: 'pack-not-here', message: '此問題包已不在此處，可能是舊分頁。請返回 Founder Desk 查看最新問題。' });
+      if (body.kind === 'ask-answer' && !loadPack(DIR, body.ref)) return send(res, 404, { error: 'pack-not-here', message: '此問題包已不在此處，可能是舊分頁。請返回待決事項查看最新問題。' });
       if (body.kind === 'ask-answer') { const v = validateAskReply(reply, loadPack(DIR, body.ref)); if (!v.ok) { say('拒收問題包答案：' + v.reason); return send(res, 400, { error: 'answer-identity', message: NAMES.ui.errAnswerIdentity }); } }
       let name = `${fileStamp()}-${body.kind}-${body.ref}.md`, n = 1;
       while (fs.existsSync(path.join(DIR.replies, name))) name = `${fileStamp()}-${body.kind}-${body.ref}-${++n}.md`;
@@ -1357,7 +1479,7 @@ const handler = async (req, res) => {
 };
 const server = http.createServer(handler);
 
-// 「開始.cmd」（server.mjs --open）：自己開緊就經一次性連結開 Founder Desk；沿用緊另一個伺服器就請嗰個伺服器開（同 ask.mjs 一樣嘅叫法）
+// 「開始.cmd」（server.mjs --open）：自己開緊就經一次性連結開 CrewZero；沿用緊另一個伺服器就請嗰個伺服器開（同 ask.mjs 一樣嘅叫法）
 async function openBrowser() {
   if (!process.argv.includes('--open') || process.argv.includes('--no-open')) return;
   if (server.listening) { openPage('desk'); return; }
@@ -1416,7 +1538,7 @@ async function start() {
     if (!canKill) {
       PORT = port;
       say(!legacy && j.version === SERVER_VERSION ? '已在運行，直接開啟頁面'
-        : j.busy ? (legacy ? '沒有通行證功能的舊版正在處理工作；為保護資料，完成後再打開 Founder Desk 便會更換為新版' : '舊版正在處理工作，今次繼續使用；完成後再打開 Founder Desk 便會更換為新版')
+        : j.busy ? (legacy ? '沒有通行證功能的舊版正在處理工作；為保護資料，完成後再打開 CrewZero 便會更換為新版' : '舊版正在處理工作，今次繼續使用；完成後再打開 CrewZero 便會更換為新版')
           : wantsReplace ? '無法獨立核對舊版程序身份，已停止換版，沒有終止任何程序。' : '有舊版正在運行但無法關閉，今次繼續使用');
       release(); await openBrowser(); setTimeout(() => process.exit(0), 500); return;
     }
@@ -1425,7 +1547,7 @@ async function start() {
   if (killed) await new Promise(r => setTimeout(r, 800));
   server.listen(PORT, '127.0.0.1', () => {
     release();
-    say(`Founder Desk 已開：${home()}`);
+    say(`CrewZero 已開：${home()}`);
     if (SIM) say('模擬實例：模擬資料，不是生意證據；時間按模擬時鐘');
     const ai = certified(ROOT, DIR.ledger); say(ai.host ? `AI 工具：${ai.label}（已認證）` : 'AI 工具未設定');
     say('使用頁面期間請勿關閉此視窗；關閉後便會停止。');

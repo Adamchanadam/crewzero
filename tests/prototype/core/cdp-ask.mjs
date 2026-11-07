@@ -34,7 +34,7 @@ await certify(BASE);
 // 命令入口：14 條 → 自動拆成 12＋2
 const cli = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), DEMO, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA } });
 ok('命令入口：14 條自動拆成兩包', /（1／2）（共 12 條/.test(cli.stdout) && /（2／2）（共 2 條/.test(cli.stdout), cli.stdout.trim());
-ok('命令入口：印出答題網址', /Founder Desk：http/.test(cli.stdout));
+ok('命令入口：印出答題網址', /CrewZero：http/.test(cli.stdout));
 const bad = path.join(OUT, 'bad.json');
 fs.writeFileSync(bad, JSON.stringify({ format: 'startup-os.ask/0.1', title: '壞', questions: [{ id: 'x', ask: '？', kind: 'text', value: '', why: '' }] }));
 const cli2 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), bad, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA } });

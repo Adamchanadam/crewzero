@@ -194,7 +194,7 @@ try {
   ok('改日期頁：項目不存在時有說明和返回', await waitFor(() => chrome.ev(`!!document.querySelector('#change-missing .btn')`), 6000));
 
   // 每個去處都真的到位
-  // Founder Desk 首頁要有公司概覽先會顯示，否則會轉去交資料
+  // CrewZero 首頁要有公司概覽先會顯示，否則會轉去交資料
   fs.mkdirSync(path.join(DATA, 'company'), { recursive: true }); { const pg = read(path.join(PROTO, 'fixtures', 'example-company-page.json')); write(path.join(DATA, 'company', 'page.json'), pg); state = read(stateFile); state.ledgerFrom = pg.page.id; write(stateFile, state); write(path.join(DATA, 'ledger', 'confirmed.json'), { pageId: pg.page.id, confirmedAt: new Date().toISOString(), values: {}, order: [] }); }
   await chrome.go(BASE + '/#next-action', 1440, 2200);
   const nextAtTop = await chrome.ev(`(()=>{const e=document.querySelector('#next-action');if(!e)return {missing:true,hash:location.hash,app:document.querySelector('#app').innerText.slice(0,160)};const r=e.getBoundingClientRect();return {top:r.top,h:innerHeight,y:scrollY};})()`);

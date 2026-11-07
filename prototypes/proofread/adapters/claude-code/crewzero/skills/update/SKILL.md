@@ -17,8 +17,8 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
 | 指令 | Claude Code | Codex | Antigravity（agy） |
 |---|---|---|---|
 | 安裝 | `/crewzero:install` | `$crewzero:install` | `/install` |
-| Founder Desk | `/crewzero:desk` | `$crewzero:desk` | `/desk` |
-| 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
+| 打開 CrewZero（每日入口） | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
+| 和 Zero 討論 | `/crewzero:discuss` | `$crewzero:discuss` | `/discuss` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
 
 相關插件指令只供 Zero 使用，不交給創辦人；只有代做失敗時，才請創辦人到 AI 工具的插件設定更新 CrewZero，完成後再說「更新 CrewZero」。
@@ -35,11 +35,11 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
     - 結束碼 0：項目已與目前的插件版本相同。先問「要檢查有沒有新版插件嗎？」；答「好」才跟「換入新版插件」處理，否則停。
    - 結束碼 2：未安裝。請創辦人輸入安裝指令（Claude Code `/crewzero:install`、Codex `$crewzero:install`、Antigravity `/install`），然後停。
    - 結束碼 4：Zero 工作進行中。講「Zero 工作進行中，完成後再更新」，然後停；唔好自己停止任何程序。
-   - 結束碼 3：有新版本。去第 2 步；如果命令另外印出「Founder Desk 目前開着（沒有工作進行中）：更新後會把它關閉，下次打開便是新版。」就照講。
+   - 結束碼 3：有新版本。去第 2 步；如果命令另外印出「CrewZero 目前開着（沒有工作進行中）：更新後會把它關閉，下次打開便是新版。」就照講。
    - 其他：照印出嘅原因話畀創辦人知（用白話講原因同點做，見「命令出錯時點講」），然後停；唔好自己改檔或者再試第二種方法。
 2. **寫入之前一定要停**：用白話講版本會更新、舊版會先備份、公司資料不會改動，再問「好嗎？」。然後停，等創辦人答。冇答「好」（或者同樣明確嘅同意）就唔好做任何寫入。
 3. 創辦人答「好」之後執行：`node "<程式>/update.mjs" "<項目根>" --apply`
-   - 結束碼 0：更新完成，照命令印出嘅結果用一兩句話講（新版本號、公司資料沒有改動），再講下一步係打開 Founder Desk（Claude Code `/crewzero:desk`、Codex `$crewzero:desk`、Antigravity `/desk`）。
+   - 結束碼 0：更新完成，照命令印出嘅結果用一兩句話講（新版本號、公司資料沒有改動），再講下一步係打開 CrewZero（Claude Code `/crewzero:dashboard`、Codex `$crewzero:dashboard`、Antigravity `/dashboard`）；舊版嘅 `desk` 指令已經取消，之後只用呢個入口，想傾生意問題就講「和 Zero 討論」。
    - 結束碼 4：Zero 啱啱開始咗工作，命令冇改任何檔；講一句，請創辦人遲啲再試。
    - 其他：更新未完成。命令會自己由備份還原，照佢印出嘅內容用白話講清楚：係咪已經還原、公司資料冇改動、原因係乜同下一步點做（見「命令出錯時點講」）。唔好自己改檔或者刪嘢。
 
@@ -64,7 +64,7 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
    - 結束碼 1：冇可以還原嘅備份，照印出嘅一句話講，然後停。
    - 結束碼 4：Zero 工作進行中，完成後再試，然後停。
 2. 創辦人答「好」之後執行：`node "<程式>/update.mjs" "<項目根>" --rollback --apply`
-   - 結束碼 0：照命令印出嘅結果講（還原到邊個版本、`data/` 冇改動），再講下一步係打開 Founder Desk。
+   - 結束碼 0：照命令印出嘅結果講（還原到邊個版本、`data/` 冇改動），再講下一步係打開 CrewZero。
    - 其他：照印出嘅原因講（用白話講原因同點做，見「命令出錯時點講」），然後停。
 
 ## 命令出錯時點講
@@ -76,4 +76,4 @@ CrewZero 插件入面嘅更新指令（只係轉接層，核心係程式資料�
 - 更新同還原都要創辦人喺今次對話明確答「好」先做；檢查（唔加 `--apply`）唔使問。
 - 唔好手改 `<安裝>/data/` 入面任何檔；唔好為咗「修好」而自己刪除、覆寫、改名 `<安裝>`（包括舊版嘅 `startup-os/`）或者備份資料夾（`.backup-` 開頭）。
 - 唔好叫創辦人自己執行檔案；命令由你執行。
-- 更新完唔會自動打開頁面：創辦人之後輸入 Founder Desk 或營運監察台指令（Claude Code `/crewzero:desk`／`/crewzero:dashboard`、Codex `$crewzero:desk`／`$crewzero:dashboard`、Antigravity `/desk`／`/dashboard`），開到嘅就係新版。
+- 更新完唔會自動打開頁面：創辦人之後輸入打開 CrewZero 嘅指令（Claude Code `/crewzero:dashboard`、Codex `$crewzero:dashboard`、Antigravity `/dashboard`），開到嘅就係新版。

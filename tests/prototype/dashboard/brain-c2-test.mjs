@@ -178,7 +178,7 @@ try {
   seen = await seenIds();
   await answer(O1);
   const oa = await newRun(seen, r => r.kind === 'ask' && r.ref === O1.id);
-  ok('(c) 答咗：已記錄兩個決定', oa && oa.state === 'done' && /做成臨時工作/.test(oa.result.summary) && /考慮因此改路線/.test(oa.result.summary), oa && oa.result);
+  ok('(c) 答咗：已記錄兩個決定', oa && oa.state === 'done' && /做成臨時工作/.test(oa.result.summary) && /考慮因此改計劃/.test(oa.result.summary), oa && oa.result);
   const na = await newRun(seen, r => r.kind === 'note' && r.noteType === 'adhoc');
   const no = await newRun(seen, r => r.kind === 'note' && r.noteType === 'order');
   ok('(c) 做成臨時工作：行臨時工作流程（AI 先擬交付內容再問你）', na && na.state === 'done' && (state().tasks || []).some(t => t.adhoc && t.id === 'a-' + na.ref) && (await openPacks()).some(p => p.taskId === 'a-' + na.ref), na && na.result);
@@ -197,7 +197,7 @@ try {
   interviewToday(); mode('opportunities:opp-code');
   await rhythm();
   const O2 = (await offerOf('opportunity'))[0], op2 = brainOf('opportunities');
-  ok('(c) AI 寫嘅假設編號：放上 Founder Desk 之前換成假設內容', O2 && !/\bH1\b/.test(O2.questions[0].why) && O2.questions[0].why.includes('假設「' + asmOf('H1').text + '」'), O2 && O2.questions[0].why);
+  ok('(c) AI 寫嘅假設編號：放上 CrewZero 之前換成假設內容', O2 && !/\bH1\b/.test(O2.questions[0].why) && O2.questions[0].why.includes('假設「' + asmOf('H1').text + '」'), O2 && O2.questions[0].why);
   ok('(c) 下一次掃描：上一包答咗，就放新一包', O2 && O2.id !== O1.id, O2 && O2.id);
   // 上一包未答又再掃描：唔放新一包；舊包嘅機會照答得（內容喺問題包入面，唔靠新結果檔）
   await idle();
@@ -227,8 +227,8 @@ try {
   ok('生意大腦總覽：等你處理有商機決定', waits.some(w => w.item === 'opportunities'), waits);
   await shot('c2-brain.png');
   const O3 = (await offerOf('opportunity'))[0];
-  if (O3) { await go('/#/ask/' + O3.id); await shot('c2-desk-opportunity.png'); const dt = await text('#app'); ok('Founder Desk：商機決定包顯示每個機會一條', dt.includes(N.ui.oppTask) && dt.includes(N.t('oppAsk', { t: brainOf('opportunities').list[0].title })), dt.slice(0, 400)); }
-  else ok('Founder Desk：商機決定包顯示每個機會一條', false, 'no open opportunity pack');
+  if (O3) { await go('/#/ask/' + O3.id); await shot('c2-desk-opportunity.png'); const dt = await text('#app'); ok('CrewZero：商機決定包顯示每個機會一條', dt.includes(N.ui.oppTask) && dt.includes(N.t('oppAsk', { t: brainOf('opportunities').list[0].title })), dt.slice(0, 400)); }
+  else ok('CrewZero：商機決定包顯示每個機會一條', false, 'no open opportunity pack');
   ok('頁面冇程式錯誤', !errors.length, errors);
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));

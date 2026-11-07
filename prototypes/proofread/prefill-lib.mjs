@@ -20,9 +20,11 @@ export function labelOf(a, docs) {
   const t = norm(a.text);
   if (!t) return null;
   const named = docs.find(d => d.name === a.source || d.name.endsWith(String(a.source || '')));
+  // Word、PowerPoint、Excel 收件時轉出的文字版（<原檔名>.md）同樣可以核對原句：原檔讀唔到文字但有文字版，就當讀得到
+  const side = named && named.text == null ? docs.find(d => d.name === named.name + '.md' && d.text != null) : null;
   if (a.quote === true) {
     if (docs.some(d => d.text != null && norm(d.text).includes(t))) return 'quote';
-    if (named ? named.text == null : docs.every(d => d.text == null)) return 'unverified';
+    if (named ? named.text == null && !side : docs.every(d => d.text == null)) return 'unverified';
     return 'inferred';
   }
   return 'inferred';

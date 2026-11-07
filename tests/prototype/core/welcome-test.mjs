@@ -65,7 +65,7 @@ try {
   await cdp.go(BASE + '/', 1440, 2200);
   const seen = (() => { try { return JSON.parse(fs.readFileSync(WELCOME_SEEN, 'utf8')); } catch { return null; } })();
   const repeat = await root(BASE);
-  ok('首次開入門頁：留下 { at }；再開 / 留在 Founder Desk', !!(seen && seen.at) && repeat.status === 200 && !String(repeat.headers.get('location') || '').includes('/welcome'), { seen, status: repeat.status });
+  ok('首次開入門頁：留下 { at }；再開 / 留在 CrewZero', !!(seen && seen.at) && repeat.status === 200 && !String(repeat.headers.get('location') || '').includes('/welcome'), { seen, status: repeat.status });
 
   // 已認證同已有公司資料各自都唔彈；兩個資料夾都冇 welcome-seen.json。
   const CERT_DATA = path.join(OUT, 'certified-data'), CERT_PORT = Number(PORT) + 1, CERT_BASE = `http://127.0.0.1:${CERT_PORT}`;

@@ -21,7 +21,7 @@ const tech = s => console.error('（技術細節，只供 AI 排查，毋須交�
 // 出錯原因（創辦人會經 AI 聽到）：按系統錯誤代號講白話原因同做法；其他（包括程式自己嘅核對）用通用句。錯誤原文另外寫去 stderr
 function plainCause(e) {
   const c = e && e.code, m = String(e && e.message || '');
-  if (c === 'EPERM' || c === 'EBUSY' || c === 'EACCES') return '部分檔案正被其他程式使用。請關閉 Founder Desk 及其他開着這個資料夾的程式，再更新一次。';
+  if (c === 'EPERM' || c === 'EBUSY' || c === 'EACCES') return '部分檔案正被其他程式使用。請關閉 CrewZero 及其他開着這個資料夾的程式，再更新一次。';
   if (c === 'ENOSPC') return '電腦的儲存空間不足。請騰出空間後，再更新一次。';
   if (/^更新後核對不符/.test(m)) return '更新後的檔案核對不一致。請再更新一次；仍然失敗，請重新開機後再試。';
   return '電腦未能完成檔案更換。請重新開機後，再更新一次。';
@@ -74,7 +74,7 @@ function restoreFrom(backup, dir, known) {
 // 示範頁面（--demo）由同一份程式運行，只是資料夾不同；不一併關閉，舊程式便會讀到新頁面而失常
 const DEMO = path.join(target, 'demo-data');
 const isDemo = root => root === rootId(DEMO) || root === legacyRootId(DEMO);
-const openName = list => list.every(s => s.demo) ? '示範頁面' : list.some(s => s.demo) ? 'Founder Desk 及示範頁面' : 'Founder Desk';
+const openName = list => list.every(s => s.demo) ? '示範頁面' : list.some(s => s.demo) ? 'CrewZero 及示範頁面' : 'CrewZero';
 const spaced = s => s.replace(/([\u4e00-\u9fff])([A-Za-z])/g, '$1 $2').replace(/([A-Za-z])([\u4e00-\u9fff])/g, '$1 $2');
 async function runningServers() {
   const found = [];
@@ -149,7 +149,7 @@ if (ROLLBACK) {
   closeServers();
   say(`已還原 CrewZero 到版本 ${bVersion}，公司資料沒有改動。`);
   tech(`已逐一核對 ${bFiles.length} 個程式檔；備份位置：${backup}；公司資料：${DATA}`);
-  say(`下一步：打開 Founder Desk（${CMD('desk')}）。`);
+  say(`下一步：打開 CrewZero（${CMD('dashboard')}）。`);
   process.exit(0);
 }
 
@@ -231,5 +231,5 @@ release();
 closeServers();
 say(`CrewZero 已更新至版本 ${newVersion}，公司資料沒有改動。`);
 tech(`備份位置：${backup}；程式檔數量：${stageFiles.length}`);
-say('以後在 AI 對話說「打開 Founder Desk」，便可再次打開。');
+say('以後在 AI 對話說「打開 CrewZero」，便可再次打開；想先和 Zero 討論，說「和 Zero 討論」。');
 say('如新版有問題，在 AI 對話說「還原上一個版本」。');

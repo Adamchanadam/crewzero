@@ -11,6 +11,7 @@ const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, i
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const { seedDemo } = await import(pathToFileURL(path.join(PROTO, 'demo-seed.mjs')).href);
 const kit = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
+const NAMES = (await import('node:module')).createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const servers = [];
 async function startServer(DATA, port) {
   const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(port)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER }, stdio: 'ignore' });
@@ -27,7 +28,7 @@ function api(BASE) {
 }
 async function waitFor(fn, ms = 30000) { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(400); } return null; }
 const fnv = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return ('0000000' + x.toString(16)).slice(-8); };
-// 照 Founder Desk 嘅回覆格式答一個問題包
+// 照 CrewZero 嘅回覆格式答一個問題包
 async function answer(A, packId, values, includeDefaults = true) {
   const { pack } = await A.get('/api/ask?id=' + packId);
   const answers = pack.questions.filter(q => includeDefaults || q.id in values).map(q => ({ id: q.id, value: q.id in values ? values[q.id] : q.value, ai: q.value, changed: q.id in values && values[q.id] !== q.value }));
@@ -45,14 +46,14 @@ try {
   await kit.certifyDirect(DEMO, PROTO, ADAPTER);
   const B = await startServer(DEMO, Number(PORT)), A = api(B);
   for (const p of ['/dashboard', '/dashboard/path', '/dashboard/inputs', '/dashboard/team', '/dashboard/log', '/dashboard/system']) {
-    const r = await fetch(B + p); ok('路由 ' + p + ' 回監察台頁面', r.status === 200 && (await r.text()).includes('營運監察台'), r.status);
+    const r = await fetch(B + p), body = await r.text(); ok('路由 ' + p + ' 回營運頁面', r.status === 200 && body.includes('<title>CrewZero</title>') && body.includes('pageInputs'), r.status);
   }
   ok('唔存在嘅分頁回 404', (await fetch(B + '/dashboard/bogus')).status === 404);
   const d0 = await A.get('/api/dashboard');
   ok('示範資料標明係示範', d0.sample === true && d0.company.name === '從田間到餐桌');
   ok('指引：AI 已設定、公司已確認 → 日常', d0.guide === 'daily', d0.guide);
-  ok('待你處理 6 項（採用轉強留在生意大腦），逾期排第一', d0.todo.length === 6 && d0.brainTodo.length >= 1 && d0.todo[0].state === 'overdue' && d0.todo[0].overdueDays === 2, d0.todo.map(t => t.type + ':' + t.overdueDays));
-  ok('待你處理入口全部深連 Founder Desk 答題', d0.todo.every(t => /^\/#\/ask\/ask-demo-/.test(t.href)), d0.todo.map(t => t.href));
+  ok('待決事項 6 項（採用轉強留在生意大腦），逾期排第一', d0.todo.length === 6 && d0.brainTodo.length >= 1 && d0.todo[0].state === 'overdue' && d0.todo[0].overdueDays === 2, d0.todo.map(t => t.type + ':' + t.overdueDays));
+  ok('待決事項入口全部深連答題頁', d0.todo.every(t => /^\/#\/ask\/ask-demo-/.test(t.href)), d0.todo.map(t => t.href));
   ok('日程只列未來兩星期（加逾期）', d0.schedule.length >= 6 && d0.schedule.every(s => s.overdue || (new Date(s.date) - new Date(d0.today)) / 86400000 <= 14), d0.schedule.map(s => s.date));
   ok('日程有訪問、試行到期、目標日、決定期限、AI 開工', ['interview', 'trial', 'target', 'decision', 'ai'].every(k => d0.schedule.some(s => s.kind === k)), d0.schedule.map(s => s.kind));
   ok('看板六個狀態欄都有工作', ['todo', 'doing', 'waiting', 'blocked', 'review', 'done'].every(c => d0.tasks.some(t => t.column === c && !t.adhoc)), d0.tasks.map(t => t.column));
@@ -77,7 +78,8 @@ try {
   ok('規則四：其餘照次序', T0.t4.why.rule === 4 && T0.t4.why.text.includes('按路線次序'), T0.t4.why);
   ok('等候四類：工作、你的決定、你的行動、外部回覆（附預計日期）', T0.f1.wait.kind === 'task' && T0.t6.wait.kind === 'decision' && T0.t13.wait.kind === 'action' && T0.t4.wait.kind === 'external' && !!T0.t4.wait.eta, [T0.f1.wait, T0.t6.wait, T0.t13.wait, T0.t4.wait]);
   ok('可進行同等候中分開', T0.t3.ready === true && T0.f1.ready === false && T0.t6.ready === false);
-  ok('你要做：四件現實行動，負責人係你', d0.tasks.filter(t => t.owner === 'founder').length === 4 && T0.f1.teammate === '你');
+  // 示範名單加入後：由人處理的工作共八件——五件歸你、兩件歸在職成員、一件負責人已離開而歸你名下顯示（owner 不改寫）
+  ok('你要做：現實行動，負責人係你或在職成員；成員離開的工作歸你名下', d0.tasks.filter(t => t.owner === 'founder').length === 8 && d0.tasks.filter(t => t.owner === 'founder' && !t.assigneeId && !t.ownerLeft).length === 5 && d0.tasks.filter(t => t.assigneeId).map(t => t.assignee).sort().join() === '李家欣,陳小明' && d0.tasks.filter(t => t.ownerLeft).length === 1 && T0.f1.teammate === '你');
   ok('你嘅行動有日子就入兩星期日程', d0.schedule.filter(s => s.kind === 'action').map(s => s.text).join().includes('見農場丙簽供應協議') && d0.schedule.some(s => s.kind === 'action' && s.text.includes('致電發牌機關')));
   ok('AI 唔可以標完成：未經你確認嘅完成當待你確認', T0.f3.column === 'review' && T0.f3.packId === 'ask-demo-confirm-f3');
   ok('兩站並行：農場簽約＋牌照保險，第二站經你確認', d0.parallel.count === 2 && d0.parallel.confirmed && d0.parallel.ids.join() === 'm1,m4' && !d0.parallel.over, d0.parallel);
@@ -206,7 +208,7 @@ try {
   const B2 = await startServer(REAL, Number(PORT) + 1), A2 = api(B2);
   const e0 = await A2.get('/api/dashboard');
   ok('空資料：指引 AI 未設定、冇里程碑、冇日程', e0.guide === 'noAI' && e0.milestones.length === 0 && e0.schedule.length === 0 && e0.todo.length === 0 && e0.sample === false, e0.guide);
-  ok('空資料交要求：未有公司概覽唔收並講原因', (await A2.post('/api/intake', { kind: 'note', type: 'adhoc', text: 'x' })).j.message.includes('請先提交資料'));
+  ok('空資料交要求：未有公司概覽唔收並講原因', (await A2.post('/api/intake', { kind: 'note', type: 'adhoc', text: 'x' })).j.message === NAMES.ui.needOverviewAll);
   await kit.certifyDirect(REAL, PROTO, ADAPTER);
   ok('有認證未交資料 → 指引交資料', (await A2.get('/api/dashboard')).guide === 'noCompany');
   kit.seedCompany(REAL, PROTO, 'sample-company-page.js');
@@ -232,6 +234,8 @@ try {
   /* ---------- G. AI 未設定時交要求：照記錄、等設定；認證後自動續做 ---------- */
   const NOAI = path.join(OUT, 'noai');
   kit.seedCompany(NOAI, PROTO, 'sample-company-page.js');
+  // 0.40.0 起「請 Zero 做一件事」要公司概覽已確認才收
+  { const pg = JSON.parse(fs.readFileSync(path.join(NOAI, 'company', 'page.json'), 'utf8')); fs.mkdirSync(path.join(NOAI, 'ledger'), { recursive: true }); fs.writeFileSync(path.join(NOAI, 'ledger', 'confirmed.json'), JSON.stringify({ company: pg.company.name, pageId: pg.page.id, confirmedAt: new Date().toISOString(), order: pg.path.milestones.map(m => m.id), values: {}, edits: [] })); }
   const B3 = await startServer(NOAI, Number(PORT) + 2), A3 = api(B3);
   const s8 = await A3.post('/api/intake', { kind: 'note', type: 'adhoc', text: '整理客戶名單。' });
   const w1 = await waitFor(async () => { const r = await runOf(A3, x => x.kind === 'note' && x.ref === s8.j.id); return r && r.state === 'waiting' ? r : null; });

@@ -1,5 +1,5 @@
 // CrewZero 校對原型：外殼。每次由本機伺服器叫起，創辦人唔使理。
-// 次序：登記新回覆 → 機械套用（唔使 AI）→ 寫紀錄 → 有 AI 工作先開 AI → 核對收據 → AI 出嘅新問題包核對後放上 Founder Desk → 寫狀態。
+// 次序：登記新回覆 → 機械套用（唔使 AI）→ 寫紀錄 → 有 AI 工作先開 AI → 核對收據 → AI 出嘅新問題包核對後放上待決事項 → 寫狀態。
 // 一次處理一組回覆（公司概覽嘅全部回覆，或者一份問題包回覆）；做完伺服器見仲有就再叫。
 // AI 只喺 data/sandbox/<run> 入面工作；套用、核對、搬檔、紀錄全部由呢個程式做。
 // 開 AI 之前一定核對 AI 工具認證（host-lib.mjs）；未認證就只做機械套用，run 等緊 AI 設定，設定好之後自動續做。
@@ -9,16 +9,19 @@ import { randomUUID } from 'node:crypto';
 import { certified, execute, modelCandidates, webAccess } from './host-lib.mjs';
 import { checkCompanyPage, normalizePage, validDay, openingFields, ROW_PLANS, RULE_PLANS, CELLS } from './company-page-check.mjs';
 import { scanOutput, fixOutput } from './style-check.mjs';
-import { loadBrain, cardText, brainSource, brainFile, pipelineOf, ledgerAssumptions, deriveActors, counterpartsOf } from './brain-lib.mjs';
+import { loadBrain, cardText, brainSource, brainFile, pipelineOf, ledgerAssumptions, deriveActors, counterpartsOf, contactDueOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeRewriteJSON, mergeRewriteMd, deCodeInfo, deCodeJSONInfo, folderAssumptions, displayDir, displayPath, displayIndex } from './plain-lib.mjs';
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
-import { fileURLToPath } from 'node:url';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { checkLinks } from './link-check.mjs';
+import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId } from './people-ops.mjs';
+import { pad, localIso, stamp, readJSON, writeJSON, fnv, proofreadHash, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill, matchDelivered } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps, overviewIsCurrent } from './dash-lib.mjs';
+import { registerInput, recordReading, addEffect, applyFollowUp, refreshSnapshot, mergeInPlace, followUpTaskId, checkRead, checkReason, checkFollowUpItem, cleanMeta, checkSourceUrls, blankBadSourceUrls, fullTextSuffix, annotateBrokenLinks, dayText as opsDayText } from './ledger-ops.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
 
@@ -39,6 +42,21 @@ const log = msg => fs.appendFileSync(LOG, `[${localIso()}] ${msg}\n`);
 // 公司概覽清單區段：舊資料寫成 { title, items } 都照讀（新資料由 company-page-check 規整）
 const listOf = x => Array.isArray(x) ? x : x && Array.isArray(x.items) ? x.items : x && typeof x === 'object' && (x.title || x.label || x.id) ? [x] : [];
 const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+// 外部連結試開（link-check.mjs）：Zero 寫進產出的外部網址，寫入前試開一次；明確打不開的在出處加註「連結未能開啟」，不刪網址。
+// 測試實例（有 SOS_DATA）預設不連外網；要測試時用 SOS_LINKCHECK_MODULE 換成假的 fetch／lookup。
+let LINK_OPTS = null;
+async function linkOpts() {
+  if (LINK_OPTS) return LINK_OPTS;
+  LINK_OPTS = {};
+  if (process.env.SOS_LINKCHECK_MODULE) { try { const m = await import(pathToFileURL(path.resolve(process.env.SOS_LINKCHECK_MODULE)).href); LINK_OPTS = { fetchImpl: m.fetchImpl, lookup: m.lookup }; } catch { } }
+  return LINK_OPTS;
+}
+async function markBrokenLinks(entries, field) {
+  const list = Array.isArray(entries) ? entries : [];
+  const urls = list.map(e => e && e.url).filter(u => typeof u === 'string' && /^https:\/\//.test(u));
+  if (!urls.length || (process.env.SOS_DATA && !process.env.SOS_LINKCHECK_MODULE)) return list;
+  try { return annotateBrokenLinks(list, await checkLinks(urls, await linkOpts()), field, NAMES.ui.linkBroken); } catch { return list; }
+}
 // 只有外部已實際行動或已付出代價，才可由證據級推導為站點完成；口頭表示仍是進展，不是完成。
 const gradeCompletes = grade => grade === 'did' || grade === 'paid';
 
@@ -96,7 +114,7 @@ function upsertTask(t) {
 function getTask(id) { return (loadState().tasks || []).find(t => t.id === id) || null; }
 function addEvent(e, state = null) { const s = state || loadState(); s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), relatedIds: [], ...e }); if (!state) saveState(s); }
 
-// Founder Desk 只會追加操作；run 以 rename 取走整批，先讀回成功寫入 state 才清理。
+// CrewZero 只會追加操作；run 以 rename 取走整批，先讀回成功寫入 state 才清理。
 // 短鎖只保護「追加」同「取批」兩個檔案動作，唔會同 AI 工作互相等待。
 function withFounderOpsLock(fn) {
   const until = Date.now() + 2000;
@@ -126,8 +144,10 @@ function founderOpsLockCanRecover() {
     return ownerGone || age > 60000;
   } catch { return false; }
 }
-function founderEventTitle(op) {
+function founderEventTitle(op, st = null) {
   const v = op && op.value || {};
+  // 名單改正的標題要帶名稱：從套用前的帳本查（查不到就用較短的句）
+  const actors = ((st && st.company) || {}).actors || [], who = id => (actors.find(a => a && a.id === id) || {}).name || '', taskTitle = id => ((st && st.tasks) || []).find(t => t && t.id === id)?.title || '';
   if (op.op === 'reschedule') return NAMES.t('founderRescheduled', { d: v.date || '' });
   if (op.op === 'cancelNext') return U.founderCancelled;
   if (op.op === 'setNext') return NAMES.t('founderSetNext', { t: clip(v.text, 60) });
@@ -135,6 +155,13 @@ function founderEventTitle(op) {
   if (op.op === 'setTaskDue') return NAMES.t('founderTaskDueChanged', { d: v.date || '' });
   if (op.op === 'snooze') return U.founderSnoozed;
   if (op.op === 'setRhythm') return U.rhythmSaved;
+  if (op.op === 'setSourceUrl') return NAMES.t('sourceUrlFixed', { t: clip(v.title, 40) });
+  if (op.op === 'actorRename') return NAMES.t('actorRenamed', { a: clip(who(op.target), 20), b: clip(v.name, 20) });
+  if (op.op === 'actorKind') return NAMES.t('actorKinded', { n: clip(who(op.target), 20), k: NAMES.dash['ppl_kind_' + v.kind] || '' });
+  if (op.op === 'actorMerge') return NAMES.t('actorMerged', { a: clip(who(op.target), 20), b: clip(who(v.into), 20) });
+  if (op.op === 'actorStatus') return NAMES.t(v.status === 'active' ? 'actorReopened' : 'actorClosed', { n: clip(who(op.target), 20) });
+  if (op.op === 'actorTeam') return NAMES.t('actorTeamed', { n: clip(who(op.target), 20) });
+  if (op.op === 'taskOwner') return NAMES.t('taskOwnerChanged', { t: clip(taskTitle(op.target), 20), n: v.owner === 'founder' ? NAMES.ui.chgOwnerMe : who(v.owner) });
   return U.founderUnsnoozed;
 }
 const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
@@ -153,7 +180,7 @@ function mergeFounderOpsBatch(batch) {
   next.events = Array.isArray(next.events) ? next.events : [];
   for (const op of pending) {
     if (!op.op) continue;
-    next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op), relatedIds: [], moduleIds: ['now', 'inputs'] });
+    next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op, before), relatedIds: [], moduleIds: ['now', 'inputs'] });
   }
   next.founderOpsDone = [...new Set(done.concat(pending.map(op => typeof op.id === 'string' ? op.id : '').filter(Boolean)))].slice(-Math.max(200, ops.length));
   saveState(next);
@@ -174,6 +201,26 @@ function mergeFounderOps() {
   if (!moved || !staged) return merged;
   mergeFounderOpsBatch(staged);
   return true;
+}
+
+// 重新讀取的新快照：伺服器已把檔案存好並在 ledger/rereads/ 留一張單，外殼在這裏換進帳本（舊快照保留在 previous）。
+// 單據處理後才刪；同一張單做兩次結果相同（refreshSnapshot 冪等）。
+function mergeRereads() {
+  const dir = path.join(DIR.ledger, 'rereads');
+  let names = [];
+  try { names = fs.readdirSync(dir).filter(f => /^[\w-]+\.json$/.test(f)).sort(); } catch { return false; }
+  for (const f of names) {
+    const rec = readJSON(path.join(dir, f), null);
+    if (rec && typeof rec.inputId === 'string' && Number.isInteger(rec.n) && rec.fresh && typeof rec.fresh.file === 'string') {
+      const s = loadState();
+      if (s.demo !== true) {
+        const next = refreshSnapshot(s, { inputId: rec.inputId, n: rec.n, fresh: rec.fresh });
+        if (JSON.stringify(next) !== JSON.stringify(s)) { saveState(next); log(`已換用新快照：${rec.inputId}`); }
+      }
+    }
+    fs.rmSync(path.join(dir, f), { force: true });
+  }
+  return names.length > 0;
 }
 
 function bizInfo(biz) { return biz && BIZ_TYPES[biz.type] ? { type: biz.type, other: typeof biz.other === 'string' ? biz.other : '', label: BIZ_TYPES[biz.type].label } : null; }
@@ -276,7 +323,7 @@ function syncLedger() {
   // 下一個對外動作（G5）：公司概覽嘅值有改先同步（真實事件確認改過嘅唔會被舊值蓋走）
   const g5f = fieldsByPlan.G5, g5 = g5f ? { text: v(g5f), milestoneId: c.nextActionMilestone || g5f.flagTo || '' } : null;
   const oldActors = (s.company || {}).actors || [];
-  s.company = { ...(s.company || {}), assumptions: as, actors: deriveActors(page, ms, oldActors) };
+  s.company = { ...(s.company || {}), assumptions: as, actors: deriveActors(page, ms, oldActors, { today: todayIso() }) };
   for (const m of ms) if (m.state === 'done' && oldMs[m.id]?.state !== 'done') m.doneCounterpartIds = s.company.actors.filter(a => (a.fromMilestoneIds || []).includes(m.id)).map(a => a.id);
   const founderNext = (s.company || {}).nextExternalAction;
   if (g5 && !founderNext?.founderUpdatedAt && JSON.stringify(g5) !== JSON.stringify(s.ledgerG5 || null)) { s.company.nextExternalAction = g5; s.ledgerG5 = g5; }
@@ -294,6 +341,29 @@ function syncLedger() {
   return true;
 }
 // 交資料嘅封存資料夾（站點由「目前進展」推導完成時作證明）
+// 公司概覽 sources[].file：Zero 寫的是附件檔名，頁面要用封存後相對 data/ 的路徑才打得開；對不上就留空（不留一個打不開的連結）
+function keepArchived(file) {
+  try {
+    const r = path.resolve(DIR.data, String(file).replace(/\\/g, '/')), root = fs.realpathSync(DIR.archive), lst = fs.lstatSync(r);
+    if (lst.isSymbolicLink() || !lst.isFile() || !fs.realpathSync(r).startsWith(root + path.sep) || !r.startsWith(path.resolve(DIR.archive) + path.sep)) return '';
+    return path.relative(DIR.data, r).replace(/\\/g, '/');
+  } catch { return ''; }
+}
+function fixSourceFiles(page, runRef) {
+  if (!page || !Array.isArray(page.sources)) return;
+  const dirRel = intakeArchive('intake-' + runRef);
+  let names = []; try { if (dirRel) names = fs.readdirSync(path.join(DIR.data, dirRel)).filter(f => /-intake-\d+-/.test(f)); } catch { }
+  const bare = f => f.replace(/^.*?-intake-\d+-/, '');
+  for (const x of page.sources) {
+    if (!x || typeof x !== 'object' || x.file == null || x.file === '') continue;
+    const want = String(x.file).replace(/\\/g, '/').replace(/^files\//i, '').toLowerCase();
+    // 已是封存路徑：解析後的真實路徑必須在封存資料夾內，是普通檔、不是連結（Zero 寫 archive/../ledger/… 這類出界路徑一律不保留）
+    const kept = keepArchived(x.file);
+    if (kept) { x.file = kept; continue; }
+    const hit = names.find(f => bare(f).toLowerCase() === want);
+    if (hit) x.file = dirRel + '/' + hit; else delete x.file;
+  }
+}
 function intakeArchive(pageId) {
   const name = String(pageId || '');
   try { for (const mo of fs.readdirSync(DIR.archive)) if (fs.existsSync(path.join(DIR.archive, mo, name))) return path.relative(DIR.data, path.join(DIR.archive, mo, name)).replace(/\\/g, '/'); } catch { }
@@ -346,14 +416,23 @@ const showAns = (q, v) => Array.isArray(v) ? v.join('、') : String(v ?? '');
 const replyVia = v => /^browser:[a-f0-9]{6}$/i.test(String(v || '')) || /^device:[a-f0-9]{8}$/i.test(String(v || '')) ? String(v) : 'terminal';
 
 /* ---------- 俾 AI 睇嘅確認版公司概覽（通用，唔分邊間公司） ---------- */
+// G6「已有人負責的事」：名單內有在職團隊成員時，給 Zero 的背景改由名單生成（公司概覽原文不改寫）
+function ownershipText() {
+  const own = ownershipOf(loadState());
+  if (!own) return '';
+  const parts = own.lines.map(l => NAMES.t('pbOwnLine', { n: l.name, r: l.role || NAMES.dash.ppl_kind_team, w: [...l.stations, ...l.tasks, ...(l.moreTasks ? ['另有 ' + l.moreTasks + ' 項工作'] : [])].join('、') || '分工未定' }) + (l.state === 'paused' ? '（' + U.pbOwnPaused + '）' : ''));
+  for (const u of own.unowned) parts.push(NAMES.t('pbOwnNone', { s: u.station }));
+  return parts.join('；');
+}
 function confirmedMarkdown(page, reg, values, c) {
   const v = id => values[id] ?? '';
   const L = [];
   L.push(`# ${page.company.name} 公司概覽（創辦人 ${String(c.confirmedAt || '').slice(0, 10)} 確認）`, '');
   if (page.company.oneLiner) L.push(`一句話：${page.company.oneLiner}`, '');
   L.push('## 目標及下一步');
+  const ownTxt = ownershipText();
   for (const r of page.glance.rows) {
-    L.push(`- ${r.label}：${v(r.id)}` + (r.due ? `（期限 ${v(r.due.id)}）` : '') + (r.flagTo ? '　← 下一個對外動作' : ''));
+    L.push(`- ${r.label}：${r.plan === 'G6' && ownTxt ? ownTxt : v(r.id)}` + (r.due ? `（期限 ${v(r.due.id)}）` : '') + (r.flagTo ? '　← 下一個對外動作' : ''));
   }
   if (page.glance.status) {
     L.push('', `## ${page.glance.status.title || '而家去到邊'}`);
@@ -406,9 +485,9 @@ function runAI(sandbox, opts) {
   const checked = certified(ROOT, DIR.ledger);
   if (!checked.host) return Promise.resolve({ ok: false, waiting: true, reason: checked.reason });
   const actualAccess = webAccess(checked.host);
-  const webNotice = { 'search+read': '本次可以上網搜尋及讀網頁', search: '本次只可以網上搜尋，不能開啟網頁全文；只見過搜尋摘要的來源，標題後寫「（只經搜尋摘要）」', none: '本次不可上網；外部事實一律寫「查唔到」，不得寫網址' }[actualAccess];
+  const webNotice = { 'search+read': '本次可以上網搜尋及讀網頁；引用任何網址之前，必須先開啟該頁讀過全文；每個有網址的出處都要自報 fullText（true＝讀過全文，false＝只見過搜尋摘要）', search: '本次只可以網上搜尋，不能開啟網頁全文；每個有網址的出處都要自報 fullText: false，外殼會標「（只經搜尋摘要）」', none: '本次不可上網；外部事實一律寫「查唔到」，不得寫網址' }[actualAccess];
   const taskFile = path.join(sandbox, 'task.md');
-  if (fs.existsSync(taskFile)) { const task = fs.readFileSync(taskFile, 'utf8').replace(/^> 本次(?:可以上網搜尋及讀網頁|只可以網上搜尋[^\r\n]*|不可上網[^\r\n]*)\r?\n/gm, ''); fs.writeFileSync(taskFile, /^> 今日日期：[^\r\n]*\r?\n/.test(task) ? task.replace(/^(> 今日日期：[^\r\n]*\r?\n)/, '$1> ' + webNotice + '\n') : '> ' + webNotice + '\n' + task); }
+  if (fs.existsSync(taskFile)) { const task = fs.readFileSync(taskFile, 'utf8').replace(/^> 本次(?:可以上網搜尋及讀網頁[^\r\n]*|只可以網上搜尋[^\r\n]*|不可上網[^\r\n]*)\r?\n/gm, ''); fs.writeFileSync(taskFile, /^> 今日日期：[^\r\n]*\r?\n/.test(task) ? task.replace(/^(> 今日日期：[^\r\n]*\r?\n)/, '$1> ' + webNotice + '\n') : '> ' + webNotice + '\n' + task); }
   // 每份 AI 工作都加「寫給創辦人看的文字」規矩（唯一出處 ai-plain.md）
   try { const tf = path.join(sandbox, 'task.md'), rules = fs.readFileSync(path.join(ROOT, 'ai-plain.md'), 'utf8'); if (fs.existsSync(tf) && !fs.readFileSync(tf, 'utf8').includes('## 寫給創辦人看的文字')) fs.appendFileSync(tf, '\n' + rules); } catch { }
   // 創辦人答咗「不知道／稍後提供」嘅事：每份工作都列出，到期前唔好再問（規劃書 3.1、4.10）
@@ -441,7 +520,7 @@ function checkReceipt(outDir, allowEmpty) {
   if (!artifacts.length && !allowEmpty) return { ok: false, reason: 'Zero 已完成，但未有交出成果，系統未有採用。請按「重試」。' };
   return { ok: true, receipt: { summary: r.summary.slice(0, 600), artifacts, founderNext: list(r.founderNext) } };
 }
-// AI 出嘅新問題包：過外殼核對（格式、每包最多 12 條、即刻生效要有選項、答過唔再問）先放上 Founder Desk
+// AI 出嘅新問題包：過外殼核對（格式、每包最多 12 條、即刻生效要有選項、答過唔再問）先放上待決事項
 function takeAIQuestions(sb, run) {
   const f = path.join(sb, 'out', 'ask.json');
   if (!fs.existsSync(f)) return;
@@ -452,11 +531,20 @@ function takeAIQuestions(sb, run) {
   if (job && job.type === 'proofread-next') for (const pack of prep.packs) pack.forNextAction = true;
   if (isRequest(run)) markRequest(run, raw, prep.packs);
   run.result.asks = placePacks(DIR, prep.packs);
+  if (run.kind === 'note' && (run.noteType === 'adhoc' || run.noteType === 'order') && run.result.asks.length) setRequestInput(run.ref, { status: 'awaitingFounder', packId: run.result.asks[0].id, awaitingFounderText: U.reqAwaiting });
   if (run.kind === 'note' && run.noteType === 'adhoc' && run.result.asks.length) upsertTask({ id: 'a-' + run.ref, status: 'waiting', waitingFor: '等你確認交付內容及期限', packId: run.result.asks[0].id });
   if (prep.warnings.length) { run.result.askWarnings = prep.warnings; log(`${run.id} AI 問題包警告：${prep.warnings.join('；')}`); }
   if (prep.dropped.length) run.result.askDropped = prep.dropped.length;
 }
 
+// 請 Zero 做一件事／想改計劃的輸入紀錄（inputs[]）：擬好問題包就「等你確認」，全部答完就「已處理」
+function setRequestInput(ref, patch) {
+  const s = loadState(), i = (s.inputs || []).find(x => x.id === 'in-' + ref);
+  if (!i) return;
+  Object.assign(i, patch);
+  if (patch.status === 'processed') { delete i.awaitingFounderText; i.processedAt = localIso(); }
+  saveState(s);
+}
 // 創辦人要求擬成嘅問題包：記低屬邊個要求；改次序嘅選項只保留核對得過嘅套用內容（id 要齊、每個一次）
 function markRequest(run, raw, packs) {
   const ids = currentRoute().map(r => r.id);
@@ -508,7 +596,7 @@ async function runAIStep(run, sb, label, allowEmpty) {
   if (r.meta) run.aiCost = { usd: ((run.aiCost && run.aiCost.usd) || 0) + (r.meta.total_cost_usd || 0), ms: ((run.aiCost && run.aiCost.ms) || 0) + (r.meta.duration_ms || 0) };
   if (r.waiting) { run.waitingFor = 'ai-setup'; step(run, 'ai', label, 'waiting', r.reason); return finish(run, 'waiting'); }
   if (r.ok && run.noteType === 'practice-prep') return finishPracticePrep(run, sb, label);
-  if (!r.ok) { if (run.taskId) upsertTask({ id: run.taskId, status: 'blocked', waitingFor: 'Zero 工作未完成，可在 Founder Desk 按「重試」' }); step(run, 'ai', label, 'failed', r.reason); return finish(run, 'failed', r.reason); }
+  if (!r.ok) { if (run.taskId) upsertTask({ id: run.taskId, status: 'blocked', waitingFor: 'Zero 工作未完成，可在 CrewZero 按「重試」' }); step(run, 'ai', label, 'failed', r.reason); return finish(run, 'failed', r.reason); }
   if (run.kind === 'intake') return finishIntake(run, sb, label);
   if (run.kind === 'prefill') return finishPrefill(run, sb, label);
   if (run.ideateId) {
@@ -531,7 +619,7 @@ async function runAIStep(run, sb, label, allowEmpty) {
     run.result.summary = '此要求與你先前回答過的問題相同，因此不再重複提問；如需再改，請寫清新做法後再提交。';
     step(run, 'ai', label, 'done', '先前已回答，不再重複提問'); return finish(run, 'done');
   }
-  if (isRequest(run) && !(run.result.asks || []).length) { if (run.noteType === 'adhoc') upsertTask({ id: 'a-' + run.ref, status: 'blocked', waitingFor: 'Zero 未能擬定範圍，可在 Founder Desk 按「重試」' }); const why = 'Zero 這次未能擬定問題，系統未有採用。請按「重試」，Zero 會重新擬定。'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
+  if (isRequest(run) && !(run.result.asks || []).length) { if (run.noteType === 'adhoc') upsertTask({ id: 'a-' + run.ref, status: 'blocked', waitingFor: 'Zero 未能擬定範圍，可在 CrewZero 按「重試」' }); const why = 'Zero 這次未能擬定問題，系統未有採用。請按「重試」，Zero 會重新擬定。'; step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
   if (run.taskId) taskDone(run);
   const more = run.result.asks && run.result.asks.length ? `；另有 ${run.result.asks.reduce((n, a) => n + a.count, 0)} 條問題等你回答` : '';
   step(run, 'ai', label, 'done', isRequest(run) ? `已擬定 ${run.result.asks.reduce((n, a) => n + a.count, 0)} 條問題，等你確認` : `已完成 ${chk.receipt.artifacts.length} 份產出${more}`);
@@ -678,6 +766,16 @@ function installPage(page) {
   if (fs.existsSync(CONFIRMED)) fs.renameSync(CONFIRMED, path.join(hist, `confirmed-${stamp()}.json`));
   writeJSON(cur, page);
 }
+// 來源網址必須逐字出現在創辦人答案或附件文字版原文：corpus 是答案加可讀附件（純文字或轉出的文字版）；讀不到文字的附件（例如 PDF）不核對
+function intakeSourceCheck(sb, page) {
+  let corpus = '';
+  try { corpus += fs.readFileSync(path.join(sb, 'intake.md'), 'utf8') + '\n'; } catch { }
+  const textNames = new Set();
+  try { for (const f of fs.readdirSync(path.join(sb, 'files'))) if (/\.(md|txt|csv)$/i.test(f)) { textNames.add(f.replace(/\.md$/i, '')); textNames.add(f); try { corpus += fs.readFileSync(path.join(sb, 'files', f), 'utf8') + '\n'; } catch { } } } catch { }
+  const sources = Array.isArray(page && page.sources) ? page.sources : [];
+  const eff = sources.map(x => x && x.from === 'file' && !textNames.has(String(x.file || '')) ? { ...x, from: '' } : x);
+  return { corpus, bad: checkSourceUrls(eff, corpus).bad };
+}
 async function finishIntake(run, sb, label) {
   const out = path.join(sb, 'out');
   let chk = checkDraft(out, run, true);
@@ -698,12 +796,31 @@ async function finishIntake(run, sb, label) {
     step(run, 'ai', label, 'failed', why);
     return finish(run, 'failed', why);
   }
+  // 來自創辦人答案或附件的來源網址要逐字核對：不符先退回 Zero 修正一次，仍不符就把網址留空並加註
+  let urlCheck = intakeSourceCheck(sb, chk.page);
+  if (urlCheck.bad.length) {
+    log(`${run.id} 來源網址不在原文內：${urlCheck.bad.map(b => b.url).join('、')}；叫 AI 修正一次`);
+    writeJSON(path.join(sb, 'job.json'), { type: 'intake-repair', errors: urlCheck.bad.map(b => b.url) });
+    fs.writeFileSync(path.join(sb, 'task.md'), ['# 你今次嘅工作：修正來源網址', '',
+      '你啱啱寫嘅 `out/company-page.json` 有以下來源網址，並沒有逐字出現在創辦人答案（`intake.md`）或附件文字版：', '',
+      ...urlCheck.bad.map((b, i) => `${i + 1}. 來源第 ${b.index + 1} 項：${b.url}`), '', '網址必須由原文逐字抄貼，一個字元都不可以改。找不到原文就把該來源的 `url` 刪去（連同 `from`），其他內容唔好改。改完覆寫 `out/company-page.json`。只可以寫 `out/`。'].join('\n') + '\n');
+    const r = await runAI(sb);
+    if (r.meta && run.aiCost) run.aiCost.usd = (run.aiCost.usd || 0) + (r.meta.total_cost_usd || 0);
+    const again0 = r.ok ? checkDraft(out, run, true) : null;
+    if (again0 && again0.ok) { chk = again0; urlCheck = intakeSourceCheck(sb, chk.page); }
+  }
+  if (urlCheck.bad.length) {
+    chk.page.sources = chk.page.sources.map((x, i) => urlCheck.bad.some(b => b.index === i) ? (({ url, ...rest }) => ({ ...rest, note: [rest.note, U.sourceUrlUnverified].filter(Boolean).join('；') }))(x) : x);
+    log(`${run.id} 來源網址仍未能核對，已留空：${urlCheck.bad.map(b => b.url).join('、')}`);
+  }
+  if (Array.isArray(chk.page.sources)) chk.page.sources = await markBrokenLinks(chk.page.sources, 'note');
   writeJSON(path.join(out, 'company-page.json'), chk.page);
   const styleWarnings = await rewriteOnce(sb, run);
   // 改寫之後再核對一次；改壞咗就用返改寫前嗰版
   let page = chk.page;
   const again = checkDraft(out, run);
   if (again.ok) page = again.page; else log(`${run.id} 改寫後格式唔啱，用返改寫前嘅公司概覽`);
+  fixSourceFiles(page, run.ref);
   installPage(page);
   const bizFile = path.join(DIR.company, 'biz.json');
   const inferred = (page.detail.reading || []).find(f => f.plan === 'biz.type');
@@ -734,8 +851,15 @@ async function handleNote(run, file) {
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
   fs.mkdirSync(dest, { recursive: true });
   fs.renameSync(path.join(DIR.inbox, file), path.join(dest, file));
+  // 收件說明檔（來源、文字版、Google 讀取、連結失敗）：一併封存，內容核對後才用；沒有就當舊格式
+  let meta = null;
+  const metaName = run.ref + '-note-' + run.noteType + '-meta.json';
+  if (['event', 'doc', 'adhoc', 'order'].includes(run.noteType) && fs.existsSync(path.join(DIR.inbox, metaName))) {
+    meta = cleanMeta(readJSON(path.join(DIR.inbox, metaName), null));
+    fs.renameSync(path.join(DIR.inbox, metaName), path.join(dest, metaName));
+  }
   if (run.noteType === 'ideate') return handleIdeate(run);
-  if (run.noteType === 'event' || run.noteType === 'doc') return handleEvent(run, raw, text.replace(/```json[\s\S]*$/, '').trim(), dest);
+  if (run.noteType === 'event' || run.noteType === 'doc') return handleEvent(run, raw, text.replace(/```json[\s\S]*$/, '').trim(), dest, meta);
   if (run.noteType === 'feedback') return handleFeedback(run, parseReply(raw).machine || {});
   if (run.noteType === 'brain-decide') return handleBrainDecide(run, parseReply(raw).machine || {});
   if (run.noteType === 'practice-prep') return handlePracticePrep(run, parseReply(raw).machine || {}, text.replace(/```json[\s\S]*$/, '').trim());
@@ -743,18 +867,30 @@ async function handleNote(run, file) {
   if (run.noteType === 'debate-action') return handleDebateAction(run, parseReply(raw).machine || {});
   if (run.noteType === 'debate-start') { if (!loadPage()) { const why = '未有公司概覽，請先告訴 Zero'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); } return handleDebateStart(run, parseReply(raw).machine || {}); }
   if (run.noteType !== 'help' && !loadPage()) { const why = '未有公司概覽，請先告訴 Zero'; step(run, 'applied', U.stepReqRegistered, 'failed', why); return finish(run, 'failed', why); }
+  // 請 Zero 做一件事／想改計劃：也登記成「交給 Zero 的事」（帳本 inputs[]，帶來源、附件、文字版）；沒有附件、不是討論來的也照登記
+  let reqFiles = [];
+  if (run.noteType === 'adhoc' || run.noteType === 'order') {
+    const pre = run.ref + '-note-' + run.noteType + '-file-';
+    const names = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(pre)).sort();
+    for (const f of names) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
+    const s0 = loadState();
+    const s1 = registerInput(s0, { id: 'in-' + run.ref, via: run.noteType, title: clip((run.noteType === 'adhoc' ? U.reqAdhoc : U.reqOrder) + '：' + said, 50), file: path.relative(DIR.data, path.join(dest, file)).replace(/\\/g, '/'), dir: path.relative(DIR.data, dest).replace(/\\/g, '/'), names, receivedAt: localIso(), meta });
+    saveState(s1);
+    const reg = s1.inputs.find(i => i.id === 'in-' + run.ref);
+    reqFiles = attachmentRows(reg);
+  }
   if (run.noteType === 'adhoc') {
-    upsertTask({ id: 'a-' + run.ref, title: clip(text.replace(/\s+/g, ' '), 30), adhoc: true, status: 'planned', waitingFor: 'Zero 正在擬定範圍', noteId: run.ref });
+    upsertTask({ id: 'a-' + run.ref, title: clip(text.replace(/\s+/g, ' '), 30), adhoc: true, status: 'planned', waitingFor: 'Zero 正在擬定範圍', noteId: run.ref, ...(meta && meta.source ? { source: meta.source } : {}) });
     addEvent({ actor: 'founder', type: 'input', title: '提交臨時工作：' + clip(said, 30), relatedIds: ['a-' + run.ref], moduleIds: ['inputs', 'decisions'] });
   } else if (run.noteType === 'help') addEvent({ actor: 'founder', type: 'input', title: '提出求助：' + clip(said, 30), moduleIds: ['inputs'] });
   else addEvent({ actor: 'founder', type: 'input', title: '要求改路線：' + clip(said, 30), relatedIds: [], moduleIds: ['inputs', 'paths'] });
   step(run, 'applied', U.stepReqRegistered, 'done', '');
   const sb = newSandbox(run);
   if (run.noteType === 'help') helpNoteTask(sb, text.replace(/\x60\x60\x60json[\s\S]*$/, '').trim(), machine.context || {});
-  else noteTask(sb, run.noteType, text);
+  else noteTask(sb, run.noteType, text, reqFiles);
   await runAIStep(run, sb, run.noteType === 'help' ? U.helpReply : U.requestFollowUp, true);
 }
-/* ---------- 生意大腦：結果卡意見（有用／沒有用照記；要修改就叫 AI 按意見改）同「要你決定」放上 Founder Desk ---------- */
+/* ---------- 生意大腦：結果卡意見（有用／沒有用照記；要修改就叫 AI 按意見改）同「要你決定」放上待決事項 ---------- */
 const FEEDBACK = path.join(DIR.ledger, 'brain-feedback.json');
 const VERDICT = { useful: '有用', useless: '沒有用', revise: '要修改' };
 async function handleFeedback(run, m) {
@@ -778,7 +914,7 @@ function reviseTask(sb, card, say) {
   fs.copyFileSync(path.join(ROOT, 'ai-revise.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'revise' });
 }
-// 紅藍對打嘅「需要你決定」：外殼照裁判寫嘅選項機械出問題包（唔使 AI），放上 Founder Desk
+// 紅藍對打嘅「需要你決定」：外殼照裁判寫嘅選項機械出問題包（唔使 AI），放上待決事項
 function placeFounderDecisions(key, ds, matchId = '') {
   if (!key || !ds || !ds.length) return { ok: false, reason: U.debateDecisionMissing };
   const file = path.join(DIR.ledger, 'brain-decisions.json'), map = readJSON(file, {}) || {};
@@ -853,7 +989,7 @@ async function handlePracticePrep(run, m, say) {
   writeJSON(path.join(sb, 'job.json'), { type: 'practice-prep' });
   await runAIStep(run, sb, U.practicePrepAI, true);
 }
-function finishPracticePrep(run, sb, label) {
+async function finishPracticePrep(run, sb, label) {
   const sc = readJSON(path.join(sb, 'out', 'scenario.json'), null);
   const txt = (x, n) => typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : '';
   const okSc = sc && sc.counterpart && txt(sc.counterpart.name, 60) && sc.persona && ['identity', 'stance', 'interests'].every(k => sc.persona[k] && txt(sc.persona[k].text, 400)) && sc.goal && txt(sc.goal.text, 200) && Array.isArray(sc.questions) && sc.questions.length && Array.isArray(sc.objections) && sc.objections.length;
@@ -871,7 +1007,8 @@ function finishPracticePrep(run, sb, label) {
     questions: sc.questions.slice(0, 8).map((q, i) => ({ id: 'Q' + (i + 1), text: txt(q.text || q, 200) })).filter(q => q.text),
     objections: sc.objections.slice(0, 7).map((o, i) => ({ id: 'O' + (i + 1), text: txt(o.text || o, 200), response: txt(o.response, 200) })).filter(o => o.text),
     opening: txt(sc.opening, 200) || '你好，坐低傾吓。', openers: (sc.openers || []).slice(0, 3).map(x => txt(x, 160)).filter(Boolean),
-    sources: (sc.sources || []).slice(0, 8).map((s, i) => ({ n: Number(s.n) || i + 1, title: txt(s.title, 120), url: /^https?:\/\//.test(String(s.url || '')) ? txt(s.url, 300) : '', readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.readOn || '')) ? s.readOn : /^https?:\/\//.test(String(s.url || '')) ? localIso().slice(0, 10) : '' })).filter(s => s.title), practiceOnly: true, preparedAt: localIso(), fromRun: run.id };
+    sources: (sc.sources || []).slice(0, 8).map((s, i) => ({ n: Number(s.n) || i + 1, title: markSource(txt(s.title, 120), /^https?:\/\//.test(String(s.url || '')) ? s : {}, ''), ...(/^https?:\/\//.test(String(s.url || '')) ? { fullText: s.fullText === true } : {}), url: /^https?:\/\//.test(String(s.url || '')) ? txt(s.url, 300) : '', readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(s.readOn || '')) ? s.readOn : /^https?:\/\//.test(String(s.url || '')) ? localIso().slice(0, 10) : '' })).filter(s => s.title), practiceOnly: true, preparedAt: localIso(), fromRun: run.id };
+  clean.sources = await markBrokenLinks(clean.sources, 'title');
   fs.mkdirSync(PRACTICE_DIR, { recursive: true });
   writeJSON(path.join(PRACTICE_DIR, id + '.json'), clean);
   if (task) upsertTask({ id: task.id, scenarioId: id });
@@ -893,15 +1030,16 @@ async function handleDebrief(run, m, say) {
   if (sc) writeJSON(path.join(sb, 'scenario.json'), sc);
   const s = loadState(), date = localIso().slice(0, 10), inputId = 'in-' + run.ref;
   s.inputs = (s.inputs || []).filter(i => i.id !== inputId);
-  s.inputs.push({ id: inputId, kind: 'inbox', via: 'debrief', title: '會後紀錄：' + (sc ? sc.counterpart.name : '真實會面') + '：' + clip(say, 50), file: '', files: [], eventDate: date, receivedAt: localIso(), status: 'unprocessed', effects: [] });
+  s.inputs.push({ id: inputId, kind: 'inbox', via: 'debrief', title: '會後紀錄：' + (sc ? sc.counterpart.name : '真實會面') + '：' + clip(say, 50), file: '', files: [], eventDate: date, receivedAt: localIso(), status: 'unprocessed', effects: [], ...(m.followUp ? { followUpHint: { date: m.followUp, who: sc ? sc.counterpart.name : '' } } : {}) });
   saveState(s);
   eventTask(sb, s, { text: say, date, files: [], ref: run.ref });
   fs.copyFileSync(path.join(ROOT, 'ai-debrief.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'debrief' });
   await runAIStep(run, sb, U.practiceDebriefAI, true);
 }
-function noteTask(sb, type, text) {
-  fs.writeFileSync(path.join(sb, 'note.md'), `# 創辦人的要求（${type === 'order' ? '改次序或加一站' : '臨時工作'}）\n\n${text}\n`);
+function noteTask(sb, type, text, rows = []) {
+  const listing = writeAttachments(sb, rows);
+  fs.writeFileSync(path.join(sb, 'note.md'), `# 創辦人的要求（${type === 'order' ? '改次序或加一站' : '臨時工作'}）\n\n${text}\n` + (listing.length ? `\n## 附件（在 files/）\n\n${listing.join('\n')}\n` : ''));
   writeJSON(path.join(sb, 'route.json'), currentRoute());
   writeConfirmedPage(sb);
   if (!fs.existsSync(path.join(sb, 'confirmed-page.md'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
@@ -986,47 +1124,80 @@ function finishCelebration(s, batch) {
   s.celebrations.entries.push({ id: 'cele-' + stamp() + '-' + randomUUID(), level: winner.level, kind: winner.kind, title: winner.title, grade, gradeName: NAMES.evName(grade), nextGradeName: NAMES.EV_KEYS[rank + 1] ? NAMES.evName(NAMES.EV_KEYS[rank + 1]) : '', stage: m ? m.short : '', nextStage: next ? next.short : '', at: localIso(), ...(also.length ? { also } : {}) });
   s.celebrations.entries = s.celebrations.entries.slice(-50);
 }
-async function handleEvent(run, raw, text, dest) {
+async function handleEvent(run, raw, text, dest, meta = null) {
   const mac = parseReply(raw).machine || {};
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(mac.date || '')) ? mac.date : localIso().slice(0, 10);
-  // 證明文件同筆記一齊封存（永不刪除）
+  // 證明文件同筆記一齊封存（永不刪除）；文字版（.md）一併封存但不算附件，由 registerInput 分開
   // 放入文件（doc）同真實事件同一條路；文件名前綴唔同
   const isDoc = run.noteType === 'doc', pre = run.ref + '-note-' + (isDoc ? 'doc' : 'event') + '-file-';
-  const files = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(pre)).sort();
-  for (const f of files) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
+  const allNames = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(pre)).sort();
+  for (const f of allNames) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
   const rel = f => path.relative(DIR.data, path.join(dest, f)).replace(/\\/g, '/');
   syncLedger();
-  const s = loadState(), inputId = 'in-' + run.ref;
-  s.inputs = (s.inputs || []).filter(i => i.id !== inputId);
+  const inputId = 'in-' + run.ref;
+  const sidecars = new Set(((meta && meta.fileInfo) || []).map(x => x.text).filter(Boolean));
+  const files = allNames.filter(f => !sidecars.has(f));
   const names = files.map(f => f.slice(pre.length).replace(/^\d+-/, '').replace(/\.[A-Za-z0-9]{1,5}$/, '')).join('、');
-  s.inputs.push({ id: inputId, kind: 'inbox', via: isDoc ? 'doc' : 'event', title: clip(isDoc ? '文件（' + dayText(date) + '）：' + names : '真實事件（' + dayText(date) + '）：' + text.replace(/\s+/g, ' '), 50), file: rel(run.replyFiles[0]), files: files.map(rel), eventDate: date, receivedAt: localIso(), status: 'unprocessed', effects: [] });
+  const said0 = text.replace(/\s+/g, ' '), label = said0 && said0 !== '（沒有補充）' ? said0 : names;
+  const title = clip(isDoc ? '文件（' + dayText(date) + '）：' + names : U.reqEvent + '（' + dayText(date) + '）：' + label, 50);
+  const s = registerInput(loadState(), { id: inputId, via: isDoc ? 'doc' : 'event', title, file: rel(run.replyFiles[0]), dir: path.relative(DIR.data, dest).replace(/\\/g, '/'), names: allNames, eventDate: date, receivedAt: localIso(), meta });
   s.events = s.events || [];
-  s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type: 'input', title: isDoc ? '放入文件：' + clip(names, 30) : '記錄真實事件（' + dayText(date) + '）：' + clip(text.replace(/\s+/g, ' '), 30), relatedIds: [inputId], moduleIds: ['inputs', 'evidence'] });
+  s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type: 'input', title: isDoc ? '放入文件：' + clip(names, 30) : '記錄真實事件（' + dayText(date) + '）：' + clip(label, 30), relatedIds: [inputId], moduleIds: ['inputs', 'evidence'] });
   saveState(s);
   step(run, 'applied', U.stepReqRegistered, 'done', files.length ? `連同 ${files.length} 份證明文件` : '');
   if (!(s.milestones || []).length && !((s.company || {}).assumptions || []).length) { step(run, 'ai', U.stepEventAI, 'failed', U.eventNeedOverview); return finish(run, 'failed', U.eventNeedOverview); }
   const sb = newSandbox(run);
-  eventTask(sb, s, { text, date, files: files.map(f => path.join(dest, f)), ref: run.ref, pre, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
+  const rows = attachmentRows(s.inputs.find(i => i.id === inputId));
+  eventTask(sb, s, { text: text || '（沒有補充）', date, files: rows.map(r => r.abs), rows, ref: run.ref, pre, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
   await runAIStep(run, sb, U.stepEventAI, true);
 }
 // 附件檔名清單：逐份列出（不能列資料夾的 AI 工具，例如 Antigravity，不用再猜檔名）
 const fileListLines = names => names.map(n => `  - files/${n}`);
+// 附件的顯示檔名：去掉收件時加的「編號-note-類型-file-序號-」前綴
+const attachName = rel => path.basename(String(rel)).replace(/^.*?-note-(?:event|doc|adhoc|order)-file-\d+-/, '');
+// 一件輸入的附件列表（路徑已轉絕對）：原檔、文字版（Office 轉文字或 Google 匯出）、Google 原連結及讀取日期
+function attachmentRows(input) {
+  const info = new Map(((input && input.fileInfo) || []).map(x => [x.file, x]));
+  return ((input && input.files) || []).map(rel => {
+    const x = info.get(rel) || {};
+    return { name: attachName(rel), abs: path.join(DIR.data, rel), ...(x.text ? { textName: attachName(x.text), textAbs: path.join(DIR.data, x.text) } : {}), ...(x.url ? { url: x.url, readOn: x.readOn || '' } : {}) };
+  });
+}
+// 複製進工作資料夾 files/，並回傳給 AI 的附件清單行（有文字版的註明，Google 附件註明原連結及讀取日期）
+function writeAttachments(sb, rows) {
+  if (!rows.length) return [];
+  fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
+  const lines = [];
+  for (const r of rows) {
+    fs.copyFileSync(r.abs, path.join(sb, 'files', r.name));
+    lines.push(`  - files/${r.name}`);
+    if (r.textName && fs.existsSync(r.textAbs)) { fs.copyFileSync(r.textAbs, path.join(sb, 'files', r.textName)); lines.push('    - ' + NAMES.t('textSidecarNote', { f: 'files/' + r.textName })); }
+    if (r.url) lines.push('    - ' + NAMES.t('googleNote', { u: r.url, d: dayText(r.readOn) }));
+  }
+  return lines;
+}
 function eventTask(sb, s, ev) {
-  const fileNames = ev.files.map(f => path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''));
-  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${ev.files.length ? ev.files.length + ' 份（在 files/）' : '沒有'}`, ...fileListLines(fileNames), '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
-  if (ev.files.length) { fs.mkdirSync(path.join(sb, 'files'), { recursive: true }); ev.files.forEach((f, i) => fs.copyFileSync(f, path.join(sb, 'files', fileNames[i]))); }
+  const rows = ev.rows || ev.files.map(f => ({ name: path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''), abs: f }));
+  const listing = writeAttachments(sb, rows);
+  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${rows.length ? rows.length + ' 份（在 files/）' : '沒有'}`, ...listing, '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
   writeJSON(path.join(sb, 'ledger.json'), {
     milestones: (s.milestones || []).filter(m => m.pathStatus !== 'retired').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short, event: m.event || '', witness: m.witness || '', proof: m.evidence || '', deliveryCondition: m.deliveryCondition || '', done: m.state === 'done' })),
     assumptions: ((s.company || {}).assumptions || []).map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '' })),
-    nextExternalAction: (s.company || {}).nextExternalAction || null
+    nextExternalAction: (s.company || {}).nextExternalAction || null,
+    // 人物及機構名單（只給名稱、別名、類別、機構、角色，用來避免重複建議；不含編號及任何聯絡方式）
+    actors: (((s.company || {}).actors) || []).filter(x => x && !x.mergedInto).slice(0, 80).map(x => ({ name: x.name, aliases: x.aliases || [], kind: x.kind || '', ...(x.org ? { org: x.org } : {}), ...(x.role ? { role: x.role } : {}), status: x.status || 'active' }))
   });
   writeConfirmedPage(sb);
   fs.copyFileSync(path.join(ROOT, 'ai-event.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'event' });
 }
 // out/event.json 核對：每項只可指向帳本已有嘅假設（級別要變）或者未完成嘅站；最多三項（即時生效題每包最多三條）
-function checkEvent(out) {
+function checkEvent(out, input = null, lenient = false) {
   const ev = readJSON(path.join(out, 'event.json'), null), s = loadState(), errors = [];
+  // 新對象的名稱必須逐字出現在創辦人原話或附件文字版（event.md 的原話段、files/ 內的 md／txt／csv，含轉出的文字版）
+  const sbDir = path.join(out, '..');
+  let said0 = ''; try { said0 = fs.readFileSync(path.join(sbDir, 'event.md'), 'utf8').split('## 創辦人原話').pop(); } catch { }
+  const fileTexts = []; try { for (const f of fs.readdirSync(path.join(sbDir, 'files'))) if (/\.(md|txt|csv)$/i.test(f)) fileTexts.push(fs.readFileSync(path.join(sbDir, 'files', f), 'utf8')); } catch { }
   if (!ev || typeof ev !== 'object') return { ok: false, errors: ['未有交出 out/event.json，或內容無法讀取'] };
   const txt = (x, n) => typeof x === 'string' && x.trim() && x.length <= n;
   if (!txt(ev.summary, 300)) errors.push('summary 必須是一句（最多 300 字）');
@@ -1037,6 +1208,25 @@ function checkEvent(out) {
     const at = `items 第 ${i + 1} 項`;
     if (!it || typeof it !== 'object') return errors.push(at + '格式不正確');
     if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
+    if (it.kind === 'newActor') {
+      const r = checkNewActorItem(it, { actors: (s.company || {}).actors || [], texts: [said0, ...fileTexts], at });
+      if (r.status === 'drop') { log(`真實事件建議的新對象已丟棄（${r.reason === 'full' ? '名單已滿' : '名稱已在名單內'}）：${clip(it.name, 20)}`); return; }
+      // 新對象退回修正一次後仍不合格：只丟棄這一項，不令整件事失敗（lenient＝修正後的第二次核對）
+      if (r.status === 'error') { if (lenient) { log(`真實事件建議的新對象修正後仍不合格，已丟棄：${clip(it.name, 20)}（${r.errors[0]}）`); return; } return errors.push(...r.errors); }
+      const key = 'newActor:' + pnorm(r.item.name);
+      if (seen.has(key)) return;
+      seen.add(key); items.push({ ...r.item, id: key, ...(pnorm(said0).includes(pnorm(r.item.name)) ? {} : { fromDoc: true }) });
+      return;
+    }
+    if (it.kind === 'followUp') {
+      const key = 'followUp:' + it.date + ':' + String(it.action || '').trim();
+      if (seen.has(key)) return;
+      const bad = checkFollowUpItem(it, at, { eventDate: input && input.eventDate, milestones: s.milestones || [], styleIssues: NAMES.styleIssues });
+      if (bad.length) return errors.push(...bad);
+      if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
+      seen.add(key); items.push({ kind: 'followUp', id: key, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why });
+      return;
+    }
     if (seen.has(it.kind + ':' + it.id)) return;
     if (it.kind === 'assumption') {
       const a = ((s.company || {}).assumptions || []).find(x => x.id === it.id);
@@ -1052,7 +1242,7 @@ function checkEvent(out) {
       if (!txt(it.text, 120)) return errors.push(at + '：下一個對外動作 text 必須是一句（最多 120 字）');
       if (it.milestoneId && !(s.milestones || []).some(x => x.id === it.milestoneId)) return errors.push(at + '：找不到站 ' + it.milestoneId);
       if (((s.company || {}).nextExternalAction || {}).text === it.text.trim()) return;
-    } else return errors.push(at + '：kind 必須是 assumption、milestone 或 nextAction');
+    } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp 或 newActor');
     seen.add(it.kind + ':' + it.id); items.push(it);
   });
   // 未能讀取的附件：結構化清單（檔名必須是這次附件的檔名），摘要不再兼顧逐份列出
@@ -1072,10 +1262,19 @@ function checkEvent(out) {
       if (!unreadable.some(u => u.file === actual)) unreadable.push({ file: actual, reason: reason.slice(0, 80) });
     });
   }
+  // 讀了甚麼（文件重點）、沒有確認題時的原因：創辦人看得到，要過口語／術語／編號檢查
+  const delivered = (() => { try { return fs.readdirSync(path.join(out, '..', 'files')); } catch { return []; } })();
+  const rd = checkRead(ev.read, { delivered, styleIssues: NAMES.styleIssues });
+  errors.push(...rd.errors);
+  const rs = checkReason(ev.reason, { styleIssues: NAMES.styleIssues });
+  errors.push(...rs.errors);
+  if (!items.length && !rs.reason && !rs.errors.length && !lenient) errors.push('沒有任何確認項目時，reason 必須填寫：一句講清楚為甚麼這件事沒有影響（最多 120 字）');
   if (errors.length) return { ok: false, errors };
-  if (items.length > 3) log(`真實事件建議多過三項，只問頭三項：${items.slice(3).map(x => x.kind + ':' + x.id).join('、')}`);
+  // 次序：假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作；每件事最多一個新對象；先排序再截三項
+  const kept = orderEventItems(items);
+  if (items.length > kept.length) log(`真實事件建議多過三項（或多於一個新對象），不問：${items.filter(x => !kept.includes(x)).map(x => x.kind + ':' + x.id).join('、')}`);
 
-  return { ok: true, ev, items: items.slice(0, 3), unreadable: unreadList(unreadable) };
+  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason };
 }
 function eventPack(run, s, input, items) {
   const qs = items.map((it, i) => {
@@ -1090,18 +1289,36 @@ function eventPack(run, s, input, items) {
       return { id: 'q' + (i + 1), priority: i + 1, about: U.nextActionAsk, ask: U.nextActionAsk, kind: 'choice', effect: 'now',
         options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '' } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why };
     }
+    if (it.kind === 'newActor') {
+      const kn = NAMES.dash['ppl_kind_' + it.actorKind], who = (it.org || '') + it.name + (it.role ? '（' + it.role + '）' : ''), me = pnorm(it.name);
+      const sim = it.similarTo ? (((s.company || {}).actors) || []).find(a => a.id === it.similarTo) : null;
+      const item = { name: it.name, ...(it.org ? { org: it.org } : {}), ...(it.role ? { role: it.role } : {}), actorKind: it.actorKind, ...(it.teamType ? { teamType: it.teamType } : {}), ...(it.fromDoc ? { fromDoc: true } : {}) };
+      const add = { text: NAMES.t('newActorYes', { k: kn }), apply: { op: 'addActor', mode: 'add', item } }, no = { text: U.newActorNo, apply: { op: 'keep' } };
+      let options;
+      if (sim) {
+        const alias = { text: NAMES.t('newActorAlias', { n: sim.name }), apply: { op: 'addActor', mode: 'alias', aliasOf: sim.id, item } }, other = { text: NAMES.t('newActorOther', { k: kn }), apply: { op: 'addActor', mode: 'add', item } };
+        (nameKeys(sim).some(x => x !== me && (x.includes(me) || me.includes(x))) ? alias : other).rec = true;
+        options = [alias, other, no];
+      } else { add.rec = true; options = [add, no]; }
+      return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.name, 30), ask: NAMES.t('newActorAsk', { who }), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
+    }
+    if (it.kind === 'followUp') {
+      return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.action, 40), ask: NAMES.t('followUpAsk', { d: dayText(it.date), a: it.action }), judge: U.followUpJudge, kind: 'choice', effect: 'now',
+        options: [{ text: U.followUpYes, rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '' } }, { text: U.followUpNo, apply: { op: 'keep' } }], value: U.followUpYes, why: it.why };
+    }
     const m = s.milestones.find(x => x.id === it.id);
     return { id: 'q' + (i + 1), priority: i + 1, about: m.short, ask: '「' + m.short + '」這一站是否已經完成？', judge: NAMES.t('msJudge', { c: String(m.deliveryCondition || m.event || m.short).trim().replace(/[。.]+$/, '') }), kind: 'choice', effect: 'now',
       options: [{ text: U.msDoneYes, rec: true, apply: { op: 'markDone', id: m.id } }, { text: U.msDoneNo, apply: { op: 'keep', id: m.id } }], value: U.msDoneYes, why: it.why };
   });
   const iv = input.kind === 'interview';
   return { format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-ev', title: (iv ? U.interviewConfirm : U.eventConfirm) + '（' + dayText(input.eventDate) + '）',
-    context: iv ? NAMES.t('interviewSaid', { d: dayText(input.eventDate), t: clip(input.title.replace(/^[^：]*：/, ''), 80) }) : '你記錄了 ' + dayText(input.eventDate) + ' 的真實事件：「' + clip(input.title.replace(/^真實事件（[^）]*）：/, ''), 80) + '」。Zero 據此擬定以下更新，每項經你確認後才會生效。',
-    afterConfirm: '確認的項目即時更新公司紀錄及營運監察台', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate }, questions: qs };
+    context: iv ? NAMES.t('interviewSaid', { d: dayText(input.eventDate), t: clip(input.title.replace(/^[^：]*：/, ''), 80) }) : '你記錄了 ' + dayText(input.eventDate) + ' 發生的一件事：「' + clip(input.title.replace(/^(?:真實事件|發生了一件事)（[^）]*）：/, ''), 80) + '」。Zero 據此擬定以下更新，每項經你確認後才會生效。',
+    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate }, questions: qs };
 }
 async function finishEvent(run, sb, label, styleWarnings) {
   const out = path.join(sb, 'out');
-  let chk = checkEvent(out);
+  const input0 = (loadState().inputs || []).find(i => i.id === 'in-' + run.ref) || null;
+  let chk = checkEvent(out, input0);
   if (!chk.ok) {
     log(`${run.id} 真實事件建議格式唔啱：${chk.errors.join('；')}；叫 AI 修正一次`);
     writeJSON(path.join(sb, 'job.json'), { type: 'event-repair', errors: chk.errors });
@@ -1110,23 +1327,31 @@ async function finishEvent(run, sb, label, styleWarnings) {
     fs.copyFileSync(path.join(ROOT, 'ai-event.md'), path.join(sb, 'ai-event.md'));
     const r = await runAI(sb);
     if (r.meta && run.aiCost) run.aiCost.usd = (run.aiCost.usd || 0) + (r.meta.total_cost_usd || 0);
-    chk = r.ok ? checkEvent(out) : chk;
+    chk = r.ok ? checkEvent(out, input0, true) : chk;
   }
-  const s = loadState(), input = (s.inputs || []).find(i => i.id === 'in-' + run.ref);
+  let s = loadState();
+  let input = (s.inputs || []).find(i => i.id === 'in-' + run.ref);
   if (!chk.ok || !input) { step(run, 'ai', label, 'failed', U.eventFailed); return finish(run, 'failed', U.eventFailed); }
   if (Object.hasOwn(chk.ev, 'personaUpdate')) { delete chk.ev.personaUpdate; writeJSON(path.join(out, 'event.json'), chk.ev); }
   fs.cpSync(out, path.join(DIR.work, run.id), { recursive: true });
   writeJSON(path.join(DIR.work, run.id, 'run.json'), { id: run.id, kind: run.kind, ref: run.ref, label, startedAt: run.startedAt, aiCost: run.aiCost || null });
-  input.summary = clip(chk.ev.summary.trim(), 300);
-  if (chk.ev.grade) input.grade = chk.ev.grade;
-  if (chk.unreadable.length) input.unreadable = chk.unreadable; else delete input.unreadable;
+  // 讀了甚麼、文件重點、沒有影響的原因：由 Zero 交回、外殼核對後存入這件輸入（recordReading 純函數）
+  s = recordReading(s, input.id, { summary: chk.ev.summary, grade: chk.ev.grade, unreadable: chk.unreadable, read: chk.read, reason: chk.reason });
+  input = s.inputs.find(i => i.id === 'in-' + run.ref);
   const unread = chk.unreadable.length ? { unreadable: chk.unreadable } : {};
-  if (!chk.items.length) {
+  // 會後紀錄的跟進日期走同一條路：創辦人寫了日期而 Zero 沒有同日的跟進建議，外殼補一條跟進題（仍要創辦人確認才入日程）
+  const hint = input.followUpHint;
+  let items = chk.items;
+  if (hint && /^\d{4}-\d{2}-\d{2}$/.test(String(hint.date || '')) && (!input.eventDate || hint.date >= input.eventDate)) {
+    const act = NAMES.t('followUpDebrief', { n: hint.who || '對方' });
+    items = orderEventItems(items.filter(x => x.kind !== 'followUp' || x.date !== hint.date).concat([{ kind: 'followUp', id: 'followUp:' + hint.date + ':' + act, date: hint.date, action: act, why: U.followUpDebriefWhy }]));
+  }
+  if (!items.length) {
     input.status = 'processed'; input.processedAt = localIso(); saveState(s);
     run.result = { summary: input.summary + ' ' + U.eventNoChange, artifacts: [], founderNext: [], styleWarnings, ...unread };
     step(run, 'ai', label, 'done', U.eventNoChange); return finish(run, 'done');
   }
-  const pack = eventPack(run, s, input, chk.items);
+  const pack = eventPack(run, s, input, items);
   const placed = placePacks(DIR, [pack]);
   input.status = 'awaitingFounder'; input.awaitingFounderText = U.eventAwaiting; input.packId = placed[0].id;
   saveState(s);
@@ -1136,7 +1361,10 @@ async function finishEvent(run, sb, label, styleWarnings) {
 }
 // 你確認真實事件：只套用答咗嘅即時生效題（未答嘅留低等你）；同一題唔會套用兩次
 function handleEventConfirm(run, pack, store) {
-  const s = loadState(), input = (s.inputs || []).find(i => i.id === pack.realEvent.inputId);
+  const s = loadState();
+  let input = (s.inputs || []).find(i => i.id === pack.realEvent.inputId);
+  // 帳本寫入走 ledger-ops 的純函數（回傳新狀態），這裏把結果放回 s 並重新取得 input
+  const sync = next => { mergeInPlace(s, next); input = (s.inputs || []).find(i => i.id === pack.realEvent.inputId); };
   if (!input) { run.result = { summary: '已記錄你的答案；找不到這件事的紀錄。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
   const applied = new Set(input.appliedQids || []), date = pack.realEvent.date, said = [], doneIds = [], celebrations = [];
   const replyAt = replySubmittedAt(run, Object.values(store.answers || {})[0]);
@@ -1156,18 +1384,35 @@ function handleEventConfirm(run, pack, store) {
     applied.add(q.id);
     const opts = q.options || [], opt = opts.find(o => o.text === a.value);
     let ap = opt ? opt.apply : null;
+    const naOpt = opts.find(o => o.apply && o.apply.op === 'addActor');
+    if (naOpt) {
+      // 新對象題：加入名單／記為別名才寫；其他答案（不加入、自訂）只記「沒有加入名單」。同一題做兩次不重複（編號由輸入＋題號決定）
+      const sel = opt && opt.apply && opt.apply.op === 'addActor' ? opt.apply : null, it = { kind: 'newActor', ...naOpt.apply.item };
+      const tx = { kind: Object.fromEntries(['customer', 'partner', 'investor', 'advisor', 'team'].map(k => [k, NAMES.dash['ppl_kind_' + k]])), added: U.peopleAdded, aliased: U.peopleAliased, skipped: U.peopleSkipped };
+      sync(applyNewActor(s, { inputId: input.id, qid: q.id, item: it, answer: sel ? sel.mode : 'skip', aliasOf: sel && sel.aliasOf, today: todayIso(), now: localIso(), addedFrom: input.source === 'chat' ? 'chat' : it.fromDoc ? 'doc' : 'event', t: tx }));
+      if (sel) { const t = sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(a => a.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] }); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); }
+      continue;
+    }
+    const fuOpt = opts.find(o => o.apply && o.apply.op === 'addFollowUp');
+    if (fuOpt) {
+      // 跟進日期題：答「加入日程」才寫一項創辦人行動（日程清單及月曆自動顯示）；其他答案只記「沒有加入」。同一題做兩次不重複（任務編號固定）
+      const accepted = !!opt && opt === fuOpt;
+      sync(applyFollowUp(s, { inputId: input.id, qid: q.id, answer: accepted ? 'accept' : 'reject', item: { date: fuOpt.apply.date, action: fuOpt.apply.action, station: fuOpt.apply.station, why: q.why }, now: localIso() }));
+      if (accepted) { const t = '已加入日程：' + dayText(fuOpt.apply.date) + '　' + clip(fuOpt.apply.action, 40); ev('input', t, [followUpTaskId(input.id, q.id), input.id], ['now', 'inputs']); said.push(t); }
+      continue;
+    }
     // 自訂答案：證據級題寫咗一個級別名稱就照套用；其餘只記錄
     if (!opt && opts[0] && opts[0].apply.op === 'setAssumptionGrade') { const k = NAMES.evKey(String(a.value).replace(/^(?:改為|維持)/, '').replace(/[「」\s]/g, '')); ap = k ? { op: 'setAssumptionGrade', id: opts[0].apply.id, grade: k } : null; }
     if (ap && ap.op === 'setAssumptionGrade') {
       const as = ((s.company || {}).assumptions || []).find(x => x.id === ap.id);
       if (!as) continue;
       const from = as.grade || 'guess';
-      if (from === ap.grade) { input.effects.push({ targetKind: 'assumption', targetId: as.id, change: '「' + clip(as.text, 30) + '」維持「' + NAMES.evName(from) + '」' }); continue; }
+      if (from === ap.grade) { sync(addEffect(s, input.id, { targetKind: 'assumption', targetId: as.id, change: '「' + clip(as.text, 30) + '」維持「' + NAMES.evName(from) + '」' })); continue; }
       if (EV_RANK(ap.grade) > EV_RANK(from)) noteCelebration(s, { assumption: as, from, grade: ap.grade, batch: celebrations });
       as.grade = ap.grade; as.sourceId = input.id; as.changedAt = date; ADVANCED = true;
       as.status = EV_RANK(ap.grade) < EV_RANK(from) ? 'weakened' : EV_RANK(ap.grade) >= 2 ? 'supported' : 'open';
       const t = '「' + clip(as.text, 30) + '」由「' + NAMES.evName(from) + '」改為「' + NAMES.evName(ap.grade) + '」';
-      input.effects.push({ targetKind: 'assumption', targetId: as.id, change: t });
+      sync(addEffect(s, input.id, { targetKind: 'assumption', targetId: as.id, change: t, before: NAMES.evName(from), after: NAMES.evName(ap.grade) }));
       ev('input', '證據級更新：' + t, [as.id, input.id], ['evidence', 'inputs']); said.push(t);
     } else if (ap && ap.op === 'markDone') {
       const m = (s.milestones || []).find(x => x.id === ap.id);
@@ -1175,14 +1420,15 @@ function handleEventConfirm(run, pack, store) {
       noteCelebration(s, { milestone: m, batch: celebrations });
       m.state = 'done'; m.doneAt = date; m.doneEvidence = [input.file, ...(input.files || [])].filter(Boolean); m.doneInputId = input.id; m.doneCounterpartIds = deriveActors(loadPage(), s.milestones || [], (s.company || {}).actors || []).filter(a => (a.fromMilestoneIds || []).includes(m.id)).map(a => a.id); doneIds.push(m.id); ADVANCED = true;
       const t = '站點「' + m.short + '」已完成（' + dayText(date) + '，經你確認）';
-      input.effects.push({ targetKind: 'decision', targetId: pack.id, change: t });
+      sync(addEffect(s, input.id, { targetKind: 'decision', targetId: pack.id, change: t, before: U.fxMsBefore, after: NAMES.t('fxMsAfter', { d: dayText(date) }) }));
       ev('milestone', '站點完成：' + m.short + '（' + dayText(date) + '）', [m.id, input.id], ['now', 'paths', 'evidence']); said.push(t);
     } else if (ap && ap.op === 'setNextExternalAction') {
       if (keepNewerFounderAction((s.company || {}).nextExternalAction)) { nextSet = true; continue; }
       s.company = s.company || {};
+      const prevNext = (s.company.nextExternalAction || {}).text;
       s.company.nextExternalAction = { text: ap.text, milestoneId: ap.milestoneId || '' }; nextSet = true;
       const t = '下一個對外動作改為：' + clip(ap.text, 40);
-      input.effects.push({ targetKind: 'decision', targetId: pack.id, change: t });
+      sync(addEffect(s, input.id, { targetKind: 'decision', targetId: pack.id, change: t, before: prevNext ? clip(prevNext, 60) : U.fxNextNone, after: clip(ap.text, 60) }));
       ev('decision', t, [input.id].concat(ap.milestoneId ? [ap.milestoneId] : []), ['now', 'paths']); said.push(t);
     } else input.effects.push({ targetKind: 'decision', targetId: pack.id, change: '「' + clip(q.about || q.ask, 30) + '」維持不變' });
   }
@@ -1286,6 +1532,22 @@ function markUnknowns(pack, answers, at) {
   if (changed) saveState(s);
 }
 function intakeFiles(id) { return fs.readdirSync(DIR.inbox).filter(f => f.startsWith(id + '-intake-')).sort(); }
+// 告訴 Zero／由文件預填的收件說明檔（<編號>-meta-intake.json／-meta-prefill.json）：沒有就當舊格式
+function takeMeta(id, kind) {
+  const name = `${id}-meta-${kind}.json`;
+  return fs.existsSync(path.join(DIR.inbox, name)) ? { name, meta: cleanMeta(readJSON(path.join(DIR.inbox, name), null)) } : { name, meta: null };
+}
+// files.md 的清單行：文字版不單獨列出，附在原檔下一行；Google 附件註明原連結及讀取日期
+function storedFileLines(files, pre, meta) {
+  const side = new Set(((meta && meta.fileInfo) || []).map(x => x.text).filter(Boolean)), info = new Map(((meta && meta.fileInfo) || []).map(x => [x.name, x]));
+  const bare = f => f.slice(pre.length).replace(/^\d+-/, '');
+  return files.filter(f => !side.has(f)).flatMap(f => {
+    const x = info.get(f) || {}, out = [`  - files/${bare(f)}`];
+    if (x.text) out.push('    - ' + NAMES.t('textSidecarNote', { f: 'files/' + bare(x.text) }));
+    if (x.url) out.push('    - ' + NAMES.t('googleNote', { u: x.url, d: dayText(x.readOn) }));
+    return out;
+  });
+}
 async function handleIntake(run, file) {
   run.kind = 'intake';
   const id = file.replace(/-intake\.md$/, '');
@@ -1296,11 +1558,12 @@ async function handleIntake(run, file) {
   fs.copyFileSync(path.join(DIR.inbox, file), path.join(sb, 'intake.md'));
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   for (const f of files) fs.copyFileSync(path.join(DIR.inbox, f), path.join(sb, 'files', f.slice((id + '-intake-').length).replace(/^\d+-/, '')));
-  if (files.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...fileListLines(files.map(f => f.slice((id + '-intake-').length).replace(/^\d+-/, '')))].join('\n') + '\n');
+  const mi = takeMeta(id, 'intake');
+  if (files.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...storedFileLines(files, id + '-intake-', mi.meta)].join('\n') + '\n');
   // 收件匣唔可以越積越亂：登記完即搬去封存
   const now = clockNow(), dest = path.join(DIR.archive, `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, 'intake-' + id);
   fs.mkdirSync(dest, { recursive: true });
-  for (const f of [file, ...files]) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
+  for (const f of [file, ...files, ...(mi.meta ? [mi.name] : [])]) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
   step(run, 'applied', U.stepIntakeRegistered, 'done', files.length ? `${files.length} 份文件` : '沒有附件');
   intakeTask(sb);
   await runAIStep(run, sb, U.stepIntakeAI, true);
@@ -1317,11 +1580,12 @@ async function handlePrefill(run, file) {
   const sb = newSandbox(run, selectedBiz), files = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(id + '-prefill-')).sort();
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   for (const f of files) fs.copyFileSync(path.join(DIR.inbox, f), path.join(sb, 'files', f.slice((id + '-prefill-').length).replace(/^\d+-/, '')));
-  if (files.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...fileListLines(files.map(f => f.slice((id + '-prefill-').length).replace(/^\d+-/, '')))].join('\n') + '\n');
+  const mp = takeMeta(id, 'prefill');
+  if (files.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...storedFileLines(files, id + '-prefill-', mp.meta)].join('\n') + '\n');
   // 收件匣唔可以越積越亂：登記完即搬去封存（掃描工具之後照呢份文件核對）
   const now = clockNow(), dest = path.join(DIR.archive, `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, 'prefill-' + id);
   fs.mkdirSync(dest, { recursive: true });
-  for (const f of [file, ...files]) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
+  for (const f of [file, ...files, ...(mp.meta ? [mp.name] : [])]) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
   writeJSON(path.join(sb, 'questions.json'), intakeQuestions((selectedBiz || {}).type).map(q => ({ id: 'q' + q.n, ask: q.ask, hint: q.hint })));
   datedTask(sb, 'ai-prefill.md');
   writeJSON(path.join(sb, 'job.json'), { type: 'prefill', today: todayIso() });
@@ -1471,6 +1735,8 @@ function rejectedOpportunities(decisions) {
   }
   return [...rejected.values()];
 }
+// 出處標註：Zero 自報有沒有讀過全文（fullText）；缺欄、false，或本次只能搜尋（不能開啟網頁），一律標「（只經搜尋摘要）」
+const markSource = (text, entry, access) => { text = String(text || ''); if (!text || text.includes('只經搜尋摘要')) return text; return text + ((access === 'search' ? NAMES.ui.sourceSearchOnly : '') || fullTextSuffix(entry, NAMES.ui.sourceSearchOnly)); };
 function checkOpportunities(raw, at, L) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.list)) return { ok: false, reason: '商機掃描的格式不正確' };
   const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n), tag = at.replace(/\D/g, '').slice(0, 12);
@@ -1479,7 +1745,7 @@ function checkOpportunities(raw, at, L) {
   const rejected = (L.rejectedOpportunities || []);
   const knownIds = new Set([...(L.knownOpportunityIds || []), ...rejected.map(x => x.id)]);
   const previousId = o => { const id = txt(o?.previousId, 100); return knownIds.has(id) ? id : ''; };
-  const list = raw.list.filter(o => !rejected.some(x => opportunityMatch(previousId(o), txt(o?.title, 80), x.id, x))).slice(0, 5).map((o, i) => ({ id: 'opp-' + tag + '-' + (i + 1), ...(previousId(o) ? { previousId: previousId(o) } : {}), kind: OPP_KINDS.includes(o && o.kind) ? o.kind : '時間窗', as: o && o.as === 'path' ? 'path' : 'task', title: txt(o && o.title, 80), why: txt(o && o.why, 300), firstTest: txt(o && o.firstTest, 200), window: txt(o && o.window, 60), windowDate: txt(o && o.windowDate, 10), counterpartId: ((L.counterparts || []).some(a => a.id === o?.counterpartId) ? o.counterpartId : ''), source: txt(o && o.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(o && o.url || '')) ? String(o.url) : '' })).filter(o => { if (o.windowDate && (!/^\d{4}-\d{2}-\d{2}$/.test(o.windowDate) || Number.isNaN(Date.parse(o.windowDate)) || new Date(o.windowDate).toISOString().slice(0, 10) !== o.windowDate || o.windowDate < at.slice(0, 10))) return false; return o.title && o.why && o.firstTest && o.source; });
+  const list = raw.list.filter(o => !rejected.some(x => opportunityMatch(previousId(o), txt(o?.title, 80), x.id, x))).slice(0, 5).map((o, i) => ({ id: 'opp-' + tag + '-' + (i + 1), ...(previousId(o) ? { previousId: previousId(o) } : {}), kind: OPP_KINDS.includes(o && o.kind) ? o.kind : '時間窗', as: o && o.as === 'path' ? 'path' : 'task', title: txt(o && o.title, 80), why: txt(o && o.why, 300), firstTest: txt(o && o.firstTest, 200), window: txt(o && o.window, 60), windowDate: txt(o && o.windowDate, 10), counterpartId: ((L.counterparts || []).some(a => a.id === o?.counterpartId) ? o.counterpartId : ''), source: txt(o && o.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(o && o.url || '')) ? String(o.url) : '', fullText: !!o && o.fullText === true && L.webAccess !== 'search' })).map(o => ({ ...o, source: o.url ? markSource(o.source, o, L.webAccess) : o.source })).filter(o => { if (o.windowDate && (!/^\d{4}-\d{2}-\d{2}$/.test(o.windowDate) || Number.isNaN(Date.parse(o.windowDate)) || new Date(o.windowDate).toISOString().slice(0, 10) !== o.windowDate || o.windowDate < at.slice(0, 10))) return false; return o.title && o.why && o.firstTest && o.source; });
   if (!list.length) return { ok: false, reason: '商機掃描未有寫出附出處的機會' };
   return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_opportunities, partial: raw.partial === true, list } };
 }
@@ -1516,7 +1782,7 @@ function checkCheckup(raw, L, at) {
   const weak = raw.weak.slice(0, 3).map((w, i) => { const a = byId[w && w.assumptionId]; return { id: 'weak-' + tag + '-' + (i + 1), title: txt(w && w.title, 80), assumptionId: a ? a.id : '', evidence: a ? Math.max(0, NAMES.EV_KEYS.indexOf(a.grade)) : 0, source: 'Zero 解讀', why: txt(w && w.why, 300), cheapestTest: txt(w && w.cheapestTest, 200), stop: txt(w && w.stop, 200) }; }).filter(w => w.title && w.why && w.cheapestTest);
   const unseen = (Array.isArray(raw.unseen) ? raw.unseen : []).slice(0, 3).map((u, i) => ({ id: 'unseen-' + tag + '-' + (i + 1), text: txt(u && (u.text || u), 200), source: 'Zero 解讀' })).filter(u => u.text);
   const notNow = (Array.isArray(raw.notNow) ? raw.notNow : []).slice(0, 3).map((u, i) => ({ id: 'notnow-' + tag + '-' + (i + 1), text: txt(u && (u.text || u), 200), why: txt(u && u.why, 200) })).filter(u => u.text);
-  const industryCheck = L.webAccess === 'none' ? [] : (Array.isArray(raw.industryCheck) ? raw.industryCheck : []).slice(0, 5).map(x => ({ text: txt(x?.text, 300), source: txt(x?.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(x?.url || '')) ? String(x.url) : '', readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(x?.readOn || '')) ? x.readOn : '' })).filter(x => x.text && x.source && x.url && x.readOn).map(x => ({ ...x, source: x.source + (L.webAccess === 'search' && !x.source.includes('只經搜尋摘要') ? '（只經搜尋摘要）' : '') }));
+  const industryCheck = L.webAccess === 'none' ? [] : (Array.isArray(raw.industryCheck) ? raw.industryCheck : []).slice(0, 5).map(x => ({ text: txt(x?.text, 300), source: txt(x?.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(x?.url || '')) ? String(x.url) : '', readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(x?.readOn || '')) ? x.readOn : '', fullText: !!x && x.fullText === true && L.webAccess !== 'search' })).filter(x => x.text && x.source && x.url && x.readOn).map(x => ({ ...x, source: markSource(x.source, x, L.webAccess) }));
   if (!weak.length && !(raw.partial === true && (unseen.length || notNow.length))) return { ok: false, reason: '生意體檢未有寫出可用的環節' };
   return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_checkup, partial: raw.partial === true, weak, unseen, notNow, industryCheck } };
 }
@@ -1559,6 +1825,8 @@ async function brainStep(run, item, opts = {}) {
   if (!chk.ok) { step(run, key, label, interrupted || raw?.partial ? 'skipped' : 'failed', interrupted || raw?.partial ? '未完成，未有可用內容' : chk.reason); return false; }
   if (chk.result.partial) { chk.result.status = 'partial'; chk.result.summary = '部分完成，只覆蓋已交出的項目。' + (chk.result.summary || ''); }
   chk.result.feedbackUsed = fb.length;
+  if (item === 'checkup') chk.result.industryCheck = await markBrokenLinks(chk.result.industryCheck, 'source');
+  if (item === 'opportunities') chk.result.list = await markBrokenLinks(chk.result.list, 'source');
   fs.mkdirSync(path.dirname(brainFile(DIR, item)), { recursive: true });
   writeJSON(brainFile(DIR, item), chk.result);
   if (item !== 'checkup') { addEvent({ actor: 'ai', type: 'brain', title: (chk.result.partial ? '商機掃描部分完成' : NAMES.dash['brainDone_' + item]) + '：' + clip((chk.result.list[0] || {}).title || '', 30), relatedIds: [], moduleIds: ['ai-week'] }); step(run, key, label, chk.result.partial ? 'partial' : 'done', chk.result.summary); if (!chk.result.partial) offerOpportunities(run, chk.result); return true; }
@@ -1571,13 +1839,13 @@ async function brainStep(run, item, opts = {}) {
   step(run, key, label, chk.result.partial ? 'partial' : 'done', chk.result.summary);
   return true;
 }
-// 生意大腦放上 Founder Desk 嘅建議（每份結果最多一包）：ledger/brain-offers.json 記低邊份結果出過、問題包編號
+// 生意大腦放上待決事項 嘅建議（每份結果最多一包）：ledger/brain-offers.json 記低邊份結果出過、問題包編號
 const OFFERS = path.join(DIR.ledger, 'brain-offers.json');
 const offered = (k, at) => { const o = (readJSON(OFFERS, {}) || {})[k]; return !!(o && o.resultAt === at); };
 function noteOffer(k, at, packId) { const all = readJSON(OFFERS, {}) || {}; all[k] = { resultAt: at, packId, at: localIso() }; writeJSON(OFFERS, all); }
-// AI 寫嘅句子放上 Founder Desk 之前：假設編號換成假設內容（同生意大腦頁一樣嘅最後保險）
+// AI 寫嘅句子放上待決事項 之前：假設編號換成假設內容（同生意大腦頁一樣嘅最後保險）
 const plainOf = s => deCodeInfo(String(s || ''), { assumptions: ledgerAssumptions(DIR) }).text;
-// 有一場辯論做緊或者等你（未採用轉強卡、未失敗）就唔再建議；失敗咗嘅唔擋（你仍然可以喺 Founder Desk 重跑嗰場）
+// 有一場辯論做緊或者等你（未採用轉強卡、未失敗）就唔再建議；失敗咗嘅唔擋（你仍然可以喺 CrewZero 重跑嗰場）
 const debateBusy = () => { const last = listMatches(DIR, brainSource(DIR)).pop(); return pendingMatches(DIR).length > 0 || !!(last && !['adopted', 'failed'].includes(last.phase)); };
 // 生意體檢之後：AI 按最弱嘅環節建議開一場紅藍對打（確認類待決定，規劃書 4.6）。外殼唔會自己開場：你答「開始」先開。
 // 已經有一場做緊或者等你、或者已有一包未答，就唔再建議
@@ -1686,7 +1954,7 @@ async function handleProofread(run, files) {
   run.kind = 'proofread';
   const page = loadPage();
   if (!page) { step(run, 'applied', U.stepApplyConfirm, 'failed', '未有公司概覽'); return finish(run, 'failed', '未有公司概覽'); }
-  const reg = registry(page), hash = fnv(JSON.stringify(page));
+  const reg = registry(page), hash = proofreadHash(page);
   run.ref = page.page.id;
   step(run, 'received', U.stepReceivedConfirm, 'done', `${files.length} 份回覆`);
   const latest = files[files.length - 1];
@@ -1839,6 +2107,7 @@ async function handleAsk(run, file) {
   const left = pack.questions.filter(q => !store.answers[q.id] || requiresFounderAnswer(pack, q) && !hasAnswer(store.answers[q.id])).length;
   const unanswered = requiredLeft(pack, store);
   const applied = pack.request && pack.request.type === 'order' ? applyOrder(pack, store, run) : '';
+  if (pack.request && (pack.request.type === 'adhoc' || pack.request.type === 'order') && pack.questions.every(q => store.answers[q.id])) setRequestInput(pack.request.noteId, { status: 'processed' });
   step(run, 'applied', U.stepAppliedAns, 'done', `今次回答了 ${entries.length} 條` + (left ? (unanswered.length ? `；尚有 ${left} 條未回答` : `；另有 ${left} 條暫按 Zero 建議`) : '；此問題包已全部回答') + (applied ? '；' + applied : ''));
   if (pack.ideate) return handleIdeateAnswer(run, pack, store);
   if (pack.rhythm) { const fresh = new Set((machine.answers || []).map(a => a.id)), k = pack.rhythm.kind;
@@ -1861,7 +2130,7 @@ async function handleAsk(run, file) {
   finish(run, 'done');
 }
 
-// 你嘅現實行動（見客、打電話、線下交付）：只有你喺 Founder Desk 確認先算完成，AI 冇得標
+// 你嘅現實行動（見客、打電話、線下交付）：只有你喺 CrewZero 確認先算完成，AI 冇得標
 function handleActionConfirm(run, pack, store) {
   const t = getTask(pack.actionConfirm.taskId);
   const answers = pack.questions.map(q => store.answers[q.id]);
@@ -1970,8 +2239,8 @@ function handleDebateAction(run, a) {
     if (m.packs.response && loadPack(DIR, m.packs.response)) return done('回應問題已在待決事項');
     const placed = placeDebatePacks([responsePack(v)]);
     m.packs.response = placed[0] ? placed[0].id : ''; saveMatch(m);
-    run.result = { summary: '已放上 Founder Desk：回應這場', artifacts: [], founderNext: [], asks: placed, matchId: m.id };
-    step(run, 'applied', U.stepReqRegistered, 'done', '已放上 Founder Desk'); return finish(run, 'done');
+    run.result = { summary: '已放上待決事項：回應這場', artifacts: [], founderNext: [], asks: placed, matchId: m.id };
+    step(run, 'applied', U.stepReqRegistered, 'done', '已放上待決事項'); return finish(run, 'done');
   }
   if (a.action === 'adopt') {
     if (!v || !v.strengthen) return done('未有轉強卡', false);
@@ -1979,7 +2248,7 @@ function handleDebateAction(run, a) {
     if (open.length) return done('採用問題已在待決事項');
     const placed = placeDebatePacks(adoptionPacks(v));
     m.packs.adoption = placed.map(p => p.id); saveMatch(m);
-    run.result = { summary: placed.length ? '已放上 Founder Desk：採用轉強' : '沒有未決定的轉強卡', artifacts: [], founderNext: [], asks: placed, matchId: m.id };
+    run.result = { summary: placed.length ? '已放上待決事項：採用轉強' : '沒有未決定的轉強卡', artifacts: [], founderNext: [], asks: placed, matchId: m.id };
     step(run, 'applied', U.stepReqRegistered, 'done', run.result.summary); return finish(run, 'done');
   }
   return done('操作不正確', false);
@@ -2064,7 +2333,7 @@ async function runDebatePass(run, m) {
   if ((m.budget.aiStarts || 0) >= HARD_CAP) { m.next = ''; return fail('一場最多 ' + HARD_CAP + ' 次 Zero 工作，已到上限'); }
   const sb = debateSandbox(run, m, pass);
   const role = PASS_ROLE[pass], t0 = Date.now();
-  step(run, 'ai', label, 'running', 'Zero 處理中，一般需時數分鐘；完成後會在營運監察台「生意大腦」逐幕出現');
+  step(run, 'ai', label, 'running', 'Zero 處理中，一般需時數分鐘；完成後會在 CrewZero「生意大腦」逐幕出現');
   log(`${run.id} 辯論 ${m.id} ${pass} start`);
   const r = await runAI(sb, { role, onStart: () => {
     if ((m.budget.aiStarts || 0) >= HARD_CAP) return false;
@@ -2118,6 +2387,7 @@ async function runDebatePass(run, m) {
   const minutes = Math.max(1, Math.round((Date.now() - t0) / 60000));
   if (m.roles && m.roles[role]) Object.assign(m.roles[role], { ok: true, minutes: (m.roles[role].minutes || 0) + minutes, startedAt: m.roles[role].startedAt || localIso() });
   // 寫入場次資料夾（舊場寫疊加資料夾；試驗資料夾永不寫）
+  if (chk.data && Array.isArray(chk.data.sources)) chk.data.sources = await markBrokenLinks(chk.data.sources, 'title');
   if (['blue', 'red', 'rebuttal', 'judge'].includes(pass)) writeJSON(path.join(dir, PASS_OUT[pass]), chk.data);
   if (pass === 'rejudge') {
     const j = readMatchFile(DIR, src, m.id, 'judge.json');
@@ -2165,7 +2435,7 @@ async function runDebatePass(run, m) {
     const asks = placed.concat(decisions.ok ? decisions.placed : []);
     run.result = { summary: '辯論完結：等待你回應三個關鍵時刻', artifacts: [], founderNext: [], asks, matchId: m.id };
     addEvent({ actor: 'ai', type: 'run', title: '辯論完結：' + clip(m.topic.title, 30) + '，等待你回應', relatedIds: [m.id, run.id], moduleIds: ['ai-week', 'decisions'] });
-    summary = '辯論完結，已放上 Founder Desk';
+    summary = '辯論完結，已放上待決事項';
   } else if (pass === 'reattack-judge' && (m.round || 1) === 1) {
     const placed = placeDebatePacks(adoptionPacks(viewOf(m.id)));
     m.packs.adoption = placed.map(p => p.id);
@@ -2603,6 +2873,13 @@ function placeInterviewIfDue() {
       options: recOpts([U.overdueDone, U.overdueMove, U.overdueDrop, U.unknownLater], rec), value: rec, effect: 'tentative',
       why: hit ? NAMES.t('overdueWhyLedger', { d: dayText(String(hit.eventDate || hit.receivedAt).slice(0, 10)), t: clip(hit.title, 30) }) : U.overdueWhyNone });
   }
+  // 公司以外的對象超過十四日沒有接觸：只問沒有接觸最久的一個（接觸以輸入及事件並集計；暫時維持的對象到期前不再問）
+  for (const p of contactDueOf(DIR, { state: s, today, limit: 1 })) {
+    const lc = p.lastContact, week = NAMES.t('contactYes', { n: p.name });
+    qs.push({ id: 'contact', bind: 'contact', contact: { id: p.id }, about: p.name, ask: NAMES.t('contactAsk', { n: p.name, d: p.gapDays }), kind: 'choice',
+      options: recOpts([week, U.contactSnooze, U.contactClose], week), value: week, effect: 'tentative',
+      why: lc ? NAMES.t('contactWhy', { d: dayText(lc.date), t: clip(lc.text, 40) }) : NAMES.t('contactWhyNone', { d: dayText(p.addedAt) }) });
+  }
   const free = (id, ask) => ({ id, bind: 'none', preset: true, noChange: true, ask, kind: 'choice', options: [{ text: U.interviewNone, rec: true }], value: U.interviewNone, why: U.interviewWhyNone, effect: 'tentative' });
   qs.push(free('f1', U.interviewF1));
   const ms = (s.milestones || []).filter(m => m.pathStatus === 'confirmed' && m.state !== 'done').sort((a, b) => (a.order || 0) - (b.order || 0)).slice(0, 2);
@@ -2678,6 +2955,25 @@ function handleInterviewAnswer(run, pack, store, fresh) {
     }
     if (q.bind === 'none' || q.bind === 'held') { if (!unknown && val !== U.interviewNone) texts.push(q.id); continue; }
     structuredSeen = true;
+    if (q.bind === 'contact') {
+      // 十四日跟進題：答題時對象已不是有效對象（被併走、不再接觸）就只記錄不寫入；選項次序固定（一星期內聯絡／暫時維持／不再接觸）
+      const actors = (s.company || {}).actors || [], aid = resolveActorId(actors, q.contact && q.contact.id), a = actors.find(x => x.id === aid);
+      if (!a || a.status === 'inactive' || a.mergedInto) continue;
+      const idx = (q.options || []).findIndex(o => o.text === val);
+      if (idx === 0) {
+        const tid = 'ct-' + pack.id + '-' + aid;
+        s.tasks = s.tasks || [];
+        if (!s.tasks.some(t => t.id === tid)) s.tasks.push({ id: tid, title: NAMES.t('contactTaskTitle', { n: a.name }), owner: 'founder', status: 'planned', dueAt: addDays(today, 7), prospectId: aid, updatedAt: localIso() });
+        said.push(NAMES.t('contactTaskTitle', { n: a.name })); ev('decision', NAMES.t('contactTaskTitle', { n: a.name }), [aid, pack.id]);
+      } else if (idx === 1) {
+        iv.contactSnooze = { ...(iv.contactSnooze || {}), [aid]: addDays(today, 14) };
+        said.push(a.name + '：' + U.contactSnooze);
+      } else if (idx === 2) {
+        const r = applyActorOp(s, 'actorStatus', { id: aid, status: 'inactive' });
+        if (r.ok) { mergeInPlace(s, r.state); said.push(a.name + '：' + U.contactClose); ev('decision', a.name + '：' + U.contactClose, [aid, pack.id]); }
+      }
+      continue;
+    }
     if (q.bind === 'next') {
       if (unknown || val === U.interviewSame) continue;
       // 小旗原本掛喺已完成嘅站：改掛進行中嘅站
@@ -2957,9 +3253,9 @@ const pausedNow = () => !!(loadState().health || {}).pausedByFounder;
 function rhythmLedger(type) {
   const s = loadState(), today = todayIso();
   const ms = (s.milestones || []).slice().sort((a, b) => (a.order || 99) - (b.order || 99));
-  const canDo = (s.tasks || []).filter(t => t.owner !== 'founder' && t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'waiting').map(t => ({ title: t.title, next: t.next || '', firstBatch: !!t.firstBatch, milestoneId: t.milestoneId || '' }));
+  const canDo = (s.tasks || []).filter(t => ownerKind(t.owner) === 'ai' && t.status !== 'done' && t.status !== 'cancelled' && t.status !== 'waiting').map(t => ({ title: t.title, next: t.next || '', firstBatch: !!t.firstBatch, milestoneId: t.milestoneId || '' }));
   // 創辦人有明確日子的行動亦是 AI 下一次安排的事實；改日期後由已合併帳本直接讀入。
-  const founderActions = (s.tasks || []).filter(t => t.owner === 'founder' && t.dueAt && t.status !== 'done' && t.status !== 'cancelled' && t.column !== 'done' && t.column !== 'cancelled').map(t => ({ title: t.title, dueAt: t.dueAt, milestoneId: t.milestoneId || '' }));
+  const founderActions = (s.tasks || []).filter(t => ownerKind(t.owner) !== 'ai' && t.dueAt && t.status !== 'done' && t.status !== 'cancelled' && t.column !== 'done' && t.column !== 'cancelled').map(t => ({ title: t.title, dueAt: t.dueAt, milestoneId: t.milestoneId || '' }));
   const open = listPacks(DIR).filter(p => p.open).map(p => { const f = loadPack(DIR, p.id) || {}; return { title: p.title, questions: (f.questions || []).map(q => q.ask) }; });
   const second = ms.find(m => !secondProblem(s, m.id));
   return {
@@ -3058,7 +3354,7 @@ function recordInboxRun(run, hadInput) {
   const aiStarted = !!ai && ai.state !== 'waiting';
   const appliedOnly = run.state === 'done' && !aiStarted && !ADVANCED;
   recordRun({ id: run.id, type: 'inbox', trigger: RUN_TRIGGER, ...(RUN_TYPE ? { slot: RUN_SLOT || todayIso() } : {}), startedAt: run.startedAt, endedAt: run.endedAt || localIso(), capMinutes: rhythmOf(loadState()).runCapMinutes, aiStarted,
-    state: run.state === 'waiting' || appliedOnly ? 'skipped' : 'ended', ...(run.state === 'waiting' ? { skipReason: run.waitingFor === 'paused' ? 'pausedByFounder' : 'adapterNotCertified' } : appliedOnly ? { skipReason: 'appliedOnly' } : { ending: ADVANCED ? 'advanced' : (run.kind === 'intake' && run.state === 'done') || (run.result && (run.result.artifacts || []).length) ? 'artifact' : 'blocked' }),
+    state: run.state === 'waiting' || appliedOnly ? 'skipped' : 'ended', ...(run.state === 'waiting' ? { skipReason: run.waitingFor === 'paused' ? 'pausedByFounder' : 'adapterNotCertified' } : appliedOnly ? { skipReason: 'appliedOnly' } : { ending: ADVANCED ? 'advanced' : (run.kind === 'intake' && run.state === 'done') || (run.result && (run.result.artifacts || []).length) ? 'artifact' : run.state === 'done' && run.result && (run.result.asks || []).length && ['event', 'doc', 'debrief', 'adhoc', 'order'].includes(run.noteType) ? 'asked' : 'blocked' }),
     ...(run.state === 'failed' ? { rejected: true, rejectReason: run.error || '' } : {}), label: (ai && ai.label) || ((run.steps || [])[0] || {}).label || U.runType_inbox, summary: (run.result && run.result.summary) || run.error || '', artifacts: (run.result && (run.result.artifacts || []).length) || 0, moduleIds: ['inputs', 'ai-week'] });
   if (hadInput && run.state !== 'waiting' && !appliedOnly) countStreak(true);
 }
@@ -3068,6 +3364,7 @@ async function main() {
   let run = null, hadInput = false;
   try {
     mergeFounderOps();
+    mergeRereads();
     applyObserve();
     if (process.argv.includes('--plain')) { await plainAll(); return; }
     const replies = fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')).sort();
@@ -3164,7 +3461,7 @@ async function main() {
           const old = path.join(DIR.sandbox, prev.id, 'event.md'), s = loadState(), input = (s.inputs || []).find(i => i.id === 'in-' + prev.ref);
           if (!input || !fs.existsSync(old)) { finish(run, 'failed', '找不到上次記錄的事件，請重新記錄'); return; }
           const sb = newSandbox(run);
-          eventTask(sb, s, { text: fs.readFileSync(old, 'utf8').split('## 創辦人原話').pop().trim(), date: input.eventDate, files: (input.files || []).map(f => path.join(DIR.data, f)), ref: prev.ref, pre: prev.ref + '-note-' + prev.noteType + '-file-', ...(prev.noteType === 'doc' ? { heading: fs.readFileSync(old, 'utf8').split(/\r?\n/)[0] } : {}) });
+          eventTask(sb, s, { text: fs.readFileSync(old, 'utf8').split('## 創辦人原話').pop().trim(), date: input.eventDate, files: (input.files || []).map(f => path.join(DIR.data, f)), rows: attachmentRows(input), ref: prev.ref, pre: prev.ref + '-note-' + prev.noteType + '-file-', ...(prev.noteType === 'doc' ? { heading: fs.readFileSync(old, 'utf8').split(/\r?\n/)[0] } : {}) });
           await runAIStep(run, sb, U.stepEventAI, true);
           return;
         }
@@ -3187,7 +3484,7 @@ async function main() {
         } else {
           const old = path.join(oldDir, 'note.md');
           if (!fs.existsSync(old)) { finish(run, 'failed', '找不到上次提交的要求，請重新提交'); return; }
-          noteTask(sb, run.noteType, fs.readFileSync(old, 'utf8').split(/\r?\n\r?\n/).slice(1).join('\n\n').trim());
+          { const inp = (loadState().inputs || []).find(i => i.id === 'in-' + prev.ref); noteTask(sb, run.noteType, fs.readFileSync(old, 'utf8').split(/\r?\n\r?\n/).slice(1).join('\n\n').split(/\r?\n\r?\n## 附件（在 files\/）/)[0].trim(), attachmentRows(inp)); }
         }
         await runAIStep(run, sb, U.stepReqAI, true);
         return;
@@ -3201,7 +3498,7 @@ async function main() {
     log('外殼出錯：' + (e && e.stack || e));
     // 辯論回合出錯：標未完成，免得伺服器不停再叫
     if (run && run.kind === 'debate' && run.ref) { const m = readMatch(run.ref); if (m && m.next && !m.failed) { m.failed = { pass: m.next, reason: '工作中途中斷', at: localIso() }; m.next = ''; saveMatch(m); } }
-    if (run && run.state === 'running') finish(run, 'failed', '工作中途中斷，未有完成。請按「重試」；如再次中斷，請在 AI 對話說「打開 Founder Desk」重新開啟後再試。');
+    if (run && run.state === 'running') finish(run, 'failed', '工作中途中斷，未有完成。請按「重試」；如再次中斷，請在 AI 對話輸入 /crewzero:dashboard（或說「打開 CrewZero」）重新開啟後再試。');
   } finally {
     if (run && run.state !== 'running') try { recordInboxRun(run, hadInput); } catch (e) { log('記錄 run 出錯：' + (e && e.message || e)); }
     dropLock();

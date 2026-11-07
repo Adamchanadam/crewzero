@@ -199,7 +199,7 @@ try {
   const in8 = state().inputs.find(i => i.id === 'in-' + sub8.j.id);
   ok('第九輪-6：AI 寫 files/會後紀錄.DOCX：不被判為不合格（沒有叫 AI 修正），事件處理成功', r && r.state === 'done' && fixCount() === fix0, r && { state: r.state, error: r.error, fixes: fixCount() - fix0 });
   ok('第九輪-6：紀錄換回實際檔名「會後紀錄.docx」', in8 && Array.isArray(in8.unreadable) && in8.unreadable.length === 1 && in8.unreadable[0].file === '會後紀錄.docx', in8 && in8.unreadable);
-  ok('第九輪-6：AI 的口語原因只保存作紀錄，畫面原因由 names.js 固定（Office 檔一句）', in8 && in8.unreadable[0].reason === 'Word 檔目前讀唔到' && N.unreadReason('會後紀錄.docx') === N.t('unreadReasonOffice', { page: N.ui.intakeTitle }) && !/讀唔到|唔/.test(N.unreadReason('會後紀錄.docx')), in8 && in8.unreadable);
+  ok('第九輪-6：AI 的口語原因只保存作紀錄，畫面原因由 names.js 固定（Office 檔一句）', in8 && in8.unreadable[0].reason === 'Word 檔目前讀唔到' && /未能轉成文字/.test(N.unreadReason('會後紀錄.docx')) && !/讀唔到|唔/.test(N.unreadReason('會後紀錄.docx')), in8 && in8.unreadable);
   // 0.39.1 第十輪：原因超過 80 字 → 截斷並記警告，不判整份事件不合格（與預填一致）
   mode('event:event-unread-longreason');
   seen = await seenIds();
@@ -234,6 +234,59 @@ try {
   ok('之後 AI 工作說明列出「不知道」的事項，叫 AI 到期前不要再問', seenTask.includes('創辦人已答「' + N.ui.unknownLater + '」的事項') && seenTask.includes('實際開始時間'), seenTask.slice(-400));
   const again = lib.preparePacks({ format: 'startup-os.ask/0.1', title: '會面時間', questions: [{ id: 'st2', ask: '10 月 29 日與 陳先生 的視像會面，實際開始時間是幾點？', kind: 'text', value: '下午 3 時', why: '訊息要寫明時間。' }, { id: 'jk', ask: '10 月 27 日與乙公司 林小姐 會面的結果是甚麼？', kind: 'text', value: '暫無共識', why: '要知道乙公司立場。' }] }, { dirs: { ledger: path.join(DATA, 'ledger') }, strictTitle: false });
   ok('換個講法再問同一件事：到期前拎走；唔同嘅事照問', again.packs[0].questions.length === 1 && again.packs[0].questions[0].id === 'jk' && again.dropped.length === 1, { kept: again.packs[0].questions.map(q => q.id), dropped: again.dropped });
+
+
+  /* ---- 0.40.0 人物及機構名單：Zero 建議新對象 → 確認題 → 加入／別名／不加入；退回修正；逐字核對；丟棄 ---- */
+  const actorsNow = () => (state().company.actors || []);
+  const actorQ = P => P && P.questions.find(q => (q.options || []).some(o => o.apply && o.apply.op === 'addActor'));
+  const runActor = async (text, modes) => {
+    mode(modes.join(String.fromCharCode(10))); seen = await seenIds();
+    const sub = await post('/api/intake', { kind: 'note', type: 'event', text, date: '2026-11-11' });
+    const run = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
+    const inp = state().inputs.find(i => i.id === 'in-' + sub.j.id);
+    return { sub, run, inp, P: inp && inp.packId ? pack(inp.packId) : null };
+  };
+  const nA0 = actorsNow().length;
+  const NA1 = await runActor('11 月 11 日 乙餐廳的黃小姐 來電，說想先試單。', ['event:event-actor']);
+  const nq1 = actorQ(NA1.P);
+  ok('N1 Zero 建議新對象：出「加入名單？」確認題（二選項，推薦加入），顯示機構、名稱、角色，並寫明不記聯絡方式', NA1.run && NA1.run.state === 'done' && nq1 && nq1.options.length === 2 && nq1.options[0].rec && /乙餐廳黃小姐（負責人）/.test(nq1.ask) && /不記聯絡方式/.test(nq1.judge) && /Zero 建議類別：客戶/.test(nq1.judge), nq1 && { ask: nq1.ask, opts: nq1.options.map(o => o.text) });
+  ok('N1 確認前名單沒有改動', actorsNow().length === nA0);
+  { const hits = [NA1.P.title, NA1.P.context, ...NA1.P.questions.flatMap(q => [q.ask, q.judge, q.why, q.value, ...q.options.map(o => o.text)])].flatMap(t => N.styleIssues(String(t || '')).map(h => h.term)); ok('N1 確認題畫面文字零內部術語、零編號', !hits.length, hits); }
+  seen = await seenIds(); await answer(NA1.P);
+  await newRun(seen, x => x.kind === 'ask' && x.ref === NA1.P.id);
+  { const a = actorsNow().find(x => x.name === '黃小姐'), inp = state().inputs.find(i => i.id === NA1.inp.id);
+    ok('N2 創辦人按加入：名單新增一人，類別、機構、角色、來源、確認時間齊，狀態在冊，只有約定欄位', a && a.kind === 'customer' && a.org === '乙餐廳' && a.role === '負責人' && a.addedFrom === 'event' && a.status === 'active' && a.confirmedAt && a.addedAt && !Object.keys(a).some(k => !['id', 'name', 'label', 'kind', 'org', 'role', 'aliases', 'status', 'addedFrom', 'addedAt', 'confirmedAt', 'fromMilestoneIds', 'team', 'mergedInto'].includes(k)), a);
+    ok('N2 回饋卡效果：已加入名單，帶編號指向新對象', inp.effects.some(e => e.targetKind === 'actor' && e.targetId === (a && a.id) && /已加入名單：黃小姐（客戶）/.test(e.change)), inp.effects); }
+  // 同名再被建議：丟棄（名單已有），不出題
+  const NA2 = await runActor('11 月 12 日 黃小姐 再來電。', ['event:event-actor']);
+  ok('N3 與名單同名：靜默丟棄、不出新對象題、日誌有記錄', NA2.run && NA2.run.state === 'done' && !actorQ(NA2.P) && /名稱已在名單內/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')));
+  // 疑似變體 → 三選項；選記為別名
+  const known = actorsNow().find(a => a.name === '黃小姐');
+  const NA3 = await runActor('11 月 13 日 ' + known.name + ' 來電，提到下星期。', ['event:event-actor-similar']);
+  const nq3 = actorQ(NA3.P);
+  ok('N4 名稱是現有名稱的子字串：三選項（記為別名／另一個對象／不加入）', nq3 && nq3.options.length === 3 && /本人，記為別名/.test(nq3.options[0].text) && nq3.options[0].rec, nq3 && nq3.options.map(o => o.text));
+  if (nq3) { seen = await seenIds(); await answer(NA3.P, q => q.id === nq3.id ? nq3.options[0].text : q.value); await newRun(seen, x => x.kind === 'ask' && x.ref === NA3.P.id); }
+  { const t = actorsNow().find(a => a.id === known.id), first = Array.from(known.name)[0];
+    ok('N4 記為別名：目標對象的別名加了新稱呼，名稱與類別不變，名單沒有新增人', t && t.aliases.includes(first) && t.name === known.name && t.kind === known.kind && actorsNow().length === nA0 + 1, t); }
+  // 不加入
+  const NA4 = await runActor('11 月 14 日 乙餐廳的黃小姐 的同事 林師傅 也來電。', ['event:event-actor-team']);
+  const nq4 = actorQ(NA4.P), nn4 = actorsNow().length;
+  seen = await seenIds(); await answer(NA4.P, q => q.id === (nq4 || {}).id ? N.ui.newActorNo : q.value); await newRun(seen, x => x.kind === 'ask' && x.ref === NA4.P.id);
+  ok('N5 創辦人按不加入：不寫任何對象，只記「沒有加入名單」', nq4 && actorsNow().length === nn4 && !actorsNow().some(a => a.name === '林師傅') && state().inputs.find(i => i.id === NA4.inp.id).effects.some(e => /沒有加入名單：林師傅/.test(e.change)), state().inputs.find(i => i.id === NA4.inp.id).effects);
+  // 團隊成員：同一個建議再來，這次加入
+  const NA5 = await runActor('11 月 15 日 新請了 林師傅 幫手送貨。', ['event:event-actor-team']);
+  seen = await seenIds(); await answer(NA5.P); await newRun(seen, x => x.kind === 'ask' && x.ref === NA5.P.id);
+  { const m = actorsNow().find(a => a.name === '林師傅');
+    ok('N6 團隊成員：類別 team，team 欄預設在職、工作類型 parttime、分工空白；之前按過不加入不影響之後加入', m && m.kind === 'team' && m.role === '送貨' && m.team && m.team.type === 'parttime' && m.team.state === 'active' && Array.isArray(m.team.owns) && !m.team.owns.length, m); }
+  // 電郵 → 退回修正一次
+  const NA6 = await runActor('11 月 16 日 乙餐廳的吳小姐 來電。', ['event:event-actor-contact', 'event-repair:event-actor-contact']);
+  ok('N7 機構含電郵：退回 Zero 修正一次，修正後處理成功並出題', NA6.run && NA6.run.state === 'done' && /不可含電郵或長串數字/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')) && !!actorQ(NA6.P), NA6.run && NA6.run.state);
+  ok('N7 修正後的確認題及名單內沒有電郵', !/@/.test(JSON.stringify(NA6.P)) && !JSON.stringify(actorsNow()).includes('@'));
+  // 名稱不在原話 → 退回，修正後仍不在 → 只丟棄該項，整件事不失敗
+  const NA7 = await runActor('11 月 17 日 只是例行問候。', ['event:event-actor-ghost', 'event-repair:event-actor-ghost']);
+  ok('N8 名稱沒有逐字出現在原話：退回一次，仍不合格就只丟棄該項，整件事照常完成', NA7.run && NA7.run.state === 'done' && !actorQ(NA7.P) && /沒有逐字出現在創辦人原話/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')) && /修正後仍不合格，已丟棄/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')), NA7.run && NA7.run.state);
+  ok('N9 AI 說明檔寫明新對象項目、逐字出現、不寫聯絡方式', (() => { const t = fs.readFileSync(path.join(PROTO, 'ai-event.md'), 'utf8'); return /"kind": "newActor"/.test(t) && /逐字/.test(t) && /唔好寫電話、電郵/.test(t); })());
+  mode('event:event-ok');
 } catch (e) {
   ok('測試程式出錯', false, String(e && e.stack || e));
 } finally {

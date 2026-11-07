@@ -4,8 +4,18 @@
     "updatedAt": "@-6d 21:30",
     "summary": "最薄弱的三處、你可能未想到的事項、現階段不建議做的事",
     "industryCheck": [
-      { "text": "餐廳採購前可先比較供貨時間與缺貨安排。", "source": "餐飲採購資訊站", "url": "https://farm-dining.example.org/buying/supply", "readOn": "@-6d" },
-      { "text": "小型供應商可先以少量試單了解餐廳需求。", "source": "食材合作資訊站", "url": "https://local-harvest.example.org/guides/trial-orders", "readOn": "@-6d" }
+      {
+        "text": "餐廳採購前可先比較供貨時間與缺貨安排。",
+        "source": "餐飲採購資訊站",
+        "url": "https://farm-dining.example.org/buying/supply",
+        "readOn": "@-6d"
+      },
+      {
+        "text": "小型供應商可先以少量試單了解餐廳需求。",
+        "source": "食材合作資訊站",
+        "url": "https://local-harvest.example.org/guides/trial-orders",
+        "readOn": "@-6d"
+      }
     ],
     "weak": [
       {
@@ -73,7 +83,7 @@
       "farm-c",
       "chef-a"
     ],
-    "waitText": "四日後與農場主丙會面：請先在 Founder Desk 練習一次",
+    "waitText": "四日後與農場主丙會面：請先在情景演練練習一次",
     "summary": "Zero 扮演對方與你模擬會面，練習後提供覆盤及會面卡",
     "doneSummary": "練習完成：已有覆盤及會面卡"
   },
@@ -176,6 +186,13 @@
         "material": {
           "title": "農場合作一頁簡介",
           "runId": "R-demo-a"
+        },
+        "kindCode": "partner",
+        "org": "甲農場",
+        "role": "農場主",
+        "lastContact": {
+          "date": "@-19d",
+          "text": "與農場甲會面紀錄"
         }
       },
       {
@@ -190,7 +207,14 @@
           "title": "農場合作一頁簡介",
           "runId": "R-demo-a"
         },
-        "practiceId": "chef-a"
+        "practiceId": "chef-a",
+        "kindCode": "customer",
+        "org": "餐廳甲",
+        "role": "主廚",
+        "lastContact": {
+          "date": "@-5d",
+          "text": "主廚已試食兩款菜"
+        }
       },
       {
         "id": "r-b",
@@ -199,7 +223,14 @@
         "stage": 1,
         "lastReal": "老闆在電話中表示有興趣",
         "lastAt": "@-9d",
-        "next": "邀請出席試食會"
+        "next": "邀請出席試食會",
+        "kindCode": "customer",
+        "org": "餐廳乙",
+        "role": "東主",
+        "lastContact": {
+          "date": "@-9d",
+          "text": "老闆在電話中表示有興趣"
+        }
       },
       {
         "id": "f-c",
@@ -214,7 +245,14 @@
           "runId": "R-demo-b"
         },
         "practiceId": "farm-c",
-        "rehearsal": "目標部分達成"
+        "rehearsal": "目標部分達成",
+        "kindCode": "partner",
+        "org": "丙農場",
+        "role": "農場主",
+        "lastContact": {
+          "date": "@-1d",
+          "text": "與農場丙的通話紀錄"
+        }
       },
       {
         "id": "r-c",
@@ -222,7 +260,10 @@
         "kind": "客戶",
         "stage": 0,
         "lastReal": "",
-        "next": "先請餐廳甲介紹"
+        "next": "先請餐廳甲介紹",
+        "kindCode": "customer",
+        "org": "餐廳丙",
+        "role": "東主"
       }
     ]
   }

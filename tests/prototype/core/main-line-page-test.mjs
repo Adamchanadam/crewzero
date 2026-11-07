@@ -29,7 +29,7 @@ try {
   ok('首頁最頂是下一個對外動作，有已完成、改期、取消此動作', card && ['已完成', '改期', '取消此動作'].every(x => card.includes(x)), card);
   const top = await c.ev(`(()=>{const a=document.querySelector('#next-action').getBoundingClientRect().top,b=document.querySelector('#next-list').getBoundingClientRect().top;return a<b})()`);
   ok('下一個對外動作排在「接下來」之前', top, null);
-  ok('整頁只有主線卡的主要操作是主按鈕', await c.ev(`[...document.querySelectorAll('#app .btn.primary')].every(b=>b.closest('#next-action'))`), await c.ev(`[...document.querySelectorAll('#app .btn.primary')].map(b=>b.textContent)`));
+  ok('整頁可見的主按鈕只有主線卡的操作，加上「Zero 近期工作」卡的「現在開工」（展開前的送出鍵在隱藏表格內，不算）', await c.ev(`[...document.querySelectorAll('#app .btn.primary')].filter(b=>b.offsetParent).every(b=>b.closest('#next-action')||b.id==='run-now')`), await c.ev(`[...document.querySelectorAll('#app .btn.primary')].filter(b=>b.offsetParent).map(b=>b.textContent)`));
   ok('隱藏中的新日期欄及確定按鈕不顯示', !(await text('#next-action')).includes('確定新日期'), await text('#next-action'));
   const rows = await c.ev(`[...document.querySelectorAll('#next-list [data-todo]')].map(r=>r.dataset.todo)`);
   ok('對打回應不在「接下來」，裁判決定題留在主線', !rows.includes('ask-brain') && rows.includes('ask-judge'), rows);
@@ -37,7 +37,7 @@ try {
 
   // 輸入區：輪詢重畫不可清走正在輸入的字
   await c.click('#quick-event');
-  ok('選「真實事件」才顯示日期及附件欄', await c.ev(`!document.querySelector('#quick-event-fields').hidden`), null);
+  ok('選「發生了一件事」才顯示日期及附件欄', await c.ev(`!document.querySelector('#quick-event-fields').hidden`), null);
   await c.ev(`document.querySelector('#quick-text').focus()`); await c.send('Input.insertText', { text: '客戶來電改期。' });
   await sleep(9500);
   ok('輸入中等候輪詢，文字及類型不被清走', await c.ev(`document.querySelector('#quick-text').value==='客戶來電改期。'&&document.querySelector('#quick-event').getAttribute('aria-pressed')==='true'`), await c.ev(`document.querySelector('#quick-text').value`));
@@ -46,9 +46,10 @@ try {
   ok('失焦後有未送出內容，文字仍保留', await c.ev(`document.querySelector('#quick-text').value==='客戶來電改期。'`), await c.ev(`document.querySelector('#quick-text').value`));
   await c.click('#quick-send');
   const sent = await waitFor(() => fs.readdirSync(path.join(DATA, 'founder', 'inbox')).concat(fs.existsSync(path.join(DATA, 'archive')) ? fs.readdirSync(path.join(DATA, 'archive')) : []).find(f => /-note-event\.md$/.test(f)));
-  ok('送出後產生真實事件要求，並清空輸入', !!sent && (await c.ev(`document.querySelector('#quick-text').value`)) === '', sent);
+  ok('送出後產生事件輸入，並清空輸入', !!sent && (await c.ev(`document.querySelector('#quick-text').value`)) === '', sent);
   await c.ev(`document.activeElement.blur()`);
   ok('送出後首頁會恢復更新，不會永遠停在等待提示', !!(await waitFor(async () => (await c.ev(`(document.querySelector('#quick-note')||{}).textContent`)) === '', 40000)), await c.ev(`(document.querySelector('#quick-note')||{}).textContent`));
+  ok('送出後有可見的下一步：「最近交給 Zero 的事」列出剛送出的事，並有「查看回饋」', !!(await waitFor(() => c.ev(`!![...document.querySelectorAll('#recent-list li')].find(li=>li.innerText.includes('客戶來電改期')&&li.querySelector('[data-feedback]'))`), 20000)), await c.ev(`(document.querySelector('#recent-inputs')||{}).innerText`));
 
   // 改期、暫緩、取消此動作：即時生效
   await c.send('Page.reload'); await waitFor(() => c.ev(`!!document.querySelector('#next-reschedule')`));

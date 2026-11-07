@@ -1,4 +1,4 @@
-// 待決事項排序測試（規劃書 4.3；唔開瀏覽器）：逾期日數 → 類型 → 提出先後；監察台、Founder Desk 同伺服器同一份清單
+// 待決事項排序測試（規劃書 4.3；唔開瀏覽器）：逾期日數 → 類型 → 提出先後；監察台、CrewZero 同伺服器同一份清單
 // 用法：node todo-test.mjs <原型資料夾> <輸出資料夾> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -48,7 +48,7 @@ try {
   ok('營運監察台用同一份清單同次序', JSON.stringify(ds.todo.map(t => t.id)) === JSON.stringify(WANT), ds.todo.map(t => t.id));
   await usePass(`http://127.0.0.1:${PORT}`);
   let a = null; for (let i = 0; i < 240 && !a; i++) { try { a = await (await fetch(`http://127.0.0.1:${PORT}/api/asks`)).json(); } catch { await sleep(250); } }
-  ok('Founder Desk（/api/asks）回傳同一份清單同次序', a && JSON.stringify(a.todo.map(t => t.id)) === JSON.stringify(WANT), a && a.todo.map(t => t.id));
+  ok('CrewZero（/api/asks）回傳同一份清單同次序', a && JSON.stringify(a.todo.map(t => t.id)) === JSON.stringify(WANT), a && a.todo.map(t => t.id));
   ok('每項都有類型名稱同圖示', td.every(t => lib.NAMES.dash['ty_' + t.type] && lib.NAMES.TODO_ICON[t.type]), td.filter(t => !lib.NAMES.dash['ty_' + t.type] || !lib.NAMES.TODO_ICON[t.type]).map(t => t.type));
   const changed = dash.applyFounderOps({ company: { nextExternalAction: { text: '聯絡客戶', milestoneId: 'M1' } } }, [{ op: 'reschedule', target: 'nextAction', value: { date: day(3) }, at: ago(0) }, { op: 'snooze', target: 'ask-a', value: { until: day(7) }, at: ago(0) }]);
   ok('創辦人改期即時覆蓋下一個動作', changed.company.nextExternalAction.date === day(3) && changed.company.nextExternalAction.pendingUpdate === false, changed.company.nextExternalAction);

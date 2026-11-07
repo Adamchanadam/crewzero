@@ -12,10 +12,26 @@
     "initials": "田桌",
     "oneLiner": "把本地小農的當季蔬菜直送注重來源的中小型餐廳。",
     "assumptions": [
-      { "id": "H1", "text": "餐廳願意為可追溯來源付較高價錢", "grade": "said" },
-      { "id": "H2", "text": "兩個農場可以每週穩定供貨", "grade": "guess" },
-      { "id": "H3", "text": "中小型餐廳找不到穩定的本地菜源", "grade": "guess" },
-      { "id": "H4", "text": "創辦人親自送貨足以應付首三間餐廳", "grade": "guess" }
+      {
+        "id": "H1",
+        "text": "餐廳願意為可追溯來源付較高價錢",
+        "grade": "said"
+      },
+      {
+        "id": "H2",
+        "text": "兩個農場可以每週穩定供貨",
+        "grade": "guess"
+      },
+      {
+        "id": "H3",
+        "text": "中小型餐廳找不到穩定的本地菜源",
+        "grade": "guess"
+      },
+      {
+        "id": "H4",
+        "text": "創辦人親自送貨足以應付首三間餐廳",
+        "grade": "guess"
+      }
     ],
     "nextExternalAction": {
       "text": "約農場主丙簽供應協議",
@@ -29,7 +45,202 @@
       "runCapMinutes": 30,
       "triggeredRunsPerHour": 6,
       "aiStartsPerDay": 40
-    }
+    },
+    "actors": [
+      {
+        "id": "pr-m0",
+        "name": "農場甲",
+        "label": "農場甲",
+        "kind": "partner",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [
+          "m1",
+          "m1t"
+        ],
+        "org": "甲農場",
+        "role": "農場主",
+        "addedFrom": "milestone",
+        "addedAt": "@-26d"
+      },
+      {
+        "id": "pr-m1",
+        "name": "農場乙",
+        "label": "農場乙",
+        "kind": "partner",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [
+          "m1",
+          "m6"
+        ],
+        "org": "乙農場",
+        "role": "農場主",
+        "addedFrom": "milestone",
+        "addedAt": "@-26d"
+      },
+      {
+        "id": "pr-m2",
+        "name": "農場丙",
+        "label": "農場丙",
+        "kind": "partner",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [
+          "m1",
+          "m1t"
+        ],
+        "org": "丙農場",
+        "role": "農場主",
+        "addedFrom": "milestone",
+        "addedAt": "@-26d"
+      },
+      {
+        "id": "pr-m3",
+        "name": "餐廳甲",
+        "label": "餐廳甲",
+        "kind": "customer",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [
+          "m2",
+          "m7"
+        ],
+        "org": "餐廳甲",
+        "role": "主廚",
+        "addedFrom": "overview",
+        "addedAt": "@-24d"
+      },
+      {
+        "id": "pc-demo-chen",
+        "name": "陳經理",
+        "label": "陳經理",
+        "kind": "customer",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "org": "餐廳乙",
+        "role": "採購經理",
+        "addedFrom": "event",
+        "addedAt": "@-20d",
+        "confirmedAt": "@-20d"
+      },
+      {
+        "id": "pc-demo-fund",
+        "name": "青年創業基金",
+        "label": "青年創業基金",
+        "kind": "investor",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "org": "青年創業基金",
+        "role": "項目經理",
+        "addedFrom": "overview",
+        "addedAt": "@-9d"
+      },
+      {
+        "id": "pc-demo-cai",
+        "name": "蔡博士",
+        "label": "蔡博士",
+        "kind": "advisor",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "org": "食品安全顧問",
+        "role": "顧問",
+        "addedFrom": "overview",
+        "addedAt": "@-15d"
+      },
+      {
+        "id": "pc-demo-wong",
+        "name": "王先生",
+        "label": "王先生",
+        "kind": "partner",
+        "aliases": [],
+        "status": "inactive",
+        "fromMilestoneIds": [],
+        "org": "舊供應商",
+        "addedFrom": "overview",
+        "addedAt": "@-60d"
+      },
+      {
+        "id": "pc-tm-lee",
+        "name": "李家欣",
+        "label": "李家欣",
+        "kind": "team",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "role": "採購",
+        "addedFrom": "overview",
+        "addedAt": "@-26d",
+        "team": {
+          "type": "cofounder",
+          "state": "active",
+          "owns": [
+            "m1"
+          ]
+        }
+      },
+      {
+        "id": "pc-tm-chan",
+        "name": "陳小明",
+        "label": "陳小明",
+        "kind": "team",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "role": "配送",
+        "addedFrom": "event",
+        "addedAt": "@-12d",
+        "confirmedAt": "@-12d",
+        "team": {
+          "type": "parttime",
+          "state": "active",
+          "owns": [
+            "m3"
+          ]
+        }
+      },
+      {
+        "id": "pc-tm-wong",
+        "name": "黃師傅",
+        "label": "黃師傅",
+        "kind": "team",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "role": "牌照代辦",
+        "addedFrom": "event",
+        "addedAt": "@-18d",
+        "confirmedAt": "@-18d",
+        "team": {
+          "type": "contractor",
+          "state": "paused",
+          "owns": [
+            "m4"
+          ]
+        }
+      },
+      {
+        "id": "pc-tm-chow",
+        "name": "周家豪",
+        "label": "周家豪",
+        "kind": "team",
+        "aliases": [],
+        "status": "active",
+        "fromMilestoneIds": [],
+        "role": "送貨",
+        "addedFrom": "event",
+        "addedAt": "@-22d",
+        "confirmedAt": "@-22d",
+        "team": {
+          "type": "parttime",
+          "state": "left",
+          "owns": []
+        }
+      }
+    ]
   },
   "lines": [
     {
@@ -724,6 +935,43 @@
       "needsAcceptance": true,
       "acceptedBy": "founder",
       "updatedAt": "@-4d"
+    },
+    {
+      "id": "f5",
+      "title": "向陳經理跟進試單",
+      "owner": "founder",
+      "status": "planned",
+      "dueAt": "@+5d 10:00",
+      "prospectId": "pc-demo-chen",
+      "next": "問清楚試單日期及數量",
+      "updatedAt": "@-1d"
+    },
+    {
+      "id": "f6",
+      "title": "向青年創業基金交一頁簡介",
+      "owner": "pc-tm-lee",
+      "status": "planned",
+      "dueAt": "@+7d 10:00",
+      "prospectId": "pc-demo-fund",
+      "next": "一頁簡介草稿已備好",
+      "updatedAt": "@-1d"
+    },
+    {
+      "id": "f7",
+      "title": "送樣本到餐廳乙",
+      "owner": "pc-tm-chow",
+      "status": "planned",
+      "dueAt": "@+3d 11:00",
+      "next": "樣本已包好",
+      "updatedAt": "@-2d"
+    },
+    {
+      "id": "f8",
+      "title": "試送食菜到餐廳甲",
+      "owner": "pc-tm-chan",
+      "status": "planned",
+      "dueAt": "@+2d 09:00",
+      "updatedAt": "@-1d"
     }
   ],
   "decisions": [
@@ -803,7 +1051,9 @@
       "status": "awaitingFounder",
       "awaitingFounderText": "農場丙要求月結，接受嗎？",
       "packId": "ask-demo-inbox",
-      "receivedAt": "@-1d 10:05"
+      "receivedAt": "@-1d 10:05",
+      "via": "event",
+      "eventDate": "@-1d"
     },
     {
       "id": "in3",
@@ -818,7 +1068,9 @@
         {
           "change": "決定：不接受獨家"
         }
-      ]
+      ],
+      "via": "event",
+      "eventDate": "@-19d"
     },
     {
       "id": "in4",

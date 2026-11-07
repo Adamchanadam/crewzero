@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Founder Desk
+title CrewZero
 chcp 65001 >nul
 cd /d "%~dp0"
 where node >nul 2>nul
@@ -9,7 +9,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo [CrewZero] Starting Founder Desk. Keep this window open while you use the page; close it to stop.
+echo [CrewZero] Starting CrewZero. Keep this window open while you use the page; close it to stop.
 node "%~dp0server.mjs" --open
 echo.
 echo [CrewZero] Stopped.

@@ -112,9 +112,9 @@ try {
   await usePass(BASE, cdp);
   await cdp.go(BASE + '/', 1280, 2200);
   const headerHelp = await cdp.ev('(()=>{const b=document.getElementById("open-help");return b?{first:document.querySelector(".tool-right button")===b,text:b.textContent}:null})()');
-  ok('Founder Desk 頁頭最前有「需要幫助」按鈕', headerHelp && headerHelp.first && headerHelp.text === N.ui.helpOpen, headerHelp);
+  ok('頁頭最前有「需要幫助」按鈕', headerHelp && headerHelp.first && headerHelp.text === N.ui.helpOpen, headerHelp);
   const tools = await cdp.ev('(()=>({direct:[...document.querySelectorAll(".tool-right > button")].map(b=>b.id),inMore:[...document.querySelectorAll("#tool-more .tool-menu button")].map(b=>b.id),open:document.getElementById("tool-more").open}))()');
-  ok('頁頭只直接顯示求助，其餘工具收入「更多」', tools.direct.join() === 'open-help' && tools.inMore.join() === 'open-feedback,open-phone,refresh-now,fx,pause' && !tools.open, tools);
+  ok('頁頭只直接顯示求助，其餘工具（含開啟資料夾）收入「更多」', tools.direct.join() === 'open-help' && tools.inMore.join() === 'open-feedback,open-folder,open-phone,refresh-now,fx,pause' && !tools.open, tools);
   await cdp.click('#open-help');
   const dialog = await cdp.ev('(()=>{const d=document.getElementById("help-modal"),b=d&&d.querySelector(".layer").getBoundingClientRect();return d?{text:d.innerText,focus:document.activeElement&&document.activeElement.id,boxHidden:document.getElementById("help-ask-box").hidden,right:Math.round(b.right),left:Math.round(b.left)}:null})()');
   ok('頁頭有「需要幫助」：側欄靠右不遮整頁，輸入欄先收起，說明不含技術術語', dialog && dialog.focus === 'help-ask' && dialog.boxHidden && dialog.right === 1280 && dialog.left > 800 && !/PNG|MB|埠|伺服器|JSON|run|sandbox/i.test(dialog.text), dialog);
@@ -135,7 +135,7 @@ try {
   const dashboardNext = await waitFor(async () => await cdp.ev('(()=>{const a=document.querySelector("#help-next a");return a&&a.getAttribute("href")})()'), 5000);
   await cdp.click('#help-next a');
   const dashboardDestination = await cdp.ev('location.pathname + location.hash');
-  ok('從營運監察台的求助框按下一步，會打開 Founder Desk 對應頁', dashboardNext === '/#/setup' && dashboardDestination === '/#/setup', { href: dashboardNext, destination: dashboardDestination });
+  ok('從營運監察台的求助框按下一步，會打開 CrewZero 對應頁', dashboardNext === '/#/setup' && dashboardDestination === '/#/setup', { href: dashboardNext, destination: dashboardDestination });
 
   await cdp.go(BASE + '/', 1280, 1300);
   await cdp.click('#open-help');

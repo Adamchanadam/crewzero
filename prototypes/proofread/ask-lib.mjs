@@ -69,6 +69,13 @@ export function fnv(str) {
   return ('0000000' + x.toString(16)).slice(-8);
 }
 
+// 公司概覽版本雜湊（校對頁載入時算一次，確認回覆帶回；外殼用同一算法核對）。來源連結可以在同一頁更正（伺服器改 page.json），
+// 所以雜湊略去 sources[] 的 url、urlBefore、fixedOn；沒有這三欄的舊頁面雜湊與 0.39.1 的算法結果相同。proofread.html 的 hashView() 必須同一算法。
+export function proofreadHash(page) {
+  const view = page && Array.isArray(page.sources) ? { ...page, sources: page.sources.map(s => { if (!s || typeof s !== 'object') return s; const { url, urlBefore, fixedOn, ...rest } = s; return rest; }) } : page;
+  return fnv(JSON.stringify(view));
+}
+
 // 公司概覽「最近一次確認內容」的摘要值（唯一定義處之一；proofread.html 的 digestOf() 用同一算法）：
 // 以 { 全部欄位 id 排序後的 [id, 值]、路線次序、各站真事／工作 } 串起後取 fnv。
 // 校對頁以目前有效內容算同一個值，與伺服器確認內容的摘要值相同才算「已交付」。
@@ -143,7 +150,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.39.1';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.40.0';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

@@ -52,7 +52,8 @@ try {
   /* ---------- A. 一個殼：九個分頁三組、兩道門、每頁同一個頁頭 ---------- */
   const TABS = ['pending', 'inputs', 'company', 'overview', 'brain', 'path', 'team', 'log', 'system'];
   const NAME = t => t === 'pending' || t === 'company' ? U[t] : D[t];
-  const PAGES = [['/', 'pending'], ['/#/intake', 'company'], ['/#/setup', 'system'], ['/#/log', 'log'], ['/#/request/event', 'inputs'], ['/#/debate', 'brain'], ['/proofread.html', 'company'], ['/dashboard', 'overview'], ['/dashboard/brain', 'brain'], ['/dashboard/path', 'path'], ['/dashboard/inputs', 'inputs'], ['/dashboard/team', 'team'], ['/dashboard/log', 'log'], ['/dashboard/system', 'system']];
+  // 舊網址 /#/request/event：沒有對應的輸入時回首頁（待決事項）並展開「告訴 Zero 一件事」，所以所屬分頁是待決事項
+  const PAGES = [['/', 'pending'], ['/#/intake', 'company'], ['/#/setup', 'system'], ['/#/log', 'log'], ['/#/request/event', 'pending'], ['/#/debate', 'brain'], ['/proofread.html', 'company'], ['/dashboard', 'overview'], ['/dashboard/brain', 'brain'], ['/dashboard/path', 'path'], ['/dashboard/inputs', 'inputs'], ['/dashboard/team', 'team'], ['/dashboard/log', 'log'], ['/dashboard/system', 'system']];
   const navOf = `(()=>{const n=document.querySelector('nav.tabs');if(!n)return null;return {groups:[...n.querySelectorAll('[data-grp]')].map(g=>({name:g.getAttribute('data-name'),tabs:[...g.querySelectorAll('a[data-tab]')].map(a=>[a.getAttribute('data-tab'),a.childNodes[0].textContent,a.getAttribute('href')])})),dividers:n.querySelectorAll('.divider').length,cur:[...n.querySelectorAll('a[aria-current="page"]')].map(a=>a.getAttribute('data-tab')),more:/更多/.test(n.textContent),metrics:[...document.querySelectorAll('.metric')].map(m=>m.getAttribute('data-metric')),mark:(document.querySelector('.dtop .mark')||{}).textContent}})()`;
   const navBad = [];
   for (const [p, want] of PAGES) {
@@ -77,7 +78,7 @@ try {
   await c.go(B + '/dashboard', 1440, 3500);
   const mDash = await c.ev(`[...document.querySelectorAll('[data-odo]')].map(e=>e.getAttribute('aria-label')).join('|')`);
   const mt = shellM.metrics;
-  ok('頁頭三個指標：Founder Desk 同監察台一樣、同伺服器數值一致', mDesk === mDash && mDash === [mt.quarter.done + '／' + mt.quarter.total, String(mt.pending), String(mt.inbox)].join('|'), { mDesk, mDash, mt });
+  ok('頁頭三個指標：CrewZero 同監察台一樣、同伺服器數值一致', mDesk === mDash && mDash === [mt.quarter.done + '／' + mt.quarter.total, String(mt.pending), String(mt.inbox)].join('|'), { mDesk, mDash, mt });
   // 紀錄三個篩選
   const lf = async p => { await c.go(B + p, 1440, 2600); return c.ev(`(()=>{const b=document.querySelector('#log-filters');return b?{on:(b.querySelector('a.on')||{}).getAttribute&&b.querySelector('a.on').getAttribute('data-logf'),links:[...b.querySelectorAll('a')].map(a=>a.getAttribute('data-logf')+'>'+a.getAttribute('href')+'>'+a.textContent).join('|')}:null})()`); };
   const l1 = await lf('/#/log'), l2 = await lf('/dashboard/log'), l3 = await lf('/dashboard/log?f=work');
@@ -86,7 +87,7 @@ try {
   await c.go(B + '/dashboard/system', 1440, 2600);
   ok('設定歸系統分頁：系統頁有 AI 工具設定入口，開到嘅設定畫面導航標「系統」', await c.ev(`document.querySelector('#sys-setup').getAttribute('href')==='/#/setup'`) && await (async () => { await c.go(B + '/#/setup', 1440, 2600); return (await c.ev(navOf)).cur[0] === 'system'; })());
   await c.go(B + '/dashboard/inputs', 1440, 2600);
-  ok('輸入分頁：訪問、真實事件、文件與筆記、交要求嘅入口都喺度', await c.ev(`!!document.querySelector('#in-event')&&!!document.querySelector('#doc-drop')&&!!document.querySelector('#open-folder')&&!!document.querySelector('a[href="/#/request/order"],a[href="/#/request/adhoc"]')`));
+  ok('真實進展頁：交給 Zero 的事、Zero 的工作、每週訪問都在；唯一入口是「告訴 Zero 一件事」，去首頁的盒（上載、現在開工不在這頁）', await c.ev(`!!document.querySelector('#in-inbox')&&!!document.querySelector('#in-work')&&!!document.querySelector('#in-interview')&&!document.querySelector('#doc-drop')&&!document.querySelector('#run-now')&&document.querySelector('#tell-go').getAttribute('href')==='/#quick-input'`));
   const dashSrc = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8'), askSrc = fs.readFileSync(path.join(PROTO, 'ask.html'), 'utf8');
   ok('回覆盒只有一處：監察台檔案冇送出回覆（/api/submit）；答題畫面（ask.html）有', !dashSrc.includes('/api/submit') && askSrc.includes('/api/submit'));
   // 深連：/dashboard#<里程碑> 預選壓縮條嗰站
@@ -234,7 +235,7 @@ try {
   await c.go(B + '/', 1440, 4000);
   const cd1 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`); await sleep(1600); const cd2 = await c.ev(`(document.querySelector('[data-tele] [data-cd]')||{}).textContent`);
   ok('AI 近期工作：下次 AI 開工倒數每秒走、AI 今日工作／用時一行（真數據）', /^\d{2}:\d{2}:\d{2}$/.test(cd2 || '') && cd1 !== cd2 && await c.ev(`(()=>{const t=document.querySelector('[data-tele]').textContent;return t.includes(${JSON.stringify(D.startsTodayL.split('{a}')[0])})&&t.includes('次')})()`), { cd1, cd2 });
-  // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI；基準 7 次，加上必須逐題作答的點擊，零跨產品
+  // 典型一日（設計文件第 4 節方案 A）：開 → 作答 → 確認 → 公司現況 → 首頁告訴 Zero 一件事 → 送出；基準 7 次，加上必須逐題作答的點擊，零跨產品
   let clicks = 0; const tap = async sel => { await c.click(sel); clicks++; await sleep(900); };
   await c.go(B + '/', 1440, 3500);
   await tap('#next-list a[href^="#/ask/"]');
@@ -246,13 +247,13 @@ try {
   await sleep(1500);
   await tap('nav.tabs a[data-tab="overview"]'); await sleep(1500);
   const onDash = await c.ev(`location.pathname==='/dashboard'`);
-  await tap('nav.tabs a[data-tab="inputs"]'); await sleep(1200);
-  await tap('#in-event'); await sleep(1500);
-  await c.type('#req-text', '農場丙今日來電，答應下星期一簽供應協議。');
-  await tap('#req-send');
-  const sent = await waitFor(async () => c.ev(`/已收到|已記錄|處理中|完成/.test((document.querySelector('#req-track')||{}).textContent||'')`), 15000);
+  await tap('nav.tabs a[data-tab="pending"]'); await sleep(1200);
+  await tap('#quick-event'); await sleep(800);
+  await c.type('#quick-text', '農場丙今日來電，答應下星期一簽供應協議。');
+  await tap('#quick-send');
+  const sent = await waitFor(async () => c.ev(`/已收到/.test((document.querySelector('#quick-note')||{}).textContent||'')&&!!document.querySelector('#quick-track')`), 15000);
   const clickLimit = 7 + requiredIds.length;
-  ok(`典型一日：開 → 作答 → 確認 → 公司現況 → 輸入 → 記錄真實事件 → 交給 AI，點擊 ≤ ${clickLimit}（基準 7 + 必須作答 ${requiredIds.length} 題）、全程同一列導航（零跨產品）`, clicks <= clickLimit && onDash && !!sent, { clicks, clickLimit, required: requiredIds.length, onDash, sent });
+  ok(`典型一日：開 → 作答 → 確認 → 公司現況 → 首頁告訴 Zero「發生了一件事」→ 送出，點擊 ≤ ${clickLimit}（基準 7 + 必須作答 ${requiredIds.length} 題）、全程同一列導航（零跨產品）`, clicks <= clickLimit && onDash && !!sent, { clicks, clickLimit, required: requiredIds.length, onDash, sent });
   ok('全程冇程式錯誤', !c.errors.length, c.errors);
 } catch (e) {
   ok('測試出錯', false, String(e && e.stack || e));

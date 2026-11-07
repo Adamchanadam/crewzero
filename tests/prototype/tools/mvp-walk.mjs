@@ -71,7 +71,7 @@ try {
   const mark = readJ(path.join(T, 'data', 'ledger', 'schedule.json'));
   ok('批准（假）：寫入伺服器授權標記，登入啟動保持未開啟', rg.status === 0 && mark && mark.mode === 'server' && mark.autostart && mark.autostart.enabled === false && mark.runTime === '21:00', rg.stdout);
 
-  step('2 打開 Founder Desk');
+  step('2 打開 CrewZero');
   const od = await openDesk();
   ok('ask.mjs --desk 開到頁', !!B, od.stdout + od.stderr);
   c = await openChrome(CHROME, path.join(OUT, 'profile'), PORT + 50);
@@ -84,7 +84,7 @@ try {
   await shot('01-desk-ai-unset.png');
   await c.go(B + 'dashboard/system', 1280, 3000);
   const sys1 = await text('#sys-rhythm'), last1 = await text('#sys-last');
-  ok('系統頁：每日自動開工已開啟 · 每日 21:00，並如實說明重開電腦後要先打開 Founder Desk', /已開啟/.test(sys1) && /21:00/.test(sys1) && /重新開啟後/.test(sys1), { sys1, last1 });
+  ok('系統頁：每日自動開工已開啟 · 每日 21:00，並如實說明重開電腦後要先打開 CrewZero', /已開啟/.test(sys1) && /21:00/.test(sys1) && /重新開啟後/.test(sys1), { sys1, last1 });
   await shot('02-system-registered.png');
 
   step('3 設定 AI');

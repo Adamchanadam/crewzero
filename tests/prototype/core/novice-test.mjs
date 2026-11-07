@@ -51,9 +51,9 @@ try {
   fs.writeFileSync(path.join(DATA, 'ledger', 'state.json'), JSON.stringify({ company: { name: '', initials: '', rhythm: { runCadence: 'weekly', runTime: '21:00', interviewWeekday: 1, runCapMinutes: 30 } }, interviews: { nextOn: '2099-01-05', applied: {} }, tasks: [], events: [] }));
   await chrome.go(BASE + '/#/');
   const waitCard = await waitFor(() => chrome.ev(`(()=>{const c=document.querySelector('#today-card');const a=c&&c.querySelector('a');return c?{text:c.innerText,href:a&&a.getAttribute('href')}:null})()`));
-  ok('首次訪問未到時提供日期與可用的真實事件入口', !!waitCard && waitCard.text.includes('首次每週訪問在 1 月 5 日') && waitCard.href === '#/request/event', waitCard);
+  ok('首次訪問未到時提供日期與可用的「發生了一件事」入口', !!waitCard && waitCard.text.includes('首次每週訪問在 1 月 5 日') && waitCard.href === '#/request/event', waitCard);
   await chrome.click('#today-card a');
-  ok('首次訪問未到的入口可打開記錄真實事件頁', !!await waitFor(() => chrome.ev(`!!document.querySelector('#req-form')&&location.hash==='#/request/event'`)), null);
+  ok('首次訪問未到的入口（舊網址 #/request/event）回到首頁，並選好「發生了一件事」、展開表格', !!await waitFor(() => chrome.ev(`location.hash==='#/'&&!!document.querySelector('#tell-form')&&!document.querySelector('#tell-form').hidden&&document.querySelector('#quick-event').getAttribute('aria-pressed')==='true'`)), await chrome.ev(`location.hash+' '+((document.querySelector('#quick-event')||{}).className||'')`));
   fs.mkdirSync(path.join(DATA, 'asks'), { recursive: true });
   fs.writeFileSync(path.join(DATA, 'asks', 'ask-novice-interview.json'), JSON.stringify({ id: 'ask-novice-interview', title: '首次每週訪問', askedBy: 'AI', askedAt: new Date().toISOString(), todoType: 'interview', due: '2099-01-05', rhythm: { kind: 'interview', on: '2099-01-05' }, questions: [{ id: 'progress', ask: '本週有甚麼真實進展？', kind: 'text', priority: 1 }] }));
   await chrome.go(BASE + '/#/');
@@ -96,7 +96,7 @@ try {
   const installRoot = path.join(OUT, 'install-root'); fs.mkdirSync(installRoot, { recursive: true });
   const installed = spawnSync(process.execPath, [path.join(PROTO, 'install.mjs'), installRoot], { cwd: PROTO, encoding: 'utf8', windowsHide: true });
   const installText = String(installed.stdout || '');
-  ok('安裝完成提示提供重新打開入口而沒有內部名稱', installed.status === 0 && installText.includes('打開 Founder Desk') && !/VERSION|START-HERE|程式檔/.test(installText), { code: installed.status, text: installText });
+  ok('安裝完成提示提供重新打開入口而沒有內部名稱', installed.status === 0 && installText.includes('打開 CrewZero') && !/VERSION|START-HERE|程式檔/.test(installText), { code: installed.status, text: installText });
   ok('瀏覽器沒有程式錯誤', !chrome.errors.length, chrome.errors);
 } catch (error) {
   ok('測試程式出錯', false, String(error?.stack || error));

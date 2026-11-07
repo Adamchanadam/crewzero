@@ -1,10 +1,10 @@
 {
   "name": "crewzero-local",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "CrewZero：Zero 團隊與創辦人一起經營初創（本機原型）",
   "owner": { "name": "Adam Chan" },
   "renames": { "startup-os": "crewzero" },
   "plugins": [
-    { "name": "crewzero", "version": "0.12.1", "source": "./crewzero" }
+    { "name": "crewzero", "version": "0.13.0", "source": "./crewzero" }
   ]
 }

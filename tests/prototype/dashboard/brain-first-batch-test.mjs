@@ -10,6 +10,8 @@ const NAMES = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const brain = await import(pathToFileURL(path.join(PROTO, 'brain-lib.mjs')));
 const practice = await import(pathToFileURL(path.join(PROTO, 'practice-lib.mjs')));
 const prefillLib = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs')));
+const ops = await import(pathToFileURL(path.join(PROTO, 'ledger-ops.mjs')));
+const people = await import(pathToFileURL(path.join(PROTO, 'people-ops.mjs'))); // run.mjs 模組層從這裏取 orderEventItems 等函數，vm 環境要一併放入
 const pageCheck = await import(pathToFileURL(path.join(PROTO, 'company-page-check.mjs')));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-first-batch-'));
 const previous = process.cwd(), previousData = process.env.SOS_DATA;
@@ -42,6 +44,7 @@ try {
   check('對象前綴沿用舊名字配對及編號穩定', JSON.stringify(actors) === JSON.stringify(again) && prospects.find(x => x.name === '陳').stage === 2 && prospects.find(x => x.name === '陳經理').stage === 2);
   j(path.join(sb, 'job.json'), { type: 'debrief' });
   // checkEvent 用到 run.mjs 模組層的 unreadList（再用到 U、matchDelivered、log、readJSON、loadState）：一併放入環境，否則會 ReferenceError
+  Object.assign(ctx, ops, people, { pnorm: people.norm, markBrokenLinks: async e => e, attachmentRows: () => [], attachName: x => x });
   vm.runInContext(section('const unreadList =', '\n') + '\n' + section('function checkEvent(', 'function eventPack(') + '\nthis.checkEvent=checkEvent;', ctx);
   const before = fs.readFileSync(stateFile, 'utf8');
   fs.writeFileSync(path.join(data, 'fake-mode.txt'), 'debrief:auto-grade\n');
@@ -158,10 +161,10 @@ try {
   const bc = { fs, path, Date, NAMES, U: NAMES.ui, DIR: brainDir, ROOT: PROTO, readJSON: ctx.readJSON, writeJSON: j, brainFile: brain.brainFile,
     loadState: () => state, saveState: v => j(stateFile, v), pausedNow: () => false, certified: () => ({ host: {} }), webAccess: () => 'none', listMatches: () => [], brainSource: () => null, writeCounterparts() {}, writeBizContext() {}, writeConfirmedPage() {},
     todayIso: () => '2026-11-05', localIso: ctx.localIso, clockNow: Date.now, datedTask: folder => fs.writeFileSync(path.join(folder, 'task.md'), 'task'),
-    runAI: async folder => { j(path.join(folder, 'out', 'checkup.json'), output); return aiReply; }, step: (_r, _k, _l, st, detail) => steps.push({ st, detail }),
+    markBrokenLinks: async e => e, runAI: async folder => { j(path.join(folder, 'out', 'checkup.json'), output); return aiReply; }, step: (_r, _k, _l, st, detail) => steps.push({ st, detail }),
     addEvent: e => events.push(e), offerDebate: () => offeredCount++, offerOpportunities: () => offeredCount++, clip: ctx.clip, log() {} };
   vm.createContext(bc);
-  vm.runInContext(section('const BRAIN_JOBS =', '// 生意大腦放上 Founder Desk') + '\nthis.brainStep=brainStep;', bc);
+  vm.runInContext(section('const BRAIN_JOBS =', '// 生意大腦放上待決事項') + '\nthis.brainStep=brainStep;', bc);
   await bc.brainStep({ id: 'partial', steps: [] }, 'checkup');
   const savedPartial = JSON.parse(fs.readFileSync(brain.brainFile(brainDir, 'checkup')));
   check('超時已有有效內容：保存部分結果，不建議後續工作', savedPartial.partial && savedPartial.status === 'partial' && savedPartial.summary.includes('部分完成') && events[0].title.includes('部分完成') && offeredCount === 0 && state.company.assumptions[0].cheapestTestPartial === true);
@@ -215,13 +218,13 @@ try {
   let priorAtStart;
   Object.assign(ctx, { ROOT: PROTO, loadState: () => state, counterpartsOf: d => brain.counterpartsOf(d), listScenarios: practice.listScenarios, getTask: () => null, newSandbox: () => prepSb, writeCounterparts() {}, brainSource: () => null, writeConfirmedPage() {},
     runAIStep: async () => { priorAtStart = fs.existsSync(path.join(prepSb, 'scenario-seed.json')); } });
-  vm.runInContext(section('async function handlePracticePrep(', 'function finishPracticePrep(') + '\nthis.handlePracticePrep=handlePracticePrep;', ctx);
+  vm.runInContext(section('async function handlePracticePrep(', 'async function finishPracticePrep(') + '\nthis.handlePracticePrep=handlePracticePrep;', ctx);
   await ctx.handlePracticePrep({ id: 'prep-before' }, { counterpartId: 'a', who: '農場甲' }, '');
   j(path.join(chainSb, 'out', 'scenario.json'), { title: '再準備', counterpart: { name: '農場甲' }, persona: { identity: { text: '身份' }, stance: { text: '立場' }, interests: { text: '利益' }, concerns: { text: 'AI 想法' } }, goal: { text: '目標' }, questions: ['問題'], objections: ['反對'] });
   ctx.counterpartsOf = d => brain.counterpartsOf(d); ctx.DIR = DIR; ctx.stamp = () => 'new';
   check('AI 執行前不建立人物卡種子', priorAtStart === false);
-  vm.runInContext(section('function finishPracticePrep(', 'async function handleDebrief(') + '\nthis.finishPracticePrep=finishPracticePrep;', ctx);
-  ctx.finishPracticePrep({ id: 'prep', practiceCounterpartId: 'a' }, chainSb, '準備');
+  vm.runInContext(section('async function finishPracticePrep(', 'async function handleDebrief(') + '\nthis.finishPracticePrep=finishPracticePrep;', ctx);
+  await ctx.finishPracticePrep({ id: 'prep', practiceCounterpartId: 'a' }, chainSb, '準備');
   const prepared = JSON.parse(fs.readFileSync(path.join(scenarioDir, 'Snew.json')));
   check('重新準備保存 AI 產生的場景欄位', prepared.persona.concerns.text === 'AI 想法' && prepared.persona.concerns.source === 'Zero 解讀');
   const matchDir = path.join(temp, 'debates', 'match'); fs.mkdirSync(matchDir, { recursive: true });

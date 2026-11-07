@@ -194,7 +194,7 @@ try {
   const a1 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), pack], { cwd: PROTO, encoding: 'utf8', env: envAsk });
   const a2 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), '--desk'], { cwd: PROTO, encoding: 'utf8', env: envAsk });
   const outAll = a1.stdout + a1.stderr + a2.stdout + a2.stderr;
-  ok('ask.mjs 放問題包並開頁：結束碼 0、印普通網址', a1.status === 0 && /Founder Desk：http:\/\/127\.0\.0\.1:\d+\/#\/ask\//.test(a1.stdout) && a2.status === 0 && /Founder Desk：http:\/\/127\.0\.0\.1:\d+\/$/m.test(a2.stdout), outAll);
+  ok('ask.mjs 放問題包並開頁：結束碼 0、印普通網址', a1.status === 0 && /CrewZero：http:\/\/127\.0\.0\.1:\d+\/#\/ask\//.test(a1.stdout) && a2.status === 0 && /CrewZero：http:\/\/127\.0\.0\.1:\d+\/\s*$/m.test(a2.stdout), outAll);
   ok('ask.mjs 輸出零 token：冇 /pass/、冇 64 位十六進制、冇 sos_pass', !/\/pass\//.test(outAll) && !/[a-f0-9]{64}/.test(outAll) && !/sos_pass/.test(outAll), outAll);
   ok('ask.mjs 原始碼唔再自己開瀏覽器、改經 /api/pass/open、用 /api/health 認伺服器', (() => { const t = fs.readFileSync(path.join(PROTO, 'ask.mjs'), 'utf8'); return !/'start', ''/.test(t) && t.includes('api/pass/open') && t.includes('api/health') && t.indexOf('api/health') >= 0 && t.indexOf('api/health') < t.indexOf('/api/status'); })());
 
@@ -217,7 +217,7 @@ try {
     c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);
     await c.go(BASE + '/', 1440, 2500);
     const np = await c.ev(`(()=>{const e=document.getElementById('no-pass');return e?{title:e.querySelector('h2').textContent,text:e.innerText}:null})()`);
-    ok('Founder Desk 冇通行證：全頁顯示「此瀏覽器未與 Founder Desk 配對」同三種工具嘅叫法', np && np.title === N.ui.noPassTitle && /\/crewzero:desk（Claude Code）/.test(np.text) && /\$crewzero:desk（Codex）/.test(np.text) && /\/desk（Antigravity）/.test(np.text) && !/\/pass\//.test(np.text), np);
+    ok('首頁冇通行證：全頁顯示「此瀏覽器未與 CrewZero 配對」同三種工具嘅 dashboard 叫法', np && np.title === N.ui.noPassTitle && np.title === '此瀏覽器未與 CrewZero 配對' && /\/crewzero:dashboard（Claude Code）/.test(np.text) && /\$crewzero:dashboard（Codex）/.test(np.text) && /\/dashboard（Antigravity）/.test(np.text) && !/\/pass\//.test(np.text), np);
     await shotBoth(c, '403-desk', BASE + '/');
     await c.go(BASE + '/dashboard', 1440, 2500);
     const npd = await c.ev(`(()=>{const e=document.getElementById('no-pass');return e?e.innerText:null})()`);

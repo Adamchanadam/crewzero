@@ -10,7 +10,7 @@ CrewZero 插件入面嘅安裝指令（只係轉接層，核心係程式資料�
 
 CrewZero 係 Zero 團隊同創辦人一齊經營初創嘅工具。安裝會喺項目入面新增一個 `crewzero/` 資料夾（程式檔同一個空嘅 `data/`），唔改項目其他檔；之後創辦人批准，已開啟的 CrewZero 伺服器每日按時開工。
 
-創辦人亦可以在營運監察台的系統頁自行開關和更改自動開工時間；原有批准規則不變。
+創辦人亦可以在 CrewZero 的系統頁自行開關和更改自動開工時間；原有批准規則不變。
 
 ## 指令叫法（三種 AI 工具）
 
@@ -19,8 +19,8 @@ CrewZero 係 Zero 團隊同創辦人一齊經營初創嘅工具。安裝會喺�
 | 指令 | Claude Code | Codex | Antigravity（agy） |
 |---|---|---|---|
 | 安裝 | `/crewzero:install` | `$crewzero:install` | `/install` |
-| Founder Desk | `/crewzero:desk` | `$crewzero:desk` | `/desk` |
-| 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
+| 打開 CrewZero（每日入口） | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
+| 和 Zero 討論 | `/crewzero:discuss` | `$crewzero:discuss` | `/discuss` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
 
 ## 先搵三個位置
@@ -37,19 +37,19 @@ CrewZero 係 Zero 團隊同創辦人一齊經營初創嘅工具。安裝會喺�
    - `<安裝>` 係 `crewzero/`：講「呢個項目已經安裝咗 CrewZero」；想換新版本嘅話叫佢輸入更新指令（Claude Code `/crewzero:update`、Codex `$crewzero:update`、Antigravity `/update`；安裝命令唔會覆寫舊版）。
    - `<安裝>` 係 `startup-os/`（舊版）：講「呢個項目已經有舊版安裝（`startup-os/`），CrewZero 會沿用呢個資料夾，唔會另建 `crewzero/`；請輸入更新指令換成新版程式，公司資料不會改動」（填入創辦人工具嘅更新指令叫法）。
    - 再問佢要唔要登記或者重新登記每日排程，要就跳去「登記每日排程」。
-2. **寫入之前一定要停**：講「將在「<資料夾名稱>」資料夾內加入 CrewZero，不會改動其他資料；營運監察台亦會顯示這個資料夾內的 AI 對話狀態，可隨時在系統頁移除。好嗎？」（以實際項目資料夾名稱代入 `<資料夾名稱>`）然後停，等創辦人答。冇答「好」（或者同樣明確嘅同意）就唔好做任何寫入。
+2. **寫入之前一定要停**：講「將在「<資料夾名稱>」資料夾內加入 CrewZero，不會改動其他資料；CrewZero 亦會顯示這個資料夾內的 AI 對話狀態，可隨時在系統頁移除。好嗎？」（以實際項目資料夾名稱代入 `<資料夾名稱>`）然後停，等創辦人答。冇答「好」（或者同樣明確嘅同意）就唔好做任何寫入。
 3. 創辦人答「好」之後執行：`node "<程式>/install.mjs" "<項目根>"`
    - 結束碼 0：安裝完成，照命令印出嘅結果用一兩句話講。之後 `<安裝>` 就係 `<項目根>/crewzero`。
    - 結束碼 2：已經安裝，冇改任何檔；命令印出有新版本或者舊版安裝嘅話，講一句「要更新請輸入 …」（填入創辦人工具嘅更新指令叫法）；然後跳去「登記每日排程」。
    - 其他：照印出嘅原因話畀創辦人知（用白話講原因同點做，見「命令出錯時點講」），唔算完成；唔好自己改檔或者再試第二種方法。
 4. 跟住做「登記每日排程」。
-5. 最後登記觀察資料夾同打開 Founder Desk（同一條命令）：`node "<安裝>/ask.mjs" --desk --observe "<項目根>"`。話畀創辦人知已經打開，下一步是頁頂「AI 工具未設定」的「前往設定」。最後一定要說：「以後在 AI 對話說「打開 Founder Desk」，便可再次打開。」創辦人喺第 2 步明確講唔要觀察，就改用 `node "<安裝>/ask.mjs" --desk`。
+5. 最後登記觀察資料夾同打開 CrewZero（同一條命令）：`node "<安裝>/ask.mjs" --dashboard --observe "<項目根>"`。話畀創辦人知已經打開，下一步是頁頂「AI 工具未設定」的「前往設定」。最後一定要說：「以後在 AI 對話說「打開 CrewZero」，便可再次打開；想先和 Zero 傾一傾，說「和 Zero 討論」。」創辦人喺第 2 步明確講唔要觀察，就改用 `node "<安裝>/ask.mjs" --dashboard`。
 
 ## 登記每日自動開工（亦處理「安裝排程」「重新登記排程」）
 
 1. 先讀取排程說明：`node "<安裝>/adapters/scheduler/install-schedule.mjs"`。向創辦人講清每天時間、伺服器必須開着、錯過後只在 6 小時內補做一次，然後問「批准每日自動開工？」。先停，等創辦人答。
 2. 創辦人答「批准」後執行：`node "<安裝>/adapters/scheduler/install-schedule.mjs" --register`
-   - 成功：如伺服器未開，必須如實說「打開 Founder Desk 一次後開始生效」；並講明電腦重開後要打開一次 Founder Desk 才會恢復。
+   - 成功：如伺服器未開，必須如實說「打開 CrewZero 一次後開始生效」；並講明電腦重開後要打開一次 CrewZero 才會恢復。
 3. 登入時自動打開 CrewZero 仍在驗證，唔好主動提出。創辦人主動要求時，先講明未經真機驗證，佢再次答應先加 `--autostart`；答應每日自動開工唔代表答應登入啟動。
 4. 創辦人唔批准每日自動開工：講「系統頁會寫『未開啟』；之後想開啟，在對話輸入『安裝排程』」。
 

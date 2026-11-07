@@ -1,4 +1,4 @@
-// 生意大腦瀏覽器測試＋截圖（假 AI、示範資料）：六項總覽、紅藍對打逐步亮起、重播、結果卡意見、放上 Founder Desk、手機闊度
+// 生意大腦瀏覽器測試＋截圖（假 AI、示範資料）：六項總覽、紅藍對打逐步亮起、重播、結果卡意見、放上 CrewZero、手機闊度
 // 用法：node cdp-brain.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port> [截圖資料夾]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -86,7 +86,7 @@ try {
   for (const w of [1440, 1024, 390]) { await go('dashboard/brain/wargame', w); await shot('b04-wargame-done', '#b-wargame'); }
   await go('dashboard/brain/wargame');
   await click('#wg-decide-put');
-  ok('放上 Founder Desk：之後變成作答入口', await waitFor(async () => { await sleep(1500); return ev(`(document.querySelector('#wg-decide-go')||{}).getAttribute&&/^\\/#\\/ask\\//.test(document.querySelector('#wg-decide-go').getAttribute('href'))`); }, 20000));
+  ok('放上 CrewZero：之後變成作答入口', await waitFor(async () => { await sleep(1500); return ev(`(document.querySelector('#wg-decide-go')||{}).getAttribute&&/^\\/#\\/ask\\//.test(document.querySelector('#wg-decide-go').getAttribute('href'))`); }, 20000));
   // 結果卡意見：要修改（生意體檢分頁）
   await go('dashboard/brain/checkup');
   await click('[data-card="weak-2"] [data-fb="revise"]');
@@ -106,7 +106,7 @@ try {
   await click('#fb-send');
   ok('有用：卡上顯示你的意見', await waitFor(async () => (await text('[data-card="opp-1"]')).includes('你的意見：有用')));
   await go('dashboard/brain/scenario');
-  ok('情景演練等你：一按去 Founder Desk 練習', await ev(`[...document.querySelectorAll('#b-scenario a')].some(a=>a.getAttribute('href')==='/#/practice/farm-c')`));
+  ok('情景演練等你：一按去 CrewZero 練習', await ev(`[...document.querySelectorAll('#b-scenario a')].some(a=>a.getAttribute('href')==='/#/practice/farm-c')`));
   ok('監察台冇回覆盒（只有意見一句）', await ev(`!document.querySelector('textarea')`));
   for (const w of [1440, 1024, 390]) { await go('dashboard/brain', w); await shot('b07-brain-full', null, true); }
   for (const w of [1440, 1024, 390]) { await go('dashboard', w); await shot('b08-overview-strip', '#brain-strip'); }

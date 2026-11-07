@@ -1,6 +1,6 @@
 // 插件打包測試（MVP 規格 2026-10-29 第 2 節第 6 項）：
 // (1) 插件入面嘅 program/ 同原型喺同一排除清單下逐檔雜湊一致（唔一致即失敗，防止插件內程式落後；要重跑 adapters/claude-code/build-plugin.mjs）；
-// (2) 將成個 adapters/claude-code/ 複製去原型以外嘅暫存位置，喺嗰度執行 program/install.mjs <空資料夾>：裝得到、開得到 Founder Desk、資料寫入新安裝嘅 data/；
+// (2) 將成個 adapters/claude-code/ 複製去原型以外嘅暫存位置，喺嗰度執行 program/install.mjs <空資料夾>：裝得到、開得到 CrewZero、資料寫入新安裝嘅 data/；
 // (3) 複製出去嘅插件資料夾，掃描本機絕對路徑同開發資料夾名，結果要係零。假 AI、零費用。
 // 用法：node plugin-bundle-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import fs from 'node:fs';
@@ -39,12 +39,14 @@ try {
   const licOk = fs.existsSync(path.join(PLUGIN_ROOT, 'LICENSE')) && sha(path.join(PLUGIN_ROOT, 'LICENSE')) === LIC_SHA, noticeOk = fs.existsSync(path.join(PLUGIN_ROOT, 'NOTICE')) && fs.readFileSync(path.join(PLUGIN_ROOT, 'NOTICE'), 'utf8').includes('由 Adam Chan 製作');
   ok('插件根目錄有 Apache-2.0 LICENSE（雜湊等於官方原文）及 NOTICE（含作者聲明），plugin.json 的 license 是 Apache-2.0', licOk && noticeOk && pj.license === 'Apache-2.0', { license: licOk, notice: noticeOk, pluginJson: pj.license });
   ok('插件資訊檔同市集檔版本一致', pj.version === mk.version && mk.plugins.every(p => p.version === pj.version), { plugin: pj.version, market: mk.version });
-  const skills = ['install', 'desk', 'dashboard', 'update'].map(s => path.join(PLUGIN_SRC, 'crewzero', 'skills', s, 'SKILL.md'));
-  ok('四個指令齊（install、desk、dashboard、update）', skills.every(f => fs.existsSync(f)), skills.filter(f => !fs.existsSync(f)));
-  const sk = Object.fromEntries(['install', 'desk', 'dashboard', 'update'].map((s, i) => [s, fs.existsSync(skills[i]) ? fs.readFileSync(skills[i], 'utf8') : '']));
-  ok('install 技能：安裝前講明會登記觀察資料夾，最後一步用 --desk --observe 登記項目根（唔使創辦人貼路徑）', /觀察資料夾/.test(sk.install) && /--desk --observe "<項目根>"/.test(sk.install));
+  const SKILL_NAMES = ['install', 'dashboard', 'discuss', 'update'];
+  const skills = SKILL_NAMES.map(s => path.join(PLUGIN_SRC, 'crewzero', 'skills', s, 'SKILL.md'));
+  ok('四個指令齊（install、dashboard、discuss、update），舊的 desk 指令已移除', skills.every(f => fs.existsSync(f)) && !fs.existsSync(path.join(PLUGIN_SRC, 'crewzero', 'skills', 'desk')) && fs.readdirSync(path.join(PLUGIN_SRC, 'crewzero', 'skills')).sort().join() === [...SKILL_NAMES].sort().join(), skills.filter(f => !fs.existsSync(f)));
+  const sk = Object.fromEntries(SKILL_NAMES.map((s, i) => [s, fs.existsSync(skills[i]) ? fs.readFileSync(skills[i], 'utf8') : '']));
+  ok('install 技能：安裝前講明會登記觀察資料夾，最後一步用 --dashboard --observe 登記項目根（唔使創辦人貼路徑）', /觀察資料夾/.test(sk.install) && /--dashboard --observe "<項目根>"/.test(sk.install));
   ok('update 技能：寫入前先檢查再停等創辦人答「好」、用 --apply 執行、有「還原上一個版本」、唔手改 data/', /--apply/.test(sk.update) && /還原上一個版本/.test(sk.update) && /--rollback/.test(sk.update) && /好嗎/.test(sk.update) && sk.update.includes('<安裝>/data/') && fs.existsSync(path.join(PLUGIN_SRC, 'crewzero', 'program', 'update.mjs')));
-  ok('desk 技能：問題包草稿寫去系統暫存資料夾、唔寫入項目資料夾，放上之後刪走', /系統暫存資料夾/.test(sk.desk) && /唔好存喺項目資料夾/.test(sk.desk) && /刪走/.test(sk.desk) && !/存喺你而家嘅工作資料夾/.test(sk.desk));
+  ok('dashboard 技能：問題包草稿寫去系統暫存資料夾、唔寫入項目資料夾，放上之後刪走', /系統暫存資料夾/.test(sk.dashboard) && /唔好存喺項目資料夾/.test(sk.dashboard) && /刪走/.test(sk.dashboard) && !/存喺你而家嘅工作資料夾/.test(sk.dashboard));
+  ok('discuss 技能：草稿寫去系統暫存資料夾、唔寫入項目資料夾，交出之後刪走', /系統暫存資料夾/.test(sk.discuss) && /唔好存喺項目資料夾/.test(sk.discuss) && /刪走/.test(sk.discuss));
 
   /* (2) 喺原型以外嘅位置用插件附帶嘅程式安裝 */
   const COPY = path.join(AWAY, 'claude-code');
@@ -60,7 +62,7 @@ try {
   const st = url ? await (await fetch(url + 'api/health')).json() : {};
   pid = Number(st.pid) || 0;
   if (url) unpair = await installPass(lib.rootId(path.join(T, 'data')), url, path.join(T, 'data'));
-  ok('開得到 Founder Desk，伺服器用新安裝嘅 data/', !!url && /Founder Desk/.test(await (await fetch(url)).text()) && st.root === lib.rootId(path.join(T, 'data')), { out: r2.stdout, root: st.root });
+  ok('開得到 CrewZero，伺服器用新安裝嘅 data/', !!url && /CrewZero/.test(await (await fetch(url)).text()) && st.root === lib.rootId(path.join(T, 'data')), { out: r2.stdout, root: st.root });
   const post = async (p, body) => { const r = await fetch(url + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: url.replace(/\/$/, '') }, body: JSON.stringify(body) }); return r.status; };
   if (url) await post('api/setup', { action: 'certify', host: 'test' });
   let cert = null; for (let i = 0; url && i < 100 && !cert; i++) { await sleep(400); const s = await (await fetch(url + 'api/setup')).json(); if (s.certify && s.certify.state !== 'running') cert = s.certify; }

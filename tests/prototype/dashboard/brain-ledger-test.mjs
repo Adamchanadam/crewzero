@@ -129,7 +129,7 @@ try {
   const er = await newRun(seen, r => r.kind === 'note' && r.noteType === 'event');
   ok('真實事件：AI 擬好確認題', er && er.state === 'done', er);
   const pm = (await get('/api/asks')).packs.filter(p => p.open).map(p => JSON.parse(fs.readFileSync(path.join(DATA, 'asks', p.id + '.json'), 'utf8'))).find(p => p.realEvent);
-  ok('真實事件確認包已放上 Founder Desk', !!pm, (await get('/api/asks')).packs.map(p => p.title));
+  ok('真實事件確認包已放上 CrewZero', !!pm, (await get('/api/asks')).packs.map(p => p.title));
   const midPipe = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '綠野物流');
   ok('確認之前：格位未動、最近真事唔顯示淨係記錄咗嘅事（AI 建議唔算）', midPipe && midPipe.stage === 0 && !midPipe.lastReal, midPipe);
   seen = await seenIds();
@@ -219,7 +219,7 @@ try {
   ok('HTTP 拒收跨包同題號，帳本、人物卡、答案及回覆不變', rejected.code === 400 && JSON.stringify({ state: state(), replies: filesSnapshot(repliesDir), answers: filesSnapshot(answersDir), personas: filesSnapshot(personaDir) }) === beforeMismatch, rejected);
   const d2 = await get('/api/dashboard'), asks = await get('/api/asks');
   const tb = d2.todo.filter(t => t.brain), ab = asks.todo.filter(t => t.brain), lane = d2.brainTodo || [];
-  ok('要拍板的裁判決定包留主線；辯論回應包留生意大腦；監察台同 Founder Desk 同一份', tb.length === 2 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.decisions) && lane.some(t => t.id === dm.packs.response) && !tb.some(t => t.id === dm.packs.response) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
+  ok('要拍板的裁判決定包留主線；辯論回應包留生意大腦；監察台同 CrewZero 同一份', tb.length === 2 && tb.some(t => t.id === bp.id) && tb.some(t => t.id === dm.packs.decisions) && lane.some(t => t.id === dm.packs.response) && !tb.some(t => t.id === dm.packs.response) && tb.every(t => t.brain === 'wargame') && JSON.stringify(ab.map(t => t.id)) === JSON.stringify(tb.map(t => t.id)), { tb, ab });
 
   /* 畫面 */
   await openChrome();

@@ -160,6 +160,42 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:128px;padding:8px;background:#14161c;border:1px solid var(--line);border-radius:10px}.tool-menu .btn{width:100%;justify-content:center}
 .btn.link.q-help{color:var(--muted);text-decoration:none;font-size:var(--fs-label);font-weight:400;margin-left:auto}.dq-foot .q-help-line{margin-left:auto;display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap}.dq-foot .q-help-line .q-help{margin-left:0}.btn.link.q-help:hover:not(:disabled){color:var(--text,#e8e6e3);text-decoration:underline}
 .tools-label{margin:20px 0 -2px;color:var(--muted);font-size:var(--fs-label);letter-spacing:.08em}
+/* 0.40.0 告訴 Zero 一件事、最近交給 Zero 的事、回饋卡、附件、現在開工預覽 */
+.intents{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+.intent{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer;background:rgba(255,255,255,.02);min-height:92px}
+.intent:hover{border-color:rgba(255,255,255,.35)}.intent:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+.intent.cur{border-color:var(--amber);background:linear-gradient(180deg,rgba(232,141,79,.14),rgba(232,141,79,.04))}
+.intent b{font-size:var(--fs-title);font-weight:650}.intent span{font-size:var(--fs-sub);color:var(--muted);line-height:1.5}.intent .after{font-size:var(--fs-label);color:var(--mint)}
+.tell-form{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}#quick-date{max-width:220px}.tell-form label{display:block;font-size:var(--fs-sub);font-weight:600;margin:10px 0 4px}
+.tell-form .after-line{font-size:var(--fs-sub);color:var(--muted);margin:10px 0 0}
+.tell-links{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.tell-links .in{flex:1 1 260px;width:auto}
+.link-hint{font-size:var(--fs-label);color:var(--muted);margin:4px 0 0}
+.help-line{margin-top:10px;font-size:var(--fs-sub);color:var(--muted)}
+.recent{list-style:none;margin:8px 0 0;padding:0}
+.recent li{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line);font-size:var(--fs-sub)}
+.recent li:first-child{border-top:0}.recent li .tt{flex:1 1 320px;min-width:0}.recent li .tt b{display:block;font-weight:600;color:var(--text)}.recent li .tt small{color:var(--muted)}
+.recent .acts{display:flex;gap:8px;flex-wrap:wrap}
+.fb-steps{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
+.fb-steps>li{position:relative;display:grid;grid-template-columns:26px 1fr;gap:10px;padding:0 0 16px}
+.fb-steps>li:before{content:"";position:absolute;left:12px;top:24px;bottom:0;width:1px;background:var(--line)}.fb-steps>li:last-child:before{display:none}
+.fb-ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:var(--fs-min);border:1px solid var(--line);color:var(--muted);background:var(--panel)}
+.fb-ic.done{background:rgba(153,215,188,.14);border-color:var(--mint);color:var(--mint)}.fb-ic.now{border-color:var(--amber);color:var(--amber);background:rgba(232,141,79,.12)}.fb-ic.off{border-style:dashed}.fb-ic.bad{border-color:var(--red);color:var(--red)}
+.fb-body{min-width:0}.fb-body h4{margin:2px 0 4px;font-size:var(--fs-body);font-weight:650}.fb-body p{margin:0 0 4px;font-size:var(--fs-sub);color:var(--muted);overflow-wrap:anywhere}.fb-body .q{color:var(--text)}
+.fb-body ul{margin:4px 0 0;padding-left:18px;font-size:var(--fs-sub);color:var(--text)}.fb-body ul li{margin:3px 0}
+.fb-body .chg{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.fb-body .chg s{color:var(--muted)}.fb-body .chg em{font-style:normal;color:var(--mint);font-weight:600}
+.fb-body .link{color:var(--amber);text-decoration:underline;text-underline-offset:3px}
+.fb-body .miss{margin-top:8px}.fb-body .miss textarea{margin:6px 0}
+.attach-list{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}.attach-list li{margin:0}
+.attach{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:var(--fs-label);color:var(--text);text-decoration:none;overflow-wrap:anywhere}
+.attach:before{content:"📎"}.attach.g:before{content:"🔗"}
+.att-note{display:block;font-size:var(--fs-label);color:var(--muted);margin:3px 0 0 4px}.att-acts{display:inline-flex;gap:10px;flex-wrap:wrap;margin-left:6px;font-size:var(--fs-label)}
+.run-preview{margin-top:10px;padding:10px 12px;border:1px solid rgba(153,215,188,.35);border-radius:10px;font-size:var(--fs-sub)}.run-preview b{color:var(--mint)}.run-preview ol,.run-preview ul{margin:4px 0 0;padding-left:18px}
+.run-preview .foot{margin-top:10px}
+.grid-in{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px;align-items:start}.grid-in .stack{display:flex;flex-direction:column;gap:14px}.att-err{font-size:var(--fs-label);color:var(--wait);margin:6px 0 0;overflow-wrap:anywhere}@media (max-width:900px){.grid-in{grid-template-columns:minmax(0,1fr)}}
+.help-credit{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.help-credit a{color:var(--amber)}
+.mo-month>summary{cursor:pointer;font-weight:600;padding:8px 0}
+.tell-form input[type=file]::file-selector-button{font:inherit;padding:0 12px;margin-right:10px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+@media (max-width:600px){.tell-form input[type=file]{min-height:44px}.tell-form input[type=file]::file-selector-button{min-height:44px}.mo-month>summary{min-height:44px;display:flex;align-items:center}.intents{grid-template-columns:1fr}.recent li .tt{flex-basis:100%}.recent .acts .btn{flex:1 1 40%}.attach{min-height:44px}.att-acts a{display:inline-flex;align-items:center;min-height:44px}}
 .layer:after,.panel:after{content:"";position:absolute;left:14px;right:14px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);pointer-events:none}
 body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
 @keyframes cardin{from{transform:translateY(10px) scale(.992)}to{transform:none}}
@@ -293,9 +329,11 @@ body.paused .bg *{animation:none!important}
   /* ---------- 九個分頁三組（規劃書 4.1）；網址照舊，舊深連繼續用得 ---------- */
   var GROUPS = [['navDo', ['pending', 'inputs', 'company']], ['navRun', ['overview', 'brain', 'path']], ['navRef', ['team', 'log', 'system'], 'ref']];
   var HREF = { pending: '/', inputs: '/dashboard/inputs', company: '/proofread.html', overview: '/dashboard', brain: '/dashboard/brain', path: '/dashboard/path', team: '/dashboard/team', log: '/dashboard/log', system: '/dashboard/system' };
+  // 頁頭眉題：CrewZero · 分組名 · 頁名
+  function groupName(t) { for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i][1].indexOf(t) >= 0) return D[GROUPS[i][0]]; return ''; }
   function tabName(t) { return t === 'pending' || t === 'company' ? U[t] : D[t]; }
   // Founder Desk 畫面（ask.html／proofread.html）屬邊個分頁：答題、交要求、交資料、設定、決定紀錄、練習、辯論
-  var PAGE = { pending: ['pending'], request: ['inputs'], company: ['company'], intake: ['company', U.intake], log: ['log', D.logDecisions], setup: ['system', U.setup], practice: ['brain', U.practice], debate: ['brain', U.debate] };
+  var PAGE = { pending: ['pending'], request: ['pending', U.fbCrumb], company: ['company'], intake: ['company', U.intake], log: ['log', D.logDecisions], setup: ['system', U.setup], practice: ['brain', U.practice], debate: ['brain', U.debate] };
 
   /* ---------- 狀態：暫停動效、特效開關（同一部電腦記住） ---------- */
   var ST = { paused: !!REDUCED, fx: true, conn: 'live', readAt: Date.now(), data: null, work: null, provider: false, pending: null, title: null, cbs: { pause: [], fx: [], refresh: [] } };
@@ -367,6 +405,7 @@ body.paused .bg *{animation:none!important}
       ready ? el('a', { href: '/proofread.html', 'aria-current': 'step' }, U.firstReview) : el('span', null, U.firstReview),
       el('span', { 'aria-hidden': 'true' }, '→'), el('span', null, U.firstStart));
   }
+  function openFolder() { setupPost({ action: 'openFolder' }).then(function (j) { toast(j.opened ? U.openFolderDone : U.openFolderNoWin); }, function (e) { toast(why(e)); }); }
   function toolbar(cur, counts, first, company) {
     return el('div', { cls: 'toolbar' }, first ? firstSteps(company) : nav(cur, counts),
       el('div', { cls: 'tool-right' }, liveBadge(),
@@ -381,6 +420,7 @@ body.paused .bg *{animation:none!important}
         el('a', { cls: 'btn small', href: '/welcome' }, U.welcomeLink),
         el('button', { type: 'button', cls: 'btn small', id: 'open-feedback', onclick: feedbackDialog }, N.feedback.open),
         el('a', { cls: 'btn small', id: 'open-support', href: N.feedback.support, target: '_blank', rel: 'noopener noreferrer' }, N.feedback.supportText),
+        el('button', { type: 'button', cls: 'btn small', id: 'open-folder', onclick: openFolder }, D.recOpenFolder),
         el('button', { type: 'button', cls: 'btn small phone-open', id: 'open-phone', onclick: phoneDialog }, U.phoneOpen),
         el('button', { type: 'button', cls: 'btn small', id: 'refresh-now', title: D.refreshNow, onclick: refreshNow }, D.refreshNow),
         el('button', { type: 'button', cls: 'btn small', id: 'fx', 'aria-pressed': ST.fx ? 'true' : 'false', onclick: toggleFx }, ST.fx ? D.fxOn : D.fxOff),
@@ -484,8 +524,9 @@ body.paused .bg *{animation:none!important}
     var askBox = el('div', { cls: 'help-part', id: 'help-ask-box' }, el('h3', { class: 'layer-title' }, U.helpAskAI), input, note, el('div', { cls: 'pair-actions' }, submit));
     askBox.hidden = true;
     var askOpen = el('button', { type: 'button', cls: 'btn link', id: 'help-ask', onclick: function () { askBox.hidden = false; askOpen.hidden = true; input.focus(); } }, U.helpAskOpen);
+    var credit = el('p', { cls: 'small muted help-credit', id: 'help-credit' }, U.helpCredit, ' ', U.helpSupportLine, el('a', { href: N.feedback.support, target: '_blank', rel: 'noopener noreferrer' }, N.feedback.supportText));
     modal.append(el('section', { cls: 'layer' }, el('h2', { id: 'help-title' }, U.helpTitle), next, about, askOpen, askBox,
-      el('div', { cls: 'pair-actions' }, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉'))));
+      el('div', { cls: 'pair-actions' }, el('button', { type: 'button', cls: 'btn', onclick: close }, D.close || '關閉')), credit));
     modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
     modal.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
     document.body.append(modal); askOpen.focus();
@@ -715,7 +756,7 @@ body.paused .bg *{animation:none!important}
         el('div', { cls: 'ident' },
           markBtn(c),
           el('div', null,
-            el('span', { cls: 'eyebrow' }, D.shell + ' · ' + tabName(cur) + (sub ? ' · ' + sub : '')),
+            el('span', { cls: 'eyebrow' }, D.shell + ' · ' + groupName(cur) + ' · ' + tabName(cur) + (sub ? ' · ' + sub : '')),
             el('h1', null, c.name || D.shell),
             c.oneLiner ? el('p', { cls: 'one' }, c.oneLiner) : null,
             o.basis ? el('div', { cls: 'basis' }, o.basis) : null)),
@@ -933,8 +974,50 @@ body.paused .bg *{animation:none!important}
       el('a', { cls: 'btn' + (opts && opts.primary ? ' primary' : ''), id: 'next-desk', href: s.href, 'data-pending': String(s.n) }, s.button));
   }
 
+  /* ---------- 交給 Zero 的事：首頁、回饋卡、真實進展頁共用的顯示。狀態一律取自伺服器（dash-lib 的 inputStatus），這裏只負責畫 ---------- */
+  function zhDay(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? (+m[2]) + ' 月 ' + (+m[3]) + ' 日' : ''; }
+  var TAG_CLS = { working: '', failed: 'eff', awaiting: 'ai', updated: 'mint', noeffect: '' };
+  // 來自討論的一件事：標題前綴「來自與 Zero 的討論：」與旁邊的標籤重複，只留標籤
+  function inputTitle(v) { var t = N.fix(v.title || ''); return v.source === 'chat' ? t.replace(/^來自與 Zero 的討論[：:]\s*/, '') : t; }
+  function inputTag(v) { return el('span', { cls: 'tag ' + (TAG_CLS[v.status.code] || ''), 'data-state': v.status.code }, U[v.status.tag]); }
+  // 一行摘要：按狀態寫；附件數放前面
+  function inputLine(v) {
+    var s = v.status, line;
+    if (s.code === 'awaiting') line = s.open < s.total ? N.t('inLineAwaiting', { n: s.total, m: s.open }) : N.t('inLineAwaitingAll', { n: s.total });
+    else if (s.code === 'working') line = s.applying ? U.inLineApplying : s.packGone ? U.inLinePackGone : s.aiWaiting ? U.inLineAiWait : U.inLineWorking;
+    else if (s.code === 'failed') line = U.inLineFailed;
+    else if (s.code === 'noeffect') line = N.fix(v.reason) || U.eventNoChange;
+    else line = v.effects.map(function (e) { return e.targetKind === 'followUp' && e.dueAt ? N.t('fbFollowUp', { d: zhDay(e.dueAt), t: N.fix(e.text) }) : e.before && e.after ? N.fix(e.text) + '：' + e.before + ' → ' + e.after : N.fix(e.text); }).filter(Boolean).join('；') || U.fbRecorded;
+    return (v.files.length ? N.t('inFilesN', { n: v.files.length }) + ' · ' : '') + clip(line, 120);
+  }
+  var LINK_ERR = { 'not-shared': 'linkErr_notShared', 'not-found': 'linkErr_notFound', 'too-big': 'linkErr_tooBig', timeout: 'linkErr_timeout', 'blocked-redirect': 'linkErr_blocked', network: 'linkErr_network' };
+  function fileHref(v, f, text) { return '/api/input-file?id=' + encodeURIComponent(v.id) + '&n=' + f.n + (text ? '&text=1' : ''); }
+  // 附件列表：每份「開啟」連結＋類型判定；Google 連結附件顯示「名稱（類型 · 日期讀取）」加「開啟存檔」「原連結」「重新讀取」；讀不到的連結按原因寫固定字句
+  function attachList(v, opts) {
+    var box = el('div', { id: 'att-' + v.id }), ul = el('ul', { cls: 'attach-list' });
+    (v.files || []).forEach(function (f) {
+      var li = el('li', { 'data-file': f.name });
+      if (f.url) {
+        var gk = { 'google-doc': 'gk_doc', 'google-sheet': 'gk_sheet', 'google-slides': 'gk_slides' }[f.gkind] || 'gk_doc';
+        li.append(el('span', { cls: 'attach g' }, N.t('attGoogle', { n: f.name.replace(/\.[A-Za-z0-9]+$/, ''), k: U[gk], d: zhDay(f.readOn) })),
+          el('span', { cls: 'att-acts' }, f.openable ? el('a', { href: fileHref(v, f), target: '_blank', rel: 'noopener noreferrer' }, U.attOpenSnap) : null,
+            el('a', { href: f.url, target: '_blank', rel: 'noopener noreferrer' }, U.attOrigin),
+            opts && opts.reread ? el('button', { type: 'button', cls: 'btn link', 'data-reread': f.n, onclick: function () { toast(U.attRereadAsked); } }, U.attReread) : null));
+      } else {
+        li.append(el('span', { cls: 'attach' }, f.name),
+          el('span', { cls: 'att-acts' }, f.openable ? el('a', { href: fileHref(v, f), target: '_blank', rel: 'noopener noreferrer', 'data-open': f.n }, U.attOpen) : null,
+            f.hasText ? el('a', { href: fileHref(v, f, true), target: '_blank', rel: 'noopener noreferrer' }, U.attOpenText) : null),
+          el('span', { cls: 'att-note' }, N.fileJudge(f.name)));
+      }
+      ul.append(li);
+    });
+    if (ul.children.length) box.append(ul);
+    (v.linkErrors || []).forEach(function (x) { box.append(el('p', { cls: 'att-err', 'data-link-error': x.reason }, clip(x.url, 70) + '　', U[LINK_ERR[x.reason] || 'linkErr_network'])); });
+    return box;
+  }
+
   g.SOS_DESK = {
-    nextStep: nextStep, nextBlock: nextBlock,
+    nextStep: nextStep, nextBlock: nextBlock, inputTag: inputTag, inputTitle: inputTitle, inputLine: inputLine, attachList: attachList, zhDay: zhDay,
     shell: shell, header: header, note: note, devices: devices, title: title, feedbackDialog: feedbackDialog, feedbackPrompt: feedbackPrompt, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast, watchHelp: watchHelp,
     send: send, why: why, netError: netError, apiError: apiError,

@@ -101,7 +101,7 @@ function skipText(reason) {
 function statusLine(last) {
   if (!last) return '未有';
   if (last.state === 'skipped') return '跳過：' + skipText(last.skipReason);
-  if (last.state === 'ended') return last.rejected || last.ending === 'blocked' ? '未完成，請打開 Founder Desk 查看' : '完成';
+  if (last.state === 'ended') return last.rejected || last.ending === 'blocked' ? '未完成，請打開 CrewZero 查看' : '完成';
   return last.state === 'running' ? '進行中' : last.state || '未有';
 }
 function serverMark(autostart) {
@@ -158,13 +158,13 @@ if (has('register')) {
   if (has('autostart')) { x = registerAutostart(); auto = { enabled: !!x.ok }; }
   const mark = serverMark(auto); fs.mkdirSync(path.dirname(MARK), { recursive: true }); fs.writeFileSync(MARK, JSON.stringify(mark, null, 2));
   const live = await serverOpen();
-  say(live ? `每日自動開工已生效：${CADENCE[r.runCadence] || '每日'} ${r.runTime}。` : `每日自動開工已批准：打開 Founder Desk 一次後開始生效（${CADENCE[r.runCadence] || '每日'} ${r.runTime}）。`);
-  if (has('autostart')) say(x && x.ok ? '登入電腦時會自動打開 CrewZero。' : '每日自動開工已保留；登入啟動未能設定，電腦重開後請打開一次 Founder Desk 才會恢復。');
-  else say('登入啟動未開啟；電腦重開後，請打開一次 Founder Desk 才會恢復。');
+  say(live ? `每日自動開工已生效：${CADENCE[r.runCadence] || '每日'} ${r.runTime}。` : `每日自動開工已批准：打開 CrewZero 一次後開始生效（${CADENCE[r.runCadence] || '每日'} ${r.runTime}）。`);
+  if (has('autostart')) say(x && x.ok ? '登入電腦時會自動打開 CrewZero。' : '每日自動開工已保留；登入啟動未能設定，電腦重開後請打開一次 CrewZero 才會恢復。');
+  else say('登入啟動未開啟；電腦重開後，請打開一次 CrewZero 才會恢復。');
   if (x && x.tech) tech(x.tech + (x.err ? '\n結果：' + x.err : ''));
   process.exit(0);
 }
 
 say('每日自動開工尚未開啟。');
 say(`批准後，CrewZero 伺服器會於${CADENCE[r.runCadence] || '每日'} ${r.runTime}開工；伺服器必須開着，錯過後只會在 6 小時內補做一次。`);
-say('電腦重開後，要打開一次 Founder Desk 才會恢復；登入時自動打開的選項仍在驗證，目前不會設定。');
+say('電腦重開後，要打開一次 CrewZero 才會恢復；登入時自動打開的選項仍在驗證，目前不會設定。');

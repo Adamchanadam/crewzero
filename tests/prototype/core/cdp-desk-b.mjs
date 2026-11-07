@@ -1,4 +1,4 @@
-// 階段 B 頁面測試（瀏覽器，假 AI）：今日要做的事卡、上次離開之後、待決事項次序／圖示／逾期、確認掣字眼同外殼一致、現實輸入三欄、放入文件、兩個本機固定動作
+// 階段 B 頁面測試（瀏覽器，假 AI）：今日要做的事卡、上次離開之後、待決事項次序／圖示／逾期、確認掣字眼同外殼一致、真實進展頁只看紀錄、首頁告訴 Zero 附文件、現在開工
 // 用法：node cdp-desk-b.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -126,38 +126,53 @@ try {
   const noNext = await answer('ask-plain');
   ok('冇 AI 跟進嘅包：掣只寫「確認」，外殼冇開 AI', noNext.label === N.ui.submitApply && noNext.label === '確認' && !noNext.ai, noNext);
 
-  /* 現實輸入：三欄、放入文件、兩個本機固定動作 */
+  /* 0.40.0 入口重整：文件與固定動作搬到首頁「告訴 Zero 一件事」及「Zero 近期工作」；真實進展頁只看紀錄 */
   await go(B + 'dashboard/inputs');
-  ok('現實輸入：訪問、真實事件、收件匣三欄', await ev(`(()=>{const g=document.querySelector('.grid3');return !!g&&[...g.children].map(c=>c.id).join(',')==='in-interview,in-events,in-inbox'})()`), await ev(`[...(document.querySelector('.grid3')||{children:[]}).children].map(c=>c.id)`));
-  ok('收件匣有文件區、「開啟資料夾」、「立即開始 AI 工作」', (await has('#doc-drop')) && (await has('#open-folder')) && (await has('#run-now')), await text('#in-inbox'));
+  ok('真實進展頁：交給 Zero 的事、Zero 的工作、每週訪問三個區塊，只看紀錄', await ev(`(()=>{const g=document.querySelector('.grid-in');return !!g&&!!g.querySelector('#in-inbox')&&!!g.querySelector('#in-work')&&!!g.querySelector('#in-interview')})()`), await ev(`[...document.querySelectorAll('.panel')].map(c=>c.id)`));
+  ok('真實進展頁已移走上載、現在開工，開啟資料夾只在頁頭「更多」（只有一個「告訴 Zero 一件事」連結）', !(await has('#doc-drop')) && !(await has('#doc-files')) && !(await has('#in-inbox #open-folder, #in-work #open-folder, #in-interview #open-folder')) && !(await has('#run-now')) && (await text('#tell-go')) === N.dash.tellGo && (await ev(`document.querySelector('#tell-go').getAttribute('href')`)) === '/#quick-input', { go: await text('#tell-go'), href: await ev(`document.querySelector('#tell-go').getAttribute('href')`), n: await ev(`document.querySelectorAll('#tell-go').length`), has: [await has('#doc-drop'), await has('#doc-files'), await has('#in-inbox #open-folder'), await has('#run-now')] });
+  await go(B + '#/');
+  ok('首頁告訴 Zero 一件事：三個選項，選了才展開表格', (await ev(`[...document.querySelectorAll('#tell-intents .intent')].map(b=>b.id).join(',')`)) === 'quick-event,quick-adhoc,quick-order' && (await ev(`document.querySelector('#tell-form').hidden`)), await text('#tell-intents'));
   const f1 = path.join(OUT, '會議紀錄.md'); fs.writeFileSync(f1, '# 會議紀錄\n\n農場甲表示下星期可以試送一次。\n');
+  await click('#quick-event');
+  ok('選「發生了一件事」後展開表格，有日期欄及附件', !(await ev(`document.querySelector('#tell-form').hidden`)) && !(await ev(`document.querySelector('#quick-event-fields').hidden`)) && (await has('#quick-files')), await text('#tell-form'));
   const doc = await send('DOM.getDocument', { depth: -1 });
-  const q = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#doc-files' });
+  const q = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: '#quick-files' });
   await send('DOM.setFileInputFiles', { nodeId: q.nodeId, files: [f1] }); await sleep(500);
-  ok('加入文件：列出並出現交出掣', (await text('#doc-list')).includes('會議紀錄.md') && (await has('#doc-send')), await text('#doc-list'));
-  await click('#doc-send');
+  ok('加入文件：列出文件名', (await text('#tell-file-list')).includes('會議紀錄.md'), await text('#tell-file-list'));
+  await click('#quick-send');
   const docRun = await waitFor(async () => (await api(PB, '/api/status')).j.runs.find(r => r.kind === 'note' && r.noteType === 'doc' && (r.state === 'done' || r.state === 'failed')));
-  ok('放入文件：外殼登記並交 AI 讀（同真實事件同一條路）', docRun && docRun.state === 'done' && (docRun.steps || []).some(s => s.key === 'ai'), docRun);
+  ok('只附文件送出：外殼登記並交 AI 讀（同事件同一條路）', docRun && docRun.state === 'done' && (docRun.steps || []).some(s => s.key === 'ai'), docRun);
+  ok('送出後有可見的下一步：已收到，並有「查看回饋」連結', (await text('#quick-note')).includes(N.ui.tellReceived) && (await ev(`(document.querySelector('#quick-track')||{}).getAttribute&&document.querySelector('#quick-track').getAttribute('href')`)).startsWith('#/feedback/in-'), await text('#quick-note'));
   const stB = JSON.parse(fs.readFileSync(path.join(DB, 'ledger', 'state.json'), 'utf8'));
   const inp = (stB.inputs || []).find(i => i.via === 'doc');
-  ok('放入文件：記成一份輸入（標題寫文件名、唔顯示副檔名），文件封存', inp && /文件（.*）：會議紀錄$/.test(inp.title) && inp.files.length === 1 && fs.existsSync(path.join(DB, inp.files[0])) && !fs.readdirSync(path.join(DB, 'founder', 'inbox')).some(f => f.includes('-note-doc')), inp);
+  ok('只附文件：記成一份輸入（標題寫文件名、唔顯示副檔名），文件封存', inp && /文件（.*）：會議紀錄$/.test(inp.title) && inp.files.length === 1 && fs.existsSync(path.join(DB, inp.files[0])) && !fs.readdirSync(path.join(DB, 'founder', 'inbox')).some(f => f.includes('-note-doc')), inp);
+  await go(B + '#/');
+  ok('首頁「最近交給 Zero 的事」列出剛送出的文件類輸入', await waitFor(async () => (await ev(`!!document.querySelector('#recent-list [data-input="${inp.id}"]')`))), await text('#recent-inputs'));
+  await go(B + 'dashboard/inputs');
+  ok('真實進展頁「交給 Zero 的事」也列出文件類（按月摺疊）', (await has('#in-inbox details.mo-month')) && (await ev(`!!document.querySelector('#in-inbox [data-input="${inp.id}"]')`)), await text('#in-inbox'));
+  await ev(`document.querySelector('#tool-more').open=true`);
   await click('#open-folder');
-  ok('「開啟資料夾」：只開固定收件匣（測試環境唔開視窗）', (await text('#toast')).includes(N.ui.openFolderNoWin), await text('#toast'));
+  ok('「開啟資料夾」在頁頭「更多」：只開固定收件匣（測試環境唔開視窗）', (await text('#toast')).includes(N.ui.openFolderNoWin), await text('#toast'));
   ok('本機固定動作唔接受參數', (await api(PB, '/api/setup', { action: 'openFolder', path: 'C:/' })).code === 400 && (await api(PB, '/api/setup', { action: 'runNow', type: 'x' })).code === 400);
   await waitFor(async () => !(await api(PB, '/api/dashboard')).j.ai.busy, 30000);
-  await go(B + 'dashboard/inputs');
+  await go(B + '#/');
+  ok('首頁「Zero 近期工作」卡有「現在開工」及兩行說明', (await has('#run-now')) && (await text('#run-now')) === N.ui.runNow && (await ev(`document.querySelectorAll('#run-preview li').length`)) >= 1, await text('#run-preview'));
   await click('#run-now');
-  ok('「立即開始 AI 工作」：開始一次手動工作', (await text('#toast')).includes(N.ui.runNowSent), await text('#toast'));
+  ok('「現在開工」：開始一次手動工作', (await text('#toast')).includes(N.ui.runNowSent), await text('#toast'));
   const manual = await waitFor(async () => ((await api(PB, '/api/dashboard')).j.runs || []).find(r => r.trigger === 'manual'), 40000);
   ok('手動工作記錄為「手動」觸發', !!manual, ((await api(PB, '/api/dashboard')).j.runs || []).map(r => r.trigger));
   await waitFor(async () => !(await api(PB, '/api/dashboard')).j.ai.busy, 30000);
   const sp = path.join(DB, 'ledger', 'state.json'), s2 = JSON.parse(fs.readFileSync(sp, 'utf8'));
   s2.health = { ...(s2.health || {}), pausedByFounder: true }; fs.writeFileSync(sp, JSON.stringify(s2, null, 2));
   const stop = await api(PB, '/api/setup', { action: 'runNow' });
-  ok('持續暫停：「立即開始 AI 工作」只講原因、唔開 AI', stop.code === 409 && stop.j.message === N.ui.skip_pausedByFounder, stop);
-  await go(B + 'dashboard/inputs');
+  ok('持續暫停：「現在開工」只講原因、唔開 AI', stop.code === 409 && stop.j.message === N.ui.skip_pausedByFounder, stop);
+  await go(B + '#/');
   ok('持續暫停：掣停用並顯示原因', (await ev(`document.querySelector('#run-now').disabled`)) && (await text('#run-now-note')) === N.ui.skip_pausedByFounder, await text('#run-now-note'));
-  ok('現實輸入畫面文字：用字檢查零命中', !(await scanText(['.grid3'])).length, await scanText(['.grid3']));
+  ok('首頁告訴 Zero、近期工作畫面文字：用字檢查零命中', !(await scanText(['#quick-input', '#run-preview'])).length, await scanText(['#quick-input', '#run-preview']));
+  await go(B + 'dashboard/inputs');
+  // 附件清單顯示的是創辦人自己的檔案名（例如「會議紀錄.md」），不是產品文字，檢查時略去
+  const scanNoAttach = async sel => N.styleIssues(await ev(`(()=>{const c=document.querySelector(${JSON.stringify(sel)}).cloneNode(true);c.querySelectorAll('.attach-list').forEach(e=>e.remove());return c.innerText||c.textContent})()`));
+  ok('真實進展頁畫面文字（略去創辦人自己的附件檔名）：用字檢查零命中', !(await scanNoAttach('.grid-in')).length, await scanNoAttach('.grid-in'));
   await shot('b3-inputs.png');
   ok('頁面冇程式錯誤', !errors.length, errors);
 } catch (e) {

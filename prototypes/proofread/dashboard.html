@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>營運監察台</title>
+<title>CrewZero</title>
 <script src="/names.js"></script>
 <script src="/md.js"></script>
 <script src="/pair.js"></script>
@@ -375,7 +375,25 @@ details.legend-d .blegend{margin-top:6px}
 .fbhit{animation:fbhit 1.8s ease-out}
 @keyframes fbhit{0%,30%{box-shadow:0 0 0 2px var(--mint)}100%{box-shadow:0 0 0 2px transparent}}
 .pipe{display:grid;gap:8px}
-.pr{display:grid;grid-template-columns:minmax(120px,.9fr) minmax(0,2fr) minmax(0,1.6fr);gap:12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:rgba(255,255,255,.015)}
+.pr{position:relative;display:grid;grid-template-columns:minmax(150px,.9fr) minmax(0,2fr) minmax(0,1.6fr) auto;gap:14px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:rgba(255,255,255,.015)}
+.pipe .pr.partner{border-left-color:#7fa7e8}.pipe .pr.investor{border-left-color:#f0d27a}.pipe .pr.advisor{border-left-color:#c9a8f0}
+.pr .nm .tag{margin-top:6px}.pr .said{font-size:var(--fs-sub);color:var(--text)}.pr .gap{color:#ffc18e}.pr .next{font-size:var(--fs-sub)}.pr .next small{margin-bottom:2px}.pr .docs{margin-top:4px}.pr .docs a{color:var(--amber);text-decoration:underline;text-underline-offset:3px;font-size:var(--fs-label)}
+.track5{margin-bottom:6px}
+.ppl .sec-h{display:flex;align-items:baseline;gap:10px;margin:18px 0 8px;font-size:var(--fs-body);font-weight:650}.ppl .sec-h small{color:var(--muted);font-weight:400;font-size:var(--fs-sub)}
+.ppl .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}.ppl .chips .chip{display:inline-flex;align-items:center;gap:6px;text-decoration:none}.ppl .chips .chip b{font-family:var(--mono);font-weight:500;color:var(--muted)}.ppl .chips .chip.on b{color:var(--mint)}
+.fixwrap{position:relative}.menu{position:absolute;right:0;top:36px;z-index:5;min-width:210px;padding:6px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:#12141a;box-shadow:0 18px 40px -10px rgba(0,0,0,.8)}
+.menu a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:7px;color:var(--text);text-decoration:none;font-size:var(--fs-sub)}.menu a:hover{background:rgba(255,255,255,.06)}.menu a.warn{color:var(--red)}.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.ppl .closed{margin-top:14px;border:1px dashed var(--line);border-radius:10px;padding:10px 14px}.ppl .closed summary{cursor:pointer;font-size:var(--fs-sub);color:var(--muted);min-height:32px}.ppl .closed .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-sub)}.ppl .closed .row .sp{flex:1 1 220px;min-width:0}
+.mem-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}.mem{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.015);display:flex;flex-direction:column;gap:6px;min-width:0}
+.mem h4{margin:0;font-size:var(--fs-body);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mem .role{font-size:var(--fs-sub);color:var(--muted)}.mem dl{margin:2px 0 0;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:var(--fs-sub)}.mem dt{color:var(--muted)}.mem dd{margin:0}
+.mem .foot{margin-top:auto;padding-top:6px;display:flex;gap:8px;flex-wrap:wrap}.mem.paused{border-style:dashed}
+.own{width:100%;border-collapse:collapse;font-size:var(--fs-sub)}.own th,.own td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}.own th{color:var(--muted);font-weight:400;font-size:var(--fs-label);border-top:0}.own td.no{color:#ffc18e}
+.who-h{display:flex;gap:8px;align-items:baseline;margin:14px 0 4px;font-size:var(--fs-sub);font-weight:650}.who-h small{font-weight:400;color:var(--muted)}
+.sched .tx{flex:1;min-width:0}.who{display:inline-block;margin-left:8px;font-size:var(--fs-label);color:var(--mint);border:1px solid rgba(153,215,188,.4);border-radius:6px;padding:0 6px;white-space:nowrap}.who.warn{color:#ffc18e;border-color:rgba(232,141,79,.6)}.who.me{color:var(--blue);border-color:rgba(194,214,250,.4)}
+.ppl .fld{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center;margin:10px 0}.ppl .fld label{color:var(--muted);font-size:var(--fs-sub)}.ppl .fld .in{box-sizing:border-box;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font:inherit}
+.pair-modal .layer.ppl{width:min(520px,100%)}.pair-modal .mm{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin:10px 0}.mm .box{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:var(--fs-sub)}.mm .box small{display:block;color:var(--muted);font-size:var(--fs-label)}.mm .arrow{color:var(--amber);font-size:var(--fs-title)}
+@media (max-width:900px){.pr{grid-template-columns:1fr}.mem-grid{grid-template-columns:1fr}.fixwrap .btn{width:100%}.menu{left:0;right:0;min-width:0}}
+@media (max-width:600px){.ppl .btn,.ppl .btn.small,.pair-modal .btn{min-height:44px;height:auto;padding:8px 16px}.ppl .chips .chip{min-height:44px}.menu a{min-height:44px}.pair-modal .opt{min-height:48px}.ppl .fld{grid-template-columns:1fr;gap:4px}.ppl .fld .in{height:44px}.pair-modal .mm{grid-template-columns:1fr}.mm .arrow{text-align:center;transform:rotate(90deg)}.ppl .closed summary{min-height:44px;display:flex;align-items:center}.own th,.own td{padding:8px 6px}}
 .track5{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .track5 span{font-size:var(--fs-min);color:var(--muted);text-align:center;border-top:3px solid rgba(255,255,255,.08);padding-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .track5 span.on{border-top-color:var(--mint);color:var(--text)}
@@ -798,7 +816,7 @@ canvas.burst{position:fixed;left:0;top:0;z-index:70;pointer-events:none}
 .evstream{display:flex;flex-direction:column}
 #evbody{flex:1;min-height:0}
 .evs{list-style:none;margin:0;padding:0;max-height:380px;overflow:auto;-webkit-mask-image:linear-gradient(#000 88%,transparent);mask-image:linear-gradient(#000 88%,transparent)}
-.ev{position:relative;display:grid;grid-template-columns:78px 66px minmax(0,1fr);gap:8px;padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.04);border-left:2px solid transparent;font-size:var(--fs-sub);align-items:start}
+.ev{position:relative;display:grid;grid-template-columns:78px 92px minmax(0,1fr);gap:8px;padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.04);border-left:2px solid transparent;font-size:var(--fs-sub);align-items:start}
 .ev .at{font:var(--fs-min) var(--mono);color:var(--muted);padding-top:3px;white-space:nowrap}
 .ev .who{min-width:0;font-size:var(--fs-label);color:var(--amber);padding-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ev .who.you{color:var(--mint)}.ev .who.team{color:var(--blue)}.ev .who.observe{color:var(--muted)}
@@ -1115,7 +1133,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       if (head !== lastHead) { ul.append(h('li', { class: 'dh' }, head)); lastHead = head; }
       var od = it.overdue ? diffDays(parseDay(it.date), today()) : 0;
       ul.append(h('li', { class: 'it' + (it.overdue ? ' od' : '') }, h('span', { class: 'k ' + it.kind }, D['sk_' + it.kind] || it.kind),
-        h('span', null, it.href ? h('a', { href: it.href }, it.text) : it.text, od ? h('span', { class: 'sub' }, ' · ' + d('overdueDays', { n: od })) : null)));
+        h('span', { class: 'tx' }, it.href ? h('a', { href: it.href }, it.text) : it.text, whoPill(it.who), od ? h('span', { class: 'sub' }, ' · ' + d('overdueDays', { n: od })) : null)));
     });
     var r = V.data.rhythm;
     if (r && r.runTime) ul.append(h('li', { class: 'it' }, h('span', { class: 'sub' }, 'Zero 每' + ({ daily: '日', weekdays: '個工作日', weekly: '星期' }[r.runCadence] || '日') + ' ' + r.runTime + ' 按節奏開工；訪問日：星期' + WD[(r.interviewWeekday || 1) % 7])));
@@ -1176,7 +1194,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       var list = h('ul', { class: 'sched' });
       entries.forEach(function (item) {
         var kindLabel = item.run || item.ai ? 'Zero' : item.kind === 'external' ? D.nextAction : D['sk_' + item.kind] || item.kind;
-        list.append(h('li', { class: 'it' }, h('span', { class: 'k ' + item.kind.replace(/^run-/, '') }, kindLabel), h('span', { class: 'tx' }, item.text, item.reason ? h('span', { class: 'sub' }, ' · ' + item.reason) : null), item.href ? h('a', { class: 'btn small', href: item.href, onclick: function (event) { calendarAction(item, event); } }, item.action || D.view) : null));
+        list.append(h('li', { class: 'it' }, h('span', { class: 'k ' + item.kind.replace(/^run-/, '') }, kindLabel), h('span', { class: 'tx' }, item.text, whoPill(item.who), item.reason ? h('span', { class: 'sub' }, ' · ' + item.reason) : null), item.href ? h('a', { class: 'btn small', href: item.href, onclick: function (event) { calendarAction(item, event); } }, item.action || D.view) : null));
       });
       dayList.append(list);
     }
@@ -1224,7 +1242,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         break;
       case 'decisions':
         var td = (x.todo || []).filter(function (t) { return inScope(t.milestoneId); });
-        if (!td.length) { out.push(ln(D.noTodo), ln('Zero 需要你決定的事項，會出現在 Founder Desk。', 'sub')); break; }
+        if (!td.length) { out.push(ln(D.noTodo), ln('Zero 需要你決定的事項，會出現在待決事項。', 'sub')); break; }
         td.slice(0, full ? 20 : 3).forEach(function (t) { out.push(ln([h('a', { href: t.href }, (ICON[t.type] || '◆') + ' ' + t.text), t.overdueDays ? ' · ' + d('overdueDays', { n: t.overdueDays }) : ''])); });
         break;
       case 'paths':
@@ -1648,13 +1666,15 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var seg = h('div', { class: 'seg', role: 'group', 'aria-label': '檢視' },
       h('button', { type: 'button', 'aria-pressed': V.view === 'map' ? 'true' : 'false', id: 'view-map', onclick: function () { V.view = 'map'; render(true); } }, D.viewMap),
       h('button', { type: 'button', 'aria-pressed': V.view === 'timeline' ? 'true' : 'false', id: 'view-timeline', onclick: function () { V.view = 'timeline'; render(true); } }, D.viewTimeline));
-    var req = h('div', { class: 'reqbar', id: 'reqbar' }, '想改路線？', h('a', { class: 'btn', href: '/#/request/order' }, D.reqOrder), h('a', { class: 'btn', href: '/#/request/adhoc' }, D.reqAdhoc), h('span', null, '（在 Founder Desk 提交，Zero 會擬成問題供你確認）'));
+    var req = h('div', { class: 'reqbar', id: 'reqbar' }, h('a', { class: 'btn', id: 'tell-go', href: '/#quick-input' }, D.tellGo));
     var groups = [['confirmed', D.groupConfirmed], ['trial', D.groupTrial], ['proposed', D.groupProposed]].map(function (g) {
       var list = ms.filter(function (m) { return m.pathStatus === g[0]; });
       if (!list.length) return null;
       return h('div', { class: 'grp' }, h('h3', null, g[1]), h('div', { class: 'cards' }, list.map(mCard)));
     });
     var ret = ms.filter(function (m) { return m.pathStatus === 'retired'; });
+    // 回饋卡連來的錨點（#station-<站點>）：畫好後捲到該站，只做一次
+    setTimeout(function () { var mm = /^#(station-[\w-]+)$/.exec(location.hash), e = mm && document.getElementById(mm[1]); if (e && V.jumpedStation !== mm[1]) { V.jumpedStation = mm[1]; e.scrollIntoView({ block: 'center' }); } }, 0);
     return [blockCard(),
       h('section', { class: 'panel' }, h('div', { class: 'ph' }, h('h2', null, V.view === 'map' ? D.pathMap : D.viewTimeline), h('div', { class: 'r' }, V.view === 'map' ? legend() : null, seg)),
         V.view === 'map' ? pathMap(true) : timeline(), req),
@@ -1666,7 +1686,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function mCard(m) {
     var cls = m.pathStatus === 'trial' ? ' trial' : m.pathStatus === 'proposed' ? ' prop' : m.pathStatus === 'retired' ? ' ret' : '';
     var opt = m.pathStatus === 'proposed' ? (V.data.options || []).filter(function (o) { return (o.milestoneIds || []).indexOf(m.id) >= 0; })[0] : null;
-    return h('div', { class: 'mcard' + cls, id: m.id },
+    return h('div', { class: 'mcard' + cls, id: m.id }, h('span', { id: 'station-' + m.id, class: 'anchor' }),
       h('h4', null, m.short, m.pathStatus === 'trial' && m.trial ? tag(m.trial.overdue ? D.trialDue : d('trialLeft', { n: m.trial.daysLeft }), 'ai') : m.pathStatus === 'retired' ? null : tag(D['ms_' + m.state], m.state === 'active' ? 'mine' : ''), m.depth === 'shallow' && m.state !== 'done' ? tag(D.deepen, 'ai') : null),
       h('dl', null, [['事件', m.event], ['證明', m.evidence], ['目標日期', m.targetDate ? md(m.targetDate) + (m.targetDateTentative ? '（暫定）' : '') : D.undated], ['撤回原因', m.retiredReason]].filter(function (r) { return r[1]; }).map(function (r) { return [h('dt', null, r[0]), h('dd', null, r[1])]; })),
       (m.watchItems || []).length ? h('div', { class: 'mb' }, m.watchItems.map(watchLine)) : null,
@@ -1730,60 +1750,34 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return h('div', { id: 'timeline' }, h('ul', { class: 'sched' }, items.map(function (it) { return h('li', { class: 'it' }, h('span', { class: 'k' }, md(it.date)), h('span', null, it.text)); })),
       h('div', { class: 'tl-undated', id: 'undated' }, h('b', null, D.undated + '：'), undated.length ? undated.map(function (m) { return tag(m.short); }) : h('span', { class: 'muted' }, '全部已有日期')));
   }
-  /* ---------- 分頁：現實輸入（規劃書 4.6：訪問、真實事件、收件匣三欄；收件匣有文件區同兩個本機固定動作） ---------- */
-  var IP = { files: [], sending: false };
-  function docRead(list) {
-    return Promise.all(list.map(function (f) { return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res({ name: f.name, data: String(fr.result).split(',')[1] || '' }); }; fr.onerror = function () { var er = new Error('read'); er.said = N.t('fileUnread', { f: f.name }); rej(er); }; fr.readAsDataURL(f); }); }));
+  /* ---------- 分頁：真實進展（0.40.0：只看紀錄；輸入全部在首頁「告訴 Zero 一件事」） ---------- */
+  function inputRow(v) {
+    var s = v.status, acts = h('div', { class: 'acts' });
+    if (s.button === 'answer' && v.packId) acts.append(h('a', { class: 'btn primary', href: '/#/ask/' + v.packId }, N.t('answerN', { n: Math.min(3, s.open) })));
+    acts.append(h('a', { class: 'btn', href: '/#/feedback/' + v.id, 'data-feedback': v.id }, N.ui.recFeedback || N.ui.inFeedback));
+    return h('li', { 'data-input': v.id, 'data-state': s.code }, DESK.inputTag(v), h('div', { class: 'tt' }, h('b', null, DESK.inputTitle(v), v.source === 'chat' ? [' ', tag(N.ui.inFromChat, 'mine')] : null), h('small', null, DESK.inputLine(v)), v.files.length ? DESK.attachList(v) : null), acts);
   }
-  function docList() {
-    var box = $('#doc-list'); if (!box) return;
-    box.replaceChildren();
-    IP.files.forEach(function (f, k) { box.append(h('div', { class: 'file-row' }, h('span', null, f.name), h('button', { type: 'button', class: 'btn small', onclick: function () { IP.files.splice(k, 1); docList(); } }, '移除'))); });
-    if (IP.files.length) box.append(h('button', { type: 'button', class: 'btn primary', id: 'doc-send', disabled: IP.sending ? true : null, onclick: docSend }, '★ ' + N.ui.reqDoc + '（' + IP.files.length + '）'));
-  }
-  function docSend() {
-    IP.sending = true; docList();
-    docRead(IP.files).then(function (files) {
-      return postJSON('/api/intake', { kind: 'note', type: 'doc', files: files });
-    }).then(function () { IP.files = []; IP.sending = false; toast(N.ui.docSent); load(); })
-      .catch(function (e) { IP.sending = false; docList(); toast('未能交出文件：' + why(e)); });
-  }
-  function localAct(action) { return postJSON('/api/setup', { action: action }); }
   function pageInputs() {
     var x = V.data, iv = x.interviews, inp = x.inputs, U = N.ui, ivTodo = x.todo.filter(function (t) { return t.type === 'interview'; })[0], ivPast = !!(iv && iv.nextOn && parseDay(iv.nextOn) < today());
-    var hl = x.health || {}, stopped = hl.pausedByFounder ? U.skip_pausedByFounder : hl.autoStopped ? U.skip_autoStopped : '';
-    var stName = function (st) { return st === 'processed' ? D.processed : st === 'awaitingFounder' ? D.awaiting : D.unprocessed; };
     var ivCol = h('section', { class: 'panel', id: 'in-interview' }, h('div', { class: 'ph' }, h('h2', null, D.interview)),
-      iv && iv.nextOn ? h('p', null, '下次訪問：', h('b', null, mdw(iv.nextOn)), '（' + rel(iv.nextOn) + '） ', ivTodo ? h('a', { class: 'btn primary', href: ivTodo.href }, '★ ' + D.startInterview) : h('span', { class: 'muted small' }, ivPast ? 'Zero 正在準備今次訪問，完成後會顯示「開始訪問」。' : '到期當日，Founder Desk 會出現「開始訪問」。')) : h('p', { class: 'muted' }, '未安排每週訪問：確認公司概覽後按經營節奏排期。'),
+      iv && iv.nextOn ? h('p', null, '下次訪問：', h('b', null, mdw(iv.nextOn)), '（' + rel(iv.nextOn) + '） ', ivTodo ? h('a', { class: 'btn primary', href: ivTodo.href }, '★ ' + D.startInterview) : h('span', { class: 'muted small' }, ivPast ? 'Zero 正在準備今次訪問，完成後會顯示「開始訪問」。' : '到期當日，待決事項會出現「開始訪問」。')) : h('p', { class: 'muted' }, '未安排每週訪問：確認公司概覽後按經營節奏排期。'),
       iv && iv.lastSummary && iv.lastSummary.length ? [h('h4', null, D.lastInterview + (iv.lastOn ? '（' + md(iv.lastOn) + '）' : '')), h('ul', null, iv.lastSummary.map(function (t) { return h('li', null, t); })), iv.changed ? h('p', null, h('b', null, D.changedBy + '：'), iv.changed) : null] : null);
-    var evs = inp.events || [];
-    var evCol = h('section', { class: 'panel', id: 'in-events' }, h('div', { class: 'ph' }, h('h2', null, D.evCol)),
-      h('div', { class: 'tags' }, h('a', { class: 'btn primary', id: 'in-event', href: '/#/request/event' }, D.reqEvent)),
-      h('p', { class: 'small muted' }, '公司以外發生的事（見面結果、對方答應或拒絕）；Zero 擬定證據級及站點進度，經你確認後更新。'),
-      h('h4', null, D.evRecent),
-      evs.length ? h('ul', { id: 'ev-list' }, evs.map(function (e) { return h('li', null, e.title + '（' + stName(e.status) + '）' + (e.effects.length ? '：' + e.effects.join('；') : ''), (e.unreadable || []).length ? h('ul', { class: 'small muted ev-unread' }, e.unreadable.map(function (u) { return h('li', null, N.t('unreadFileLine', { f: u.file, r: N.unreadReason(u.file) })); })) : null); })) : h('p', { class: 'empty' }, '未有。'));
-    var input = h('input', { type: 'file', multiple: true, hidden: true, id: 'doc-files' });
-    input.addEventListener('change', function () { Array.prototype.forEach.call(input.files, function (f) { if (!IP.files.some(function (y) { return y.name === f.name && y.size === f.size; })) IP.files.push(f); }); input.value = ''; docList(); });
-    var drop = h('div', { class: 'drop', id: 'doc-drop' }, h('p', { class: 'small' }, U.docDrop), h('button', { type: 'button', class: 'btn', onclick: function () { input.click(); } }, '選擇文件'), input, h('div', { id: 'doc-list' }));
-    drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
-    drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
-    drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('over'); Array.prototype.forEach.call((e.dataTransfer && e.dataTransfer.files) || [], function (f) { IP.files.push(f); }); docList(); });
-    setTimeout(docList, 0);
+    // 交給 Zero 的事：全部（包括文件類），按月摺疊；最近一個月展開
+    var all = inp.all || [], months = [];
+    all.forEach(function (v) { var k = String(v.receivedAt || '').slice(0, 7), g = months[months.length - 1]; if (!g || g.k !== k) { g = { k: k, list: [] }; months.push(g); } g.list.push(v); });
     var inCol = h('section', { class: 'panel', id: 'in-inbox' }, h('div', { class: 'ph' }, h('h2', null, D.inbox)),
-      h('h4', null, D.awaiting + '（' + inp.awaiting.length + '）'),
-      inp.awaiting.length ? h('ul', { class: 'todo' }, inp.awaiting.map(function (a) { return h('li', null, h('span', { class: 'ic' }, '✉'), h('span', { class: 'tx' }, h('b', null, a.title), h('small', null, a.question)), a.packId ? h('a', { class: 'btn primary', href: '/#/ask/' + a.packId }, D.answer) : null); })) : h('p', { class: 'empty' }, '沒有。'),
-      h('h4', null, D.unprocessed + '（' + inp.unprocessed.length + '）'),
-      inp.unprocessed.length ? h('ul', null, inp.unprocessed.map(function (u) { return h('li', null, u.title + (u.at ? '（' + when(u.at) + '）' : '')); })) : h('p', { class: 'empty' }, '沒有。'),
-      h('h4', null, U.reqDoc), x.company && x.company.confirmed ? drop : h('p', { class: 'small muted', id: 'doc-wait' }, U.docNeedOverview),
-      h('div', { class: 'tags', id: 'local-actions', style: 'margin-top:10px' },
-        h('button', { type: 'button', class: 'btn', id: 'open-folder', onclick: function () { localAct('openFolder').then(function (j) { toast(j.opened ? U.openFolderDone : U.openFolderNoWin); }).catch(function (e) { toast(e.code === 'open' ? why(e) : '未能開啟資料夾：' + why(e)); }); } }, U.openFolder),
-        h('button', { type: 'button', class: 'btn primary', id: 'run-now', disabled: x.ai.busy || stopped || !x.ai.ready ? true : null, onclick: function (e) { e.target.disabled = true; localAct('runNow').then(function () { toast(U.runNowSent); setTimeout(load, 800); }).catch(function (er) { e.target.disabled = false; toast(er.said || '未能開始 Zero 工作：' + why(er)); setTimeout(load, 800); }); } }, U.runNow)),
-      h('p', { class: 'small muted', id: 'run-now-note' }, stopped || (x.ai.busy ? U.runNowBusy : !x.ai.ready ? D.blockNoAI : U.runNowNote)),
-      h('p', { class: 'small muted' }, U.openFolderNote),
-      h('h4', null, D.recentInputs),
-      inp.recent.length ? h('ul', null, inp.recent.map(function (r) { return h('li', null, r.title + '：' + (r.effects || []).join('；')); })) : h('p', { class: 'empty' }, '未有。'),
-      h('p', { class: 'small muted' }, '提交新要求：', h('a', { href: '/#/request/adhoc' }, D.reqAdhoc), ' · ', h('a', { href: '/#/intake' }, '提交公司資料')));
-    return [blockCard(), h('div', { class: 'grid3', style: 'margin-top:0' }, ivCol, evCol, inCol)];
+      h('p', { class: 'small muted' }, D.recNote),
+      months.length ? months.map(function (g, i) {
+        var y = g.k.slice(0, 4), m = Number(g.k.slice(5, 7));
+        return h('details', { class: 'mo-month', id: 'month-' + g.k, 'data-keep': 'month-' + g.k, open: i === 0 ? true : null }, h('summary', null, d('recMonth', { y: y, m: m, n: g.list.length })), h('ul', { class: 'recent' }, g.list.map(inputRow)));
+      }) : h('p', { class: 'empty' }, D.recNone),
+      h('p', null, h('a', { class: 'btn primary', id: 'tell-go', href: '/#quick-input' }, D.tellGo)));
+    // Zero 的工作及自動開工
+    var runs = (x.runs || []).slice(0, 5);
+    var workCol = h('section', { class: 'panel', id: 'in-work' }, h('div', { class: 'ph' }, h('h2', null, D.recWork)),
+      runs.length ? h('div', { class: 'rows' }, runs.map(function (r) { return h('div', { class: 'row-item' }, h('time', null, when(r.startedAt)), h('span', null, h('b', null, r.label || 'Zero 工作'), r.summary || r.skipReason ? h('span', { class: 'small muted', style: 'display:block' }, r.summary || U['skip_' + r.skipReason] || '') : null)); })) : h('p', { class: 'empty' }, D.recRunsNone),
+      h('h4', null, D.recAuto), x.rhythm && x.rhythm.runTime ? h('p', null, rhythmWhen(x.rhythm), (x.rhythmInfo && x.rhythmInfo.scheduler && x.rhythmInfo.scheduler !== 'none') ? '（已開啟）' : '', ' ', h('a', { href: '/dashboard/system' }, '更改時間')) : h('p', { class: 'muted' }, '確認公司概覽後，Zero 會按經營節奏開工。'));
+    return [blockCard(), h('div', { class: 'grid-in' }, inCol, h('div', { class: 'stack' }, workCol, ivCol))];
   }
   /* ---------- 分頁：團隊（工作看板、角色卡、能力建設） ---------- */
   var COLS = ['todo', 'doing', 'waiting', 'blocked', 'review', 'done'];
@@ -1817,8 +1811,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       return h('div', { class: 'kcol', 'data-col': c }, h('h4', null, D['col_' + c], h('b', null, String(list.length))), list.length ? list.map(function (t) { return card(t, false); }) : h('p', { class: 'empty' }, D.noTasks));
     }).concat([h('div', { class: 'kcol adhoc', 'data-col': 'adhoc' }, h('h4', null, D.col_adhoc, h('b', null, String(adhoc.length))), h('p', { class: 'hint' }, D.adhocNote),
       adhoc.length ? adhoc.map(function (t) { return card(t, true); }) : h('p', { class: 'empty' }, D.noTasks),
-      h('a', { class: 'btn small', href: '/#/request/adhoc' }, D.reqAdhoc))]));
-    return h('section', { class: 'panel' }, h('div', { class: 'ph' }, h('h2', null, D.kanban), h('div', { class: 'r' }, h('span', null, '唯讀：狀態只會因你在 Founder Desk 作答或 Zero 交付而改變；每欄按優先次序排列；你的行動由 Zero 負責準備，完成須由你確認。'), h('label', null, D.ownerFilter + ' ', own), h('label', null, D.filterMs + ' ', sel))),
+      h('a', { class: 'btn small', href: '/#quick-input' }, D.tellGo))]));
+    return h('section', { class: 'panel' }, h('div', { class: 'ph' }, h('h2', null, D.kanban), h('div', { class: 'r' }, h('span', null, '唯讀：狀態只會因你在待決事項作答或 Zero 交付而改變；每欄按優先次序排列；你的行動由 Zero 負責準備，完成須由你確認。'), h('label', null, D.ownerFilter + ' ', own), h('label', null, D.filterMs + ' ', sel))),
       (x.tasks || []).length ? board : h('p', { class: 'empty' }, x.company.confirmed ? 'Zero 尚未分配工作；Zero 下次開工後，工作會按狀態排列於此。' : '確認公司概覽後，Zero 會按里程碑分配工作，並按狀態在此顯示。'));
   }
   // 未啟用嘅角色卡：啟用任務做好就有驗收入口；未做好就講明等緊乜
@@ -1829,7 +1823,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   }
   function pageTeam() {
     var x = V.data;
-    return [blockCard(), kanban(),
+    return [blockCard()].concat(teamPeople(), [kanban(),
       h('section', { class: 'panel', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.roleCards)),
         // 角色卡頂邊狀態色＋信號條（工作中先流動；只由真實工作推導，規劃書 4.8）＋圖例
         (x.teammates || []).length ? h('div', { class: 'teamlegend', 'aria-label': D.teamLegendL }, [['working', '#9ae5ba'], ['doing', '#9ae5ba'], ['idle', '#a5c9ff'], ['not_started', '#838d9e']].map(function (k) { return h('span', null, h('i', { style: '--c:' + k[1] }), D['act_' + k[0]]); })) : null,
@@ -1844,7 +1838,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
             t.lifecycle === 'planned' ? activation(t) : null);
         })) : h('p', { class: 'empty' }, '尚未有角色卡：Zero 會按里程碑提出建議，你驗收啟用任務後才開始工作。')),
       h('section', { class: 'panel', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.capabilities)),
-        (x.capabilities || []).length ? h('div', { class: 'rows' }, x.capabilities.map(function (c) { return h('div', { class: 'row-item' }, h('b', null, c.title), tag({ proposed: '擬議', active: '進行中', proven: '已證明使用', retired: '已撤' }[c.status] || c.status), h('span', { class: 'muted small' }, '證明方式：' + c.proofMethod)); })) : h('p', { class: 'empty' }, '未有能力建設項目。'))];
+        (x.capabilities || []).length ? h('div', { class: 'rows' }, x.capabilities.map(function (c) { return h('div', { class: 'row-item' }, h('b', null, c.title), tag({ proposed: '擬議', active: '進行中', proven: '已證明使用', retired: '已撤' }[c.status] || c.status), h('span', { class: 'muted small' }, '證明方式：' + c.proofMethod)); })) : h('p', { class: 'empty' }, '未有能力建設項目。'))]);
   }
   /* ---------- 分頁：紀錄 ---------- */
   function pageLog() {
@@ -2153,7 +2147,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function pageBrain() {
     var b = V.data.brain;
     if (!b || !b.source) return [h('section', { class: 'panel block-card' }, h('span', { class: 'eyebrow' }, D.brain), h('img', { class: 'bband', src: '/assets/crew-brain-members.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.remove(); } }), h('div', { class: 't' }, D.brainEmpty),
-      h('p', { class: 'small muted' }, b && b.source === null ? '提交資料後，Zero 會由生意體檢開始；如欲先查看範例，可要求「打開營運監察台示範」。' : '找不到指定的試驗資料夾，請重新設定。'))];
+      h('p', { class: 'small muted' }, b && b.source === null ? '提交資料後，Zero 會由生意體檢開始；如欲先查看範例，可要求「打開 CrewZero 示範」。' : '找不到指定的試驗資料夾，請重新設定。'))];
     if (sub) return ({ checkup: pageCheckup, wargame: pageWargame, scenario: pageScenario, opportunities: pageOpp, routes: pageRoutes, pipeline: pagePipe })[sub](brainItem(sub));
     // 等你處理：先列待決事項入面屬生意大腦嘅問題包（同 Founder Desk 同一份清單），再列冇問題包嘅（例如等你練習）
     var tw = (V.data.brainTodo || []).filter(function (t) { return t.brain; }).map(function (t) { var it = brainItem(t.brain); return { id: t.brain, name: it.name, waitText: t.text, summary: it.summary, waitHref: t.href }; });
@@ -2383,7 +2377,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       s.founderDecisions.length ? h('div', { class: 'decide', id: 'wg-decide', 'data-act': 'judge' }, h('h4', null, D.founderDecide + '（' + s.founderDecisions.length + '）'),
         h('ul', { class: 'm-sum' }, s.founderDecisions.map(function (q, i) { var answer = ((d.founder || {}).decisions || []).filter(function (v) { return v.questionId === 'd' + (i + 1); })[0]; return h('li', null, q.question, answer ? h('small', { class: 'muted', style: 'display:block' }, D.debateChosen.replace('{value}', answer.value)) : null, h('small', { class: 'muted', style: 'display:block' }, '★ 裁判建議：' + q.recommend + ' · ' + q.why + (q.risk ? ' · ' + D.decisionRisk + '：' + q.risk : ''))); })),
         h('p', { style: 'margin:8px 0 0' }, dec ? h('a', { class: 'btn primary', href: '/#/ask/' + dec.packId, id: 'wg-decide-go' }, dec.open ? '★ ' + D.toDeskAsk : '已答 · ' + D.view)
-          : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; postJSON('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide', matchId: d.id }).then(function () { toast('正在放上 Founder Desk……'); setTimeout(load, 1500); }).catch(function (er) { e.target.disabled = false; toast('未能放上 Founder Desk：' + why(er)); }); } }, '★ ' + D.putOnDesk))) : null,
+          : h('button', { type: 'button', class: 'btn primary', id: 'wg-decide-put', onclick: function (e) { e.target.disabled = true; postJSON('/api/intake', { kind: 'note', type: 'brain-decide', item: 'wargame', cardId: 'decide', matchId: d.id }).then(function () { toast('正在放上待決事項……'); setTimeout(load, 1500); }).catch(function (er) { e.target.disabled = false; toast('未能放上待決事項：' + why(er)); }); } }, '★ ' + D.putOnDesk))) : null,
       s.assumptionChanges.length ? h('p', { class: 'small', style: 'margin:10px 0 0', 'data-act': 'judge' }, h('b', null, D.assumptionChanges + '：'), s.assumptionChanges.map(function (a) { return [a.change, ' ', tag(N.zeroLabels(a.label || 'Zero 建議 · 未確認'), 'src-ai'), '；']; })) : null);
   }
   function halfDebate(x, d) {
@@ -2467,9 +2461,9 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return h('div', { class: 'wg-go', id: 'wg-entries' },
       d.phase === 'done' ? h('a', { class: 'btn primary', href: respond, id: 'wg-respond' }, '★ ' + D.respond + ' →') : null,
       d.phase === 'adopt' ? h('a', { class: 'btn primary', href: adopt ? '/#/ask/' + adopt : '/#/debate/' + d.id, id: 'wg-adopt' }, '★ ' + D.adoptCards + ' →') : null,
-      d.phase === 'failed' ? h('a', { class: 'btn primary', href: '/#/debate/' + d.id, id: 'wg-rerun' }, '★ 到 Founder Desk 重跑 →') : null,
+      d.phase === 'failed' ? h('a', { class: 'btn primary', href: '/#/debate/' + d.id, id: 'wg-rerun' }, '★ 到待決事項重跑 →') : null,
       !running ? h('a', { class: 'btn', href: '/#/debate/new', id: 'wg-rematch' }, D.rematch + ' →') : null,
-      h('a', { class: 'btn small', href: '/#/debate/' + d.id }, '在 Founder Desk 查看這場'));
+      h('a', { class: 'btn small', href: '/#/debate/' + d.id }, '在待決事項查看這場'));
   }
   /* 2 紅藍對打：舞台。場次頭、階段條、主張、半場切換同重播兩個半場共用；入口喺兩個半場底部 */
   function pageWargame(x) {
@@ -2567,20 +2561,184 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
           row(D.firstTest, function (r) { return r.firstTest || '—'; }),
           row(D.stopCondition, function (r) { return r.stop || '—'; }),
           row(D.yourFeedback, function (r) { return fbBar(x.id, 'route-' + r.id); })))),
-      d.decisionsMade ? h('p', { class: 'small muted', style: 'margin-top:12px' }, D.debateDecisionRecorded) : d.chooseHref ? h('p', { style: 'margin-top:12px' }, h('a', { class: 'btn primary', href: d.chooseHref, id: 'routes-choose' }, '★ ' + D.chooseRoute)) : h('p', { class: 'small muted', style: 'margin-top:12px' }, '紅藍對打的「需要你決定」放上 Founder Desk 後，請在該處選擇。')]);
+      d.decisionsMade ? h('p', { class: 'small muted', style: 'margin-top:12px' }, D.debateDecisionRecorded) : d.chooseHref ? h('p', { style: 'margin-top:12px' }, h('a', { class: 'btn primary', href: d.chooseHref, id: 'routes-choose' }, '★ ' + D.chooseRoute)) : h('p', { class: 'small muted', style: 'margin-top:12px' }, '紅藍對打的「需要你決定」放上待決事項後，請在該處選擇。')]);
   }
-  /* 6 客戶推進追蹤：五格推進板（供應對象左邊框虛線，客戶實線；頂部每格數目） */
+  /* ---------- 人物及機構名單（0.40.0）：對象推進追蹤（五格推進板）＋更正；團隊成員見團隊頁。
+     資料全部來自 /api/dashboard 的 brain.pipeline（格位）及 people（成員、已不再接觸、G6 生成）；更正經創辦人操作隊列，本機即時，不經 Zero。 */
+  var PPL_KINDS = ['customer', 'partner', 'investor', 'advisor'];
+  function pplKind(k) { return D['ppl_kind_' + k] || k; }
+  // 舊資料（示範的結果卡）只有舊顯示字串，沒有代碼：讀時對應
+  function pplCode(p) { return p.kindCode || ({ '客戶': 'customer', '供應': 'partner', '投資者': 'investor', '顧問': 'advisor' }[p.kind]) || 'customer'; }
+  function people() { return V.data.people || { external: [], closed: [], team: [], ownership: null }; }
+  function teamLive() { return people().team.filter(function (m) { return !m.team || m.team.state !== 'left'; }); }
+  function memberRole(m) { var t = m.team ? D['team_' + m.team.type] || '' : ''; return [t, m.role].filter(Boolean).join('・'); }
+  function pplSub(p) { return [p.org, p.role].filter(Boolean).join('・'); }
+  function fixError(e) {
+    var code = e && (e.error || (e.body && e.body.error));
+    var map = { duplicateName: D.ppl_errDuplicate, contactInfo: D.ppl_errContact, needRole: D.ppl_errNeedRole, merged: D.ppl_errMerged };
+    return (code && map[code]) || (e && e.said) || D.ppl_errGeneric;
+  }
+  function sendFix(op, target, value) {
+    return postJSON('/api/founder-op', { op: op, target: target, value: value || {} }).then(function (j) {
+      if (j && j.ok === false) throw j;
+      closePplModal(); toast(D.ppl_saved); return load();
+    }).catch(function (e) { toast(fixError(e)); throw e; });
+  }
+  function closePplModal() { var m = $('#ppl-modal'); if (m) m.remove(); document.removeEventListener('keydown', pplEsc); }
+  function pplEsc(e) { if (e.key === 'Escape') closePplModal(); }
+  function openPplModal(eyebrow, title, body, actions) {
+    closePplModal();
+    var box = h('section', { class: 'layer accent ppl' }, h('span', { class: 'eyebrow' }, eyebrow), h('h2', null, title), body, h('div', { class: 'pair-actions' }, actions));
+    var m = h('div', { class: 'pair-modal', id: 'ppl-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title, onclick: function (e) { if (e.target === m) closePplModal(); } }, box);
+    document.body.append(m); document.addEventListener('keydown', pplEsc);
+    var f = m.querySelector('input,button.opt,button'); if (f) f.focus();
+    return m;
+  }
+  function pplCancel() { return h('button', { type: 'button', class: 'btn big', onclick: closePplModal }, D.ppl_cancel); }
+  function dlgRename(p) {
+    var inp = h('input', { type: 'text', class: 'in', maxlength: '20', value: p.name, 'aria-label': D.ppl_renameField });
+    var go = h('button', { type: 'button', class: 'btn primary big', onclick: function () { var v = inp.value.trim(); if (!v || v === p.name) { closePplModal(); return; } go.disabled = true; sendFix('actorRename', p.id, { name: v }).catch(function () { go.disabled = false; }); } }, D.ppl_save);
+    openPplModal(D.ppl_fix + ' · ' + D.ppl_fixRename, D.ppl_renameTitle, [h('p', { class: 'small muted' }, D.ppl_renameBody), h('div', { class: 'fld' }, h('label', null, D.ppl_renameField), inp)], [go, pplCancel()]);
+  }
+  function dlgKind(p) {
+    var cur = pplCode(p);
+    var opts = PPL_KINDS.map(function (k) { return h('button', { type: 'button', class: 'opt' + (k === cur ? ' cur' : ''), 'data-kind': k, onclick: function () { cur = k; opts.forEach(function (o) { o.classList.toggle('cur', o.getAttribute('data-kind') === cur); }); } }, h('span', { class: 'dot' }), h('span', null, pplKind(k))); });
+    var go = h('button', { type: 'button', class: 'btn primary big', onclick: function () { if (cur === pplCode(p)) { closePplModal(); return; } go.disabled = true; sendFix('actorKind', p.id, { kind: cur }).catch(function () { go.disabled = false; }); } }, D.ppl_save);
+    openPplModal(D.ppl_fix + ' · ' + D.ppl_fixKind, D.ppl_kindTitle, [h('p', { class: 'small muted' }, D.ppl_kindBody), opts], [go, pplCancel()]);
+  }
+  function dlgMerge(p, pool) {
+    var others = pool.filter(function (x) { return x.id !== p.id; }), pick = null, body = h('div', null), acts = h('div', { style: 'display:contents' });
+    function mmBox(o) { return h('div', { class: 'box' }, h('b', null, o.name), pplSub(o) ? h('small', null, pplSub(o)) : null, o.lastContact ? h('small', null, D.ppl_lastContact + '：' + md(o.lastContact.date)) : null); }
+    var m = openPplModal(D.ppl_fix + ' · ' + D.ppl_fixMerge, D.ppl_fixMerge, body, acts), title = m.querySelector('h2');
+    function draw() {
+      body.replaceChildren(); acts.replaceChildren(); title.textContent = pick ? d('ppl_mergeTitle', { a: p.name, b: pick.name }) : D.ppl_fixMerge;
+      if (!others.length) { body.append(h('p', { class: 'small muted' }, D.ppl_mergeNone)); acts.append(pplCancel()); return; }
+      if (!pick) {
+        add(body, [h('p', { class: 'small muted' }, d('ppl_mergePick', { a: p.name })), others.map(function (o) { return h('button', { type: 'button', class: 'opt', onclick: function () { pick = o; draw(); } }, h('span', { class: 'dot' }), h('span', null, o.name + (pplSub(o) ? '（' + pplSub(o) + '）' : ''))); })]);
+        acts.append(pplCancel()); return;
+      }
+      body.append(h('p', { class: 'small muted' }, d('ppl_mergeBody', { a: p.name, b: pick.name })), h('div', { class: 'mm' }, mmBox(p), h('div', { class: 'arrow', 'aria-hidden': 'true' }, '→'), mmBox(pick)));
+      var go = h('button', { type: 'button', class: 'btn primary big', onclick: function () { go.disabled = true; sendFix('actorMerge', p.id, { into: pick.id }).catch(function () { go.disabled = false; }); } }, D.ppl_mergeDo);
+      acts.append(go, h('button', { type: 'button', class: 'btn big', onclick: function () { pick = null; draw(); } }, '← ' + D.ppl_mergeBack), pplCancel());
+    }
+    draw();
+  }
+  function dlgClose(p) {
+    var go = h('button', { type: 'button', class: 'btn primary big', onclick: function () { go.disabled = true; sendFix('actorStatus', p.id, { status: 'inactive' }).catch(function () { go.disabled = false; }); } }, D.ppl_closeDo);
+    openPplModal(D.ppl_fix + ' · ' + D.ppl_fixClose, d('ppl_closeTitle', { n: p.name }), h('p', { class: 'small muted' }, D.ppl_closeBody), [go, pplCancel()]);
+  }
+  function fixMenu(p, items) {
+    var open = V.pplMenu === p.id, btn = h('button', { type: 'button', class: 'btn small', 'aria-haspopup': 'menu', 'aria-expanded': open ? 'true' : 'false', onclick: function (e) { e.stopPropagation(); V.pplMenu = open ? null : p.id; render(true); } }, D.ppl_fix);
+    return h('div', { class: 'fixwrap' }, btn, open ? h('div', { class: 'menu', role: 'menu' }, items.map(function (it) {
+      return it === '-' ? h('hr') : h('a', { href: '#', role: 'menuitem', class: it.warn ? 'warn' : null, onclick: function (e) { e.preventDefault(); e.stopPropagation(); V.pplMenu = null; render(true); it.run(); } }, it.text);
+    })) : null);
+  }
+  document.addEventListener('click', function () { if (V.pplMenu) { V.pplMenu = null; if (V.data) render(true); } });
+  function pplMenuItems(p, pool) {
+    return [{ text: D.ppl_fixRename, run: function () { dlgRename(p); } }, { text: D.ppl_fixKind, run: function () { dlgKind(p); } }, { text: D.ppl_fixMerge, run: function () { dlgMerge(p, pool); } }, '-', { text: D.ppl_fixClose, warn: true, run: function () { dlgClose(p); } }];
+  }
+  function contactText(p) {
+    if (p.lastContact) return '「' + p.lastContact.text + '」（' + md(p.lastContact.date) + '）';
+    if (p.stage > 0) return D.ppl_noRecord;
+    if (p.addedAt) return d('ppl_noContact', { d: md(p.addedAt) });
+    return D.pipe_0;
+  }
+  function pplRow(p, pool) {
+    var kc = pplCode(p), fresh = !p.lastContact && p.addedAt && diffDays(parseDay(p.addedAt), today()) <= 2;
+    var docs = p.docs || [], docCount = docs.reduce(function (n, x) { return n + (x.count || 1); }, 0);
+    return h('div', { class: 'pr ' + kc, 'data-actor': p.id },
+      h('div', { class: 'nm' }, h('b', null, p.name), pplSub(p) ? h('small', null, pplSub(p)) : null, fresh ? tag(D.ppl_justAdded, 'mint') : null),
+      h('div', null, h('div', { class: 'track5' }, STAGE5.map(function (s2, i) { return h('span', { class: i < p.stage ? 'on' : i === p.stage ? 'cur' : '' }, s2); })),
+        h('span', { class: 'said' }, contactText(p)), p.gapDays != null && p.gapDays >= (V.data.people.gapDays || 14) ? h('small', { class: 'gap' }, d('ppl_gap', { n: p.gapDays })) : null,
+        p.rehearsal ? h('small', null, tag(D.rehearsalTag, 'src-ai'), ' ', p.rehearsal.replace(/^演練：/, '').replace(/（唔計證據）$/, '')) : null),
+      h('div', { class: 'next' }, h('small', null, D.ppl_next), p.next, p.nextBy === 'ai' ? [' ', tag('Zero 建議 · 未確認', 'src-ai')] : null, p.nextDue ? h('small', null, md(p.nextDue)) : null,
+        h('div', { class: 'docs' }, docCount ? h('a', { href: '/#/feedback/' + docs[0].inputId, title: docs.map(function (x) { return x.title; }).join('、') }, d('ppl_docs', { n: docCount })) : h('small', null, D.ppl_noDocs)),
+        p.hasOpportunity ? h('div', null, h('a', { href: brainHref('opportunities') }, D.oppAvailable)) : null, p.practiceId ? h('div', null, h('a', { href: '/#/practice/' + p.practiceId }, '🎭 ' + D.practiceGo + ' →')) : null, p.material ? h('div', null, h('a', { href: '#', onclick: function (e) { e.preventDefault(); showRun(p.material.runId, p.material.title); } }, D.materialL + '：' + p.material.title)) : null),
+      fixMenu(p, pplMenuItems(p, pool)));
+  }
+  /* 6 對象推進追蹤：類別篩選、分組、五格推進板、更正 */
   function pagePipe(x) {
-    var list = (x.detail || {}).prospects || [];
-    if (!list.length) return itemPage(x, plainBody(x));
-    return itemPage(x, [h('div', { class: 'pipehead' }, h('span', null, '只有真實行為才會令對象向右推進；演練與 Zero 推論不計算在內。'), STAGE5.map(function (s, i) { return h('span', null, s + ' ', h('b', null, String(list.filter(function (p) { return p.stage === i; }).length))); })),
-      h('div', { class: 'pipe', id: 'pipeline' }, list.map(function (p) {
-        var supply = /供應/.test(p.kind || '');
-        return h('div', { class: 'pr' + (supply ? ' supply' : '') }, h('div', { class: 'nm' }, h('b', null, p.label || p.name), h('small', null, supply ? D.kindSupply : D.kindCustomer)),
-          h('div', null, h('div', { class: 'track5' }, STAGE5.map(function (s, i) { return h('span', { class: i < p.stage ? 'on' : i === p.stage ? 'cur' : '' }, s); })),
-            p.lastReal ? h('small', null, D.lastRealL + '：' + p.lastReal + (p.lastAt ? '（' + md(p.lastAt) + '）' : '')) : null, p.rehearsal ? h('small', null, tag(D.rehearsalTag, 'src-ai'), ' ', p.rehearsal.replace(/^演練：/, '').replace(/（唔計證據）$/, '')) : null),
-          h('div', null, h('small', null, D.nextStepL), p.next, p.nextBy === 'ai' ? [' ', tag('Zero 建議 · 未確認', 'src-ai')] : null, p.hasOpportunity ? h('div', null, h('a', { href: brainHref('opportunities') }, D.oppAvailable)) : null, p.practiceId ? h('div', null, h('a', { href: '/#/practice/' + p.practiceId }, '🎭 ' + D.practiceGo + ' →')) : null, p.material ? h('div', null, h('a', { href: '#', onclick: function (e) { e.preventDefault(); showRun(p.material.runId, p.material.title); } }, D.materialL + '：' + p.material.title)) : null, fbBar(x.id, 'pipe-' + p.id)));
-      }))]);
+    var list = (x.detail || {}).prospects || [], P = people(), closed = P.closed || [];
+    if (!list.length && !closed.length) return itemPage(x, plainBody(x));
+    var filter = V.pplFilter || 'all', team = teamLive();
+    var chip = function (key, label, n, href) {
+      var on = filter === key;
+      return h(href ? 'a' : 'button', { type: href ? undefined : 'button', href: href || null, class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: href ? null : function () { V.pplFilter = key; render(true); } }, label + ' ', h('b', null, String(n)), href ? ' →' : '');
+    };
+    var chips = h('div', { class: 'chips', role: 'group', 'aria-label': D.ppl_filterL }, chip('all', D.ppl_all, list.length + team.length), PPL_KINDS.map(function (k) { return chip(k, pplKind(k), list.filter(function (p) { return pplCode(p) === k; }).length); }), team.length ? chip('team', D.ppl_toTeam, team.length, '/dashboard/team') : null);
+    var groups = PPL_KINDS.filter(function (k) { return filter === 'all' || filter === k; }).map(function (k) {
+      var items = list.filter(function (p) { return pplCode(p) === k; }); if (!items.length) return null;
+      return [h('div', { class: 'sec-h' }, pplKind(k), h('small', null, d('ppl_count', { n: items.length }))), h('div', { class: 'pipe' }, items.map(function (p) { return pplRow(p, list); }))];
+    });
+    var closedBox = closed.length ? h('details', { class: 'closed' }, h('summary', null, d('ppl_closedTitle', { n: closed.length })), closed.map(function (p) {
+      return h('div', { class: 'row' }, h('div', { class: 'sp' }, h('b', null, p.name), pplSub(p) ? ' · ' + pplSub(p) : '', p.lastContact ? h('div', null, h('small', { class: 'muted' }, D.ppl_lastContact + '：「' + p.lastContact.text + '」（' + md(p.lastContact.date) + '）')) : null),
+        h('button', { type: 'button', class: 'btn small', onclick: function () { sendFix('actorStatus', p.id, { status: 'active' }).catch(function () { }); } }, D.ppl_fixReopen));
+    })) : null;
+    return [h('section', { class: 'panel item-page bsec ppl', style: acStyle(x.id), id: 'b-' + x.id },
+      bnav(),
+      h('div', { class: 'bhead' }, h('img', { class: 'bmember', src: '/assets/crew-orbit-member-' + x.id + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.replaceWith(h('span', { class: 'bicon' }, bicon(x.id))); } }),
+        h('div', null, h('h2', null, h('span', { class: 'no' }, String(x.no)), D.ppl_title, bStatus(x.status)), h('div', { class: 'sub' }, D.ppl_intro)),
+        h('div', { class: 'r' }, folderBadge(), h('a', { class: 'btn small', href: brainHref() }, D.backBrain))),
+      chips,
+      h('div', { class: 'pipehead' }, h('span', null, '只有真實行為才會令對象向右推進；演練與 Zero 推論不計算在內。'), STAGE5.map(function (s2, i) { return h('span', null, s2 + ' ', h('b', null, String(list.filter(function (p) { return p.stage === i; }).length))); })),
+      h('div', { id: 'pipeline' }, groups), closedBox)];
+  }
+  /* 團隊頁：團隊成員、已有人負責的事（由名單生成）、按負責人的工作 */
+  function stationNames(ids) { var ms = V.data.milestones || []; return (ids || []).map(function (id) { var m = ms.filter(function (z) { return z.id === id; })[0]; return m ? (m.short || m.title) : ''; }).filter(Boolean); }
+  function openTasksOf(pred) { return (V.data.tasks || []).filter(function (t) { return t.owner === 'founder' && t.column !== 'done' && pred(t); }).sort(function (a, b) { return String(a.dueAt || '9999').localeCompare(String(b.dueAt || '9999')); }); }
+  function stateTag(m) { var s2 = (m.team && m.team.state) || 'active'; return tag(D['ts_' + s2], s2 === 'active' ? 'mint' : s2 === 'paused' ? 'wait' : 'red'); }
+  function setTeam(m, patch) { return sendFix('actorTeam', m.id, { team: patch }).catch(function () { }); }
+  function memberMenu(m) {
+    var st = (m.team && m.team.state) || 'active', pool = teamLive();
+    var items = [{ text: D.ppl_fixRename, run: function () { dlgRename(m); } }, { text: D.ppl_fixKind, run: function () { dlgKind(Object.assign({}, m, { kindCode: 'team' })); } }, { text: D.ppl_fixMerge, run: function () { dlgMerge(m, pool); } }, '-'];
+    if (st !== 'active') items.push({ text: D.ppl_setActive, run: function () { setTeam(m, { state: 'active' }); } });
+    if (st !== 'paused') items.push({ text: D.ppl_setPaused, run: function () { setTeam(m, { state: 'paused' }); } });
+    items.push({ text: D.ppl_setLeft, warn: true, run: function () { setTeam(m, { state: 'left' }); } });
+    return fixMenu(m, items);
+  }
+  function reassign(tasks, owner) {
+    return tasks.reduce(function (p, t) { return p.then(function () { return postJSON('/api/founder-op', { op: 'taskOwner', target: t.id, value: { owner: owner } }); }); }, Promise.resolve()).then(function () { toast(D.ppl_saved); return load(); }).catch(function (e) { toast(fixError(e)); });
+  }
+  function memberCard(m) {
+    var st = (m.team && m.team.state) || 'active', mine = openTasksOf(function (t) { return t.assigneeId === m.id; }), stations = stationNames(m.team && m.team.owns), next = mine.filter(function (t) { return t.dueAt; })[0];
+    return h('div', { class: 'mem' + (st === 'paused' ? ' paused' : ''), 'data-actor': m.id }, h('h4', null, m.name, stateTag(m)), h('div', { class: 'role' }, memberRole(m)),
+      h('dl', null, h('dt', null, D.ppl_stations), h('dd', null, stations.length ? stations.join('、') : D.ppl_noStations), h('dt', null, D.ppl_works), h('dd', null, !mine.length ? D.ppl_noWorks : next ? d('ppl_worksNext', { n: mine.length, d: md(next.dueAt) }) : d('ppl_worksN', { n: mine.length }))),
+      h('div', { class: 'foot' }, memberMenu(m), st === 'paused' ? h('button', { type: 'button', class: 'btn small', onclick: function () { setTeam(m, { state: 'active' }); } }, D.ppl_setActive) : null));
+  }
+  function teamPeople() {
+    var P = people(), live = teamLive(), left = P.team.filter(function (m) { return m.team && m.team.state === 'left'; });
+    if (!P.team.length) return [h('section', { class: 'panel ppl', id: 'team-members' }, h('div', { class: 'ph' }, h('h2', null, D.ppl_teamTitle)), h('p', { class: 'empty' }, D.ppl_teamEmpty))];
+    var out = [h('section', { class: 'panel ppl', id: 'team-members', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.ppl_teamTitle)), h('p', { class: 'small muted' }, D.ppl_teamIntro),
+      live.length ? h('div', { class: 'mem-grid' }, live.map(memberCard)) : null,
+      left.length ? h('details', { class: 'closed', open: true }, h('summary', null, d('ppl_leftTitle', { n: left.length })), left.map(function (m) {
+        var tasks = openTasksOf(function (t) { return t.ownerLeft && t.formerOwner === m.name; });
+        return h('div', { class: 'row' }, h('div', { class: 'sp' }, h('b', null, m.name), ' · ', memberRole(m), tasks.length ? h('div', null, h('small', { class: 'muted' }, d('ppl_leftTasks', { n: tasks.length })), tasks.map(function (t) { return h('div', null, h('small', { class: 'muted' }, (t.dueAt ? md(t.dueAt) + '　' : '') + t.title)); })) : null),
+          h('div', { class: 'foot', style: 'margin:0' }, tasks.length ? [h('button', { type: 'button', class: 'btn small primary', onclick: function () { reassign(tasks, 'founder'); } }, D.ppl_reassignMe)].concat(live.filter(function (z) { return z.team.state === 'active'; }).map(function (z) { return h('button', { type: 'button', class: 'btn small', onclick: function () { reassign(tasks, z.id); } }, d('ppl_reassignTo', { n: z.name })); })) : null,
+            h('button', { type: 'button', class: 'btn small', onclick: function () { setTeam(m, { state: 'active' }); } }, D.ppl_setActive)));
+      })) : null)];
+    var own = P.ownership;
+    if (own) {
+      out.push(h('section', { class: 'panel ppl', id: 'team-ownership', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.ppl_ownTitle)), h('p', { class: 'small muted' }, D.ppl_ownIntro),
+        h('table', { class: 'own' }, h('thead', null, h('tr', null, h('th', null, D.ppl_ownWho), h('th', null, D.ppl_ownWhat))),
+          h('tbody', null, own.lines.map(function (l) {
+            var ts = openTasksOf(function (t) { return t.assigneeId === l.actorId; }), shown = ts.slice(0, 2).map(function (t) { return t.title + (t.dueAt ? '（' + md(t.dueAt) + '）' : ''); }), more = ts.length - shown.length;
+            var what = stationNames((live.concat(left).filter(function (z) { return z.id === l.actorId; })[0] || { team: {} }).team.owns).concat(shown).join('；') + (more > 0 ? '；' + d('ppl_ownMore', { n: more }) : '') + (l.state === 'paused' ? '（' + D.ppl_pausedTag + '）' : '');
+            return h('tr', null, h('td', null, l.name + (l.role ? '（' + [D['team_' + ((live.filter(function (z) { return z.id === l.actorId; })[0] || {}).team || {}).type] || '', l.role].filter(Boolean).join('・') + '）' : '')), h('td', null, what || D.ppl_noStations));
+          }).concat((own.unowned || []).map(function (u) { return h('tr', null, h('td', { class: 'no' }, D.ppl_ownNobody), h('td', { class: 'no' }, u.station + '（原由' + u.formerOwners.join('、') + '負責）')); }))))));
+      var groups = live.map(function (m) { return { name: m.name, tasks: openTasksOf(function (t) { return t.assigneeId === m.id; }) }; }).filter(function (g) { return g.tasks.length; });
+      var mine = openTasksOf(function (t) { return !t.assigneeId; });
+      if (mine.length || groups.length) out.push(h('section', { class: 'panel ppl', id: 'team-work', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.ppl_workTitle)),
+        groups.concat([{ name: D.ppl_workMe, tasks: mine, me: true }]).filter(function (g) { return g.tasks.length; }).map(function (g) {
+          var lefts = g.me ? g.tasks.filter(function (t) { return t.ownerLeft; }) : [];
+          return [h('div', { class: 'who-h' }, g.name, h('small', null, lefts.length ? d('ppl_workMeLeft', { n: g.tasks.length, m: lefts.length, o: lefts[0].formerOwner }) : d('ppl_workN', { n: g.tasks.length }))),
+            h('ul', { class: 'sched' }, g.tasks.map(function (t) { return h('li', { class: 'it' }, h('span', { class: 'k action' }, t.dueAt ? md(t.dueAt) : '—'), h('span', { class: 'tx' }, t.title, t.ownerLeft ? h('span', { class: 'who warn' }, D.ppl_whoLeft) : null)); }))];
+        })));
+    }
+    return out;
+  }
+  function whoPill(w) {
+    if (!w || !(V.data.people && V.data.people.team && V.data.people.team.length)) return null;
+    return w.kind === 'member' ? h('span', { class: 'who' }, d('ppl_whoMember', { n: w.name })) : w.kind === 'left' ? h('span', { class: 'who warn' }, D.ppl_whoLeft) : h('span', { class: 'who me' }, D.ppl_whoMe);
   }
   // 新出現嘅推進項目亮一下（兩次讀回之間；首次載入唔亮）
   function flashNew() {

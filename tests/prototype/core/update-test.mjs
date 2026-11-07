@@ -113,15 +113,15 @@ try {
   const st0 = url0 ? await (await fetch(url0 + 'api/health')).json() : {};
   if (url0) unpairs.push(await installPass(lib.rootId(DATA), url0, DATA));
   const oldPid = Number(st0.pid) || 0; if (oldPid) pids.push(oldPid);
-  ok('舊版 Founder Desk 開到（更新前）', !!url0 && oldPid > 0 && st0.root === lib.rootId(DATA), { out: s0.stdout, err: s0.stderr, st0 });
+  ok('舊版 CrewZero 開到（更新前）', !!url0 && oldPid > 0 && st0.root === lib.rootId(DATA), { out: s0.stdout, err: s0.stderr, st0 });
   // 伺服器開機會建空資料夾（asks/、founder/ 等），係伺服器做嘅；data/ 快照喺伺服器開咗之後先影，更新前後比較
   await sleep(800);
   const dataPre = tree(DATA);
   ok('舊版伺服器開機只建空資料夾，data/ 檔案雜湊同夾具一致', same(Object.fromEntries(Object.entries(dataPre).filter(([, v]) => v !== 'dir')), Object.fromEntries(Object.entries(dataBefore).filter(([, v]) => v !== 'dir'))));
   const c2 = run(UPDATE, [PROJ]);
-  ok('檢查時講明 Founder Desk 開着、更新後會關閉', c2.status === 3 && /Founder Desk 目前開着/.test(c2.stdout), c2.stdout);
+  ok('檢查時講明 CrewZero 開着、更新後會關閉', c2.status === 3 && /CrewZero 目前開着/.test(c2.stdout), c2.stdout);
   const a1 = run(UPDATE, [PROJ, '--apply']);
-  ok(`更新：結束碼 0、講新版本 ${newVersion}、公司資料沒有改動、已關閉舊版 Founder Desk；備份位置只在技術細節`, a1.status === 0 && new RegExp(`已更新至版本 ${newVersion.replace(/\./g, '\\.')}`).test(a1.stdout) && /沒有改動/.test(a1.stdout) && /已關閉開着的 Founder Desk/.test(a1.stdout) && /備份位置：.*\.backup-0\.3\.0/.test(a1.stderr) && !a1.stdout.includes('.backup-') && !a1.stdout.includes('程式檔'), { status: a1.status, out: a1.stdout, err: a1.stderr });
+  ok(`更新：結束碼 0、講新版本 ${newVersion}、公司資料沒有改動、已關閉舊版 CrewZero；備份位置只在技術細節`, a1.status === 0 && new RegExp(`已更新至版本 ${newVersion.replace(/\./g, '\\.')}`).test(a1.stdout) && /沒有改動/.test(a1.stdout) && /已關閉開着的 CrewZero/.test(a1.stdout) && /備份位置：.*\.backup-0\.3\.0/.test(a1.stderr) && !a1.stdout.includes('.backup-') && !a1.stdout.includes('程式檔'), { status: a1.status, out: a1.stdout, err: a1.stderr });
   await sleep(500);
   ok('舊版伺服器已經唔再運行', !alive(oldPid), oldPid);
   ok('更新後 data/ 逐檔雜湊不變（連資料夾都冇多冇少）、冇留低鎖', same(tree(DATA), dataPre) && !fs.existsSync(LOCK), { changed: Object.keys(dataPre).filter(k => tree(DATA)[k] !== dataPre[k]), extra: Object.keys(tree(DATA)).filter(k => !(k in dataPre)) });
@@ -145,7 +145,7 @@ try {
   const st1 = url1 ? await (await fetch(url1 + 'api/health')).json() : {};
   if (url1) unpairs.push(await installPass(lib.rootId(DATA), url1, DATA));
   const newPid = Number(st1.pid) || 0; if (newPid) pids.push(newPid);
-  ok('更新後打開 Founder Desk：新版伺服器、同一個 data/', !!url1 && st1.version === lib.SERVER_VERSION && st1.root === lib.rootId(DATA), { out: s1.stdout, err: s1.stderr, st1 });
+  ok('更新後打開 CrewZero：新版伺服器、同一個 data/', !!url1 && st1.version === lib.SERVER_VERSION && st1.root === lib.rootId(DATA), { out: s1.stdout, err: s1.stderr, st1 });
   const pageJs = url1 ? await (await fetch(url1 + 'company-page.js')).text() : '';
   const dash = url1 ? await (await fetch(url1 + 'api/dashboard')).json() : {};
   ok('新版讀到舊安裝嘅公司資料（公司概覽同監察台都有公司名）', pageJs.includes(company) && dash.company && dash.company.name === company, { company, dashCompany: dash.company, page: pageJs.slice(0, 120) });
@@ -178,10 +178,10 @@ try {
   for (const j of both) pids.push(Number(j.pid));
   ok('舊版公司伺服器和示範伺服器都開着', !!deskNow && !!demoNow && deskNow.pid !== demoNow.pid, both);
   const c3 = run(UPDATE, [PROJ]);
-  ok('檢查時講明兩者都開着、更新後會關閉', c3.status === 3 && /Founder Desk 及示範頁面目前開着/.test(c3.stdout), c3.stdout);
+  ok('檢查時講明兩者都開着、更新後會關閉', c3.status === 3 && /CrewZero 及示範頁面目前開着/.test(c3.stdout), c3.stdout);
   const a3 = run(UPDATE, [PROJ, '--apply']);
   await sleep(500);
-  ok('更新：結束碼 0、講明兩者都已關閉、兩個程序都不再運行', a3.status === 0 && /已關閉開着的 Founder Desk 及示範頁面/.test(a3.stdout) && !alive(Number(deskNow?.pid)) && !alive(Number(demoNow?.pid)), { status: a3.status, out: a3.stdout });
+  ok('更新：結束碼 0、講明兩者都已關閉、兩個程序都不再運行', a3.status === 0 && /已關閉開着的 CrewZero 及示範頁面/.test(a3.stdout) && !alive(Number(deskNow?.pid)) && !alive(Number(demoNow?.pid)), { status: a3.status, out: a3.stdout });
   ok('更新後沒有舊版伺服器留下', (await openHealth()).every(j => j.root !== lib.rootId(DATA) && j.root !== lib.rootId(path.join(T, 'demo-data'))), await openHealth());
 
   /* 只有示範伺服器開着：同樣認得、關得到 */

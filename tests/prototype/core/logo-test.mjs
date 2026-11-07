@@ -1,5 +1,5 @@
 // 公司標誌（創辦人喺頁頭自己上載）：伺服器只收 PNG／JPG／WebP、1MB 以內、按檔頭認格式；要通行證同本機來源；
-// 頁頭標誌係掣，按咗可以上載同移除；Founder Desk 同營運監察台都顯示同一個標誌，冇就顯示公司名首兩個字。
+// 頁頭標誌係掣，按咗可以上載同移除；CrewZero 同營運監察台都顯示同一個標誌，冇就顯示公司名首兩個字。
 // 用法：node logo-test.mjs <chrome> <輸出資料夾> <原型資料夾> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -67,7 +67,7 @@ try {
   await usePass(BASE, cdp);
   await cdp.go(BASE + '/', 1440, 2500);
   const m0 = await cdp.ev(`(()=>{const m=document.getElementById('co-mark');return m?{tag:m.tagName,img:!!m.querySelector('img'),text:m.textContent,label:m.getAttribute('aria-label')}:null})()`);
-  ok('Founder Desk 頁頭標誌係掣，未有標誌就顯示公司名首兩個字', m0 && m0.tag === 'BUTTON' && !m0.img && m0.text.length >= 2 && m0.label === '更換公司標誌', m0);
+  ok('CrewZero 頁頭標誌係掣，未有標誌就顯示公司名首兩個字', m0 && m0.tag === 'BUTTON' && !m0.img && m0.text.length >= 2 && m0.label === '更換公司標誌', m0);
   await cdp.click('#co-mark');
   const d0 = await cdp.ev(`(()=>{const d=document.getElementById('logo-modal');return d?{remove:!!document.getElementById('logo-remove'),text:d.textContent}:null})()`);
   ok('按標誌：彈出公司標誌對話框，講明會自動調整大小、冇技術細節（格式、MB），未有標誌時冇「移除」', d0 && !d0.remove && /自動調整大小/.test(d0.text) && !/PNG|JPG|WebP|MB|像素/.test(d0.text), d0);

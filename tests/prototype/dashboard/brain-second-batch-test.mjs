@@ -10,6 +10,7 @@ const root = path.resolve(process.argv[2] || 'prototypes/proofread');
 const d = await import(pathToFileURL(path.join(root, 'debate-lib.mjs')));
 const { webAccess } = await import(pathToFileURL(path.join(root, 'host-lib.mjs')));
 const { NAMES } = await import(pathToFileURL(path.join(root, 'ask-lib.mjs')));
+const ops = await import(pathToFileURL(path.join(root, 'ledger-ops.mjs')));
 const ledger = { assumptions: [{ id: 'H1', grade: 'guess' }] };
 const blueRaw = { thesis: '主張', claims: [{ id: 'B1', claim: '甲', evidence: 3, assumptionIds: ['H1'] }, { id: 'B2', claim: '乙' }], sources: [{ n: 1, title: '來源', url: 'https://example.com/', readOn: '2026-11-06' }], aiChecked: [{ finding: '發現', label: 'fact', sources: [{ title: '來源', url: 'https://example.com/', readOn: '2026-11-06' }] }] };
 let r = d.checkBlue(blueRaw, { ledger });
@@ -39,7 +40,7 @@ async function redPass(outputs, starts = 0, alreadyRetried = false, costs = []) 
     readJSON: p => p.endsWith('ledger.json') ? ledger : current, brainSource: () => ({}), matchDir: () => 'match',
     readMatchFile: (_dir, _src, _id, name) => name === 'blue.json' ? blue : null, loadState: () => ({ company: {} }), checkRed: d.checkRed,
     writeJSON: p => { if (p.endsWith('red.json')) throw new Error('accepted'); } };
-  vm.createContext(ctx); vm.runInContext(part('async function runDebatePass(', 'function handleDebateAnswer(') + '\nthis.runDebatePass = runDebatePass;', ctx);
+  ctx.markBrokenLinks = async e => e; vm.createContext(ctx); vm.runInContext(part('async function runDebatePass(', 'function handleDebateAnswer(') + '\nthis.runDebatePass = runDebatePass;', ctx);
   const run = {}; let result; try { result = await ctx.runDebatePass(run, match); } catch (e) { if (e.message !== 'accepted') throw e; result = { state: 'accepted' }; }
   return { calls, match, result, run };
 }
@@ -66,7 +67,7 @@ async function judgePass(opening, host) {
     readJSON: p => p.endsWith('ledger.json') ? ledger : judge, brainSource: () => ({}), matchDir: () => 'match',
     readMatchFile: (_dir, _src, _id, name) => name === 'blue.json' ? blue : { attacks: [] }, checkJudge: d.checkJudge,
     writeJSON: (p, value) => { if (p.endsWith('judge.json')) { saved.judge = value; throw new Error('saved'); } } };
-  vm.createContext(ctx);
+  ctx.markBrokenLinks = async e => e; vm.createContext(ctx);
   vm.runInContext(part('function runAI(', 'function checkReceipt(') + part('async function runDebatePass(', 'function handleDebateAnswer(') + '\nthis.runDebatePass = runDebatePass;', ctx);
   try { await ctx.runDebatePass({}, match); } catch (e) { if (e.message !== 'saved') throw e; }
   return saved.judge.factChecks.find(f => f.n === 1).ok;
@@ -82,7 +83,7 @@ for (const sources of [[null], [{ url: 'https://example.com/' }], [42, { title: 
   const cards = d.checkStrengthen({ sources, cards: [{ id: 'T1', from: { claimIds: ['B1'] }, handling: '先驗證', test: { what: '測試', stop: '停止', aiChecked: [checkedFact] } }] }, { rows: [{ claim: { id: 'B1' }, attacks: [], verdict: { verdict: '受傷' } }] });
   assert.equal(cards.ok, true); assert.equal(cards.data.cards[0].test.aiChecked[0].label, 'observation');
 }
-const c = { NAMES, Date, OPP_KINDS: ['政策','資助','時間窗','競爭空隙'] }; vm.createContext(c);
+const c = { ...ops, NAMES, Date, OPP_KINDS: ['政策','資助','時間窗','競爭空隙'] }; vm.createContext(c);
 vm.runInContext(part('const opportunityTitle =', 'const checkupStale') + part('function checkCheckup(', '// 一次工作入面加一步') + '\nthis.checkOpportunities=checkOpportunities; this.checkCheckup=checkCheckup;', c);
 assert.equal(c.checkCheckup({ weak: [{ assumptionId: 'H99' }] }, ledger, '2026-11-06').invalidAssumption, true);
 const industry = { text: '反審', source: '來源', url: 'https://example.com/a', readOn: '2026-11-06' };
@@ -126,8 +127,8 @@ try {
   const opp = generate('opportunities', 'past-window', 'opportunities.json'); assert.ok(c.checkOpportunities(opp, '2026-11-06', { counterparts: [] }).result.list.every(o => o.windowDate !== '2000-01-01'));
   const sc = generate('practice-prep', 'source-bad', 'scenario.json'); assert.equal(sc.persona.stance.source, '我估');
   const pc = { fs, path, NAMES, PRACTICE_DIR: path.join(tmp, 'scenarios'), readJSON: p => JSON.parse(fs.readFileSync(p, 'utf8')), writeJSON: (p, v) => fs.writeFileSync(p, JSON.stringify(v)), stamp: () => 'test', localIso: () => '2026-11-06', getTask: () => null, upsertTask() {}, step() {}, finish() {} };
-  vm.createContext(pc); vm.runInContext(part('function finishPracticePrep(', 'async function handleDebrief(') + '\nthis.finishPracticePrep=finishPracticePrep;', pc);
-  const practiceRun = {}; pc.finishPracticePrep(practiceRun, tmp, '測試');
+  pc.markBrokenLinks = async e => e; pc.markSource = (t, e, access) => t + (access === 'search' ? NAMES.ui.sourceSearchOnly : ops.fullTextSuffix(e, NAMES.ui.sourceSearchOnly)); vm.createContext(pc); vm.runInContext(part('async function finishPracticePrep(', 'async function handleDebrief(') + '\nthis.finishPracticePrep=finishPracticePrep;', pc);
+  const practiceRun = {}; await pc.finishPracticePrep(practiceRun, tmp, '測試');
   assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'scenarios', 'Stest.json'))).persona.stance.source, 'Zero 解讀'); assert.ok(practiceRun.result.warnings.length);
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log('PASS 第二批無伺服器機械核對反例');

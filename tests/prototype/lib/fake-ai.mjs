@@ -144,6 +144,10 @@ if (type === 'work' && outputMode === 'agy') {
   if (M === 'intake-platform') { page.detail ||= {}; page.detail.reading = [{ id: 'biz-type', plan: 'biz.type', label: '生意類型', kind: 'choice', value: '平台或配對', origin: 'ai' }]; }
   if (M === 'intake-noready') fs.writeFileSync('noready', '1');
   if (type === 'intake' && M === 'intake-bad') delete page.path;
+  // intake-badurl：來源網址不在創辦人答案內（修正那一次仍然不改）；intake-badurl-fix：修正那一次改回原文網址
+  // intake-srcfile：來源 file 只寫附件檔名（真實 Zero 的寫法），另一項寫不存在的檔名
+  if (M === 'intake-srcfile') page.sources = [...(page.sources || []), { id: 'zz2', title: '商業計劃', file: '商業計劃.md' }, { id: 'zz3', title: '不存在', file: '沒有這份.pdf' }, { id: 'zz4', title: '出界甲', file: 'archive/../ledger/state.json' }, { id: 'zz5', title: '出界乙', file: 'archive' + String.fromCharCode(92) + '..' + String.fromCharCode(92) + 'ledger' + String.fromCharCode(92) + 'state.json' }, { id: 'zz6', title: '出界丙', file: 'archive/x/../../company/page.json' }];
+  if (/^intake-badurl/.test(M)) page.sources = [...(page.sources || []), { id: 'zz1', title: '政策', url: type === 'intake-repair' && M === 'intake-badurl-fix' ? 'https://example.hk/procurement_schs.html' : 'https://example.hk/procurement_schools.html', from: 'answer' }];
   if (M === 'intake-jargon' || M === 'jargon-stuck') page.glance.rows[0].value = '季末 G1：三間餐廳連續四週每週下單（run 計）';
   fs.writeFileSync('out/company-page.json', JSON.stringify(page, null, 2));
   fs.writeFileSync('out/receipt.json', JSON.stringify({ summary: '已按你提交的資料擬好公司概覽，請你校對。', artifacts: [], founderNext: [], needsFounder: [] }));
@@ -173,7 +177,7 @@ if (type === 'work' && outputMode === 'agy') {
 } else if (type === 'debrief') {
   const L = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));
   const a = L.assumptions.find(x => x.grade === 'guess') || L.assumptions[0];
-  const ev = { summary: '測試：已記錄會面。', grade: 'did', items: a ? [{ kind: 'assumption', id: a.id, grade: 'did', why: '對方已經作出行動。' }] : [] };
+  const ev = { summary: '測試：已記錄會面。', grade: 'did', reason: '測試理由：這次會面沒有新的對方行動。', items: a ? [{ kind: 'assumption', id: a.id, grade: 'did', why: '對方已經作出行動。' }] : [] };
   if (M === 'auto-grade') { fs.writeFileSync('state.json', JSON.stringify({ company: { assumptions: [{ id: a && a.id, grade: 'did' }] } })); }
   fs.writeFileSync('out/event.json', JSON.stringify(ev));
   done();
@@ -188,10 +192,23 @@ if (type === 'work' && outputMode === 'agy') {
   if (a) items.push({ kind: 'assumption', id: a.id, grade: 'did', why: '對方答應介紹餐廳並約定再談，屬對方採取的實際行動。' });
   if (m) items.push({ kind: 'milestone', id: m.id, done: true, why: '會面已舉行並有會後紀錄，符合這一站的完成標準。' });
   if (M === 'event-next') items.push({ kind: 'nextAction', text: '測試：與對方約定下次會面', milestoneId: (L.milestones.find(x => !x.done && x.id !== (m && m.id)) || {}).id, why: '測試理由：會面已舉行，下一步是約下次會面。' });
+  // 跟進日期（event-follow：事件日後 14 日；event-follow-bad：第一次交早過事件日的日期，修正一次後改好）
+  const evDate = (/事件日期：(\d{4}-\d{2}-\d{2})/.exec(fs.readFileSync('event.md', 'utf8')) || [])[1] || '2026-01-01';
+  const plus = n => { const d = new Date(evDate + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  if (/^event-follow/.test(M)) items.push({ kind: 'followUp', date: M === 'event-follow-bad' && type === 'event' ? plus(-3) : plus(14), action: '回覆甲餐廳的報價', station: M === 'event-follow-station' ? 'm-nope' : undefined, why: '會議紀錄寫明須在該日前回覆。' });
+  // 新對象建議（event-actor／-similar／-contact／-ghost／-dup／-team）：名稱取自創辦人原話；contact 第一次在機構寫電郵（修正後改好）；ghost 名稱不在原話內
+  if (/^event-actor/.test(M)) {
+    const known = (L.actors || [])[0] || {}, first = Array.from(known.name || '陳')[0];
+    const base = { kind: 'newActor', name: '黃小姐', org: '乙餐廳', role: '負責人', actorKind: 'customer', why: '原話提到她是乙餐廳負責人，之後可能成為試單對象。' };
+    const byMode = { 'event-actor': {}, 'event-actor-similar': { name: first, org: '' }, 'event-actor-contact': { name: '吳小姐', org: type === 'event' ? 'a@b.com' : '乙餐廳' }, 'event-actor-ghost': { name: '周先生' }, 'event-actor-dup': { name: known.name || '陳經理' }, 'event-actor-team': { name: '林師傅', org: '', role: '送貨', actorKind: 'team', teamType: 'parttime' } }[M] || {};
+    items.push({ ...base, ...byMode });
+  }
   const OFFICE_EV = /\.(docx?|pptx?|xlsx?)$/i;
   const looseName = f => 'files/' + f.replace(/\.[^.]+$/, e => e.toUpperCase()), loose = /-loose$/.test(M);
-  const unreadable = [...(fs.existsSync('files') ? fs.readdirSync('files') : []).filter(f => OFFICE_EV.test(f)).map(f => ({ file: loose ? looseName(f) : f, reason: loose ? 'Word 檔目前讀唔到' : M === 'event-unread-longreason' ? '長'.repeat(90) : '測試：Word／PowerPoint／Excel 檔目前讀不到' })), ...(M === 'event-unread-bogus' ? [{ file: '不是這次附件的檔案.docx', reason: '虛構' }] : [])];
-  const ev = { summary: '測試 AI：' + said, grade: 'did', items: M === 'event-none' || /^event-unread/.test(M) ? [] : items, ...(unreadable.length ? { unreadable } : {}) };
+  const unreadable = [...(fs.existsSync('files') ? fs.readdirSync('files') : []).filter(f => OFFICE_EV.test(f) && !fs.existsSync(path.join('files', f + '.md'))).map(f => ({ file: loose ? looseName(f) : f, reason: loose ? 'Word 檔目前讀唔到' : M === 'event-unread-longreason' ? '長'.repeat(90) : '測試：Word／PowerPoint／Excel 檔目前讀不到' })), ...(M === 'event-unread-bogus' ? [{ file: '不是這次附件的檔案.docx', reason: '虛構' }] : [])];
+  const finalItems = M === 'event-none' || /^event-unread/.test(M) ? [] : items;
+  const fl = fs.existsSync('files') ? fs.readdirSync('files') : [];
+  const ev = { summary: '測試 AI：' + said, grade: 'did', read: { summary: '測試 AI：讀了創辦人原話及 ' + fl.length + ' 份附件，對照了假設及站點。', highlights: [{ text: '會議紀錄寫明須在兩星期內回覆報價。', page: 2, ...(fl[0] ? { file: fl[0] } : {}) }] }, ...(finalItems.length ? {} : { reason: '測試理由：這件事沒有改變對方做到哪一步，也沒有新的日期。' }), items: finalItems, ...(unreadable.length ? { unreadable } : {}) };
   if (type === 'event' && M === 'event-bad') ev.items = [{ kind: 'assumption', id: 'H99', grade: 'great' }];
   fs.writeFileSync('out/event.json', JSON.stringify(ev, null, 2));
   done();

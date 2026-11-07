@@ -186,7 +186,7 @@ try {
   await c.click('#replay-end');
   ok('跳到結果：冇隱藏', await c.ev(`!document.querySelector('#b-wargame [data-act].hide')`));
   await c.go(B + '/dashboard/brain/wargame?match=D1', 1440, 2500);
-  ok('Founder Desk 場次深連 ?match= 落喺紅藍對打分頁', await c.ev(`document.querySelector('#match-bar [aria-pressed="true"]').getAttribute('data-match')==='D1'`));
+  ok('CrewZero 場次深連 ?match= 落喺紅藍對打分頁', await c.ev(`document.querySelector('#match-bar [aria-pressed="true"]').getAttribute('data-match')==='D1'`));
 
   /* ---------- F. 意見紀錄深連 ---------- */
   const f1 = await post('/api/intake', { kind: 'note', type: 'feedback', item: 'checkup', cardId: 'weak-1', verdict: 'useful', text: '' });

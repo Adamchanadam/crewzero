@@ -5,7 +5,7 @@
 | 動作 | 命令 | 結果 |
 |---|---|---|
 | 印說明 | node adapters/scheduler/install-schedule.mjs | 不寫入；先說明每日開工與獨立的登入啟動選項 |
-| 開啟每日自動開工 | --register | 寫入 data/ledger/schedule.json 的 mode: "server" 授權記錄；若伺服器未開，首次打開 Founder Desk 後才生效 |
+| 開啟每日自動開工 | --register | 寫入 data/ledger/schedule.json 的 mode: "server" 授權記錄；若伺服器未開，首次打開 CrewZero 後才生效 |
 | 同時開登入啟動 | --register --autostart | Windows 登記登入工作；macOS 寫 LaunchAgent；Linux 寫 desktop autostart。失敗不會取消已批准的每日自動開工 |
 | 讀回 | --status | 第一行 JSON：ok、mode、登入啟動狀態、帳本的上次實際結果、下次時間 |
 | 移除 | --remove | 移除授權記錄、登入啟動及同名的舊式 Windows 每日工作 |

@@ -1,6 +1,7 @@
 // 公司概覽核對同可修正嘅欄位。
 import { createRequire } from 'node:module';
 import { BIZ_TYPES } from './ask-lib.mjs';
+import { KINDS as ACTOR_KINDS, TEAM_TYPES, hasContactInfo } from './people-ops.mjs';
 const NAMES = createRequire(import.meta.url)('./names.js');
 
 /* ---------- 規劃書 3.1 就緒清單同 3.3 里程碑四格（唯一定義處；外殼、校對頁統計、測試共用） ----------
@@ -192,6 +193,22 @@ export function checkCompanyPage(page, options = {}) {
     Object.values(o).forEach(walk);
   }
   walk(page);
+  // 公司以外的決策者清單（人物及機構名單的來源）：項目用 actorKind（客戶 customer、供應或合作方 partner、投資者或資助方 investor、顧問或協助者 advisor、團隊成員 team）、org、role、team；
+  // 不收聯絡方式。item.kind 是可改項目的欄位類型，不可借用作類別。
+  for (const it of listOf(page.detail && page.detail.actors && page.detail.actors.items)) {
+    if (!it || typeof it !== 'object') continue;
+    if (hasContactInfo(it.label)) errors.push('決策者名單不可包含電郵或電話號碼');
+    if (it.actorKind != null && !ACTOR_KINDS.includes(it.actorKind)) { delete it.actorKind; warnings.push('決策者名單有一項類別不正確，已移除'); }
+    for (const f of ['org', 'role']) {
+      if (it[f] == null) continue;
+      const v = String(it[f]).trim();
+      if (!v || v.length > 40 || hasContactInfo(v)) { delete it[f]; warnings.push('決策者名單有一項的' + (f === 'org' ? '機構' : '角色') + '不合規格，已移除'); } else it[f] = v;
+    }
+    if (it.actorKind === 'team') {
+      const tm = it.team && typeof it.team === 'object' ? it.team : {};
+      it.team = { type: TEAM_TYPES.includes(tm.type) ? tm.type : 'parttime', ...(Array.isArray(tm.owns) ? { owns: tm.owns.filter(x => typeof x === 'string' && x).slice(0, 20) } : {}) };
+    } else delete it.team;
+  }
   const st = page.glance && page.glance.status;
   if (st && typeof st.prepared === 'string' && /^[\d\s./-]*$/.test(st.prepared)) { delete st.prepared; warnings.push('狀態卡「已準備好」一行只有日期，已移除'); }
   const decide = Array.isArray(page.decide) ? page.decide : page.decide?.items;

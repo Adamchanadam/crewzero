@@ -5,7 +5,7 @@
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' file:; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
-<title>公司概覽 · Founder Desk</title>
+<title>公司概覽 · CrewZero</title>
 <style>
 .hero.with-scene{isolation:isolate;overflow:hidden}.hero .scene-bg{position:absolute;inset:0 0 0 auto;width:43.5%;z-index:-1;background:url('assets/crew-scene-handover.webp') center 40%/cover no-repeat;opacity:.6;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%)}
 @media(max-width:600px){.hero .scene-bg{width:100%;opacity:.2;-webkit-mask-image:none;mask-image:none}}
@@ -183,6 +183,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .box.ask{border-color:rgba(242,162,158,.35)}
 .srcs{margin:0;padding-left:16px;font-size:var(--fs-sub);color:var(--muted)}
 .srcs b{color:var(--text);font-weight:600}
+.src-acts{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:var(--fs-label);margin:2px 0 8px}.src-acts a{color:var(--amber)}.src-fixed{color:var(--mint)}.src-edit{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.src-edit .in{flex:1 1 280px;width:auto}.srcs li{margin:4px 0}
 .foot{margin:22px 0 0;font-size:var(--fs-label);color:var(--muted);display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
 .foot-tools{display:flex;gap:8px;flex-wrap:wrap}
 .st-main > .btn.small{height:auto;min-height:26px;white-space:normal;text-align:left;padding:4px 10px}
@@ -263,7 +264,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 <div class="shell" id="app">
   <div class="layer">
     <span class="eyebrow">載入中……</span>
-    <p class="guide">此頁未能在這個視窗顯示。請在 AI 對話說「打開 Founder Desk」，再按「公司概覽」。</p>
+    <p class="guide">此頁未能在這個視窗顯示。請在 AI 對話輸入 /crewzero:dashboard（Codex：$crewzero:dashboard；Antigravity：/dashboard），或說「打開 CrewZero」，再按「公司概覽」。</p>
   </div>
 </div>
 <div class="cbar" id="cbar" hidden></div>
@@ -336,6 +337,13 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
   function stamp(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); }
   function human(d) { return d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  // 版本雜湊略去來源連結欄（可在同一頁更正）；與 ask-lib.mjs 的 proofreadHash() 同一算法
+  function hashView(p) {
+    if (!p || !Array.isArray(p.sources)) return p;
+    var out = {}; for (var k in p) out[k] = p[k];
+    out.sources = p.sources.map(function (s) { if (!s || typeof s !== 'object') return s; var r = {}; for (var k2 in s) if (k2 !== 'url' && k2 !== 'urlBefore' && k2 !== 'fixedOn') r[k2] = s[k2]; return r; });
+    return out;
+  }
   function fnv(str) {
     var x = 0x811c9dc5;
     for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; }
@@ -412,7 +420,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     FLAGFIELD = null;
     for (var id in REG) if (REG[id].flagTo) { FLAGFIELD = REG[id]; break; }
     buildQuestions();
-    HASH = fnv(JSON.stringify(D));
+    HASH = fnv(JSON.stringify(hashView(D)));
     // 區段寫成 { title, items, boxes } 都照顯示（格式容許各區有 title；畫面按清單畫）；喺計完簽收雜湊之後先規整，唔影響回覆核對
     if (D.detail) ['rules', 'missing', 'reading', 'assumptions'].forEach(function (k) {
       var x = D.detail[k];
@@ -429,6 +437,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     DESK.title('company', D.company.name);
     render();
     probeServer();
+    loadOwn();
   }
   var NOCO = false;
   function noCompany() {
@@ -449,7 +458,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     $('#cbar').hidden = true;
     $('#app').replaceChildren(h('div', { class: 'layer fatal' },
       h('span', { class: 'eyebrow' }, N.ui.loadFail),
-      h('p', null, '此頁未能在這個視窗顯示。請在 AI 對話說「打開 Founder Desk」，再按「公司概覽」。')));
+      h('p', null, '此頁未能在這個視窗顯示。' + N.ui.reopenDesk + '，再按「公司概覽」。')));
   }
   function pickFile() {
     var inp = h('input', { type: 'file', accept: '.json,.js,application/json,text/javascript' });
@@ -488,7 +497,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       if (x.edits) for (var id in x.edits) if (REG[id]) S.edits[id] = String(x.edits[id]);
       if (Array.isArray(x.order) && x.order.slice().sort().join() === S.order.slice().sort().join()) S.order = x.order;
       S.openedPath = !!x.openedPath; S.note = x.note || ''; S.confirmed = x.confirmed || null; S.sent = x.sent || null;   // 舊草稿的 changedAfter 旗標不再使用：是否修改過只看內容
-      if (x.ok) for (var qk in x.ok) if (REG[qk]) S.ok[qk] = true;
+      // 「目前有誰做了甚麼？」（@status）不在 REG 內，原本重新載入後會變回未答；題目代號 @status 與 REG 內的欄位都要恢復
+      if (x.ok) for (var qk in x.ok) if (REG[qk] || qk === '@status') S.ok[qk] = true;
       if (x.kinds) for (var mk in x.kinds) if (byId()[mk] && (x.kinds[mk] === 'real' || x.kinds[mk] === 'task')) S.kinds[mk] = x.kinds[mk];
       S.restored = !S.confirmed && (Object.keys(S.edits).length > 0 || orderChanged() || kindChanged().length > 0);
       // 0.39.0 舊草稿（已送出、沒有摘要）：以載入當刻的內容補作基線並存入。其後才作的修改因此受保護，不會被伺服器內容覆蓋
@@ -497,8 +507,10 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
   function clearDraft() {
     try { localStorage.removeItem(skey()); } catch (e) { }
+    // 伺服器對本頁已有確認：清除後馬上會改採用伺服器已確認的內容（不是 Zero 的原建議），提示要如實
+    var toConfirmed = serverHas();
     var d = D; window.STARTUP_OS_PAGE = d; start(d);
-    toast('已清除你的修改，恢復 Zero 建議');
+    toast(toConfirmed ? N.ui.clearedToConfirmed : N.ui.clearedToZero);
   }
 
   /* ---------- 狀態計算 ---------- */
@@ -687,13 +699,18 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
        一、這部瀏覽器按「確認」送出（doSend()，sent:true，摘要＝送出當刻的內容）；
        二、每次輪詢時內容等於伺服器快照（內容與 Zero 相同）→ 基線移到快照的摘要（unapplied 隨之消失；還原的未確認草稿＝伺服器確認也在此時變成已確認）；
        三、這部瀏覽器的回覆套用失敗而伺服器不是相同內容 → S.confirmed.unapplied = true 並存入草稿（送出的內容不在 Zero 那裏，基線失效；
-           sent 不改，所以不會誤顯示「只下載了回覆檔」）。失敗紀錄跌出 /api/status 最近五項後仍然有效；
+           sent 不改，所以不會誤顯示「只下載了回覆檔」）。「套用失敗」指 unappliedFail()：工作失敗而「套用確認」步不是 done，
+           包括工作中途中斷、根本沒有套用步。已標記的 unapplied 在失敗紀錄跌出 /api/status 最近五項後仍然有效；
+           頁面關閉期間才失敗而尚未標記的，靠伺服器另附的最近一次公司概覽工作（lastOverviewRun）認出。界限：若那一項不是這份回覆
+           （之後已有較新的公司概覽工作，或超過 status.json 保留的 20 項），頁面無從得知，只能當作已與 Zero 同步；
        四、0.39.0 舊草稿（sent 為真、沒有摘要）：restore() 載入時以當刻內容補作基線並存入。
      離線確認 doConfirm()（沒有 sent）只存摘要，用於顯示「確認後有沒有再改」，不是基線：Zero 沒有收到那份內容。
      內容與快照不同時，是否採用伺服器的內容：
        有基線：內容等於基線（沒有未送出的修改；按「照現狀」、改了又改回都算沒有修改）→ 採用，基線移到快照的摘要並存入草稿；
                內容不同於基線（有未送出的修改）→ 保護，伺服器改變也不覆蓋，重新載入後亦然；
        沒有基線（從未確認、離線確認、或套用失敗而 unapplied）：有任何本機修改就保護，否則採用。
+               例外：unapplied 是這部瀏覽器在線送出、確知創辦人送出的內容，即使內容等於 Zero 原值（撤回全部修改後送出）也保護，
+               直到伺服器出現相同內容或創辦人再確認；離線確認的原值維持採用（新瀏覽器離線時只看到 Zero 建議，按確認不表示要撤回伺服器上的修改）。
      採用時由快照推導編輯表、次序及類別，並清空 S.drafts（「收起」後留在記憶體的殘字，不再補回）。
      創辦人輸入中途（自行填寫框打開、編輯器打開、確認視窗開着、拖動中）、或這部瀏覽器的回覆套用失敗而內容仍與伺服器不同時不採用，等閒下來再採用；
      輸入中途輪詢只更新進度，不整頁重畫（輸入框保持焦點及文字），大掣及底部列也不改，閒下來重畫時一併更新。
@@ -720,8 +737,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
        有確認、只差自動調整的日期│ 本機               │ 是 │ 連結                        │ 另一句如實說明檢查日已調整，附「再確認一次」
        0.39.0 舊草稿（已送出、沒有摘要），內容與快照不同
                                │ 載入時補基線     │ 同上兩行 │ 同上兩行 │ 載入當刻的內容無從分辨誰改過，以伺服器為準而採用；載入後才作的修改 → 保護（restore() 補基線並存入）
-       離線確認（doConfirm()，沒有 sent）或套用失敗（unapplied），內容與快照不同 │ 本機 │ 否 │ 按鈕「再確認一次」│ 沒有基線：有本機修改就保護（中性字句或「你在確認後再作了修改」），伺服器改變不覆蓋；內容等於快照時才同步
-       還原的未確認草稿，內容與快照不同     │ 本機    │ 否 │ 按鈕「再確認一次」          │「已還原你上次未確認的修改」＋「放棄修改」；有本機修改就不採用 */
+       離線確認（doConfirm()，沒有 sent），內容與快照不同 │ 本機 │ 否 │ 按鈕「再確認一次」│ 沒有基線：有本機修改就保護（中性字句或「你在確認後再作了修改」），伺服器改變不覆蓋；沒有本機修改（內容＝Zero 原值）則採用伺服器；內容等於快照時才同步
+       套用失敗（unapplied，含工作中途中斷），內容與快照不同 │ 本機 │ 否 │ 按鈕「再確認一次」│ 沒有基線：不論有沒有本機修改都保護（內容＝Zero 原值亦然），失敗紀錄跌出清單、重新載入後亦然；內容等於快照時才同步。進度卡：套用步失敗顯示原因；工作中途中斷顯示固定字句，兩者都只有「重新載入頁面，再確認一次」，不提供「重試」（重試會沿用舊的確認）
+       還原的未確認草稿，內容與快照不同     │ 本機    │ 否 │ 按鈕「再確認一次」          │「已還原你上次未確認的修改」＋「放棄修改」；有本機修改就不採用
+       「清除我的修改」／「放棄修改」（clearDraft()）：草稿整個移除，基線與 unapplied 一併消失。伺服器對本頁有確認 → 清除後馬上改採用伺服器已確認的內容，
+         提示寫「改回 Zero 已確認的內容」（不可寫「恢復 Zero 建議」）；伺服器沒有確認或離線 → 提示寫「恢復 Zero 建議」 */
   function serverHas() {
     var c = S.server && S.server.company;
     return !!(c && c.confirmed && (!c.confirmedPageId || !D || !D.page || c.confirmedPageId === D.page.id));
@@ -754,27 +774,25 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function inFlight() {
     if (!S.sent || !S.server) return false;
     if (queued()) return true;
-    var runs = S.server.runs || [];
-    for (var i = 0; i < runs.length; i++) {
-      if ((runs[i].replyFiles || []).indexOf(S.sent.name) < 0) continue;
-      var ap = (runs[i].steps || []).filter(function (x) { return x.key === 'applied'; })[0];
-      return runs[i].state !== 'failed' && !(ap && ap.state === 'done');
-    }
-    return false;
+    var r = sentRun();
+    return !!r && r.state !== 'failed' && !appliedDone(r);
   }
+  // 這部瀏覽器送出的那一份回覆對應的工作：先找 /api/status 最近五項，找不到再看伺服器另附的「最近一次公司概覽工作」
+  // （lastOverviewRun：失敗紀錄跌出最近五項後仍認得出；伺服器只保留 20 項工作，超過就無從得知）
+  function sentRun() {
+    if (!S.sent || !S.server) return null;
+    var list = (S.server.runs || []).concat(S.server.lastOverviewRun ? [S.server.lastOverviewRun] : []);
+    for (var i = 0; i < list.length; i++) if ((list[i].replyFiles || []).indexOf(S.sent.name) >= 0) return list[i];
+    return null;
+  }
+  function appliedDone(r) { var ap = ((r && r.steps) || []).filter(function (x) { return x.key === 'applied'; })[0]; return !!(ap && ap.state === 'done'); }
+  // 工作失敗而「套用確認」沒有完成（套用步失敗，或工作中途中斷、根本沒有套用步）：創辦人送出的內容未必已在 Zero 那裏
+  function unappliedFail(r) { return !!r && r.state === 'failed' && !appliedDone(r); }
   // 目前內容與伺服器已確認的內容相同（套用失敗之後，另一部瀏覽器確認了同一份，也算 Zero 已收到）
   function matchesServer() { var snap = snapshot(); return !!snap && sameAs(snap.digest); }
   // 這部瀏覽器送出的回覆，伺服器套用確認失敗了：伺服器仍是舊的確認，但創辦人送出的內容才是他要的。
   // 伺服器其後已有相同內容時不算失敗（內容已經在 Zero 那裏）
-  function failedRun() {
-    if (!S.sent || !S.server) return null;
-    var runs = S.server.runs || [];
-    for (var i = 0; i < runs.length; i++) {
-      if ((runs[i].replyFiles || []).indexOf(S.sent.name) < 0) continue;
-      return runs[i].state === 'failed' && failedStep(runs[i]) === 'applied' ? runs[i] : null;
-    }
-    return null;
-  }
+  function failedRun() { var r = sentRun(); return unappliedFail(r) ? r : null; }
   function applyFailed() { return !!failedRun() && !matchesServer(); }
   function contentSent() {
     if (inFlight()) return sameAs(sentDigest());
@@ -830,7 +848,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (busyInput() || applyFailed()) return false;
     // 採用與否：有基線（肯定已在 Zero 那裏的內容）→ 內容等於基線才採用；沒有基線 → 沒有任何本機修改才採用
     var ld = sentDigest();
-    if (ld ? !sameAs(ld) : localChanged()) return false;
+    if (ld ? !sameAs(ld) : (localChanged() || !!(S.confirmed && S.confirmed.unapplied))) return false;
     var before = digestNow();
     var auto = {}, edits = {}, kinds = {};
     (snap.autoIds || []).forEach(function (id) { auto[id] = true; });
@@ -1153,7 +1171,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var pv = h('span', { class: 'pv' });
     pv.append(h('span', { class: 'rs-line' }, h('b', null, '路線 ' + D.path.milestones.length + ' 站：'), routePreview(fm)));
     D.glance.rows.filter(function (r) { return !isQ(r.id); }).forEach(function (r) {
-      pv.append(h('span', { class: 'rs-line' }, h('b', null, r.label + '：'), clip(showVal(r, cur(r.id)), 60)));
+      pv.append(h('span', { class: 'rs-line' }, h('b', null, r.label + '：'), clip(r.plan === 'G6' && OWN ? ownLines().join('；') : showVal(r, cur(r.id)), 60)));
     });
     (dt.rules || []).filter(function (r) { return r.effect; }).forEach(function (r) {
       pv.append(h('span', { class: 'rs-line' }, h('b', null, r.label + '：'), cur(r.id), h('span', { class: 'eff' }, '（' + N.ui.nowAfter + '）')));
@@ -1208,10 +1226,36 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       t.why ? h('p', { class: 't-w' }, t.why) : null);
   }
 
+  // G6「已有人負責的事」：團隊名單有未離開的成員後，由名單自動整理（唯讀）；沒有就沿用上面 Zero 擬的原文
+  var OWN = null;
+  function loadOwn() {
+    if (!/^https?:$/.test(location.protocol)) return;
+    fetch('/api/dashboard', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var o = j && j.people && j.people.ownership;
+      OWN = o && Array.isArray(o.lines) && o.lines.length ? o : null;
+      if (OWN) render();
+    }).catch(function () { });
+  }
+  function ownLines() {
+    if (!OWN) return [];
+    var out = OWN.lines.map(function (l) {
+      var what = (l.stations || []).concat(l.tasks || []).join('；') + (l.moreTasks ? '；' + N.d('ppl_ownMore', { n: l.moreTasks }) : '');
+      return l.name + (l.role ? '（' + l.role + '）' : '') + (l.state === 'paused' ? '（' + N.dash.ppl_pausedTag + '）' : '') + '：' + (what || N.dash.ppl_noStations);
+    });
+    (OWN.unowned || []).forEach(function (u) { out.push(N.dash.ppl_ownNobody + '：' + u.station + '（原由' + (u.formerOwners || []).join('、') + '負責）'); });
+    return out;
+  }
+  function ownRow(r) {
+    return h('div', { class: 'row', 'data-row': r.id, id: 'g6-generated' },
+      h('div', { class: 'row-head' }, h('span', { class: 'row-name' }, r.label)),
+      h('div', { class: 'row-body' }, ownLines().map(function (t) { return h('p', { class: 'own-line', style: 'margin:2px 0' }, t); }),
+        h('div', { class: 'row-note' }, h('span', { class: 'orig' }, N.ui.g6FromTeam + ' '), h('a', { href: '/dashboard/team' }, N.ui.g6EditTeam))));
+  }
+
   function layer1() {
     var g = D.glance, fm = flagged(), cf = dateConflict();
     var rows = h('div', { class: 'rows' });
-    g.rows.forEach(function (r) { rows.append(rowBlock(r, fm)); });
+    g.rows.forEach(function (r) { rows.append(r.plan === 'G6' && OWN ? ownRow(r) : rowBlock(r, fm)); });
     var sec = h('section', { class: 'layer', id: 'layer1', 'aria-labelledby': 'l1t' },
       h('span', { class: 'eyebrow' }, N.ui.glanceEyebrow),
       h('h2', { class: 'layer-title', id: 'l1t' }, N.ui.glanceTitle),
@@ -1517,11 +1561,37 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     }
     if (D.sources && D.sources.length) {
       sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.sourcesTitle),
-        h('ul', { class: 'srcs' }, D.sources.map(function (s) {
-          return h('li', null, h('b', null, s.title), s.date ? '（' + md(s.date) + '）' : '', s.note ? '：' + s.note : '');
-        }))));
+        h('ul', { class: 'srcs', id: 'srcs' }, D.sources.map(function (s, n) { return srcItem(s, n); }))));
     }
     return sec;
+  }
+  // Zero 依據：每項來源顯示標題（日期）、開啟存檔、原連結、讀取日期；可更正連結（只改這一項的網址，不影響任何題目答案及確認狀態）
+  function srcItem(s, n) {
+    var li = h('li', { 'data-src': String(n) });
+    function draw() {
+      li.replaceChildren(h('b', null, s.title), s.date ? '（' + md(s.date) + '）' : '', s.note ? '：' + s.note : '');
+      var acts = h('div', { class: 'src-acts' });
+      if (s.file) acts.append(h('a', { href: '/api/source-file?n=' + n, target: '_blank', rel: 'noopener noreferrer', 'data-open-src': String(n) }, N.ui.srcOpenFile));
+      if (s.url) acts.append(h('a', { href: s.url, target: '_blank', rel: 'noopener noreferrer', 'data-origin': String(n) }, N.ui.attOrigin));
+      if (s.readOn) acts.append(h('span', null, T('srcReadOn', { d: md(s.readOn) })));
+      if (s.fixedOn) acts.append(h('span', { class: 'src-fixed' }, T('srcFixed', { d: md(s.fixedOn) })));
+      if (S.srv !== 'offline') acts.append(h('button', { type: 'button', class: 'btn link', 'data-fix-link': String(n), onclick: edit }, s.url ? N.ui.srcFixLink : N.ui.srcAddLink));
+      li.append(acts);
+    }
+    function edit() {
+      var inp = h('input', { class: 'in', type: 'url', maxlength: '300', value: s.url || '', placeholder: N.ui.srcUrlPlaceholder, 'aria-label': N.ui.srcUrlLabel, id: 'src-url-' + n }), msg = h('p', { class: 'small muted', 'aria-live': 'polite' });
+      var save = h('button', { type: 'button', class: 'btn primary', 'data-save-link': String(n), onclick: function () {
+        save.disabled = true; msg.textContent = N.ui.sending;
+        fetch('/api/source-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n: n, url: inp.value.trim() }) })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j && j.message && /[一-鿿]/.test(j.message) ? j.message : N.ui.srcUrlBad); return j; }); })
+          .then(function (j) { s.url = j.url; s.fixedOn = j.fixedOn; draw(); toast(j.message || N.ui.srcUrlSaved); })
+          .catch(function (e) { save.disabled = false; msg.textContent = /[一-鿿]/.test(e.message) ? e.message : N.ui.srcUrlBad; });
+      } }, N.ui.srcSave);
+      li.append(h('div', { class: 'src-edit', id: 'src-edit-' + n }, inp, save, h('button', { type: 'button', class: 'btn', onclick: draw }, N.ui.srcCancel)), msg);
+      inp.focus();
+    }
+    draw();
+    return li;
   }
   function detailPreview(dt) {
     var pv = h('span', { class: 'pv' });
@@ -1593,12 +1663,14 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function myRun() {
     var runs = (S.server && S.server.runs) || [];
     if (S.sent) {
-      for (var i = 0; i < runs.length; i++) if ((runs[i].replyFiles || []).indexOf(S.sent.name) >= 0) return failedRun() && matchesServer() ? null : runs[i];   // 套用失敗之後伺服器已有相同內容：不再顯示過時的失敗
+      // 伺服器另附的最近一次公司概覽工作（已跌出最近五項）只用來顯示「套用失敗」；其餘舊工作不再翻出來
+      var sr = sentRun();
+      if (sr && (runs.indexOf(sr) >= 0 || unappliedFail(sr))) return failedRun() && matchesServer() ? null : sr;   // 套用失敗之後伺服器已有相同內容：不再顯示過時的失敗
       if (queued()) return null;
     }
-    // 重開頁時唔顯示「版本變咗、套用唔到」嗰類過時失敗；AI 步失敗就照顯示，方便重試
+    // 重開頁時唔顯示「版本變咗、套用唔到」嗰類過時失敗（含工作中途中斷、沒有套用步）；AI 步失敗就照顯示，方便重試
     var last = runs.filter(function (x) { return x.kind === 'proofread'; })[0];
-    if (last && last.state === 'failed' && failedStep(last) === 'applied') return null;
+    if (unappliedFail(last)) return null;
     return last || null;
   }
   function failedStep(r) { var s = (r.steps || []).filter(function (x) { return x.state === 'failed'; })[0]; return s ? s.key : ''; }
@@ -1657,7 +1729,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       rows.push({ label: N.ui.stepQueued, state: 'running' });
       rows.push({ label: N.ui.aiNext, state: 'wait' });
     } else {
-      rows.push({ label: ap ? N.fix(ap.label) : N.ui.stepApplyConfirm, state: ap ? ap.state : 'running', sub: ap && ap.detail });
+      rows.push({ label: ap ? N.fix(ap.label) : N.ui.stepApplyConfirm, state: ap ? ap.state : r.state === 'failed' ? 'failed' : 'running', sub: ap && ap.detail });
       rows.push({
         // 改動唔影響下一步：外殼唔開 AI，完成時呢一行寫明原因
         label: ai ? N.fix(ai.label) : r.state === 'done' ? N.ui.aiNextSkip : N.ui.aiNext, state: ai ? ai.state : r.state === 'done' ? 'done' : 'wait',
@@ -1676,8 +1748,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (state === 'waiting') card.append(h('p', null, (ai && ai.detail) || 'AI 工具尚未設定，設定完成後將自動繼續。'), h('div', { class: 'p-foot' }, h('a', { class: 'btn primary', href: '/#/setup' }, N.ui.goSetup)));
     if (S.lost) card.append(h('p', { class: 'tr-sub' }, N.ui.stoppedDesk + '已收到的確認不會遺失。'));
     if (state === 'failed') {
-      add(card, [(ai && ai.detail === r.error) ? null : h('p', null, r.error ? N.ui.reason + '：' + N.fix(r.error) : N.ui.failNoReason),
-        failedStep(r) === 'applied'
+      // 套用步失敗，或工作中途中斷（沒有套用步）：創辦人送出的內容未必已在 Zero 那裏，不提供「重試」（重試會沿用舊的確認），改為重新載入再確認
+      add(card, [(ai && ai.detail === r.error) ? null : h('p', null, failedStep(r) !== 'applied' && unappliedFail(r) ? N.ui.reason + '：' + N.ui.interruptedNoApply : r.error ? N.ui.reason + '：' + N.fix(r.error) : N.ui.failNoReason),
+        unappliedFail(r)
           ? h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, '重新載入頁面，再確認一次')
           : [ready ? null : h('p', { class: 'tr-sub' }, '請先安裝並登入 AI 工具（' + aiName + '），再按「' + N.ui.retry + '」。'),
             h('button', { type: 'button', class: 'btn primary', onclick: retryRun }, N.ui.retry)]]);

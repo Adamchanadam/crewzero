@@ -22,15 +22,17 @@ Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安�
 ## 開始
 
 1. 在 AI 對話說「安裝 CrewZero」。如尚未有工作位置，請先為你的生意開一個專用資料夾；AI 工具會在開始前問你是否同意。
-2. 完成後，在 AI 對話說「打開 Founder Desk」。第一次打開時，系統會替你的瀏覽器配對，不用輸入任何東西。
+2. 完成後，在 AI 對話說「打開 CrewZero」。第一次打開時，系統會替你的瀏覽器配對，不用輸入任何東西。
 
-以後在 AI 對話說「打開 Founder Desk」，便可再次打開。
+以後每日只需在 AI 對話說「打開 CrewZero」，便可再次打開，先看到公司現況，待決事項也在同一頁。首頁的「告訴 Zero 一件事」分三類：發生了一件事、請 Zero 做一件事、想改計劃。
+
+想先傾一傾、想一個問題或請 Zero 研究，說「和 Zero 討論」：Zero 先讀公司現況，傾完把結論交給 Zero 跟進，你同意才會交。
 
 | 指令 | Claude Code | Codex | Antigravity |
 |---|---|---|---|
 | 安裝 | `/crewzero:install` | `$crewzero:install` | `/install` |
-| Founder Desk | `/crewzero:desk` | `$crewzero:desk` | `/desk` |
-| 營運監察台 | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
+| 打開 CrewZero | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
+| 和 Zero 討論 | `/crewzero:discuss` | `$crewzero:discuss` | `/discuss` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
 
 三種 AI 工具都可以上網研究、情景演練及紅藍對打。使用 Antigravity 時，Zero 只可網上搜尋，不能開啟網頁全文，所以引用會標明「只經搜尋摘要」。
@@ -51,7 +53,7 @@ CrewZero 是 startup-os 的新名字。已在用 startup-os 的話，按你的�
 
 - 程式會在項目原本的 `startup-os/` 資料夾內更新，資料夾不用改名，也不會另建 `crewzero/`。
 - 公司資料（`startup-os/data/`）不會改動；已配對的瀏覽器與手機、每日排程都照舊有效。
-- 之後打開頁面改用新指令，例如 Claude Code 的 `/crewzero:desk`。
+- 之後打開頁面改用新指令，例如 Claude Code 的 `/crewzero:dashboard`。
 
 ## 你的資料
 

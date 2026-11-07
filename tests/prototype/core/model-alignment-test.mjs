@@ -7,6 +7,8 @@ import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { writeAdapters } from '../lib/adapters.mjs';
 import { usePass, seedCompany } from '../lib/testkit.mjs';
+// 0.40.0 起「請 Zero 做一件事」要公司概覽已確認才收：測試用的公司資料多寫一份最簡單的確認紀錄
+const seedConfirmed = (DATA, PROTO) => { seedCompany(DATA, PROTO); const page = JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8')); fs.mkdirSync(path.join(DATA, 'ledger'), { recursive: true }); fs.writeFileSync(path.join(DATA, 'ledger', 'confirmed.json'), JSON.stringify({ company: page.company.name, pageId: page.page.id, confirmedAt: '2026-10-20T10:00:00+08:00', replyFile: '', order: [], orderChanged: false, edits: [], stillMissing: [], note: '', values: {} })); };
 
 const [PROTO, OUT, PORT] = process.argv.slice(2);
 const results = [], servers = [], originalEnv = { ...process.env };
@@ -222,7 +224,7 @@ try {
   ok('認證通過後下一輪才做當日工作', kicked === 1);
 
   // 真外殼＋假 AI：退一級必須多記一行 STARTS；認證通過後等候工作會自動續做。
-  control({ failModels: ['preferred'] }); seedCompany(DATA, PROTO);
+  control({ failModels: ['preferred'] }); seedConfirmed(DATA, PROTO);
   write(path.join(ledger, 'adapter-cert.json'), { host: AD.models, version: 'fake-model 1.0', argsHash: H.hashHost(h) });
   const server = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_NO_OPEN: '1' }, stdio: 'ignore' }); servers.push(server);
   const base = 'http://127.0.0.1:' + PORT; await usePass(base);
@@ -233,7 +235,7 @@ try {
   ok('外殼退一級：工作完成，STARTS 多記一次', finished && startLines.filter(l => l.includes(finished.id)).length === 2, { finished, startLines });
   // 另一個安裝模擬升級後首次開機，唔靠重設十分鐘限速。
   const autoData = path.join(CASE, 'auto-data'), autoLedger = path.join(autoData, 'ledger');
-  seedCompany(autoData, PROTO);
+  seedConfirmed(autoData, PROTO);
   write(path.join(autoData, 'model-tool.json'), { version: 'fake-model 2.0' });
   write(path.join(autoLedger, 'adapter-cert.json'), { host: AD.models, version: 'fake-model 1.0', argsHash: H.hashHost(h) });
   const autoServer = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(Number(PORT) + 1)], { cwd: PROTO, env: { ...process.env, SOS_DATA: autoData, SOS_NO_OPEN: '1' }, stdio: 'ignore' }); servers.push(autoServer);
@@ -244,7 +246,7 @@ try {
   ok('工具升級自動認證通過後，等候工作續做', resumed && read(path.join(autoLedger, 'adapter-cert.json')).version === 'fake-model 2.0' && read(path.join(autoLedger, 'recert-attempt.json')).version === 'fake-model 2.0', resumed);
   // 自動認證失敗：已提交嘅工作要如實顯示等候 AI 設定，唔可以無聲卡住
   const badData = path.join(CASE, 'bad-data'), badLedger = path.join(badData, 'ledger');
-  seedCompany(badData, PROTO);
+  seedConfirmed(badData, PROTO);
   write(path.join(badData, 'model-tool.json'), { version: 'fake-model 3.0', failAll: true });
   write(path.join(badLedger, 'adapter-cert.json'), { host: AD.models, version: 'fake-model 1.0', argsHash: H.hashHost(h) });
   const badServer = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(Number(PORT) + 2)], { cwd: PROTO, env: { ...process.env, SOS_DATA: badData, SOS_NO_OPEN: '1' }, stdio: 'ignore' }); servers.push(badServer);

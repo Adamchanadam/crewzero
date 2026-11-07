@@ -1,4 +1,4 @@
-// 主動提示與決策可信度：先核對不開子程序的資料規則，再以 Founder Desk 驗證可見行為。
+// 主動提示與決策可信度：先核對不開子程序的資料規則，再以 CrewZero 驗證可見行為。
 // 用法：node proactive-test.mjs <chrome> <輸出> <原型> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -67,7 +67,7 @@ const first = dash.dashboardState(coreDirs, { now: new Date(), lastSeen: null })
 const back = dash.dashboardState(coreDirs, { now: new Date(), lastSeen: { at: ago(3.1) } });
 ok('首次使用不顯示離開提示，三日後保留離開日數', first.since === null && back.since && back.since.awayDays >= 3, { first: first.since, back: back.since });
 
-/* ---------- 瀏覽器：Founder Desk 真實流程 ---------- */
+/* ---------- 瀏覽器：CrewZero 真實流程 ---------- */
 fs.rmSync(DATA, { recursive: true, force: true });
 const DIR = lib.dataDirs(PROTO);
 seedCompany(DATA, PROTO);
@@ -182,7 +182,7 @@ try {
   writeJson(lastSeenFile, { at: ago(4), version: 'test' });
   await cdp.go(BASE + '/?away=old');
   const backAfter = await cdp.ev('(()=>{const e=document.getElementById("back-after");return e?e.innerText:""})()');
-  ok('四日未打開 Founder Desk 時，顯示「今天只需要做這一件」', backAfter.includes('今天只需要做這一件'), backAfter);
+  ok('四日未打開 CrewZero 時，顯示「今天只需要做這一件」', backAfter.includes('今天只需要做這一件'), backAfter);
   fs.unlinkSync(lastSeenFile);
   await cdp.go(BASE + '/?away=none');
   ok('沒有上次查看紀錄時，不顯示離開提示', !(await cdp.ev('!!document.getElementById("back-after")')), await cdp.ev('document.body.innerText'));
@@ -280,7 +280,7 @@ try {
   writePack({ format: 'startup-os.ask/0.1', id: 'ask-legacy-visible', title: '舊問題包', askedBy: 'AI', askedAt: ago(1), questions: [{ id: 'old', ask: '舊題是否仍可查看？', kind: 'choice', effect: 'now', options: [{ text: '可以', rec: true }, { text: '不可以' }], value: '可以', why: '這是舊資料。' }] });
   await cdp.go(BASE + '/#/ask/ask-legacy-visible');
   const legacyVisible = await cdp.ev('document.body.innerText.includes("舊題是否仍可查看？")');
-  ok('舊磁碟問題包沒有風險欄位仍可在 Founder Desk 顯示', legacyVisible, legacyVisible);
+  ok('舊磁碟問題包沒有風險欄位仍可在 CrewZero 顯示', legacyVisible, legacyVisible);
   ok('頁面沒有程式錯誤', !cdp.errors.length, cdp.errors);
 } catch (error) {
   ok('測試程式出錯', false, String(error && error.stack || error));

@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { pathToFileURL } from 'node:url';
 const root = path.resolve(process.argv[2] || 'prototypes/proofread');
 const { NAMES } = await import(pathToFileURL(path.join(root, 'ask-lib.mjs')));
+const ops = await import(pathToFileURL(path.join(root, 'ledger-ops.mjs')));
 const run = fs.readFileSync(path.join(root, 'run.mjs'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'server.mjs'), 'utf8');
 const part = (text, start, end) => { const a = text.indexOf(start), b = text.indexOf(end, a); assert.ok(a >= 0 && b > a); return text.slice(a, b); };
@@ -19,7 +20,7 @@ let state = { company: { assumptions: [
   { id: 'boundary', changedAt: '2026-10-09T12:00:00Z' },
   { id: 'retired', status: 'retired', milestoneIds: ['m1'], changedAt: '2020-01-01' }
 ] }, milestones: [{ id: 'm3', order: 3, pathStatus: 'confirmed' }, { id: 'm2', order: 2, pathStatus: 'confirmed' }, { id: 'm1', order: 1, pathStatus: 'confirmed' }] };
-const ctx = { NAMES, Date, clockNow: () => fixedNow, loadState: () => state, listMatches: () => [], brainSource: () => null, DIR: {}, OPP_KINDS: ['政策','資助','時間窗','競爭空隙'] };
+const ctx = { ...ops, NAMES, Date, clockNow: () => fixedNow, loadState: () => state, listMatches: () => [], brainSource: () => null, DIR: {}, OPP_KINDS: ['政策','資助','時間窗','競爭空隙'] };
 vm.createContext(ctx);
 vm.runInContext(part(run, 'const opportunityTitle =', 'const checkupStale') + part(run, 'function brainLedger()', '// 創辦人上次對呢一項') + '\nthis.brainLedger=brainLedger; this.checkOpportunities=checkOpportunities; this.rejectedOpportunities=rejectedOpportunities;', ctx);
 const hints = ctx.brainLedger().hints;
@@ -37,10 +38,10 @@ try {
   const person = { id: 'P1', name: '名單對象', stage: 1, lastReal: '真事標記', milestones: [{ name: '站點標記', actor: '決策者' }], assumptions: [{ text: '假設標記', grade: '聽過' }], debrief: { text: '會後標記' }, review: [{ reason: '覆盤標記' }] };
   const oldCardMarkers = ['舊身份標記', '舊背景標記', '舊立場標記', '舊利益標記', '舊決策標記', '舊顧慮標記', '舊風格標記'];
   person.persona = Object.fromEntries(['identity','background','stance','interests','decision','concerns','style'].map((k,i) => [k, { text: oldCardMarkers[i] }]));
-  const dirs = { inbox, data: tmp, company: tmp }; let sequence = 0;
+  const dirs = { inbox, data: tmp, company: tmp, ledger: tmp }; let sequence = 0;
   const x = { fs, path, DIR: dirs, ROOT: root, NOTE_TYPES: ['practice-prep'], counterpartsOf: () => [person], fileStamp: () => 'test' + (++sequence), U: NAMES.ui, localIso: () => '2026-11-06', getTask: () => null, loadState: () => ({ company: { actors: [{ id: 'P1', name: person.name }] } }), step() {}, newSandbox: () => sb, brainSource: () => null, writeConfirmedPage() {}, writeJSON: (p,v) => fs.writeFileSync(p, JSON.stringify(v)), runAIStep: async () => {}, NAMES };
   vm.createContext(x);
-  vm.runInContext(part(server, 'function receiveNote(', 'function chatHost()') + part(run, 'async function handlePracticePrep(', 'async function handleDebrief(').split('function finishPracticePrep(')[0] + '\nthis.receiveNote=receiveNote; this.handlePracticePrep=handlePracticePrep;', x);
+  vm.runInContext(part(server, 'function receiveNote(', 'function chatHost()') + part(run, 'async function handlePracticePrep(', 'async function handleDebrief(').split('async function finishPracticePrep(')[0] + '\nthis.receiveNote=receiveNote; this.handlePracticePrep=handlePracticePrep;', x);
   async function prepare(body) {
     const received = x.receiveNote({ type: 'practice-prep', ...body }); assert.equal(received.ok, true);
     const raw = fs.readFileSync(path.join(inbox, received.id + '-note-practice-prep.md'), 'utf8');

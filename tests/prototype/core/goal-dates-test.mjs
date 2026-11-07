@@ -471,24 +471,19 @@ try {
   ok('七-9：問題頁送出完成', !!(await until7(async () => /✓ 完成/.test(await e7(`document.querySelector('#track')?.innerText||''`)))), await e7(`document.querySelector('#track')?.innerText||''`));
   const askNext = await e7(`(()=>{const n=document.querySelector('#track .next-step');return n?{h:n.querySelector('h4')?.textContent,line:n.querySelector('p')?.textContent,btn:n.querySelector('a')?.textContent,cls:n.querySelector('a')?.className,href:n.querySelector('a')?.getAttribute('href')}:null})()`);
   ok('七-9：問題包全部作答後，完成卡有「你的下一步」及指向 Founder Desk 的主按鈕（2 項待你處理）', askNext && askNext.h === N.ui.yourNext && askNext.line === N.t('deskHasPending', { n: (await status7()).openAsks }) && (await okLbl(askNext.btn)) && /primary/.test(askNext.cls) && /\/#\/$/.test(askNext.href), askNext);
-  // 7) 要求頁：完成後（沒有新問題）有下一步；有新問題則是原本的作答按鈕
-  await g7(BASE7 + '/#/request/adhoc', 1440, 2000);
-  await e7(`(()=>{const t=document.querySelector('#req-text');t.focus();})()`);
-  await c7.type('#req-text', '請擬一張虛構的推廣單張（測試）');
-  await k7('#req-send');
-  const reqDone = await until7(async () => /✓ 完成|完成|待你確認/.test(await e7(`document.querySelector('#req-track')?.innerText||''`)) && (await e7(`!!document.querySelector('#req-answer, #req-track #next-desk')`)), 60000);
-  const reqState = await e7(`({answer:!!document.querySelector('#req-answer'),next:!!document.querySelector('#req-track #next-desk'),text:document.querySelector('#req-track')?.innerText||''})`);
-  ok('七-10：要求頁完成後有下一步（作答按鈕，或「你的下一步」）', !!reqDone && (reqState.answer || reqState.next), reqState);
-  // 要求頁完成但 Zero 沒有新開問題：只靠頁面把 /api/status 的結果改成「沒有新問題」（其餘全部是真實伺服器的回應）
-  await g7('about:blank', 1440, 300); await g7(BASE7 + '/#/request/adhoc', 1440, 2200);
-  await e7(`(()=>{const orig=window.fetch;window.fetch=function(u){return orig.apply(this,arguments).then(r=>{if(String(u).includes('/api/status')){return r.clone().json().then(j=>{(j.runs||[]).forEach(x=>{if(x.result)x.result.asks=[]});return new Response(JSON.stringify(j),{status:200,headers:{'Content-Type':'application/json'}})}).catch(()=>r)}return r})}})()`);
-  await e7(`(()=>{const t=document.querySelector('#req-text');t.value='';t.focus();})()`);
-  await c7.type('#req-text', '請擬一張虛構的活動海報（測試）');
-  await k7('#req-send');
-  const reqNo = await until7(async () => (await e7(`document.querySelector('#req-track')?.innerText||''`)).includes('已記錄。') && (await e7(`!!document.querySelector('#req-track #next-desk')`)), 60000);
-  const reqNext = await e7(`(()=>{const n=document.querySelector('#req-track .next-step');return n?{h:n.querySelector('h4')?.textContent,line:n.querySelector('p')?.textContent,btn:n.querySelector('a')?.textContent,cls:n.querySelector('a')?.className,href:n.querySelector('a')?.getAttribute('href')}:null})()`);
-  const nOpen = (await status7()).openAsks;
-  ok('七-10：要求頁完成而沒有新問題：有「你的下一步」及指向 Founder Desk 的主按鈕', !!reqNo && reqNext && reqNext.h === N.ui.yourNext && reqNext.line === (nOpen > 0 ? N.t('deskHasPending', { n: nOpen }) : N.ui.deskNoPending) && /primary/.test(reqNext.cls) && /\/#\/$/.test(reqNext.href), { reqNext, nOpen });
+  // 7) 首頁「告訴 Zero 一件事」（0.40.0 取代三個交要求頁）：送出後有可見的下一步（已收到＋查看回饋），回饋卡出現作答入口，並可回到首頁
+  clearAsks7(); await sleep(500);
+  await g7(BASE7 + '/#/', 1440, 2500);
+  await k7('#quick-adhoc');
+  await e7(`(()=>{const t=document.querySelector('#quick-text');t.focus();})()`);
+  await c7.type('#quick-text', '請擬一張虛構的推廣單張（測試）');
+  await k7('#quick-send');
+  const reqDone = await until7(async () => (await e7(`document.querySelector('#quick-note')?.innerText||''`)).includes('已收到') && (await e7(`!!document.querySelector('#quick-track')`)), 30000);
+  ok('七-10：送出後有可見的下一步：已收到，並有「查看回饋」連結', !!reqDone, await e7(`document.querySelector('#quick-note')?.innerText||''`));
+  await k7('#quick-track');
+  const reqAnswer = await until7(async () => (await e7(`!!document.querySelector('#fb-card #fb-answer')`)), 90000);
+  const reqState = await e7(`({answer:!!document.querySelector('#fb-answer'),back:document.querySelector('#fb-back')?.getAttribute('href')||'',state:document.querySelector('#fb-card')?.dataset.state||'',text:(document.querySelector('#fb-card')?.innerText||'').slice(0,300)})`);
+  ok('七-10：回饋卡完成讀取後有作答入口，並有回到首頁的按鈕', !!reqAnswer && reqState.back === '#/', reqState);
   ok('七-11：頁面沒有錯誤', c7.errors.length === 0, c7.errors);
 } catch (e) { ok('確認後的下一步測試中斷', false, String(e && e.stack || e)); }
 finally { if (c7) c7.close(); if (srv7) srv7.kill(); }
@@ -930,21 +925,26 @@ try {
   // 十-2（必修 2；第十一輪改為創辦人核准的字句）：未能讀取附件的整句是「未能讀取：{f}。{r}」，{r} 自帶句號、按檔案類型寫；頁名取自名稱表（intakeTitle）
   const PAGE = N.ui.intakeTitle, line = f => plain(N.t('unreadFileLine', { f, r: N.unreadReason(f) }));
   const WANT = {
-    office: 'Zero 目前無法直接讀取 Word、Excel、PowerPoint 檔案。請另存為 PDF 再交，或在「' + PAGE + '」頁直接寫下文件重點。',
+    legacy: 'Zero 未能讀取舊版 Office 格式。請另存為新版格式（例如 .docx）或 PDF 再交，或在「' + PAGE + '」頁直接寫下文件重點。',
+    convert: '這份文件未能轉成文字。請另存為 PDF 再交，或在「' + PAGE + '」頁直接寫下文件重點。',
+    tooBig: '這份文件太大，未能轉成文字。請分拆後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
+    corrupt: '這份文件可能已損壞，未能轉成文字。請重新另存後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
+    password: '這份文件設有密碼，未能轉成文字。請移除密碼後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
     pdf: '這份 PDF 未能讀取，常見原因是超過 100 頁或設有密碼。請分拆為每份 100 頁以內、移除密碼後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
     other: 'Zero 目前無法讀取這種檔案。請改交 PDF，或在「' + PAGE + '」頁直接寫下文件重點。'
   };
-  const FILES = { office: ['計劃書.docx', '簡報.PPTX', '數據.xlsx', '舊版.doc', '舊版.xls', '舊版.ppt'], pdf: ['報告.pdf', '報告.PDF'], other: ['照片.png', 'x.HEIC', '無副檔名', '筆記.pages', '表.numbers', '簡報.key'] };
-  const ALL = [].concat(FILES.office, FILES.pdf, FILES.other);
+  const FILES = { legacy: ['舊版.doc', '舊版.xls', '舊版.ppt'], modern: ['計劃書.docx', '簡報.PPTX', '數據.xlsx'], pdf: ['報告.pdf', '報告.PDF'], other: ['照片.png', 'x.HEIC', '無副檔名', '筆記.pages', '表.numbers', '簡報.key'] };
+  const ALL = [].concat(FILES.legacy, FILES.modern, FILES.pdf, FILES.other);
   ok('十-2：整句範本是「未能讀取：{f}。{r}」（原因自帶句號，不再用破折號接完整句子）', N.ui.unreadFileLine === '未能讀取：{f}。{r}', N.ui.unreadFileLine);
-  ok('十-2：Office（Word、Excel、PowerPoint）整句是核准字句', FILES.office.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.office)), FILES.office.map(line));
+  ok('十-2：舊版 Office（.doc、.xls、.ppt）整句是核准字句：請另存為新版格式或 PDF', FILES.legacy.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.legacy)), FILES.legacy.map(line));
+  ok('十-2：新版 Office（.docx、.xlsx、.pptx）未能轉成文字：按原因代碼分五句（沒有代碼＝一般轉換失敗；太大、損壞、密碼各有一句）', FILES.modern.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.convert) && N.unreadReason(f, 'too-big') === WANT.tooBig && N.unreadReason(f, 'corrupt') === WANT.corrupt && N.unreadReason(f, 'encrypted') === WANT.password), FILES.modern.map(f => [line(f), N.unreadReason(f, 'too-big'), N.unreadReason(f, 'corrupt'), N.unreadReason(f, 'encrypted')]));
   ok('十-2：PDF 整句是核准字句，不出現「另存為 PDF」及「文字版」', FILES.pdf.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.pdf) && !/另存為/.test(line(f)) && !/文字版/.test(line(f))), FILES.pdf.map(line));
   ok('十-2：其他（圖片、無副檔名）整句是核准字句', ['照片.png', 'x.HEIC', '無副檔名'].every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.other)), ['照片.png', 'x.HEIC', '無副檔名'].map(line));
   ok('十-2：Apple 格式（.pages、.numbers、.key）不歸入 Office，改用「其他」字句（字句只寫 Word、Excel、PowerPoint）', ['筆記.pages', '表.numbers', '簡報.key'].every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.other) && !/Word/.test(line(f))), ['筆記.pages', '表.numbers', '簡報.key'].map(line));
   ok('十-2：沒有「。。」及「——」，每句以句號結尾', ALL.every(f => !line(f).includes('。。') && !line(f).includes('——') && line(f).endsWith('。')), ALL.map(line).filter(x => x.includes('。。') || x.includes('——') || !x.endsWith('。')));
   ok('十-2：引號成對，只用「」，沒有與外層衝突的『』', ALL.every(f => (line(f).match(/「/g) || []).length === (line(f).match(/」/g) || []).length && !/[『』]/.test(line(f))), ALL.map(line).filter(x => /[『』]/.test(x)));
   ok('十-2：用字檢查零命中（整句）', ALL.every(f => N.styleIssues(N.t('unreadFileLine', { f, r: N.unreadReason(f) })).length === 0), ALL.map(f => N.styleIssues(N.t('unreadFileLine', { f, r: N.unreadReason(f) }))).filter(x => x.length));
-  ok('十-2：頁名只在名稱表一處（intakeTitle）：三句原因用 {page}，沒有另寫一份「' + PAGE + '」', ['unreadReasonOffice', 'unreadReasonPdf', 'unreadDefaultReason'].every(k => N.ui[k].includes('{page}') && !N.ui[k].includes(PAGE)), ['unreadReasonOffice', 'unreadReasonPdf', 'unreadDefaultReason'].map(k => N.ui[k]));
+  ok('十-2：頁名只在名稱表一處（intakeTitle）：各句原因用 {page}，沒有另寫一份「' + PAGE + '」', ['unreadReasonOffice', 'unreadReasonConvert', 'unreadReasonTooBig', 'unreadReasonCorrupt', 'unreadReasonPassword', 'unreadReasonPdf', 'unreadDefaultReason'].every(k => N.ui[k].includes('{page}') && !N.ui[k].includes(PAGE)), ['unreadReasonOffice', 'unreadReasonConvert', 'unreadReasonTooBig', 'unreadReasonCorrupt', 'unreadReasonPassword', 'unreadReasonPdf', 'unreadDefaultReason'].map(k => N.ui[k]));
   });
 
   await sc("十-3", async () => {
@@ -1431,11 +1431,12 @@ trace("進入 九-9：未能讀取附件的原因用固定字句（畫面不顯�
 /* ---------- 九-9：未能讀取附件的原因用固定字句（畫面不顯示 AI 寫的原因） ---------- */
 {
   const RZ = k => N.t(k, { page: N.ui.intakeTitle });   // 原因句帶頁名，由名稱表的 intakeTitle 填入
-  const reasons = [['計劃書.docx', RZ('unreadReasonOffice')], ['簡報.PPTX', RZ('unreadReasonOffice')], ['數據.xlsx', RZ('unreadReasonOffice')], ['報告.pdf', RZ('unreadReasonPdf')], ['照片.png', RZ('unreadDefaultReason')], ['無副檔名', RZ('unreadDefaultReason')]];
+  const reasons = [['計劃書.docx', RZ('unreadReasonConvert')], ['簡報.PPTX', RZ('unreadReasonConvert')], ['數據.xlsx', RZ('unreadReasonConvert')], ['舊版.doc', RZ('unreadReasonOffice')], ['報告.pdf', RZ('unreadReasonPdf')], ['照片.png', RZ('unreadDefaultReason')], ['無副檔名', RZ('unreadDefaultReason')]];
   ok('九-9：按副檔名取固定原因（Office／PDF／其他）', typeof N.unreadReason === 'function' && reasons.every(([f, want]) => N.unreadReason(f) === want), reasons.map(([f]) => [f, N.unreadReason && N.unreadReason(f)]));
   ok('九-9：固定原因是書面語，用字檢查零命中，且不含口語', typeof N.unreadReason === 'function' && reasons.every(([f]) => N.styleIssues(N.t('unreadFileLine', { f, r: N.unreadReason(f) })).length === 0 && !/讀唔到|冇|唔/.test(N.unreadReason(f))), reasons.map(([f]) => N.styleIssues(N.t('unreadFileLine', { f, r: N.unreadReason && N.unreadReason(f) }))));
   const askSrc = fs.readFileSync(path.join(PROTO, 'ask.html'), 'utf8'), dashSrc = fs.readFileSync(path.join(PROTO, 'dashboard.html'), 'utf8');
-  ok('九-9：三個顯示位置（預填、要求結果、真實進展）都取固定原因，不取 AI 寫的 reason', (askSrc.match(/unreadFileLine[^)]*N\.unreadReason\(u\.file\)/g) || []).length === 2 && /unreadFileLine[^)]*N\.unreadReason\(u\.file\)/.test(dashSrc) && !/u\.reason/.test(askSrc) && !/u\.reason/.test(dashSrc));
+  const askUses = askSrc.match(/unreadFileLine[^)]*N\.unreadReason\([^)]*\)/g) || [], askAll = askSrc.match(/unreadFileLine/g) || [], dashAll = dashSrc.match(/unreadFileLine/g) || [];
+  ok('九-9：顯示位置（預填、回饋卡）都取固定原因，不取 AI 寫的 reason；真實進展頁只讀回饋卡，不另顯示原因', askUses.length >= 2 && askUses.length === askAll.length && dashAll.length === 0 && !/u\.reason/.test(askSrc) && !/u\.reason/.test(dashSrc), { askUses: askUses.length, askAll: askAll.length, dashAll: dashAll.length });
 }
 let cF = null;
 try {

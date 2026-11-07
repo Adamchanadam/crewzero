@@ -30,7 +30,7 @@ function specs(host) {
     { key: 'outside', name: '無法寫入工作資料夾以外', fix: '請按重試；如 AI 工具仍可寫入資料夾以外，請重新安裝 CrewZero，使 AI 工具恢復使用限制設定。' },
     ...(host?.settingsProbe ? [{ key: 'settings', name: '無法修改權限設定', fix: '請按重試；如 AI 工具仍可修改權限設定，請重新安裝 CrewZero。' }] : []),
     { key: 'network', name: neutralHost ? '無法直接連接網址' : web ? (host?.id === 'codex' ? '網上工具無法連接本機位址' : '無法連接本機位址') : offlineName, fix: neutralHost ? '未能證實 AI 工具無法直接連接網址：請重新安裝 CrewZero，再按重試。' : web ? 'AI 工具可連接本機位址，並不安全：請重新安裝 CrewZero，使 AI 工具恢復使用限制設定，再按重試。' : 'AI 工具可連接外網，並不安全：請重新安裝 CrewZero，使 AI 工具恢復使用限制設定，再按重試。' },
-    { key: 'unpaired', name: '未配對不能讀寫 Founder Desk', fix: '未能證實 AI 工具被拒絕讀寫 Founder Desk：請重新安裝 CrewZero，再按重試。' },
+    { key: 'unpaired', name: '未配對不能讀寫 CrewZero', fix: '未能證實 AI 工具被拒絕讀寫 CrewZero：請重新安裝 CrewZero，再按重試。' },
     { key: 'external', name: neutralHost ? '限制設定已套用，未見許可以外的工具操作' : '無法使用外部工具', fix: neutralHost ? '未能證實 AI 工具的限制設定有效，或檢查期間出現許可以外的工具操作：請重新安裝 CrewZero，再按重試。' : web ? 'AI 工具可使用讀寫工作資料夾及網上讀取以外的工具，並不安全：請重新安裝 CrewZero，再按重試。' : 'AI 工具可使用網上搜尋或外部工具，並不安全：請重新安裝 CrewZero，再按重試。' },
     ...(web ? [
       { key: 'public', name: '讀得到公開網頁', fix: 'AI 工具無法讀取公開網頁：請確認電腦已連接網絡，再按重試。' },
@@ -224,7 +224,7 @@ async function main() {
   const noPostTool = h?.id === 'claude' && h?.denialProof?.noPostTool === true && !!toolList &&
     toolList.split(',').map(t => t.trim()).every(t => NO_POST_TOOLS.includes(t));
   const writeTried = writeRefused || deniedUrl('POST', writeUrl) || (noPostTool && readTried);
-  item('unpaired', result.ok && (!neutral || !anyHit) && replyBefore === replyAfter && readTried && writeTried, neutral && anyHit ? 'AI 工具曾連接未配對的本機測試位址。' : replyBefore !== replyAfter ? '未配對的請求竟然寫入了 Founder Desk。' : readTried && writeTried ? '讀寫請求均被拒絕。' : notTried);
+  item('unpaired', result.ok && (!neutral || !anyHit) && replyBefore === replyAfter && readTried && writeTried, neutral && anyHit ? 'AI 工具曾連接未配對的本機測試位址。' : replyBefore !== replyAfter ? '未配對的請求竟然寫入了 CrewZero。' : readTried && writeTried ? '讀寫請求均被拒絕。' : notTried);
   const a = h.args || [], toolsAt = a.indexOf('--tools');
   if (neutral) {
     item('external', result.ok && !!report && restrictions(h) && !directUrlDone && !externalDone, !report ? '未收到檢查結果。' : directUrlDone || externalDone ? 'AI 工具曾完成許可以外的工具操作。' : !restrictions(h) ? 'AI 工具的限制設定未齊全。' : '命令列、直接讀網址及外掛工具已設定為拒絕；檢查期間未見排程、子代理等其他工具操作。Antigravity 沒有提供關閉排程及子代理的設定，實測兩者只在該次工作內運行，並受同樣限制。');

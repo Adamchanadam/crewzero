@@ -39,7 +39,7 @@ try {
   const ver = rules.pluginVersion(PROTO);
   ok('VERSION 取自插件資訊檔', /^\d+\.\d+\.\d+$/.test(ver) && fs.readFileSync(path.join(T, 'VERSION'), 'utf8').trim() === ver, { ver, file: fs.readFileSync(path.join(T, 'VERSION'), 'utf8') });
   const sh = fs.readFileSync(path.join(T, 'START-HERE.md'), 'utf8');
-  ok('START-HERE.md：三個入口指令、data/ 不可手改、沒有本機通知要自己打開、出錯看系統頁、程式更新做法、版本', ['/crewzero:desk', '/crewzero:dashboard', '/crewzero:install', '$crewzero:desk', 'crewzero/data/', '請勿手改', '沒有本機通知', '系統', '程式更新', ver].every(k => sh.includes(k)) && !/\{version\}|\{date\}/.test(sh), sh.slice(0, 300));
+  ok('START-HERE.md：四個指令（沒有 desk、沒有舊名稱）、data/ 不可手改、沒有本機通知要自己打開、出錯看系統頁、程式更新做法、版本', ['/crewzero:dashboard', '/crewzero:discuss', '/crewzero:install', '$crewzero:dashboard', '$crewzero:discuss', '/discuss', 'crewzero/data/', '請勿手改', '沒有本機通知', '系統', '程式更新', ver].every(k => sh.includes(k)) && !/\{version\}|\{date\}/.test(sh) && !/Founder Desk|營運監察台|crewzero:desk|\/desk/.test(sh), sh.slice(0, 300));
   const cmd = fs.readFileSync(path.join(T, 'run-schedule.cmd'), 'utf8');
   ok('排程啟動檔：絕對路徑叫執行環境同同一資料夾嘅 run.mjs，以排程觸發，唔靠環境變數', cmd.includes('"' + process.execPath + '"') && cmd.includes('"' + path.join(T, 'run.mjs') + '"') && cmd.includes('--type auto --trigger schedule') && cmd.includes('cd /d "' + T + '"') && !/SOS_|%[A-Z_]+%/.test(cmd), cmd);
   const start = fs.readFileSync(path.join(T, 'start-crewzero.cmd'), 'utf8');
@@ -62,14 +62,14 @@ try {
   /* 以安裝咗嘅入口開頁：資料寫入新安裝嘅 data/ */
   const r4 = spawnSync(process.execPath, [path.join(T, 'ask.mjs'), '--desk'], { encoding: 'utf8', env, timeout: 30000 });
   const url = (r4.stdout.match(/http:\/\/127\.0\.0\.1:\d+\//) || [])[0];
-  ok('node crewzero/ask.mjs --desk：開到 Founder Desk', r4.status === 0 && !!url, { out: r4.stdout, err: r4.stderr });
+  ok('node crewzero/ask.mjs --desk（舊別名）：開到 CrewZero', r4.status === 0 && !!url, { out: r4.stdout, err: r4.stderr });
   const st = url ? await (await fetch(url + 'api/health')).json() : {};
   pid = Number(st.pid) || 0;
   // 正實例冇測試鉤：測試自己扮已配對嘅瀏覽器（寫雜湊入用戶設定資料夾，完畢即刪）
   if (url) unpair = await installPass(lib.rootId(path.join(T, 'data')), url, path.join(T, 'data'));
   ok('伺服器認得新安裝嘅資料夾（同一個 data/）', st.root === lib.rootId(path.join(T, 'data')), { root: st.root, want: lib.rootId(path.join(T, 'data')) });
   const page = url ? await (await fetch(url)).text() : '';
-  ok('首頁係 Founder Desk', /Founder Desk/.test(page), page.slice(0, 200));
+  ok('首頁是 CrewZero', /CrewZero/.test(page), page.slice(0, 200));
   const post = async (p, body) => { const r = await fetch(url + p.replace(/^\//, ''), { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: url.replace(/\/$/, '') }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { code: r.status, j }; };
   await post('/api/setup', { action: 'certify', host: 'test' });
   let cert = null; for (let i = 0; i < 100 && !cert; i++) { await sleep(400); const s = await (await fetch(url + 'api/setup')).json(); if (s.certify && s.certify.state !== 'running') cert = s.certify; }

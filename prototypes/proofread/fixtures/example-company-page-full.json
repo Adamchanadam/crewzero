@@ -620,6 +620,123 @@
         "value": "一條業務線",
         "origin": "default"
       }
-    ]
+    ],
+    "actors": {
+      "title": "公司以外的決策者",
+      "judge": "Zero 只照抄文件寫的狀態；沒有寫的當作「商討中」。每項要寫明類別（客戶、供應或合作方、投資者或資助方、顧問或協助者、團隊成員）；只寫名稱、機構和角色，不寫電話、電郵或其他聯絡方式。",
+      "items": [
+        {
+          "id": "ac-farm",
+          "label": "農場主（丙農場）",
+          "kind": "choice",
+          "value": "商討中",
+          "origin": "doc",
+          "options": [
+            {
+              "text": "已確定"
+            },
+            {
+              "text": "商討中",
+              "rec": true
+            },
+            {
+              "text": "建議（對方未知）"
+            }
+          ],
+          "src": [
+            {
+              "from": "資料一",
+              "at": "第二節"
+            }
+          ],
+          "actorKind": "partner",
+          "org": "丙農場",
+          "role": "農場主"
+        },
+        {
+          "id": "ac-chef",
+          "label": "餐廳東主（甲餐廳）",
+          "kind": "choice",
+          "value": "商討中",
+          "origin": "doc",
+          "options": [
+            {
+              "text": "已確定"
+            },
+            {
+              "text": "商討中",
+              "rec": true
+            },
+            {
+              "text": "建議（對方未知）"
+            }
+          ],
+          "src": [
+            {
+              "from": "資料一",
+              "at": "第三節"
+            }
+          ],
+          "actorKind": "customer",
+          "org": "甲餐廳",
+          "role": "東主"
+        },
+        {
+          "id": "ac-fund",
+          "label": "青年創業基金",
+          "kind": "choice",
+          "value": "建議（對方未知）",
+          "origin": "ai",
+          "options": [
+            {
+              "text": "已確定"
+            },
+            {
+              "text": "商討中",
+              "rec": true
+            },
+            {
+              "text": "建議（對方未知）"
+            }
+          ],
+          "why": "文件提到想申請資助，但沒有寫明對方，所以只作建議。",
+          "actorKind": "investor",
+          "org": "青年創業基金"
+        },
+        {
+          "id": "ac-team",
+          "label": "李家欣（共同創辦人）",
+          "kind": "choice",
+          "value": "已確定",
+          "origin": "doc",
+          "options": [
+            {
+              "text": "已確定"
+            },
+            {
+              "text": "商討中",
+              "rec": true
+            },
+            {
+              "text": "建議（對方未知）"
+            }
+          ],
+          "src": [
+            {
+              "from": "資料一",
+              "at": "團隊"
+            }
+          ],
+          "actorKind": "team",
+          "role": "採購",
+          "team": {
+            "type": "cofounder",
+            "owns": [
+              "m1"
+            ]
+          }
+        }
+      ]
+    }
   }
 }

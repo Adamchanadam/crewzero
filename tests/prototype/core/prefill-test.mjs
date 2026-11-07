@@ -136,7 +136,7 @@ try {
   const run8 = (await get('/api/status')).j.runs.find(r => r.kind === 'prefill' && r.ref === r8.j.id);
   ok('第九輪-5：AI 寫 files/計劃書.DOCX：核對器換回實際檔名「計劃書.docx」', P8.unreadable && P8.unreadable.length === 1 && P8.unreadable[0].file === '計劃書.docx', P8);
   ok('第九輪-5：不退回「文件未有」：全部未能讀取，摘要如實說明', P8.allUnread === true && run8 && run8.state === 'done' && !/文件未有/.test(run8.result.summary) && run8.result.summary === N.ui.prefillAllUnread, run8 && run8.result);
-  ok('第九輪-5：AI 的口語原因只保存作紀錄，畫面用字由 names.js 固定（unreadReason）', P8.unreadable[0].reason === 'Word 檔目前讀唔到' && N.unreadReason('計劃書.docx') === N.t('unreadReasonOffice', { page: N.ui.intakeTitle }), P8.unreadable);
+  ok('第九輪-5：AI 的口語原因只保存作紀錄，畫面用字由 names.js 固定（unreadReason）', P8.unreadable[0].reason === 'Word 檔目前讀唔到' && /未能轉成文字/.test(N.unreadReason('計劃書.docx')), P8.unreadable);
   const pl = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs')).href);
   const names9 = ['計劃書.docx', 'Plan.PPTX', 'Résumé.pdf'];
   const mdv = x => typeof pl.matchDelivered === 'function' ? pl.matchDelivered(x, names9) : '（沒有 matchDelivered）';

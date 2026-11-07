@@ -5,7 +5,7 @@
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
-<title>Founder Desk</title>
+<title>CrewZero</title>
 <style>
 .sub{color:var(--muted);margin:2px 0 0;font-size:var(--fs-body)}
 .guide{color:var(--muted);font-size:var(--fs-sub);margin:8px 0 0}
@@ -166,7 +166,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 <body>
 <div class="shell" id="app">
   <div class="layer"><span class="eyebrow">載入中……</span>
-    <p class="guide" id="boot-guide">如畫面一直停留於此，表示 Founder Desk 尚未開啟。請在 AI 對話打開 Founder Desk，即可重新開啟此頁。</p></div>
+    <p class="guide" id="boot-guide">如畫面一直停留於此，表示 CrewZero 尚未開啟。請在 AI 對話打開 CrewZero，即可重新開啟此頁。</p></div>
 </div>
 <div class="cbar" id="cbar" hidden></div>
 <div id="modal-root"></div>
@@ -252,6 +252,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function route() {
     clearTimeout(V.pollTimer);
     clearTimeout(V.ideateTimer);
+    // 離開回饋卡：清除它的重讀定時器，否則換到 #/request/ 之類同樣符合的頁面時，舊卡會蓋回來
+    if (typeof FB !== 'undefined' && FB) clearTimeout(FB.timer);
     $('#cbar').hidden = true;
     closeModal();
     var cm = /^#\/change\/(target|task)\/([\w-]{1,80})$/.exec(location.hash);
@@ -266,8 +268,10 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (pm) { $('#cbar').hidden = true; return pm[1] === 'new' ? showPracticeNew(pm[2]) : pm[1] === 's' ? showPracticeSession(pm[2]) : pm[1] === 'card' ? showPracticeCard(pm[2]) : pm[1] === 'debrief' ? showDebrief(pm[2]) : pm[3] ? showPracticePrep(pm[3]) : showPracticeList(); }
     var dm = /^#\/debate(?:\/new(?:\/(\w+)(?:\/([\w-]{1,40}))?)?|\/([\w-]{1,40}))?$/.exec(location.hash);
     if (dm) return /^#\/debate\/new/.test(location.hash) ? showDebateNew(dm[1], dm[2]) : dm[3] ? showDebateMatch(dm[3]) : showDebateList();
+    var fm = /^#\/feedback\/([\w-]{1,80})$/.exec(location.hash);
+    if (fm) return showFeedback(fm[1]);
     var rq = /^#\/request\/(order|adhoc|event)$/.exec(location.hash);
-    if (rq) return showRequest(rq[1]);
+    if (rq) return showFeedback(null, rq[1]);
     return showHub();
   }
   // 整頁讀取失敗：分清連唔到（CrewZero 停咗）、搵唔到（404，用 missing 句）、頁面本身出錯；每種都有掣
@@ -304,13 +308,18 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         return;
       }
       var today = isoDay(new Date()), current = isTarget ? item.targetDate : String(item.dueAt || '').slice(0, 10), title = isTarget ? item.short || item.title : item.title, input = h('input', { type: 'date', id: 'change-date', min: today, value: current || today, 'aria-label': N.ui.changePickDate }), note = h('p', { class: 'result', id: 'change-result', role: 'alert' });
+      // 工作的負責人（名單有在職成員時才出現）：我自己或某位在職成員；只改負責人，不改日期以外的內容
+      var team = !isTarget ? (((dash.people || {}).team) || []).filter(function (m) { return m.team && m.team.state === 'active'; }) : [], ownerNow = !isTarget ? (item.assigneeId || 'founder') : 'founder', pickOwner = ownerNow;
+      var ownerBox = team.length ? h('div', { class: 'date-row', id: 'change-owner' }, h('label', null, N.ui.chgOwner), h('div', { style: 'display:grid;gap:0' }, [{ id: 'founder', name: N.ui.chgOwnerMe }].concat(team.map(function (m) { return { id: m.id, name: m.name + (m.role ? '（' + m.role + '）' : '') }; })).map(function (o) {
+        return h('button', { type: 'button', class: 'opt' + (o.id === pickOwner ? ' cur' : ''), 'data-owner': o.id, onclick: function () { pickOwner = o.id; [].forEach.call(ownerBox.querySelectorAll('.opt'), function (x) { x.classList.toggle('cur', x.getAttribute('data-owner') === pickOwner); }); } }, h('span', { class: 'dot' }), h('span', null, o.name));
+      }))) : null;
       var save = h('button', { type: 'button', class: 'btn primary', id: 'change-save', onclick: function () {
         if (!input.value || input.value < today) { note.textContent = N.ui.founderOpInvalid; input.focus(); return; }
         save.disabled = true; cancel.disabled = true; save.textContent = N.ui.changeSaving; note.textContent = '';
-        post('/api/founder-op', { op: isTarget ? 'setTarget' : 'setTaskDue', target: id, value: { date: input.value } }).then(function () { changeReturn(); }).catch(function (error) { save.disabled = false; cancel.disabled = false; save.textContent = N.ui.changeSave; note.textContent = why(error); });
+        post('/api/founder-op', { op: isTarget ? 'setTarget' : 'setTaskDue', target: id, value: { date: input.value } }).then(function () { return !isTarget && pickOwner !== ownerNow ? post('/api/founder-op', { op: 'taskOwner', target: id, value: { owner: pickOwner } }) : null; }).then(function () { changeReturn(); }).catch(function (error) { save.disabled = false; cancel.disabled = false; save.textContent = N.ui.changeSave; note.textContent = why(error); });
       } }, N.ui.changeSave);
       var cancel = h('button', { type: 'button', class: 'btn', id: 'change-cancel', onclick: changeReturn }, N.ui.changeCancel);
-      setApp(head('pending', st), h('section', { class: 'layer change-date', id: 'change-date-page' }, h('span', { class: 'eyebrow' }, N.ui.changeDateTitle), h('h2', { class: 'layer-title' }, title), h('p', { class: 'current' }, N.ui.changeCurrentDate + '：' + (current ? dayOf(current) : '未設日期')), h('div', { class: 'date-row' }, h('label', { for: 'change-date' }, N.ui.changePickDate), input), h('p', { class: 'guide' }, isTarget ? N.ui.changeTargetHint : N.ui.changeTaskHint), h('div', { class: 'foot' }, save, cancel), note, h('p', { class: 'small muted' }, h('a', { href: '#/request/adhoc' }, N.ui.changeMoreLink), ' — ' + N.ui.changeMore)));
+      setApp(head('pending', st), h('section', { class: 'layer change-date', id: 'change-date-page' }, h('span', { class: 'eyebrow' }, N.ui.changeDateTitle), h('h2', { class: 'layer-title' }, title), h('p', { class: 'current' }, N.ui.changeCurrentDate + '：' + (current ? dayOf(current) : '未設日期')), h('div', { class: 'date-row' }, h('label', { for: 'change-date' }, N.ui.changePickDate), input), ownerBox, h('p', { class: 'guide' }, isTarget ? N.ui.changeTargetHint : N.ui.changeTaskHint), h('div', { class: 'foot' }, save, cancel), note, h('p', { class: 'small muted' }, h('a', { href: '#quick-input' }, N.ui.changeMoreLink), ' — ' + N.ui.changeMore)));
     }).catch(function (error) { fail(error); });
   }
 
@@ -359,7 +368,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     return h('div', { class: 'foot q-help-line' }, button, note);
   }
 
-  /* ---------- 待決事項（Founder Desk 首頁） ---------- */
+  /* ---------- 待決事項（首頁） ---------- */
   function trRow(state, label, sub) {
     return h('li', null, h('span', { class: 'tr-ic ' + state }, state === 'done' ? '✓' : state === 'failed' ? '✕' : state === 'running' ? '…' : '○'),
       h('span', null, label, sub ? h('span', { class: 'tr-sub' }, sub) : null));
@@ -435,32 +444,122 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     var openDate = h('button', { type: 'button', class: 'btn', id: 'next-reschedule', hidden: !!draft.rescheduleOpen, onclick: function () { saveDraft('rescheduleOpen', true); reschedule.hidden = false; saveDate.hidden = false; openDate.hidden = true; reschedule.focus(); } }, N.ui.actionReschedule);
     return h('section', { class: 'layer accent', id: 'next-action', 'data-state': next.staleDate ? 'overdue' : 'open' }, h('span', { class: 'eyebrow' }, N.ui.nextActionTitle), h('h2', { class: 'layer-title' }, N.fix(next.text)),
       h('p', { class: 'small muted' }, [next.milestone, next.date ? N.t('nextActionDate', { d: dayOf(next.date) }) : '', next.staleDate ? N.t('nextActionOverdue', { d: dayOf(next.date) }) : ''].filter(Boolean).join(' · ')), readyLine,
-      h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'next-done', onclick: function () { try { sessionStorage.setItem('crewzero-event-prefill', JSON.stringify({ text: next.text, date: isoDay(new Date()) })); } catch (e) { } location.hash = '#/request/event'; } }, N.ui.actionDone),
+      h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'next-done', onclick: function () { openTell('event', { text: next.text, date: isoDay(new Date()) }); } }, N.ui.actionDone),
         openDate, reschedule, saveDate, h('button', { type: 'button', class: 'btn', id: 'next-cancel', onclick: function () { founderOp('cancelNext', 'nextAction'); } }, N.ui.actionCancel)));
   }
-  function quickInput() {
-    var kind = V.quickKind || '', text = h('textarea', { id: 'quick-text', rows: '3', maxlength: '4000', placeholder: N.ui.quickInputPlaceholder, 'aria-label': N.ui.quickInputTitle }), note = h('p', { class: 'small muted', id: 'quick-note', 'aria-live': 'polite' }), date = h('input', { class: 'in', type: 'date', id: 'quick-date', value: isoDay(new Date()), 'aria-label': N.ui.eventDate }), files = h('input', { type: 'file', id: 'quick-files', multiple: true, 'aria-label': N.ui.eventFiles }), eventFields = h('div', { class: 'foot', id: 'quick-event-fields' }, date, files);
+  /* ---------- 告訴 Zero 一件事（0.40.0）：首頁一個盒，三個選項；取代「寫下新情況」及三個交要求表格 ---------- */
+  var TELL = { event: ['tellEventWhat', 'tellEventAfter', 'quickEvent', 'tellLabelEvent', 'tellPhEvent', 'tellAfterEvent'], adhoc: ['tellAdhocWhat', 'tellAdhocAfter', 'quickAdhoc', 'tellLabelAdhoc', 'tellPhAdhoc', 'tellAfterAdhoc'], order: ['tellOrderWhat', 'tellOrderAfter', 'quickOrder', 'tellLabelOrder', 'tellPhOrder', 'tellAfterOrder'] };
+  var GOOGLE_LINK = /^https:\/\/(?:docs|drive)\.google\.com\/[^\s]+$/i;
+  // 按目前認證的 AI 工具顯示「和 Zero 討論」的正確打法；未能判斷就三種都列出
+  function discussCmd(st) {
+    var c = st && st.cert;
+    function pick(s) { s = String(s || '').toLowerCase(); return /claude/.test(s) ? N.ui.discussClaude : /codex/.test(s) ? N.ui.discussCodex : /agy|antigravity/.test(s) ? N.ui.discussAgy : ''; }
+    return (c && (pick(c.label) || pick(c.host))) || N.ui.discussAll;
+  }
+  // 由首頁以外的地方（例如「已完成」）打開盒並選好類型、預填內容
+  function openTell(kind, preset) {
+    V.quickKind = kind; V.tellFiles = []; V.tellLinks = [];
+    V.quickText = preset && preset.text || ''; V.quickDate = preset && preset.date || '';
+    V.hubDirty = !!V.quickText;
+    if (location.hash === '#/' || location.hash === '') showHub(); else location.hash = '#/';
+  }
+  function tellBox(st, c, home) {
+    var U = N.ui;
+    if (!c.confirmed) {
+      return h('section', { class: 'layer', id: 'quick-input', 'data-gate': 'overview' }, h('span', { class: 'eyebrow' }, U.intakeTitle), h('h2', { class: 'layer-title' }, U.quickInputTitle),
+        h('p', { class: 'guide', id: 'tell-gate' }, U.tellNeedOverview),
+        h('div', { class: 'foot' }, h('a', { class: 'btn primary', id: 'tell-gate-go', href: c.ready ? '/proofread.html' : '#/intake' }, c.ready ? U.goConfirm : U.goIntake)));
+    }
+    var kind = V.quickKind || '', files = V.tellFiles = V.tellFiles || [], links = V.tellLinks = V.tellLinks || [];
+    var intents = h('div', { class: 'intents', id: 'tell-intents', role: 'group', 'aria-label': U.quickInputTitle }), form = h('div', { class: 'tell-form', id: 'tell-form', hidden: !kind }), buttons = {};
+    var text = h('textarea', { id: 'quick-text', rows: '4', maxlength: '4000' }), date = h('input', { class: 'in', type: 'date', id: 'quick-date', value: V.quickDate || (st && st.today) || isoDay(new Date()), 'aria-label': U.eventDate });
+    var label = h('label', { for: 'quick-text', id: 'tell-label' }), dateRow = h('div', { id: 'quick-event-fields' }, h('label', { for: 'quick-date' }, U.eventDate), date);
+    var picker = h('input', { type: 'file', id: 'quick-files', multiple: true, 'aria-label': U.tellFiles }), fileList = h('ul', { class: 'attach-list', id: 'tell-file-list' });
+    var linkIn = h('input', { class: 'in', type: 'url', id: 'quick-link', placeholder: U.tellLinkPlaceholder, 'aria-label': U.tellLinkLabel, maxlength: '300' }), linkList = h('ul', { class: 'attach-list', id: 'tell-link-list' });
+    var note = h('p', { class: 'small muted', id: 'quick-note', 'aria-live': 'polite' }), after = h('p', { class: 'after-line', id: 'tell-after' });
     text.value = V.quickText || '';
-    var dirty = function () { V.hubDirty = !!text.value.trim() || !!(files.files && files.files.length); };
+    function dirty() { V.hubDirty = !!text.value.trim() || files.length > 0 || links.length > 0; }
     text.addEventListener('input', function () { V.quickText = text.value; dirty(); });
-    files.addEventListener('change', dirty);
-    var labels = { event: N.ui.quickEvent, adhoc: N.ui.quickAdhoc, order: N.ui.quickOrder, help: N.ui.quickHelp }, buttons = {};
-    function choose(next) { kind = next; V.quickKind = next; Object.keys(buttons).forEach(function (k) { buttons[k].className = 'btn' + (k === kind ? ' cur' : ''); buttons[k].setAttribute('aria-pressed', k === kind ? 'true' : 'false'); }); eventFields.hidden = kind !== 'event'; }
-    var types = Object.keys(labels).map(function (k) { buttons[k] = h('button', { type: 'button', class: 'btn', id: 'quick-' + k, 'aria-pressed': 'false', onclick: function () { choose(k); } }, labels[k]); return buttons[k]; });
-    choose(kind);
-    var send = h('button', { type: 'button', class: 'btn', id: 'quick-send', onclick: function () {
-      var value = text.value.trim(); if (!kind) { toast(N.ui.quickNeedType); return; } if (!value) { toast(N.ui.quickNeedText); text.focus(); return; }
-      send.disabled = true; note.textContent = N.ui.sending;
-      var sentKind = kind, picked = kind === 'event' ? Array.prototype.slice.call(files.files || []) : [];
-      Promise.all(picked.map(function (file) { return new Promise(function (ok, no) { var reader = new FileReader(); reader.onload = function () { ok({ name: file.name, data: String(reader.result).replace(/^data:[^,]*,/, '') }); }; reader.onerror = no; reader.readAsDataURL(file); }); })).then(function (attachments) { return post('/api/intake', sentKind === 'event' ? { kind: 'note', type: sentKind, text: value, date: date.value, files: attachments } : sentKind === 'help' ? { kind: 'note', type: sentKind, text: value, context: { page: 'pending' } } : { kind: 'note', type: sentKind, text: value }); }).then(function (result) {
-        text.value = ''; files.value = ''; V.quickText = ''; V.quickKind = ''; V.hubDirty = false; kind = ''; choose(''); send.disabled = false;
-        // 送出後短暫保留等待提示，之後首頁照常更新，回覆會列在「AI 的解釋」或待決事項
-        V.hubWatching = Date.now() + (sentKind === 'help' ? 90000 : 20000);
-        if (sentKind === 'help') { if (V.status && V.status.ai && V.status.ai.ready === false) note.textContent = N.ui.helpSentNoAI; else DESK.watchHelp(result.id, note); }
-        else note.replaceChildren(N.ui.quickReceived, ' ', h('a', { class: 'btn link', href: '#/request/' + sentKind, onclick: function () { RQ.sent = { type: sentKind, id: result.id }; } }, N.ui.quickTrack));
+    date.addEventListener('input', function () { V.quickDate = date.value; });
+    function drawFiles() {
+      fileList.replaceChildren();
+      files.forEach(function (f, k) { fileList.append(h('li', null, h('span', { class: 'attach' }, f.name), ' ', h('button', { type: 'button', class: 'btn link', onclick: function () { files.splice(k, 1); drawFiles(); dirty(); } }, U.tellRemove), h('span', { class: 'att-note' }, N.fileJudge(f.name)))); });
+    }
+    function drawLinks() {
+      linkList.replaceChildren();
+      links.forEach(function (u, k) { linkList.append(h('li', null, h('span', { class: 'attach g' }, clip(u, 60)), ' ', h('button', { type: 'button', class: 'btn link', onclick: function () { links.splice(k, 1); drawLinks(); dirty(); } }, U.tellRemove))); });
+    }
+    picker.addEventListener('change', function () { Array.prototype.forEach.call(picker.files || [], function (f) { if (!files.some(function (x) { return x.name === f.name && x.size === f.size; })) files.push(f); }); picker.value = ''; drawFiles(); dirty(); });
+    function addLink() {
+      var u = linkIn.value.trim(); if (!u) return;
+      if (!GOOGLE_LINK.test(u)) { note.textContent = U.tellLinkBad; linkIn.focus(); return; }
+      if (links.indexOf(u) < 0) links.push(u); linkIn.value = ''; note.textContent = ''; drawLinks(); dirty();
+    }
+    linkIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addLink(); } });
+    function choose(next) {
+      kind = next; V.quickKind = next;
+      Object.keys(buttons).forEach(function (k) { buttons[k].className = 'intent' + (k === kind ? ' cur' : ''); buttons[k].setAttribute('aria-pressed', k === kind ? 'true' : 'false'); });
+      form.hidden = !kind; if (!kind) return;
+      var t = TELL[kind]; label.textContent = U[t[3]]; text.placeholder = U[t[4]]; after.textContent = U[t[5]]; text.setAttribute('aria-label', U[t[3]]); dateRow.hidden = kind !== 'event';
+    }
+    Object.keys(TELL).forEach(function (k) {
+      var t = TELL[k];
+      buttons[k] = h('button', { type: 'button', class: 'intent', id: 'quick-' + k, 'aria-pressed': 'false', onclick: function () { choose(k); try { text.focus(); } catch (e) { } } }, h('b', null, U[t[2]]), h('span', null, U[t[0]]), h('span', { class: 'after' }, U[t[1]]));
+      intents.append(buttons[k]);
+    });
+    var send = h('button', { type: 'button', class: 'btn primary big', id: 'quick-send', onclick: function () {
+      var value = text.value.trim();
+      if (!kind) return;
+      if (!value && !files.length && !links.length) { toast(U.tellNeedEventText); text.focus(); return; }
+      if (kind !== 'event' && !value) { toast(U.tellNeedEventText); text.focus(); return; }
+      if (kind === 'event' && !parseDay(date.value)) { toast(U.eventDate); date.focus(); return; }
+      send.disabled = true; note.textContent = U.sending;
+      var sentKind = kind, picked = files.slice(), body = value, linkLines = links.map(function (u) { return T('tellLinkLine', { u: u }); });
+      if (linkLines.length) body = (body ? body + '\n\n' : '') + linkLines.join('\n');
+      Promise.all(picked.map(function (file) { return new Promise(function (ok, no) { var reader = new FileReader(); reader.onload = function () { ok({ name: file.name, data: String(reader.result).replace(/^data:[^,]*,/, '') }); }; reader.onerror = no; reader.readAsDataURL(file); }); })).then(function (attachments) {
+        // 只附文件、不寫字：走文件這條路（後台本來就是同一條事件路）
+        var onlyFiles = sentKind === 'event' && !value && !linkLines.length && attachments.length;
+        return post('/api/intake', onlyFiles ? { kind: 'note', type: 'doc', text: '', files: attachments } : sentKind === 'event' ? { kind: 'note', type: 'event', text: body, date: date.value, files: attachments } : { kind: 'note', type: sentKind, text: body, files: attachments });
+      }).then(function (result) {
+        V.sent = { id: 'in-' + result.id, type: sentKind, text: value, files: picked.map(function (f) { return f.name; }), links: links.slice(), at: localIso(new Date()) };
+        text.value = ''; V.quickText = ''; V.quickKind = ''; V.quickDate = ''; V.tellFiles = []; V.tellLinks = []; V.hubDirty = false; send.disabled = false;
+        files.length = 0; links.length = 0; drawFiles(); drawLinks(); choose('');
+        V.hubWatching = Date.now() + 20000;
+        note.replaceChildren(U.tellReceived, ' ', h('a', { class: 'btn link', id: 'quick-track', href: '#/feedback/' + 'in-' + result.id }, U.inFeedback));
       }).catch(function (e) { send.disabled = false; note.textContent = why(e); });
-    } }, N.ui.quickSend);
-    return h('section', { class: 'layer', id: 'quick-input' }, h('h2', { class: 'layer-title' }, N.ui.quickInputTitle), h('div', { class: 'foot', id: 'quick-types' }, types), text, eventFields, h('div', { class: 'foot' }, send), note);
+    } }, U.tellSend);
+    var cancel = h('button', { type: 'button', class: 'btn', id: 'quick-cancel', onclick: function () { text.value = ''; V.quickText = ''; files.length = 0; links.length = 0; drawFiles(); drawLinks(); dirty(); choose(''); } }, U.tellCancel);
+    form.append(label, text, dateRow, h('label', { for: 'quick-files' }, U.tellFiles), picker, fileList,
+      h('label', { for: 'quick-link' }, U.tellLinkLabel), h('div', { class: 'tell-links' }, linkIn, h('button', { type: 'button', class: 'btn', id: 'quick-link-add', onclick: addLink }, U.tellLinkAdd)), linkList, h('p', { class: 'link-hint', id: 'tell-link-hint' }, U.tellLinkHint),
+      after, h('div', { class: 'foot' }, send, cancel));
+    choose(kind); drawFiles(); drawLinks();
+    // 最近交給 Zero 的事：資料由伺服器提供（不靠頁面記憶）；狀態標籤、摘要、按鈕全部取自 inputStatus 的結果
+    var list = (home && home.inputs) || [];
+    var recent = h('div', { id: 'recent-inputs' }, h('h4', { class: 'tools-label', style: 'margin-top:14px' }, U.recentTitle),
+      list.length ? h('ul', { class: 'recent', id: 'recent-list' }, list.map(function (v) { return recentRow(v); })) : h('p', { class: 'empty' }, U.recentNone),
+      home && home.inputsTotal > list.length ? h('p', { class: 'small' }, h('a', { href: '/dashboard/inputs', id: 'recent-all' }, U.recentAll)) : null);
+    return h('section', { class: 'layer', id: 'quick-input' }, h('span', { class: 'eyebrow' }, U.intakeTitle), h('h2', { class: 'layer-title' }, U.quickInputTitle),
+      h('p', { class: 'guide', id: 'tell-intro' }, U.tellIntro), intents, form, note,
+      h('p', { class: 'help-line', id: 'tell-discuss' }, T('tellDiscuss', { cmd: discussCmd(st) })), h('p', { class: 'help-line', id: 'tell-help' }, U.tellHelpLine), recent);
+  }
+  // 現在開工：按鈕旁固定寫明這次會做甚麼（資料由伺服器 /api/home 的 runNow 提供）
+  function runPreview(home) {
+    var r = home && home.runNow, U = N.ui; if (!r) return null;
+    var lines = [];
+    if (r.unread) lines.push(T('runPreviewUnread', { n: r.unread }));
+    lines.push(r.next ? T(r.unread ? 'runPreviewDaily' : 'runPreviewDailyOnly', { t: r.next }) : U[r.unread ? 'runPreviewGeneric' : 'runPreviewGenericOnly']);
+    var btn = h('button', { type: 'button', class: 'btn primary', id: 'run-now', disabled: r.canRun ? null : true, onclick: function () {
+      btn.disabled = true;
+      post('/api/setup', { action: 'runNow' }).then(function () { toast(U.runNowSent); V.hubWatching = Date.now() + 8000; setTimeout(showHub, 1200); }, function (e) { btn.disabled = false; toast(why(e)); });
+    } }, U.runNow);
+    return h('div', { class: 'run-preview', id: 'run-preview' }, h('b', null, U.runPreviewTitle), h(lines.length > 1 ? 'ol' : 'ul', null, lines.map(function (x) { return h('li', null, x); })),
+      h('div', { class: 'foot' }, btn, h('span', { class: 'small muted', id: 'run-now-note' }, r.stopped || (r.busy ? U.runNowBusy : r.noAI ? N.dash.blockNoAI : U.runNowNote))));
+  }
+  function recentRow(v) {
+    var s = v.status, acts = h('div', { class: 'acts' });
+    if (s.button === 'answer' && v.packId) acts.append(h('a', { class: 'btn primary', href: '#/ask/' + v.packId, 'data-answer': v.id }, T('answerN', { n: Math.min(3, s.open) })));
+    acts.append(h('a', { class: 'btn', href: '#/feedback/' + v.id, 'data-feedback': v.id }, N.ui.inFeedback));
+    return h('li', { 'data-input': v.id, 'data-state': s.code }, DESK.inputTag(v), h('div', { class: 'tt' }, h('b', null, DESK.inputTitle(v), v.source === 'chat' ? [' ', tag(N.ui.inFromChat, 'mine')] : null), h('small', null, DESK.inputLine(v))), acts);
   }
   // 輪詢重畫前先檢查：輸入中、有未送出內容或等待回覆時不重畫，否則會清走正在輸入的字及等待狀態
   function hubPoll() {
@@ -506,7 +605,9 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           if (rn.state === 'waiting') return trRow('waiting', clip(label, 70), dayOf(rn.startedAt) + ' ' + hm(rn.startedAt) + ' · ' + N.ui.aiNotSet + '：設定完成後將自動繼續');
           return trRow(rn.state === 'done' ? 'done' : rn.state === 'failed' ? 'failed' : 'running', clip(label, 70), sub);
         })) : h('p', { class: 'guide' }, '暫無。'),
+        runPreview(home),
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/log' }, N.ui.allLog)),
+        // 即時微動畫
         // 即時微動畫：讀回心跳、下次 AI 開工倒數、今日 AI 啟動、用時、費用（共用殼每秒重算）
         DESK.aiTele());
       var practiceCard = h('section', { class: 'layer', id: 'practice-card' }, h('span', { class: 'eyebrow' }, N.ui.yourActions + ' · ' + N.ui.practice),
@@ -527,7 +628,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var intakeLink = !c.ready ? h('p', { class: 'small muted' }, h('a', { href: '#/intake' }, N.ui.goIntake)) : null;
       var kept = [].map.call(document.querySelectorAll('#app details[id][open]'), function (d) { return d.id; });
       V.hubDirty = !!String(V.quickText || '').trim(); V.hubWatching = false;
-      setApp(head('pending', st), aiBlock(st), main, next, DESK.feedbackPrompt(st, asks), quietToday, others, snoozedCard, brainLine, sinceRow(home), quickInput(), intakeLink, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard, aiCard,
+      setApp(head('pending', st), aiBlock(st), main, next, DESK.feedbackPrompt(st, asks), quietToday, others, snoozedCard, brainLine, sinceRow(home), tellBox(st, c, home), intakeLink, aiCard, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
       // 慶祝只是加分項：讀不到慶祝程式也要照常顯示頁面
       if (window.SOS_CELEBRATE) window.SOS_CELEBRATE.handle(st, { allowed: function () { return location.hash === '#/' || location.hash === ''; } });
@@ -540,79 +641,104 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     }).catch(function (e) { fail(e); });
   }
 
-  /* ---------- 交要求：經收件匣交 AI 擬成問題包（答咗先生效） ---------- */
-  var RQ = { sent: null, timer: null };
-  function showRequest(type) {
-    clearTimeout(RQ.timer);
-    Promise.all([get('/api/status'), get('/api/dashboard').catch(function () { return { milestones: [] }; })]).then(function (r) {
-      var st = r[0], dash = r[1]; V.status = st; checkInstance(st);
-      var isOrder = type === 'order', isEvent = type === 'event', title = isOrder ? N.ui.reqOrder : isEvent ? N.ui.reqEvent : N.ui.reqAdhoc;
-      DESK.title('pending', title);
-      if (!st.company || !st.company.ready) {
-        setApp(head('request', st), h('section', { class: 'layer block', id: 'req-nocompany' }, h('span', { class: 'eyebrow' }, title),
-          h('div', { class: 'row' }, h('div', null, h('div', { class: 't' }, N.ui.reqNoCompany), h('div', { class: 'small muted' }, '提交資料並由 Zero 擬定公司概覽後，方可提交要求。')),
-            h('a', { class: 'btn primary', href: '#/intake' }, N.ui.goIntake))));
-        return;
-      }
-      var mine = RQ.sent && RQ.sent.type === type ? RQ.sent : null;
-      var run = mine ? st.runs.filter(function (x) { return x.kind === 'note' && x.ref === mine.id; })[0] : null;
-      var route = (dash.milestones || []).filter(function (m) { return m.pathStatus === 'confirmed' || (m.pathStatus === 'proposed' && !m.branchFrom); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
-      var routeBox = isOrder && route.length ? h('section', { class: 'layer' }, h('span', { class: 'eyebrow' }, N.ui.route),
-        h('ol', { class: 'm-sum', id: 'req-route' }, route.map(function (m) { return h('li', null, m.short + (m.targetDate ? '（' + dayOf(m.targetDate) + '）' : '')); }))) : null;
-      var preset = null;
-      if (isEvent) try { preset = JSON.parse(sessionStorage.getItem('crewzero-event-prefill') || 'null'); } catch (e) { }
-      var ta = h('textarea', { id: 'req-text', rows: '4', maxlength: '4000', 'aria-label': title,
-        placeholder: isOrder ? '例：牌照與保險須於任何送貨前辦妥；另想新增一站「廚師試食會」。' : isEvent ? '例：與甲公司的陳經理會面，對方答應介紹兩間餐廳，並約定下星期再談分帳。' : '例：請擬一張聖誕節餐廳推廣單張，下星期五前交付。' });
-      try { ta.value = preset && typeof preset.text === 'string' ? preset.text : localStorage.getItem('startup-os-req-' + type) || ''; } catch (e) { }
-      ta.addEventListener('input', function () { try { localStorage.setItem('startup-os-req-' + type, ta.value); } catch (e) { } });
-      // 真實事件：日期由你揀（預設今日），可附證明文件（對方書面回覆、會議紀錄、收據）
-      var evDate = isEvent ? h('input', { type: 'date', id: 'req-date', class: 'in', 'aria-label': N.ui.eventDate, value: preset && parseDay(preset.date) ? preset.date : st && st.today || isoDay(new Date()) }) : null;
-      var evFiles = isEvent ? h('input', { type: 'file', id: 'req-files', multiple: true, 'aria-label': N.ui.eventFiles }) : null;
-      var form = h('section', { class: 'layer', id: 'req-form' }, h('span', { class: 'eyebrow' }, N.ui.reqTitle), h('h2', { class: 'layer-title' }, title),
-        h('p', { class: 'guide' }, isOrder ? '請用一兩句說明想如何調整：哪一站提前、哪一站押後，或想新增哪一站（以及發生甚麼事才算完成）。Zero 會擬成一條問題，經你確認後路線才會更改；未確認則一切不變。'
-          : isEvent ? '請寫下公司以外發生了甚麼事：與哪個機構哪一位、對方說了或做了甚麼。Zero 會按此擬定證據級及站點進度的確認問題，每項經你確認後才會生效；未確認則一切不變。'
-          : '請用一兩句說明需要 Zero 做甚麼、交付甚麼、何時需要。此工作不屬於任何里程碑，只計產出，不計業務進展。Zero 會先擬定範圍供你確認，確認後才開始，完成後會請你驗收。'),
-        ta, h('p', { class: 'small muted' }, '可使用系統語音輸入。'),
-        isEvent ? h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, h('label', { for: 'req-date' }, N.ui.eventDate + '：'), evDate) : null,
-        isEvent ? h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, h('label', { for: 'req-files' }, N.ui.eventFiles + '：'), evFiles) : null,
-        h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/' }, N.ui.backPending),
-          h('button', { type: 'button', class: 'btn primary big', id: 'req-send', onclick: function () { sendRequest(type, ta, evDate, evFiles); } }, N.ui.reqSend)));
-      setApp(head('request', st), aiBlock(st), mine ? requestTrack(mine, run) : null, mine ? null : form, routeBox);
-      if (mine && !(run && (run.state === 'done' || run.state === 'failed'))) RQ.timer = setTimeout(function () { if (location.hash === '#/request/' + type) showRequest(type); }, 2500);
+  /* ---------- 回饋卡（0.40.0）：每一件交給 Zero 的事一張卡，由上而下最多五步；資料來自伺服器，不靠頁面記憶。
+     #/feedback/<編號> 是正式網址；舊網址 #/request/event、adhoc、order 照用：顯示該類最近一件的回饋卡，沒有就回首頁並選好該類型。
+     顯示哪幾步由 inputStatus 的 steps 決定（見 docs/evidence/v0400-ui-2026-11-07/status-table.md），這裏不另行判斷狀態。 ---------- */
+  var FB = { timer: null };
+  function showFeedback(id, legacyType) {
+    clearTimeout(FB.timer);
+    var lookup = id ? get('/api/input?id=' + encodeURIComponent(id)).then(function (j) { return j.input; }, function (e) { if (e.status === 404) return null; throw e; })
+      : get('/api/home').then(function (hm) {
+        var m = (hm.inputs || []).filter(function (x) { return legacyType === 'event' ? (x.via === 'event' || x.via === 'doc') : x.via === legacyType; })[0];
+        return m ? get('/api/input?id=' + encodeURIComponent(m.id)).then(function (j) { return j.input; }) : null;
+      });
+    Promise.all([get('/api/status'), lookup]).then(function (r) {
+      var st = r[0], v = r[1]; V.status = st; checkInstance(st);
+      DESK.title('pending', N.ui.fbCrumb);
+      if (!v && !id && legacyType) { V.quickKind = legacyType; location.replace('#/'); return; }
+      var sent = V.sent && V.sent.id === id ? V.sent : null;
+      if (!v && sent) v = pendingView(sent);
+      if (!v) { setApp(head('request', st), h('section', { class: 'layer', id: 'fb-missing' }, h('span', { class: 'eyebrow' }, N.ui.fbEyebrow), h('p', null, N.ui.fbNotFound), h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '#/' }, N.ui.fbBack)))); return; }
+      setApp(head('request', st), aiBlock(st), feedbackCard(v, st));
+      var s = v.status;
+      if ((s.code === 'working' || s.code === 'awaiting')) FB.timer = setTimeout(function () { if (/^#\/(feedback|request)\//.test(location.hash)) showFeedback(id, legacyType); }, 3000);
     }).catch(function (e) { fail(e); });
   }
-  function sendRequest(type, ta, evDate, evFiles) {
-    var text = ta.value.trim();
-    if (!text) { toast(type === 'event' ? '請先寫下發生了甚麼事。' : '請先寫下你的要求。'); ta.focus(); return; }
-    if (evDate && !parseDay(evDate.value)) { toast('請選擇事件日期。'); evDate.focus(); return; }
-    var btn = $('#req-send'); btn.disabled = true; btn.textContent = N.ui.sending;
-    var list = evFiles && evFiles.files ? Array.prototype.slice.call(evFiles.files) : [];
-    Promise.all(list.map(function (f) { return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok({ name: f.name, data: String(r.result).replace(/^data:[^,]*,/, '') }); }; r.onerror = no; r.readAsDataURL(f); }); })).then(function (files) {
-      return post('/api/intake', type === 'event' ? { kind: 'note', type: type, text: text, date: evDate.value, files: files } : { kind: 'note', type: type, text: text });
-    }).then(function (j) {
-      try { localStorage.removeItem('startup-os-req-' + type); } catch (e) { }
-      if (type === 'event') try { sessionStorage.removeItem('crewzero-event-prefill'); } catch (e) { }
-      RQ.sent = { type: type, id: j.id }; toast(N.ui.reqSent); showRequest(type);
-    }).catch(function (e) { btn.disabled = false; btn.textContent = N.ui.reqSend; toast('未能提交：' + why(e)); });
+  // 剛送出、伺服器還沒登記：只顯示第 1 步
+  function pendingView(sent) {
+    return { id: sent.id, via: sent.type, source: 'web', receivedAt: sent.at, date: '', title: '', summary: '', packId: '', said: sent.text, qa: [], effects: [], unreadable: [], linkErrors: [], read: null, reason: '',
+      files: (sent.files || []).map(function (n, k) { return { n: k, name: n, openable: false, hasText: false, url: '', readOn: '', gkind: '', convert: '' }; }),
+      status: { code: 'working', steps: ['received', 'read'], open: 0, total: 0, answered: 0, legacy: false, textless: !sent.text, source: 'web', packGone: false, applying: false, aiWaiting: false }, __local: true };
   }
-  function requestTrack(mine, r) {
-    var rows = r ? (r.steps || []).map(function (s) { return { label: N.fix(s.label), state: s.state, sub: s.detail }; })
-      : [{ label: N.ui.stepReqReceived, state: 'done' }, { label: N.ui.stepQueued, state: 'running' }];
-    var state = r ? r.state : 'running';
-    var asks = r && r.result && r.result.asks || [];
-    var card = h('section', { class: 'track' + (state === 'failed' ? ' bad' : state === 'waiting' ? ' off' : ''), id: 'req-track', 'aria-live': 'polite' },
-      h('span', { class: 'eyebrow' }, N.ui.track),
-      h('h3', null, state === 'done' ? (asks.length ? 'Zero 已擬定問題，待你確認' : N.ui.trackDone) : state === 'failed' ? N.ui.trackFailed : state === 'waiting' ? N.ui.aiNotSet : N.ui.trackRunning),
-      h('ol', { class: 'tr-steps' }, rows.map(function (x) { return trRow(x.state, x.label, x.sub); })));
-    if (state === 'waiting') add(card, waitingNote(r));
-    if (state === 'failed') card.append(h('p', null, failReason(r.error)), h('div', { class: 'foot' },
-      h('button', { type: 'button', class: 'btn primary', id: 'req-retry', onclick: function () { post('/api/retry', { runId: r.id }).then(function () { toast('已請 Zero 重新處理'); RQ.sent.id = r.ref; setTimeout(function () { showRequest(mine.type); }, 800); }, retryCatch); } }, N.ui.retry)), failureHelp(r, mine.type === 'order' ? N.ui.reqOrder : mine.type === 'event' ? N.ui.reqEvent : N.ui.reqAdhoc));
-    if (state === 'done' && r.result && r.result.summary && mine.type === 'event') card.append(h('p', { id: 'req-summary' }, N.fix(r.result.summary)));
-    if (state === 'done' && r.result && r.result.unreadable && r.result.unreadable.length) card.append(h('ul', { class: 'small', id: 'req-unread' }, r.result.unreadable.map(function (u) { return h('li', null, T('unreadFileLine', { f: u.file, r: N.unreadReason(u.file) })); })));
-    if (state === 'done') add(card, asks.length ? h('div', { class: 'foot' }, h('a', { class: 'btn primary big', id: 'req-answer', href: '#/ask/' + asks[0].id }, '★ ' + T('answerN', { n: Math.min(3, asks[0].count) })))
-      : [h('p', null, '已記錄。'), DESK.nextBlock(V.status && V.status.openAsks, { primary: true })]);
-    return card;
+  function fbStep(n, state, title, body) {
+    return h('li', { 'data-step': title }, h('span', { class: 'fb-ic ' + state, 'aria-hidden': 'true' }, String(n)), h('div', { class: 'fb-body' }, h('h4', null, title), body));
   }
+  function convertCode(f) { return f.convert === 'encrypted' ? 'encrypted' : f.convert === 'too-big' ? 'too-big' : f.convert === 'corrupt' ? 'corrupt' : ''; }
+  function feedbackCard(v, st) {
+    var U = N.ui, s = v.status, n = 0, rows = [], typeName = v.via === 'adhoc' ? U.reqAdhoc : v.via === 'order' ? U.reqOrder : v.via === 'debrief' ? U.inTyDebrief : U.reqEvent;
+    var title = v.title ? DESK.inputTitle(v) : typeName + (v.date ? '（' + dayOf(v.date) + '）' : '') + (v.said ? '：' + clip(v.said, 50) : '');
+    var head2 = h('p', { class: 'small muted', id: 'fb-meta' }, T('fbSentAt', { t: fmtWhen(v.receivedAt) }), ' · ', v.files.length ? T('inFilesN', { n: v.files.length }) : U.fbNoAttach, ' ', DESK.inputTag(v), v.source === 'chat' ? [' ', tag(U.inFromChat, 'mine')] : null);
+    // 1 已收到
+    // 原話：讀得到封存筆記就顯示原文；舊紀錄讀不到時用標題內的一句；只附文件才寫「沒有文字」
+    var said = v.said || (v.via !== 'doc' && v.title ? DESK.inputTitle(v).replace(/^[^：]*：/, '') : '');
+    var rec = [said ? h('p', { class: 'q', id: 'fb-said' }, '「' + said + '」') : s.textless && v.via === 'doc' ? h('p', { class: 'q', id: 'fb-said' }, U.inTextless) : null,
+      v.source === 'chat' ? h('p', { class: 'small', id: 'fb-from-chat' }, U.inFromChat) : null, v.files.length || v.linkErrors.length ? DESK.attachList(v, { reread: true }) : null];
+    rows.push(fbStep(++n, 'done', U.fbS1, rec));
+    // 2 Zero 讀了甚麼
+    if (s.steps.indexOf('read') >= 0) {
+      var body = [];
+      if (s.code === 'working') body.push(h('p', null, U.fbWaitRead));
+      else if (s.code === 'failed') {
+        body.push(h('p', null, U.fbFailedRead + failReason(s.error)), h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'fb-retry', onclick: function () { post('/api/retry', { runId: s.runId }).then(function () { toast(U.fbRetryAsked); setTimeout(function () { showFeedback(v.id); }, 800); }, retryCatch); } }, U.inRetry)));
+      } else {
+        var sum = (v.read && v.read.summary) || v.summary;
+        body.push(h('p', { id: 'fb-read-summary' }, sum ? N.fix(sum) : s.legacy ? U.inOldNote : U.fbReadDefault));
+        if (v.mentioned && v.mentioned.length) body.push(h('p', { id: 'fb-mentioned' }, T('peopleMentioned', { list: v.mentioned.map(function (x) { return x.name; }).join('、') })));
+        if (sum && s.legacy) body.push(h('p', { class: 'small', id: 'fb-old-note' }, U.inOldNote));
+        if (v.read && v.read.highlights.length) body.push(h('p', { class: 'q' }, h('b', null, U.fbHighlights)), h('ul', { id: 'fb-highlights' }, v.read.highlights.map(function (x) { return h('li', null, x.text, x.page !== '' ? T('fbPage', { p: x.page }) : ''); })));
+        if (v.files.length) body.push(h('ul', { id: 'fb-file-read', class: 'small' }, v.files.map(function (f) {
+          var un = v.unreadable.filter(function (u) { return u.file === f.name; })[0] || (f.convert && f.convert !== 'ok' && f.convert !== 'legacy' ? { file: f.name } : null) || (f.convert === 'legacy' ? { file: f.name } : null);
+          return h('li', null, un ? T('unreadFileLine', { f: f.name, r: N.unreadReason(f.name, convertCode(f)) }) : f.name + '：' + U.fbAttRead);
+        })));
+      }
+      rows.push(fbStep(++n, s.code === 'working' ? 'now' : s.code === 'failed' ? 'bad' : 'done', U.fbS2, body));
+    }
+    // 3 要你確認甚麼
+    if (s.steps.indexOf('confirm') >= 0) {
+      var cb = [];
+      if (v.qa.length) cb.push(h('ul', { id: 'fb-qa' }, v.qa.map(function (q) { return h('li', null, q.ask, q.answer ? ' — ' + T('fbAnswerYou', { a: q.answer }) : q.suggest ? ' — ' + T('fbSuggest', { a: q.suggest }) : ' — ' + U.fbNotAnswered); })));
+      if (s.open === 0 && v.confirmedAt) cb.push(h('p', null, T('fbConfirmedAt', { t: fmtWhen(v.confirmedAt) })));
+      if (s.open > 0 && v.packId) cb.push(h('div', { class: 'foot' }, h('a', { class: 'btn primary', id: 'fb-answer', href: '#/ask/' + v.packId }, T('answerN', { n: Math.min(3, s.open) }))));
+      // 沒有問題包的紀錄（例如討論來的結論直接記入）沒有「要你確認」一步，不畫空步驟
+      if (cb.length) rows.push(fbStep(++n, s.code === 'awaiting' ? 'now' : 'done', U.fbS3, cb));
+      if (s.code === 'awaiting' && (v.via === 'adhoc' || v.via === 'order')) rows.push(fbStep(++n, 'off', U.fbSAfter, h('p', null, v.via === 'adhoc' ? U.fbAfterAdhoc : U.fbAfterOrder)));
+    }
+    // 4 確認後改變了甚麼
+    if (s.steps.indexOf('changed') >= 0) {
+      var changed = v.effects.filter(function (e) { return e.targetKind !== 'followUp'; }), follow = v.effects.filter(function (e) { return e.targetKind === 'followUp'; });
+      var items = changed.map(function (e) {
+        return h('li', { class: e.before && e.after ? 'chg' : null }, N.fix(e.text), e.before && e.after ? [': ', h('s', null, e.before), ' → ', h('em', null, e.after)] : null, e.href ? [' ', h('a', { class: 'link', href: e.href }, U.fbOnPath)] : null);
+      }).concat(follow.map(function (e) { return h('li', { class: 'chg', 'data-followup': e.targetId }, T('fbFollowUp', { d: dayOf(e.dueAt), t: N.fix(e.text) })); }));
+      rows.push(fbStep(++n, 'done', U.fbS4, [h('ul', { id: 'fb-changes' }, items), h('p', null, U.fbRecorded)]));
+    }
+    // 5 沒有影響的原因
+    if (s.steps.indexOf('why') >= 0) {
+      var miss = h('div', { class: 'miss', id: 'fb-miss', hidden: true }), ta = h('textarea', { id: 'fb-miss-text', rows: '2', maxlength: '1000', 'aria-label': U.fbMissedLabel }), go = h('button', { type: 'button', class: 'btn primary', id: 'fb-miss-send' }, U.fbMissedSend), msg = h('p', { class: 'small muted', 'aria-live': 'polite' });
+      miss.append(h('label', { for: 'fb-miss-text' }, U.fbMissedLabel), ta, go, msg);
+      go.addEventListener('click', function () {
+        var extra = ta.value.trim(); if (!extra) { ta.focus(); return; }
+        go.disabled = true; msg.textContent = U.sending;
+        var base = v.said || '';
+        post('/api/intake', v.via === 'adhoc' || v.via === 'order' ? { kind: 'note', type: v.via, text: (base ? base + '\n' : '') + T('fbMissedPrefix', { t: extra }) } : { kind: 'note', type: 'event', text: (base ? base + '\n' : '') + T('fbMissedPrefix', { t: extra }), date: v.date || isoDay(new Date()), files: [] })
+          .then(function (j) { V.sent = { id: 'in-' + j.id, type: v.via === 'doc' ? 'event' : v.via, text: extra, files: [], at: localIso(new Date()) }; location.hash = '#/feedback/in-' + j.id; }, function (e) { go.disabled = false; msg.textContent = why(e); });
+      });
+      var lnk = h('button', { type: 'button', class: 'btn link', id: 'fb-miss-open', onclick: function () { miss.hidden = false; lnk.hidden = true; ta.focus(); } }, U.fbMissed);
+      rows.push(fbStep(++n, 'done', U.fbS5, [h('p', { id: 'fb-reason' }, h('b', null, U.fbReason.replace('{r}', '')), v.reason || U.eventNoChange), lnk, miss]));
+    }
+    return h('section', { class: 'layer accent' + (s.code === 'updated' ? ' ok' : ''), id: 'fb-card', 'data-input': v.id, 'data-state': s.code }, h('span', { class: 'eyebrow' }, U.fbEyebrow), h('h2', { class: 'layer-title' }, title), head2,
+      h('ol', { class: 'fb-steps' }, rows), h('div', { class: 'foot' }, h('a', { class: 'btn', id: 'fb-back', href: '#/' }, U.fbBack)));
+  }
+  function fmtWhen(iso) { return dayOf(iso) + ' ' + hm(iso); }
 
   /* ---------- 情景演練：準備 → 對打 → 覆盤 → 會面卡 → 會後紀錄；每次練習留紀錄，可以重跑 ---------- */
   var LV = { easy: '友善', normal: '一般', hard: '難應付' };
@@ -930,7 +1056,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
           return h('button', { type: 'button', class: 'chip' + (DT.level === k ? ' on' : ''), 'data-level': k, onclick: function () { DT.level = k; [].forEach.call(document.querySelectorAll('[data-level]'), function (b) { b.classList.toggle('on', b.getAttribute('data-level') === k); }); } }, DLV[k]);
         })),
         h('dl', { class: 'kv', style: 'margin-top:14px' }, h('dt', null, N.ui.debateFormat), h('dd', null, T0.format + '：' + (T0.format === '全場' ? '藍方 → 紅方 → 藍方反駁 → 裁判' : '藍方 → 紅方 → 裁判')),
-          h('dt', null, N.ui.debateCost), h('dd', null, '約 ' + nAI + ' 次 Zero 處理（辯論 ' + T0.passes + ' 次，轉強及再攻 3 次）；每次通常需時數分鐘，完成後會在營運監察台逐幕呈現')),
+          h('dt', null, N.ui.debateCost), h('dd', null, '約 ' + nAI + ' 次 Zero 處理（辯論 ' + T0.passes + ' 次，轉強及再攻 3 次）；每次通常需時數分鐘，完成後會在生意大腦逐幕呈現')),
         h('div', { class: 'foot' }, h('a', { class: 'btn', href: '#/debate' }, N.ui.debateBack), h('button', { type: 'button', class: 'btn primary big', id: 'dt-start', onclick: function (e) {
           if (!title.value.trim()) { toast('請用一句話寫下題目。'); title.focus(); return; }
           e.target.disabled = true;
@@ -979,7 +1105,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
         km.length ? h('ul', { class: 'm-sum', id: 'dm-moments' }, km.map(function (k) { return h('li', null, tag(DD['km_' + ({ '一擊倒下': 'fall', '最傷': 'top', '盲點': 'blind', '反轉': 'flip', '漏咗嘅路': 'missed' }[k.kind])] || k.kind), ' ', k.text); })) : null,
         (m.blindAttacks || []).length ? h('div', { id: 'dm-blind-attacks' }, h('b', null, DD.km_unmentioned), h('ul', { class: 'm-sum' }, m.blindAttacks.map(function (a) { return h('li', null, typeof a === 'string' ? a : a.text || a.attack || '', a.persona ? '（' + a.persona + '）' : ''); }))) : null,
         s ? h('ul', { class: 'm-sum', id: 'dm-cards' }, s.cards.map(function (c) { return h('li', null, tag(DD['h_' + ({ '修正': 'fix', '反轉做優勢': 'flip', '先驗證': 'test', '接受並監察': 'watch' }[c.handling])] || c.handling), ' ', tag(DD['cs_' + ({ '擬議': 'proposed', '已採用': 'adopted', '已改處理': 'changed', '唔採用': 'rejected' }[c.status])] || c.status, c.status === '已採用' ? 'mine' : ''), ' ', clip(c.critique, 50), c.reattacks.length ? '（再攻：' + verdictL(c.reattacks[c.reattacks.length - 1].verdict) + '）' : '', (c.test.aiChecked || []).length ? ' · Zero 已查 ' + c.test.aiChecked.length + ' 項' : c.test.testBy === 'ai' ? ' · Zero 未查' : ''); })) : null,
-        running && !debateEta ? h('p', { class: 'guide' }, 'Zero 處理中，完成後會自動更新；你可先到營運監察台查看逐幕呈現。') : null,
+        running && !debateEta ? h('p', { class: 'guide' }, 'Zero 處理中，完成後會自動更新；你可先到生意大腦查看逐幕呈現。') : null,
         h('div', { class: 'foot', style: 'justify-content:flex-start;flex-wrap:wrap' }, act, h('a', { class: 'btn', href: stageHref(id), id: 'dm-stage' }, N.ui.debateStage + ' ↗'), h('a', { class: 'btn', href: '#/debate' }, N.ui.debateAll))));
       // 做緊嘢就密啲更新；等你嘅時候都更新（例如喺另一頁答咗問題）
       DM.timer = setTimeout(function () { if (location.hash === '#/debate/' + id) showDebateMatch(id); }, running || sent ? 2500 : 5000);
@@ -1558,7 +1684,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     intakeQuestionsNow().forEach(function (q) { var ta = $('#q' + q.n); if (ta) d['q' + q.n] = ta.value; });
     draftSave(d);
     post('/api/intake', { kind: 'note', type: 'ideate', text: d.q1 || '' }).then(function () { IN.err = ''; return zeroThinkPoll(); })
-      .catch(function (e) { IN.err = why(e); renderFiles(); if (b) b.disabled = false; });
+      .catch(function (e) { IN.err = String(why(e)).split(N.ui.discussAll).join(discussCmd(V.status)); renderFiles(); if (b) b.disabled = false; });   // 公司概覽已就緒的回覆寫有三種打法：按目前認證的工具只顯示一種
   }
   var intakeTexts = new WeakMap();
   function intakeNames(text) {

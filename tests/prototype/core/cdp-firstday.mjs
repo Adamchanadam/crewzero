@@ -53,7 +53,7 @@ try {
   ok('需要幫助可打開', await ev(`!!document.querySelector('[role=dialog]')`));
   await go('/#/intake'); await shot('fd-new.png');
   await go('/dashboard');
-  ok('監察台第一天的進度回到 Founder Desk', await ev(`document.querySelector('#first-steps [aria-current=step]')?.getAttribute('href')===' /#/intake'.trim() && !document.querySelector('.desk-nav')`));
+  ok('監察台第一天的進度回到 CrewZero', await ev(`document.querySelector('#first-steps [aria-current=step]')?.getAttribute('href')===' /#/intake'.trim() && !document.querySelector('.desk-nav')`));
 
   write(statusFile, run('running'));
   await go('/#/intake');

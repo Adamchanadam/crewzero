@@ -56,4 +56,4 @@ try {
 }
 say('CrewZero 已安裝完成，其他資料沒有改動。');
 say('下一步可登記每日排程，再設定 AI 工具。');
-say('以後在 AI 對話說「打開 Founder Desk」，便可再次打開。');
+say('以後在 AI 對話說「打開 CrewZero」，便可再次打開；想先和 Zero 討論，說「和 Zero 討論」。');
