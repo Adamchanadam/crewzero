@@ -3,10 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { certifyDirect, seedCompany, usePass } from '../lib/testkit.mjs';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
+const NAMES = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const BASE = `http://127.0.0.1:${PORT}`, DATA = path.join(OUT, 'data');
 const WELCOME_SEEN = path.join(DATA, 'founder', 'desk', 'welcome-seen.json');
@@ -74,7 +76,7 @@ try {
   const certRoot = certHealth && await root(CERT_BASE);
   await cdp.go(CERT_BASE + '/welcome', 1440, 1700);
   const certButton = await cdp.ev(`(()=>{var e=document.querySelector('[data-welcome-setup]');return e?{text:e.textContent,href:e.getAttribute('href')}:null})()`);
-  ok('已認證但未看過入門頁：/ 不轉向；按鈕改為「回到 Founder Desk」', certRoot && certRoot.status === 200 && certButton && certButton.text === '回到 Founder Desk' && certButton.href === '/', { status: certRoot && certRoot.status, certButton });
+  ok('已認證但未看過入門頁：/ 不轉向；按鈕改為「回到待決事項」（名稱表）', certRoot && certRoot.status === 200 && certButton && certButton.text === NAMES.ui.backDesk && certButton.href === '/', { status: certRoot && certRoot.status, certButton });
 
   const COMPANY_DATA = path.join(OUT, 'company-data'), COMPANY_PORT = Number(PORT) + 2, COMPANY_BASE = `http://127.0.0.1:${COMPANY_PORT}`;
   seedCompany(COMPANY_DATA, TEST_PROTO);

@@ -23,11 +23,11 @@ export function seedCompany(DATA, PROTO, file = 'sample-company-page.js') {
 // 經系統設定介面認證測試 AI；回傳最後狀態
 export async function certify(BASE, host = 'test') {
   const origin = BASE.replace(/\/$/, '');
-  const r = await fetch(origin + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ action: 'certify', host }) });
+  const r = await fetch(origin + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ action: 'certify', host }), signal: AbortSignal.timeout(30000) });
   if (r.status !== 202) throw new Error('certify start ' + r.status);
   for (let i = 0; i < 120; i++) {
     await sleep(500);
-    const s = await (await fetch(origin + '/api/setup')).json();
+    const s = await (await fetch(origin + '/api/setup', { signal: AbortSignal.timeout(30000) })).json();
     if (s.certify && s.certify.state !== 'running') return s;
   }
   throw new Error('certify timeout');
@@ -55,10 +55,10 @@ export async function pair(BASE) {
   let up = false;
   for (let i = 0; i < 240 && !up; i++) { try { up = (await fetch(origin + '/api/health', { signal: AbortSignal.timeout(1000) })).ok; } catch { } if (!up) await sleep(250); }
   if (!up) throw new Error('伺服器未起：' + origin);
-  const r = await fetch(origin + '/api/pass/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'desk', noOpen: true }) });
+  const r = await fetch(origin + '/api/pass/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'desk', noOpen: true }), signal: AbortSignal.timeout(30000) });
   const j = await r.json();
   if (!r.ok || !j.link) throw new Error('測試實例未回傳一次性連結：' + r.status + ' ' + JSON.stringify(j));
-  const x = await fetch(origin + j.link, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36 crewzero-test' } });
+  const x = await fetch(origin + j.link, { redirect: 'manual', signal: AbortSignal.timeout(30000), headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36 crewzero-test' } });
   const m = /^(sos_pass_[a-f0-9]{32})=([a-f0-9]{64})/.exec(x.headers.get('set-cookie') || '');
   if (x.status !== 302 || !m) throw new Error('兌換失敗：' + x.status);
   return { name: m[1], value: m[2] };

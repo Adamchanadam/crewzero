@@ -34,7 +34,10 @@ function done(extra) {
 }
 function ready(p) {
   const T = { by: 'ai', until: '2026-11-20', test: '測試：問對方' };
-  p.glance.rows.splice(1, 0, { id: 'g2', plan: 'G2', label: '下一個檢查期', kind: 'text', value: '四星期內：兩個農場書面答覆是否供貨', origin: 'ai', tentative: T },
+  const day28 = new Date(Date.now() + 28 * 86400000), iso28 = day28.getFullYear() + '-' + String(day28.getMonth() + 1).padStart(2, '0') + '-' + String(day28.getDate()).padStart(2, '0');
+  // 照格式：短期目標（G2）帶獨立期限（due），內容不寫日期
+  p.glance.rows.splice(1, 0, { id: 'g2', plan: 'G2', label: '下一個檢查期', kind: 'text', value: '兩個農場書面答覆是否供貨', origin: 'ai', tentative: T,
+    due: { id: 'g2-due', plan: 'G2.endsOn', label: '短期目標檢查日', kind: 'date', value: iso28, origin: 'ai' } },
     { id: 'g3', plan: 'G3', label: '怎樣才算有進展', kind: 'text', value: '有農場簽供應協議', origin: 'ai', tentative: T });
   p.glance.rows.push({ id: 'g6', plan: 'G6', label: '已有人負責的事', kind: 'text', value: '送貨：表哥（已確定）', origin: 'ai', tentative: T },
     { id: 'g9', plan: 'G9', label: '產品或服務的要求與特色', kind: 'text', value: '每箱註明農場來源', origin: 'ai', tentative: T });
@@ -136,6 +139,8 @@ if (type === 'work' && outputMode === 'agy') {
     ...(outputMode === 'jsonl' ? { permission_denials: [], commandExecutions: denialList.filter(d => d.tool_input?.file_path).map(d => ({ command: `cmd /c echo escaped> \"${d.tool_input.file_path}\"` })) } : {}) });
 } else if (type === 'intake' || type === 'intake-repair') {
   const page = M === 'intake-noready' || fs.existsSync('noready') ? farmPage() : ready(farmPage());
+  // g2-nodue：不合規的公司概覽（短期目標沒有期限欄、句首寫日期）；第一次及修正那一次都這樣交
+  if (M === 'g2-nodue') { const g2 = page.glance.rows.find(r => r.plan === 'G2'), d = new Date(Date.now() + 28 * 86400000); delete g2.due; g2.value = '至 ' + d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日：' + g2.value; }
   if (M === 'intake-platform') { page.detail ||= {}; page.detail.reading = [{ id: 'biz-type', plan: 'biz.type', label: '生意類型', kind: 'choice', value: '平台或配對', origin: 'ai' }]; }
   if (M === 'intake-noready') fs.writeFileSync('noready', '1');
   if (type === 'intake' && M === 'intake-bad') delete page.path;
@@ -183,7 +188,10 @@ if (type === 'work' && outputMode === 'agy') {
   if (a) items.push({ kind: 'assumption', id: a.id, grade: 'did', why: '對方答應介紹餐廳並約定再談，屬對方採取的實際行動。' });
   if (m) items.push({ kind: 'milestone', id: m.id, done: true, why: '會面已舉行並有會後紀錄，符合這一站的完成標準。' });
   if (M === 'event-next') items.push({ kind: 'nextAction', text: '測試：與對方約定下次會面', milestoneId: (L.milestones.find(x => !x.done && x.id !== (m && m.id)) || {}).id, why: '測試理由：會面已舉行，下一步是約下次會面。' });
-  const ev = { summary: '測試 AI：' + said, grade: 'did', items: M === 'event-none' ? [] : items };
+  const OFFICE_EV = /\.(docx?|pptx?|xlsx?)$/i;
+  const looseName = f => 'files/' + f.replace(/\.[^.]+$/, e => e.toUpperCase()), loose = /-loose$/.test(M);
+  const unreadable = [...(fs.existsSync('files') ? fs.readdirSync('files') : []).filter(f => OFFICE_EV.test(f)).map(f => ({ file: loose ? looseName(f) : f, reason: loose ? 'Word 檔目前讀唔到' : M === 'event-unread-longreason' ? '長'.repeat(90) : '測試：Word／PowerPoint／Excel 檔目前讀不到' })), ...(M === 'event-unread-bogus' ? [{ file: '不是這次附件的檔案.docx', reason: '虛構' }] : [])];
+  const ev = { summary: '測試 AI：' + said, grade: 'did', items: M === 'event-none' || /^event-unread/.test(M) ? [] : items, ...(unreadable.length ? { unreadable } : {}) };
   if (type === 'event' && M === 'event-bad') ev.items = [{ kind: 'assumption', id: 'H99', grade: 'great' }];
   fs.writeFileSync('out/event.json', JSON.stringify(ev, null, 2));
   done();
@@ -244,7 +252,11 @@ if (type === 'work' && outputMode === 'agy') {
     q4: e,
     q5: d2 && d2.lines[0] ? { text: d2.lines[0], quote: true, source: d2.f, at: '第一段' } : d1 && d1.lines[1] ? { text: d1.lines[1], quote: true, source: d1.f, at: '第二段' } : e
   };
-  fs.writeFileSync('out/prefill.json', M === 'prefill-bad' ? '{"answers": 3' : JSON.stringify({ answers: ans }, null, 2));
+  const OFFICE = /\.(docx?|pptx?|xlsx?)$/i, unread = /^prefill-unread/.test(M);
+  const looseName = f => 'files/' + f.replace(/\.[^.]+$/, e => e.toUpperCase()), loose = /-loose$/.test(M);
+  const unreadable = [...fs.readdirSync('files').filter(f => OFFICE.test(f)).map(f => ({ file: loose ? looseName(f) : f, reason: loose ? 'Word 檔目前讀唔到' : '測試：Word／PowerPoint／Excel 檔目前讀不到' })), ...(M === 'prefill-unread-bogus' ? [{ file: '不是這次交入的檔案.docx', reason: '虛構' }] : [])];
+  const blank = { q1: e, q2: e, q3: e, q4: e, q5: e, q6: e, q7: e, q8: e };
+  fs.writeFileSync('out/prefill.json', M === 'prefill-bad' ? '{"answers": 3' : JSON.stringify({ answers: unread ? blank : ans, ...(unreadable.length ? { unreadable } : {}) }, null, 2));
   done();
 } else if (type === 'checkup') {
   // 生意體檢：揀頭兩條仲係假設級嘅假設做弱位；摘要寫明考慮咗幾多條意見。模式：checkup-bad 交錯格式；checkup-new 最便宜測試換新字（測試更新規則）

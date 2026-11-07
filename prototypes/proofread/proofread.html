@@ -46,14 +46,35 @@
 .tag.miss{border:1px dashed rgba(242,162,158,.75);color:var(--red)}
 .tag.deep{background:rgba(131,141,158,.12);color:var(--amber);border:1px dashed rgba(131,141,158,.75)}
 .tag.flag{border-color:var(--amber);color:var(--amber);background:rgba(232,141,79,.08)}
-.rows{display:flex;flex-direction:column}
-.row{padding:12px 0;border-top:1px solid var(--line)}
-.row:first-child{border-top:0;padding-top:4px}
+.rows{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+/* 每項一個區塊：標題（欄名＋狀態）→ 內容 → 日期 → 附註；修改與否左邊都對齊（左邊條位置固定） */
+.row{border:1px solid var(--line);border-left:3px solid transparent;border-radius:12px;padding:12px 14px 12px 12px;background:rgba(255,255,255,.018)}
+.row.flagged{border-left-color:var(--amber)}
+.row.edited{border-left-color:var(--mint)}
+.row.conflict{border-left-color:var(--red)}
+.row-date .rd-h.late{color:var(--red)}
+.row-head{display:flex;gap:6px 10px;align-items:center;flex-wrap:wrap}
+.row-name{font-size:var(--fs-body);font-weight:650;color:var(--text);line-height:1.4}
+.row-body{padding-left:24px}
+.row-body > .ed > .ed-val{font-size:var(--fs-body)}
+.row-chips{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row-body > .ed{margin-top:2px}
+.row .ed-val.edited,.status .ed-val.edited{box-shadow:none;padding-left:8px}
+.row-date{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.09);font-size:var(--fs-sub);color:var(--muted)}
+.row-date .rd-k{color:var(--text);font-weight:600}
+.row-date .rd-v{color:var(--text);font-size:var(--fs-body)}
+.row-date .ed{display:contents}
+.row-date .ed-val{display:inline-block;font-size:var(--fs-body);padding:2px 8px;margin:0 0 0 -6px}
+.row-date .panel{flex:1 1 100%}
+.row-note{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;font-size:var(--fs-label);color:var(--muted)}
+.row-note .orig{text-decoration:line-through;text-decoration-color:rgba(156,163,179,.5)}
+.row-sub{font-size:var(--fs-sub);color:var(--wait);margin-top:8px}
 .row-label{font-size:var(--fs-sub);color:var(--muted);margin-bottom:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.row-sub{font-size:var(--fs-sub);color:var(--wait);margin-top:4px}
 .row-due{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:var(--fs-sub);color:var(--muted);margin:2px 0 4px}
 .row-due .ed{flex:1 1 auto}
 .row-due .ed.compact .ed-val,.row-due .ed.compact .ed-val.edited{margin-left:0}
+.notice.conflict{border-left-color:var(--red);margin:0 0 12px}
+.tag.auto{border-color:rgba(194,214,250,.7);color:var(--blue)}
 .p-date{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .p-date input[type=date]{font:var(--fs-sub) var(--ui);color:var(--text);background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:7px;height:32px;padding:0 8px}
 .p-date input[type=date]:focus{outline:2px solid var(--mint);outline-offset:1px}
@@ -87,9 +108,9 @@ textarea{min-height:72px;resize:vertical}
 textarea:focus,.note-in:focus{outline:2px solid var(--mint);outline-offset:1px}
 .p-hint{font-size:var(--fs-label);color:var(--muted);margin-top:3px}
 .p-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.status{margin-top:6px;border-top:1px solid var(--line);padding-top:12px}
-.prepared{font-size:var(--fs-sub);margin:6px 0 4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.prepared .ok{color:var(--mint)}
+.status{margin-top:12px;border:1px solid var(--line);border-left:3px solid transparent;border-radius:12px;padding:12px 14px 12px 12px;background:rgba(255,255,255,.018)}
+.prepared{font-size:var(--fs-sub);margin:6px 0 4px;display:block}
+.prepared .ok{color:var(--mint);margin-right:6px}
 .st-list{display:flex;flex-direction:column;margin-top:6px}
 .st-item{display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;align-items:center;padding:7px 0;border-top:1px dashed rgba(255,255,255,.06)}
 /* 狀態（唔可以撳）：實心色塊；動作（要撳）：方角框按鈕。兩者唔可以似 */
@@ -222,6 +243,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   .prog-top .cbar-txt{display:none}
   .ed-val{padding:8px 8px}
   .ed-val.pill{padding:8px 12px}
+  .row,.status{padding:12px 12px 12px 10px}
+  .row-body{padding-left:14px}
+  .row-date .ed-val{padding:8px 8px}
   .map{display:none}
   .station{padding:12px 12px 12px 4px}
   .handle{width:36px;font-size:var(--fs-title)}
@@ -259,7 +283,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var N = window.SOS_NAMES, T = N.t, DESK = window.SOS_DESK;
-  var D = null, REG = {}, SRC = {}, S = null, HASH = '', FLAGFIELD = null;
+  var D = null, REG = {}, SRC = {}, S = null, HASH = '', FLAGFIELD = null, OPENING = {};
 
   /* ---------- 小工具 ---------- */
   function $(s, r) { return (r || document).querySelector(s); }
@@ -293,7 +317,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function isoDay(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function parseDay(s) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
-    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+    if (!m) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);
+    return d.getFullYear() === +m[1] && d.getMonth() === +m[2] - 1 && d.getDate() === +m[3] ? d : null;
   }
   function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
   function quarterEnd(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 0); }
@@ -382,6 +408,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     D = data; REG = {}; SRC = {};
     (D.sources || []).forEach(function (s) { SRC[s.id] = s; });
     walk(D);
+    OPENING = openingIds(D);
     FLAGFIELD = null;
     for (var id in REG) if (REG[id].flagTo) { FLAGFIELD = REG[id]; break; }
     buildQuestions();
@@ -396,7 +423,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       edits: {}, drafts: {}, order: D.path.milestones.map(function (m) { return m.id; }),
       openedPath: false, pathOpen: false, detailOpen: false, altOpen: false, note: '',
       confirmed: null, shownAt: new Date(), open: null, focus: null, expanded: {}, restored: false, clearArmed: false,
-      sent: null, server: null, lost: false, ok: {}, kinds: {}
+      sent: null, server: null, srv: /^https?:$/.test(location.protocol) ? 'loading' : 'offline', repaint: false, lost: false, ok: {}, kinds: {}
     };
     restore();
     DESK.title('company', D.company.name);
@@ -460,10 +487,12 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       var x = JSON.parse(raw);
       if (x.edits) for (var id in x.edits) if (REG[id]) S.edits[id] = String(x.edits[id]);
       if (Array.isArray(x.order) && x.order.slice().sort().join() === S.order.slice().sort().join()) S.order = x.order;
-      S.openedPath = !!x.openedPath; S.note = x.note || ''; S.confirmed = x.confirmed || null; S.sent = x.sent || null;
+      S.openedPath = !!x.openedPath; S.note = x.note || ''; S.confirmed = x.confirmed || null; S.sent = x.sent || null;   // 舊草稿的 changedAfter 旗標不再使用：是否修改過只看內容
       if (x.ok) for (var qk in x.ok) if (REG[qk]) S.ok[qk] = true;
       if (x.kinds) for (var mk in x.kinds) if (byId()[mk] && (x.kinds[mk] === 'real' || x.kinds[mk] === 'task')) S.kinds[mk] = x.kinds[mk];
-      S.restored = !S.confirmed && (Object.keys(S.edits).length > 0 || orderChanged());
+      S.restored = !S.confirmed && (Object.keys(S.edits).length > 0 || orderChanged() || kindChanged().length > 0);
+      // 0.39.0 舊草稿（已送出、沒有摘要）：以載入當刻的內容補作基線並存入。其後才作的修改因此受保護，不會被伺服器內容覆蓋
+      if (S.confirmed && S.confirmed.sent && !S.confirmed.digest) { S.confirmed.digest = digestNow(); save(); }
     } catch (e) { /* 草稿壞咗就由頭嚟 */ }
   }
   function clearDraft() {
@@ -473,8 +502,45 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
 
   /* ---------- 狀態計算 ---------- */
-  function cur(id) { return Object.prototype.hasOwnProperty.call(S.edits, id) ? S.edits[id] : String(REG[id].value == null ? '' : REG[id].value); }
+  function cur(id) {
+    if (Object.prototype.hasOwnProperty.call(S.edits, id)) return S.edits[id];
+    var a = autoVal(id);
+    return a != null ? a : String(REG[id].value == null ? '' : REG[id].value);
+  }
   function isEdited(id) { return Object.prototype.hasOwnProperty.call(S.edits, id); }
+  /* ---------- 日期關係（只在畫面層計算，不改 D：D 的版本指紋是未送出草稿的鑰匙） ----------
+     主日期是目前目標期限。短期目標的檢查日不可遲於它：創辦人沒有親自改過的，自動取較早的一個（「隨目前目標期限調整」，
+     不存入草稿，目前目標期限改回後自動撤回）；創辦人親自改的、或舊資料句內的日期遲於它，只提示，不自動改。 */
+  function glanceRow(plan) { var rs = D.glance.rows; for (var i = 0; i < rs.length; i++) if (rs[i].plan === plan) return rs[i]; return null; }
+  function g1Due() { var r = glanceRow('G1'); if (!r || !r.due || !REG[r.due.id]) return ''; var v = cur(r.due.id); return parseDay(v) ? v : ''; }
+  // 期限欄有值才算「有期限」：AI 沒寫期限、或交了空的期限欄，都當沒有期限，改由句首日期顯示
+  function hasDue(r) { return !!(r && r.due && REG[r.due.id] && String(cur(r.due.id)).trim() !== ''); }
+  function g2DueId() { var r = glanceRow('G2'); return r && r.due && REG[r.due.id] ? r.due.id : ''; }
+  function autoVal(id) {
+    if (!id || id !== g2DueId() || isEdited(id)) return null;
+    var g = g1Due(), z = String(REG[id].value == null ? '' : REG[id].value);
+    return g && parseDay(z) && z > g ? g : null;
+  }
+  function isAuto(id) { return autoVal(id) != null; }
+  function dueOwner(id) { var rs = D.glance.rows; for (var i = 0; i < rs.length; i++) if (rs[i].due && rs[i].due.id === id) return rs[i].id; return ''; }
+  // 舊資料：短期目標沒有期限欄，日期寫在句首（「至 2026 年 12 月 4 日：」）；只在畫面抽出顯示，不另設編輯
+  var LEG_ISO = /^\s*(?:至|在|於)?\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*(?:前|之前|止)?\s*[：:，,]\s*/, LEG_ZH = /^\s*(?:至|在|於)?\s*(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(?:前|之前|止)?\s*[：:，,]\s*/;
+  function legacyDate(r) {
+    if (!r || hasDue(r) || r.plan !== 'G2' || !REG[r.id]) return null;
+    var t = cur(r.id), m = LEG_ISO.exec(t) || LEG_ZH.exec(t);
+    if (!m) return null;
+    var y = m[1] ? +m[1] : 0, mo = +m[2], d = +m[3], base = parseDay(D.page.preparedAt) || new Date();
+    if (!y) { y = base.getFullYear(); if (new Date(y, mo - 1, d) < addDays(base, -30)) y++; }
+    var dt = new Date(y, mo - 1, d);
+    if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return { iso: isoDay(dt), rest: t.slice(m[0].length) };
+  }
+  function dateConflict() {
+    var g = g1Due(), r = glanceRow('G2');
+    if (!g || !r) return null;
+    var d2 = hasDue(r) ? cur(r.due.id) : (legacyDate(r) || {}).iso;
+    return d2 && parseDay(d2) && d2 > g ? { d2: d2, g: g } : null;
+  }
   function gradeText(k) { for (var i = 0; i < GRADES.length; i++) if (GRADES[i].key === k) return GRADES[i].text; return ''; }
   function showVal(e, v) { return e.kind === 'grade' ? gradeText(v) : e.kind === 'date' ? fmtDay(v, e.suffix) : v; }
   function all() { return Object.keys(REG).map(function (k) { return REG[k]; }); }
@@ -508,12 +574,43 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var out = [], boxes = ((D.detail && D.detail.rules) || []).some(function (r) { return r.boxes; });
     READY_PLANS.forEach(function (p) { var id = byPlan(p); if (p === 'G7' && !id && boxes) return; if (!id || !String(cur(id)).trim()) out.push(N.field[p]); });
     if (!statusItems().length) out.push(N.field.G4);
+    // 有期限欄而期限為空、句首又抽不出日期：算缺（與 missingList() 一致）
+    D.glance.rows.forEach(function (r) { if (r.due && REG[r.due.id] && !hasDue(r) && !(r.plan === 'G2' && legacyDate(r))) out.push(N.field[r.plan + '.endsOn'] || N.ui.dueDate); });
     return out;
   }
   function cellsOf(m) { return [m.event, m.actor, m.witness, m.proof].map(function (f) { return !!(f && String(cur(f.id)).trim()); }); }
   var CELL_NAMES = [N.field['milestone.event'], N.field['milestone.actor'], N.field['milestone.witness'], N.field['milestone.evidence']];
-  function tentCount() { return all().filter(function (e) { return e.tentative && !isEdited(e.id); }).length; }
-  function missingList() { return all().filter(function (e) { return e.kind !== 'grade' && !cur(e.id); }); }
+  function tentItems() { return all().filter(function (e) { return e.tentative && !isEdited(e.id); }); }
+  function tentCount() { return tentItems().length; }
+  // 核對日只有一種：每項暫定值的到期日，且不遲於目前目標期限
+  function untilOf(e) {
+    var u = e.tentative && e.tentative.until, g = g1Due();
+    if (!parseDay(u)) return '';
+    return g && g < u ? g : u;
+  }
+  // 只有開局答案欄才承諾每週覆核：每個計劃一個欄，概覽內的優先，各站的同計劃欄位（例如各站負責人）不是；
+  // 與後台 company-page-check.mjs 的 openingFields() 同一判斷寫法
+  function openingIds(page) {
+    var out = {};
+    function walk(o) {
+      if (Array.isArray(o)) { o.forEach(walk); return; }
+      if (!o || typeof o !== 'object') return;
+      if (typeof o.id === 'string' && 'value' in o && 'label' in o && /^G(?:10|[1-9])$/.test(String(o.plan || '')) && o.kind !== 'grade' && !out[o.plan]) out[o.plan] = o.id;
+      for (var k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+    }
+    walk(page && page.glance); walk(page && page.detail && page.detail.rules); walk(page);
+    return out;
+  }
+  function isRecheck(e) { return /^G(?:10|[1-9])$/.test(String(e.plan || '')) && e.kind !== 'grade' && OPENING[e.plan] === e.id; }
+  function tentSum(items) {
+    var n = items.length, re = items.filter(isRecheck), ds = re.map(untilOf).filter(Boolean).sort();
+    if (!ds.length) return T('tentNone', { n: n });
+    var same = ds[0] === ds[ds.length - 1];
+    if (re.length === n) return T(same ? 'tentAll' : 'tentMany', { n: n, d: md(ds[0]) });
+    return T(same ? 'tentPart' : 'tentPartMany', { n: n, m: re.length, d: md(ds[0]) });
+  }
+  // 空的短期目標期限欄不算「未有答案」：日期寫在句首時由句子顯示
+  function missingList() { return all().filter(function (e) { return e.kind !== 'grade' && !String(cur(e.id)).trim() && !(e.id === g2DueId() && legacyDate(glanceRow('G2'))); }); }
   function srcText(e) {
     return (e.src || []).map(function (s) {
       var t = SRC[s.from] ? SRC[s.from].title : s.from;
@@ -558,7 +655,6 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function qDom(id) { return id === '@status' ? 'status' : String(id).replace(/[^\w-]/g, '_'); }
   function acceptQ(id) {
     S.ok[id] = true;
-    if (S.confirmed) S.changedAfter = true;
     save();
     S.focus = { sel: '#dq-' + qDom(id) };
     render();
@@ -575,10 +671,205 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     setTimeout(function () { el.classList.remove('flash'); }, 1600);
     el.focus({ preventScroll: true });
   }
+  /* ---------- 確認之後：大掣指向真正的下一步 ----------
+     「已確認」以伺服器為準，不靠這部瀏覽器的紀錄。伺服器的 /api/status 回傳這一頁最近一次確認的內容（company.confirmedSnapshot：
+     值、路線次序、各站真事／工作類別、摘要值）。伺服器每次重新安裝新版公司概覽都會把舊的確認移走，所以快照必定屬於目前這一版。
+
+     「已交付」及「確認後有未送出的修改」都只按內容比較，不靠任何旗標：把目前有效內容、路線次序、各站真事／工作類別算成一個摘要值，
+     與 Zero 已收到的版本的摘要值比較。按「照現狀」、改了又改回已確認的值，內容沒有變，所以不算修改。
+     Zero 已收到的版本：
+       回覆仍在佇列或處理中（inFlight）→ 這部瀏覽器送出當刻的摘要（S.confirmed.digest；伺服器尚未套用，快照是舊的，不採用）
+       否則伺服器對本頁有確認          → 伺服器快照的摘要
+       否則（開啟的是檔案，或伺服器對本頁沒有確認）→ 這部瀏覽器最後確認時存下的摘要（離線確認 doConfirm() 也存，只用於顯示，不作採用基線）
+
+     採用伺服器的內容（adoptSnapshot）只有一個基線：sentDigest()，即 S.confirmed.digest 而且「肯定已在 Zero 那裏」（S.confirmed.sent 為真、沒有 unapplied），
+     存在草稿內（save()），重新載入後仍在。基線代表「這部瀏覽器上次肯定與 Zero 同步時的內容」，只在這些時候移動或失效：
+       一、這部瀏覽器按「確認」送出（doSend()，sent:true，摘要＝送出當刻的內容）；
+       二、每次輪詢時內容等於伺服器快照（內容與 Zero 相同）→ 基線移到快照的摘要（unapplied 隨之消失；還原的未確認草稿＝伺服器確認也在此時變成已確認）；
+       三、這部瀏覽器的回覆套用失敗而伺服器不是相同內容 → S.confirmed.unapplied = true 並存入草稿（送出的內容不在 Zero 那裏，基線失效；
+           sent 不改，所以不會誤顯示「只下載了回覆檔」）。失敗紀錄跌出 /api/status 最近五項後仍然有效；
+       四、0.39.0 舊草稿（sent 為真、沒有摘要）：restore() 載入時以當刻內容補作基線並存入。
+     離線確認 doConfirm()（沒有 sent）只存摘要，用於顯示「確認後有沒有再改」，不是基線：Zero 沒有收到那份內容。
+     內容與快照不同時，是否採用伺服器的內容：
+       有基線：內容等於基線（沒有未送出的修改；按「照現狀」、改了又改回都算沒有修改）→ 採用，基線移到快照的摘要並存入草稿；
+               內容不同於基線（有未送出的修改）→ 保護，伺服器改變也不覆蓋，重新載入後亦然；
+       沒有基線（從未確認、離線確認、或套用失敗而 unapplied）：有任何本機修改就保護，否則採用。
+     採用時由快照推導編輯表、次序及類別，並清空 S.drafts（「收起」後留在記憶體的殘字，不再補回）。
+     創辦人輸入中途（自行填寫框打開、編輯器打開、確認視窗開着、拖動中）、或這部瀏覽器的回覆套用失敗而內容仍與伺服器不同時不採用，等閒下來再採用；
+     輸入中途輪詢只更新進度，不整頁重畫（輸入框保持焦點及文字），大掣及底部列也不改，閒下來重畫時一併更新。
+
+     狀態表（輸入：伺服器對本頁有確認？／內容與 Zero 已收到的版本相同？／回覆狀態；輸出：顯示的內容、是否已交付、大掣、提示）：
+       伺服器狀態未到          │ 本機草稿／Zero 原值 │ 否 │ 按鈕（原有字樣）            │ 中性提示「正在讀取已確認的內容」
+       取得失敗                │ 本機草稿／Zero 原值 │ 否 │ 按鈕                        │ 中性提示「暫時未能讀取已確認的內容」＋離線說明
+       開啟的是檔案（離線）    │ 本機草稿／Zero 原值 │ 否 │ 按鈕                        │ 離線說明（原有）；離線確認過而內容已改 →「你在確認後再作了修改」
+       伺服器對本頁沒有確認    │ 本機草稿／Zero 原值 │ 否 │ 按鈕（首次確認字樣）        │ 無（回覆仍在處理中則以送出當刻的內容為準，見下）
+       回覆仍在佇列或處理中    │ 本機（送出當刻）    │ 內容同送出當刻才算 │ 連結 │ 無；內容已不同於送出當刻 →「你在確認後再作了修改」
+       回覆套用確認失敗（這部瀏覽器送出的那一份）
+         伺服器仍是別的確認  │ 本機（送出的內容）  │ 否 │ 按鈕「再確認一次」          │ 中性字句（內容與 Zero 已收到的不同）＋現有失敗進度卡；不採用舊快照
+         伺服器沒有任何確認  │ 本機（送出的內容）  │ 否 │ 按鈕「再確認一次」          │ 只有失敗進度卡，沒有中性字句（沒有可比較的版本，內容也沒有與誰不同）
+         伺服器其後已有相同內容（例如另一部瀏覽器確認了同一份）
+                               │ 伺服器快照／本機    │ 是 │ 連結「你的下一步」          │ 無；過時的失敗進度卡不再顯示（基線移到快照並存入草稿，unapplied 消失，失敗紀錄 S.sent 清除並存入；與下方「內容與快照相同」同一行）
+       有確認、內容與快照相同（不論有沒有動過手：沒有草稿、照現狀、改了又改回；還原的未確認草稿＝伺服器確認也算）
+                               │ 伺服器快照／本機    │ 是 │ 連結「你的下一步」          │ 無（視為已確認，不顯示「已還原……」及「放棄修改」）
+       有確認、內容與快照不同、內容等於基線（沒有未送出的修改）
+                               │ 伺服器快照          │ 是 │ 連結「你的下一步」          │ 無；採用後等同上一行
+       有確認、內容與快照不同、內容不同於基線（有未送出的修改）
+                               │ 本機                │ 否 │ 按鈕「再確認一次」          │「你在確認後再作了修改」（基線是這部瀏覽器上次與 Zero 同步時的內容）；伺服器改變不覆蓋
+       有確認、內容與快照不同、輸入中途或回覆套用失敗而內容等於基線
+                               │ 本機（暫不採用）    │ 否 │ 按鈕「再確認一次」          │ 中性字句（內容與 Zero 已收到的不同，不斷言誰改過）；閒下來／失敗解除後採用
+       有確認、只差自動調整的日期│ 本機               │ 是 │ 連結                        │ 另一句如實說明檢查日已調整，附「再確認一次」
+       0.39.0 舊草稿（已送出、沒有摘要），內容與快照不同
+                               │ 載入時補基線     │ 同上兩行 │ 同上兩行 │ 載入當刻的內容無從分辨誰改過，以伺服器為準而採用；載入後才作的修改 → 保護（restore() 補基線並存入）
+       離線確認（doConfirm()，沒有 sent）或套用失敗（unapplied），內容與快照不同 │ 本機 │ 否 │ 按鈕「再確認一次」│ 沒有基線：有本機修改就保護（中性字句或「你在確認後再作了修改」），伺服器改變不覆蓋；內容等於快照時才同步
+       還原的未確認草稿，內容與快照不同     │ 本機    │ 否 │ 按鈕「再確認一次」          │「已還原你上次未確認的修改」＋「放棄修改」；有本機修改就不採用 */
+  function serverHas() {
+    var c = S.server && S.server.company;
+    return !!(c && c.confirmed && (!c.confirmedPageId || !D || !D.page || c.confirmedPageId === D.page.id));
+  }
+  // 伺服器已確認的內容（同一頁面編號、同一版次才用）
+  function snapshot() {
+    var c = S.server && S.server.company, s = c && c.confirmedSnapshot;
+    if (!s || !c.confirmed || !D || !D.page || String(s.pageId) !== String(D.page.id)) return null;
+    if (s.revision != null && String(s.revision || 0) !== String(D.page.revision || 0)) return null;
+    return s;
+  }
+  function isConfirmed() { return !!S.confirmed || (serverHas() && !S.restored); }
+  // 目前有效內容、路線次序、各站真事／工作類別，算出一個摘要值（算法同伺服器 ask-lib.mjs 的 confirmedSnapshot()，站編號一律轉成字串）。
+  // 自動調整的日期（頁面按目前目標期限收窄、創辦人沒有親自改）另算一個「不套用自動調整」的摘要，
+  // 任何一個相同都算相同：0.39.0 確認時沒有自動調整，升級後頁面才把檢查日收窄，不可因此當成創辦人的修改。
+  function digestOf(valueOf) {
+    var vals = Object.keys(REG).sort().map(function (id) { return [id, String(valueOf(id))]; });
+    var ks = S.order.slice().sort().map(function (mid) { return [String(mid), kindOf(byId()[mid])]; });
+    return fnv(JSON.stringify([vals, S.order.map(String), ks]));
+  }
+  function digestNow() { return digestOf(cur); }
+  function digestNoAuto() { return digestOf(function (id) { return isAuto(id) ? String(REG[id].value == null ? '' : REG[id].value) : cur(id); }); }
+  function sameAs(d) { return !!d && (digestNow() === d || digestNoAuto() === d); }
+  // 這部瀏覽器最後確認時存下的摘要（離線確認 doConfirm() 也存，只用於顯示「確認後有沒有再改」，不作採用基線）
+  function localDigest() { return S.confirmed && S.confirmed.digest ? String(S.confirmed.digest) : ''; }
+  // 肯定已在 Zero 那裏的摘要（採用判斷的唯一基線）：已送出（sent）、沒有被標記為套用失敗（unapplied）、有摘要。離線確認不是基線
+  function sentDigest() { return S.confirmed && S.confirmed.sent && !S.confirmed.unapplied && S.confirmed.digest ? String(S.confirmed.digest) : ''; }
+  function localChanged() { return Object.keys(S.edits).length > 0 || orderChanged() || kindChanged().length > 0; }
+  // 這部瀏覽器送出的回覆，伺服器還沒套用（仍在佇列，或工作進行中而「套用確認」未完成）：這時伺服器的快照是舊的
+  function inFlight() {
+    if (!S.sent || !S.server) return false;
+    if (queued()) return true;
+    var runs = S.server.runs || [];
+    for (var i = 0; i < runs.length; i++) {
+      if ((runs[i].replyFiles || []).indexOf(S.sent.name) < 0) continue;
+      var ap = (runs[i].steps || []).filter(function (x) { return x.key === 'applied'; })[0];
+      return runs[i].state !== 'failed' && !(ap && ap.state === 'done');
+    }
+    return false;
+  }
+  // 目前內容與伺服器已確認的內容相同（套用失敗之後，另一部瀏覽器確認了同一份，也算 Zero 已收到）
+  function matchesServer() { var snap = snapshot(); return !!snap && sameAs(snap.digest); }
+  // 這部瀏覽器送出的回覆，伺服器套用確認失敗了：伺服器仍是舊的確認，但創辦人送出的內容才是他要的。
+  // 伺服器其後已有相同內容時不算失敗（內容已經在 Zero 那裏）
+  function failedRun() {
+    if (!S.sent || !S.server) return null;
+    var runs = S.server.runs || [];
+    for (var i = 0; i < runs.length; i++) {
+      if ((runs[i].replyFiles || []).indexOf(S.sent.name) < 0) continue;
+      return runs[i].state === 'failed' && failedStep(runs[i]) === 'applied' ? runs[i] : null;
+    }
+    return null;
+  }
+  function applyFailed() { return !!failedRun() && !matchesServer(); }
+  function contentSent() {
+    if (inFlight()) return sameAs(sentDigest());
+    var snap = snapshot();
+    return !!snap && sameAs(snap.digest);
+  }
+  function delivered() {
+    if (!S.server) return false;
+    if (applyFailed()) return false;
+    return contentSent();
+  }
+  // 確認後有未送出的修改：內容與 Zero 已收到的版本不同
+  function unsentAfterConfirm() {
+    if (!isConfirmed()) return false;
+    if (S.server && inFlight()) { var sd = sentDigest(); return !!sd && !sameAs(sd); }
+    if (snapshot()) return !contentSent();
+    var ld = localDigest();
+    return !!ld && !sameAs(ld);
+  }
+  // 可以肯定是「這部瀏覽器確認之後，內容又改了」：草稿有確認時的摘要，而目前內容已不同
+  function changedSinceMyConfirm() { var ld = localDigest(); return !!ld && !sameAs(ld); }
+  // 已交付，只差頁面自動收窄的檢查日：Zero 記錄的是原來的日子
+  function autoGap() {
+    var snap = snapshot();
+    return !!snap && !inFlight() && digestNow() !== snap.digest && digestNoAuto() === snap.digest;
+  }
+  // 創辦人正在輸入：編輯器或自行填寫框打開（輸入框只在打開時存在）、確認視窗開着、拖動進行中。這時不可把頁面內容換成伺服器的新內容，也不整頁重畫。
+  // 「收起」後留在 S.drafts 的字看不見，不算輸入中（採用伺服器的內容時會連同 S.drafts 一併清空）
+  function busyInput() {
+    if (S.open || document.body.classList.contains('is-dragging')) return true;
+    var m = $('#modal-root');
+    return !!(m && m.firstChild);
+  }
+  /* 沒有未送出的修改時，以伺服器已確認的內容作顯示及作答起點（換了瀏覽器、清了瀏覽器資料，或伺服器其後被另一部瀏覽器的確認取代）。
+     由「快照值 ≠ Zero 原值」推導編輯表、次序及類別，令之後再確認的回覆包含全部已確認修改。
+     自動調整的日期（快照的 autoIds）不放進編輯表：它不是創辦人親自改的，由頁面按目前目標期限再算。
+     基線（sentDigest()）只認「肯定已在 Zero 那裏」的內容，存在草稿內（save()），重新載入後仍在。 */
+  function adoptSnapshot() {
+    var snap = snapshot();
+    var same = !!snap && sameAs(snap.digest);
+    // 這部瀏覽器的回覆套用失敗而伺服器不是相同內容：送出的內容不在 Zero 那裏，基線標記為未套用（sent 不變，離線說明不可顯示）。伺服器沒有確認時亦要記
+    if (failedRun() && !same && S.confirmed && S.confirmed.sent && !S.confirmed.unapplied) { S.confirmed.unapplied = true; save(); }
+    if (!snap || inFlight()) return false;
+    if (same) {
+      // 內容與 Zero 已收到的相同：基線只在這時移動（unapplied 隨之消失）。這部瀏覽器套用失敗的那一份已不重要（內容已在 Zero 那裏）
+      var moved = S.restored || !S.confirmed || S.confirmed.digest !== snap.digest || !S.confirmed.sent || !!S.confirmed.unapplied, cleared = false;
+      S.restored = false;
+      if (failedRun()) { S.sent = null; cleared = true; }
+      if (moved) S.confirmed = { at: String(snap.confirmedAt || ''), name: String(snap.replyFile || ''), sent: true, digest: snap.digest };
+      if (moved || cleared) save();
+      return false;
+    }
+    if (busyInput() || applyFailed()) return false;
+    // 採用與否：有基線（肯定已在 Zero 那裏的內容）→ 內容等於基線才採用；沒有基線 → 沒有任何本機修改才採用
+    var ld = sentDigest();
+    if (ld ? !sameAs(ld) : localChanged()) return false;
+    var before = digestNow();
+    var auto = {}, edits = {}, kinds = {};
+    (snap.autoIds || []).forEach(function (id) { auto[id] = true; });
+    Object.keys(REG).forEach(function (id) {
+      if (auto[id] || !Object.prototype.hasOwnProperty.call(snap.values || {}, id)) return;
+      var v = String(snap.values[id] == null ? '' : snap.values[id]);
+      if (v !== String(REG[id].value == null ? '' : REG[id].value)) edits[id] = v;
+    });
+    D.path.milestones.forEach(function (m) {
+      var k = snap.kinds && snap.kinds[m.id];
+      if ((k === 'task' || k === 'real') && k !== (m.kind === 'task' ? 'task' : 'real')) kinds[m.id] = k;
+    });
+    var order = Array.isArray(snap.order) ? snap.order.map(String) : [];
+    var oldEdits = S.edits, oldKinds = S.kinds, oldOrder = S.order;
+    S.edits = edits; S.kinds = kinds; S.drafts = {};
+    if (order.length && order.slice().sort().join() === proposed().slice().sort().join()) S.order = order;
+    if (digestNow() === before) { S.edits = oldEdits; S.kinds = oldKinds; S.order = oldOrder; return false; }
+    S.confirmed = { at: String(snap.confirmedAt || ''), name: String(snap.replyFile || ''), sent: true, digest: snap.digest };
+    S.restored = false;
+    save();
+    return true;
+  }
   function mainLabel() {
     var st = qStats();
-    if (S.confirmed && !S.changedAfter) return '再確認一次';
+    if (isConfirmed() || snapshot()) return N.ui.reconfirm;
     return !st.total || st.done === 0 ? N.ui.adoptStart : st.left ? N.ui.adoptRestStart : N.ui.confirmStart;
+  }
+  // 頂部大掣及底部列共用：只有這一個主要按鈕
+  function mainBtn(id) {
+    if (delivered()) {
+      var ns = DESK.nextStep(S.server.openAsks);
+      return h('a', { class: 'btn primary big', id: id, href: ns.href, 'data-next': ns.n ? 'pending' : 'desk' }, ns.button);
+    }
+    return h('button', { type: 'button', class: 'btn primary big', id: id, onclick: openModal }, mainLabel());
+  }
+  function refreshMain() {
+    var a = $('#go-main');
+    if (a) a.replaceWith(mainBtn('go-main'));
+    renderBar();
   }
 
   /* ---------- 可撳一下改嘅項目 ---------- */
@@ -588,7 +879,6 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (v === String(e.value == null ? '' : e.value)) delete S.edits[id]; else S.edits[id] = v;
     delete S.drafts[key];
     S.open = null; S.focus = { key: key };
-    if (S.confirmed) S.changedAfter = true;
     save(); render();
     announce(isEdited(id) ? '已改：' + e.label : '已還原 Zero 建議：' + e.label);
   }
@@ -597,22 +887,52 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     S.focus = S.open ? { panel: key } : { key: key };
     render();
   }
-  function ed(id, ctx, cls) {
+  // opt.noMeta：附註由呼叫處自行排（每項區塊）；opt.text：畫面顯示的文字（例如抽走句首日期後的餘下文字）
+  function ed(id, ctx, cls, opt) {
     var e = REG[id];
     if (!e) return null;
+    opt = opt || {};
     var key = ctx + '~' + id, v = cur(id), edited = isEdited(id), open = S.open === key;
     var grade = e.kind === 'grade', empty = !grade && !v;
+    var shown = opt.text != null ? opt.text : showVal(e, v);
     var btn = h('button', {
       type: 'button', 'data-k': key, 'aria-expanded': open ? 'true' : 'false',
-      'aria-label': e.label + '：' + (empty ? '未有答案' : showVal(e, v)) + '。按一下修改',
+      'aria-label': e.label + '：' + (empty ? '未有答案' : shown) + '。按一下修改',
       class: 'ed-val' + (grade ? ' pill g-' + v : '') + (empty ? ' empty' : '') + (edited ? ' edited' : ''),
       onclick: function () { toggleEd(key); }
-    }, empty ? N.ui.fillIn : showVal(e, v), grade ? ' ▾' : h('span', { class: 'pen', 'aria-hidden': 'true' }, '✎'));
+    }, empty ? N.ui.fillIn : shown, grade ? ' ▾' : h('span', { class: 'pen', 'aria-hidden': 'true' }, '✎'));
     var wrap = h('div', { class: 'ed' + (cls ? ' ' + cls : ''), 'data-eid': id }, btn);
-    var meta = metaLine(e, v, edited, empty, /\bcompact\b/.test(cls || ''));
+    var meta = opt.noMeta ? null : metaLine(e, v, edited, empty, /\bcompact\b/.test(cls || ''));
     if (meta) wrap.append(meta);
     if (open) wrap.append(panel(e, key));
     return wrap;
+  }
+  // 已作答或已修改：標題已顯示「已答」或「已修改」，不再重複「Zero 建議」出處
+  function seenId(id) { return isEdited(id) || !!S.ok[id] || !!S.ok[dueOwner(id)]; }
+  function tentTitle(e) { return (N.ui['tent_' + e.tentative.by] || N.ui.tent_ai) + '。' + (isRecheck(e) && untilOf(e) ? T('tentWhen', { d: md(untilOf(e)) }) : N.ui.tentPending); }
+  function tentTag(e) { return tag(N.ui.tentative, 'tent', tentTitle(e)); }
+  function autoTag(e) { return tag(N.ui.autoAdjusted, 'auto', T('autoAdjustedTitle', { d: md(e.value) })); }
+  // 附註（未修改時）：出處、暫定、影響、來源；一行版只留短標籤，出處在按開的面板看
+  function noteNodes(e, compact) {
+    var out = [];
+    if (e.kind === 'grade') return out;
+    var seen = seenId(e.id), empty = !cur(e.id);
+    if (compact) {
+      if (e.origin === 'doc') out.push(tag(N.ui.docShort, 'doc', N.ui.fromDoc));
+      else if (e.origin === 'ai') { if (!seen) out.push(tag('Zero', 'ai', N.ui.tent_ai)); }
+      else if (e.origin === 'default') out.push(tag('預設', ''));
+      if (e.tentative && e.tentative.until) out.push(tentTag(e));
+      return out;
+    }
+    if (e.origin === 'doc') out.push(tag(N.ui.fromDoc, 'doc'));
+    else if (e.origin === 'ai') { if (!seen) out.push(tag(N.ui.tent_ai, 'ai')); }
+    else if (e.origin === 'default') out.push(tag('預設', ''));
+    else if (e.origin === 'missing' && !empty) out.push(tag(N.ui.aiUnknown, 'miss'));
+    if (e.tentative && e.tentative.until) out.push(tentTag(e));
+    if (e.effect) out.push(tag(N.ui.nowAfter, 'eff'));
+    var s = srcText(e);
+    if (s) out.push(h('span', null, s));
+    return out;
   }
   function metaLine(e, v, edited, empty, compact) {
     var m = h('div', { class: 'ed-meta' });
@@ -621,23 +941,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       if (!compact) m.append(h('span', { class: 'orig' }, 'Zero：' + clip(showVal(e, e.value) || N.ui.fillShort, 48)));
       return m;
     }
-    if (e.kind === 'grade') return null;
-    if (compact) {
-      // 一行版：只留短標籤，出處喺撳開嘅面板睇
-      if (e.origin === 'doc') m.append(tag(N.ui.docShort, 'doc', N.ui.fromDoc));
-      else if (e.origin === 'ai') m.append(tag('Zero', 'ai', N.ui.tent_ai));
-      else if (e.origin === 'default') m.append(tag('預設', ''));
-      if (e.tentative && e.tentative.until) m.append(tag(N.ui.tentative + ' ' + md(e.tentative.until), 'tent', (N.ui['tent_' + e.tentative.by] || N.ui.tent_ai) + '，' + md(e.tentative.until) + '再詢問你'));
-      return m.childNodes.length ? m : null;
-    }
-    if (e.origin === 'doc') m.append(tag(N.ui.fromDoc, 'doc'));
-    else if (e.origin === 'ai') m.append(tag(N.ui.tent_ai, 'ai'));
-    else if (e.origin === 'default') m.append(tag('預設', ''));
-    else if (e.origin === 'missing' && !empty) m.append(tag(N.ui.aiUnknown, 'miss'));
-    if (e.tentative && e.tentative.until) m.append(tag(N.ui.tentative + ' · ' + md(e.tentative.until) + '再詢問你（' + (N.ui['tent_' + e.tentative.by] || N.ui.tent_ai) + '）', 'tent'));
-    if (e.effect) m.append(tag(N.ui.nowAfter, 'eff'));
-    var s = srcText(e);
-    if (s) m.append(h('span', null, s));
+    var nodes = noteNodes(e, compact);
+    if (isAuto(e.id)) nodes.push(autoTag(e), h('span', { class: 'orig' }, N.ui.aiOrig + '：' + md(e.value)));
+    nodes.forEach(function (n) { m.append(n); });
     return m.childNodes.length ? m : null;
   }
   function panel(e, key) {
@@ -650,7 +956,10 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (e.judge) p.append(h('div', { class: 'p-judge' }, e.judge));
     if (e.why) p.append(h('p', { class: 'p-why' }, h('b', null, N.ui.why + '：'), e.why));
     if (e.test) p.append(h('p', { class: 'p-why' }, h('b', null, '最低成本的測試：'), e.test));
-    if (e.tentative && e.tentative.test) p.append(h('p', { class: 'p-why' }, h('b', null, '到期處理方式：'), e.tentative.test));
+    if (e.tentative) {
+      p.append(h('p', { class: 'p-why' }, h('b', null, N.ui.tentPlanHead + '：'), isRecheck(e) && untilOf(e) ? T('tentWhen', { d: md(untilOf(e)) }) : N.ui.tentPending));
+      if (e.tentative.test) p.append(h('p', { class: 'p-why' }, h('b', null, N.ui.tentTestHead + '：'), e.tentative.test));
+    }
     var src = srcText(e);
     if (src) p.append(h('p', { class: 'p-why' }, h('b', null, '出處：'), src));
     var isDate = e.kind === 'date';
@@ -716,6 +1025,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   /* ---------- 畫面 ---------- */
   function render() {
     var app = $('#app');
+    S.repaint = false;   // 整頁重畫後不再有待重畫（見 poll() 的輸入中途處理）
     var parts = [header(), h('div', { id: 'track', 'aria-live': 'polite' }), notices(), hero(), decideBlock(), restBlock()];
     if (S.fullOpen) parts.push(layer1(), layer2(), layer3());
     parts.push(footer());
@@ -744,23 +1054,23 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
   /* ---------- 第一眼：一個大掣、三張卡、其餘收埋（但直接講內容） ---------- */
   function hero() {
-    var st = qStats(), next = FLAGFIELD ? cur(FLAGFIELD.id) : '';
+    var st = qStats(), next = FLAGFIELD ? cur(FLAGFIELD.id) : '', done = delivered();
     return h('section', { class: 'hero with-scene' },
       h('div', { class: 'scene-bg', 'aria-hidden': 'true' }),
-      h('span', { class: 'eyebrow' }, N.ui.company + ' · ' + N.ui.companyReady),
-      h('h2', { class: 'hero-t' }, st.total ? T('companyHero', { n: st.total }) : N.ui.companyHeroNone),
-      h('p', { class: 'hero-p' }, T('companyHeroNext', { next: next ? '「' + clip(next, 30) + '」' : N.ui.companyHeroNextDefault })),
+      h('span', { class: 'eyebrow' }, N.ui.company + ' · ' + (done ? N.ui.confirmed : N.ui.companyReady)),
+      h('h2', { class: 'hero-t' }, done ? N.ui.companyHeroDone : st.total ? T('companyHero', { n: st.total }) : N.ui.companyHeroNone),
+      h('p', { class: 'hero-p' }, done ? N.ui.companyHeroDoneNote : T('companyHeroNext', { next: next ? '「' + clip(next, 30) + '」' : N.ui.companyHeroNextDefault })),
       h('div', { class: 'hero-act' },
-        h('button', { type: 'button', class: 'btn primary big', id: 'go-main', onclick: openModal }, mainLabel()),
-        st.left ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null));
+        mainBtn('go-main'),
+        st.left && !done ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null));
   }
   function decideBlock() {
     if (!QIDS.length) return null;
     var st = qStats();
     var box = h('section', { class: 'decide', 'aria-labelledby': 'dqt' },
       h('div', { class: 'dq-top' },
-        h('h2', { class: 'layer-title', id: 'dqt' }, T('pendingTitle', { n: st.done, t: st.total })),
-        h('span', { class: 'lt-sum' }, st.left ? '按一下即可選擇；未作答的將按 Zero 建議' : '✓ 已全部作答，可以開始')));
+        h('h2', { class: 'layer-title', id: 'dqt' }, delivered() ? T('pendingTitleDone', { t: st.total }) : T('pendingTitle', { n: st.done, t: st.total })),
+        h('span', { class: 'lt-sum' }, delivered() ? N.ui.pendingSumDone : st.left ? '按一下即可選擇；未作答的將按 Zero 建議' : '✓ 已全部作答，可以開始')));
     QIDS.forEach(function (id, i) { box.append(id === '@status' ? statusCard(i) : optionCard(id, i)); });
     return box;
   }
@@ -784,7 +1094,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (v && !opts.some(function (o) { return o.text === v; })) card.append(h('div', { class: 'dq-custom' }, h('b', null, N.ui.customIs + '：'), v));
     var row = D.glance.rows.filter(function (r) { return r.id === id; })[0];
     var foot = h('div', { class: 'dq-foot' });
-    if (row && row.due) foot.append(h('span', { class: 'row-due' }, h('span', null, '期限'), ed(row.due.id, 'q', 'small compact')));
+    if (row && row.due) foot.append(h('span', { class: 'row-due' }, h('span', null, row.plan === 'G2' ? N.ui.checkDate : N.ui.dueDate), ed(row.due.id, 'q', 'small compact')));
     if (S.open === key) {
       var ta = h('textarea', { rows: '2', placeholder: '自行填寫……（可使用系統語音輸入）', 'aria-label': '自行填寫：' + e.label });
       ta.value = S.drafts[key] != null ? S.drafts[key] : (opts.some(function (o) { return o.text === v; }) ? '' : v);
@@ -855,8 +1165,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (dt.reading) more.push(N.ui.readingTitle);
     if (D.sources && D.sources.length) more.push(N.ui.sourcesName);
     pv.append(h('span', { class: 'rs-line' }, h('b', null, N.ui.more + '：'), more.join('、')));
-    var t = tentCount();
-    if (t) pv.append(h('span', { class: 'rs-line tent-line' }, '當中 ' + t + ' 項為「' + N.ui.tentative + '」' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '起' : '') + '每次最多詢問你 3 條。'));
+    var ti = tentItems();
+    if (ti.length) pv.append(h('span', { class: 'rs-line tent-line' }, tentSum(ti) + '。'));
     return h('section', { class: 'layer rest' + (open ? '' : ' closed'), id: 'rest' },
       h('button', {
         type: 'button', class: 'layer-toggle', id: 'rest-toggle', 'aria-expanded': open ? 'true' : 'false',
@@ -868,10 +1178,19 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
   function notices() {
     var box = h('div');
-    if (S.confirmed && S.changedAfter) {
+    // 伺服器狀態未到或取得失敗：不顯示「已確認」，用中性提示（離線檢視的說明另在進度區）
+    if (S.srv === 'loading') box.append(h('div', { class: 'notice neutral', id: 'snap-note' }, h('span', null, N.ui.snapLoading)));
+    else if (S.srv === 'fail') box.append(h('div', { class: 'notice neutral', id: 'snap-note' }, h('span', null, N.ui.snapUnknown)));
+    if (unsentAfterConfirm()) {
+      // 可以肯定是這部瀏覽器確認之後才改的（草稿有確認時的摘要）才這樣說；舊草稿沒有摘要，無從分辨誰改過，只說內容不同
       box.append(h('div', { class: 'notice' },
-        h('span', null, '你在確認後再作了修改。如需 Zero 按新內容處理，請再按頁底「再確認一次」。')));
-    } else if (S.confirmed && !S.confirmed.sent) {
+        h('span', null, changedSinceMyConfirm() ? N.ui.changedAfterNote : N.ui.differsFromZeroNote)));
+    } else if (autoGap()) {
+      var ai0 = all().filter(function (e) { return isAuto(e.id); })[0];
+      box.append(h('div', { class: 'notice', id: 'auto-gap' },
+        h('span', null, T('autoGapNote', { d: md(ai0 ? cur(ai0.id) : '') })),
+        h('button', { type: 'button', class: 'btn small', id: 'auto-gap-btn', onclick: openModal }, N.ui.reconfirm)));
+    } else if (S.confirmed && !S.confirmed.sent && !serverHas()) {
       box.append(h('div', { class: 'notice' },
         h('span', null, '已確認（' + S.confirmed.at + '），但只下載了回覆檔，Zero 尚未收到。' + N.ui.reopenDesk + '，再於該處打開公司概覽並再次確認，Zero 才會跟進。')));
     } else if (S.restored) {
@@ -890,29 +1209,50 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
 
   function layer1() {
-    var g = D.glance, fm = flagged();
+    var g = D.glance, fm = flagged(), cf = dateConflict();
     var rows = h('div', { class: 'rows' });
-    g.rows.forEach(function (r) {
-      var row = h('div', { class: 'row' },
-        h('div', { class: 'row-label' }, qChip(r.id), r.label, r.flagTo ? tag('⚑ 下一步', 'flag') : null),
-        r.due ? h('div', { class: 'row-due' }, h('span', null, '期限'), ed(r.due.id, 'g', 'small compact')) : null,
-        ed(r.id, 'g'));
-      if (r.flagTo && fm) {
-        var pos = S.order.indexOf(fm.id) + 1;
-        row.append(h('div', { class: 'row-sub' }, '⚑ 對應：第 ' + pos + ' 站「' + fm.short + '」' +
-          (pos !== 1 ? '。此站目前並非排第一，是否正確？' : '')));
-      }
-      rows.append(row);
-    });
+    g.rows.forEach(function (r) { rows.append(rowBlock(r, fm)); });
     var sec = h('section', { class: 'layer', id: 'layer1', 'aria-labelledby': 'l1t' },
       h('span', { class: 'eyebrow' }, N.ui.glanceEyebrow),
       h('h2', { class: 'layer-title', id: 'l1t' }, N.ui.glanceTitle),
       h('p', { class: 'guide' }, '按任何一句均可修改；不作修改則按 Zero 建議。'),
       notReady().length ? h('p', { class: 'notice', id: 'ready-miss' }, N.t('readinessMissing', { list: notReady().join('、') })) : null,
+      cf ? h('p', { class: 'notice conflict', id: 'date-conflict' }, T('dateConflict', { a: md(cf.d2), b: md(cf.g) })) : null,
       tipBox(g.tip), rows);
     if (g.status) sec.append(statusBlock(g.status));
     add(sec, gaps());
     return sec;
+  }
+  // 每項一個區塊：標題（欄名＋狀態標籤）→ 內容 → 日期 → 附註；修改與否左邊對齊
+  function rowBlock(r, fm) {
+    var e = REG[r.id], due = hasDue(r) ? REG[r.due.id] : null, leg = due ? null : legacyDate(r);
+    var emptyDue = !due && !leg && r.due && REG[r.due.id] ? REG[r.due.id] : null; // 空白日期欄：仍可填寫
+    var edited = isEdited(r.id) || !!(due && isEdited(due.id)), auto = !!(due && isAuto(due.id));
+    var key = r.plan === 'G2' ? N.ui.checkDate : N.ui.dueDate, g1 = g1Due();
+    var late = r.plan === 'G2' && !!dateConflict();
+    var hint = r.plan === 'G2' && g1 ? T(late ? 'checkLate' : 'checkHint', { d: md(g1) }) : '';
+    var row = h('div', { class: 'row' + (edited ? ' edited' : '') + (r.flagTo ? ' flagged' : '') + (late ? ' conflict' : ''), 'data-row': r.id },
+      h('div', { class: 'row-head' }, h('span', { class: 'row-name' }, r.label),
+        h('span', { class: 'row-chips' }, qChip(r.id), r.flagTo ? tag('⚑ 下一步', 'flag') : null, edited ? tag(N.ui.changed, 'mine') : null, auto ? autoTag(due) : null)));
+    var body = h('div', { class: 'row-body' }, ed(r.id, 'g', null, { noMeta: true, text: leg ? leg.rest : null }));
+    if (due || emptyDue) body.append(h('div', { class: 'row-date' }, h('span', { class: 'rd-k' }, key), ed((due || emptyDue).id, 'g', null, { noMeta: true }), hint ? h('span', { class: 'rd-h' + (late ? ' late' : '') }, hint) : null));
+    else if (leg) body.append(h('div', { class: 'row-date' }, h('span', { class: 'rd-k' }, key), h('span', { class: 'rd-v' }, fmtDay(leg.iso)), hint ? h('span', { class: 'rd-h' + (late ? ' late' : '') }, hint) : null,
+      h('span', { class: 'rd-h' }, N.ui.dateInText)));
+    var notes = [];
+    if (isEdited(r.id)) notes.push(h('span', { class: 'orig' }, N.ui.aiOrig + '：' + clip(showVal(e, String(e.value == null ? '' : e.value)) || N.ui.fillShort, 60)));
+    else noteNodes(e, false).forEach(function (n) { notes.push(n); });
+    if (due) {
+      if (isEdited(due.id) || auto) notes.push(h('span', { class: 'orig' }, N.ui.aiOrig + key + '：' + md(due.value)));
+      else if (due.tentative && due.tentative.until && !(e.tentative && e.tentative.until)) notes.push(tentTag(due));
+    }
+    if (notes.length) body.append(h('div', { class: 'row-note' }, notes));
+    if (r.flagTo && fm) {
+      var pos = S.order.indexOf(fm.id) + 1;
+      body.append(h('div', { class: 'row-sub' }, '⚑ 對應：第 ' + pos + ' 站「' + fm.short + '」' +
+        (pos !== 1 ? '。此站目前並非排第一，是否正確？' : '')));
+    }
+    row.append(body);
+    return row;
   }
   function statusBlock(st) {
     var list = h('div', { class: 'st-list' });
@@ -920,14 +1260,15 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       list.append(h('div', { class: 'st-item' }, h('div', { class: 'st-text' }, qChip(it.id), ' ', it.label), ed(it.id, 's')));
     });
     return h('div', { class: 'status' },
-      h('div', { class: 'row-label' }, N.ui.statusNow),
-      st.judge ? h('div', { class: 'p-judge' }, st.judge) : null,
-      st.prepared ? h('div', { class: 'prepared' }, h('span', { class: 'ok' }, '✓'), st.prepared, tag(N.ui.fromDoc, 'doc')) : null,
-      list);
+      h('div', { class: 'row-head' }, h('span', { class: 'row-name' }, N.ui.statusNow)),
+      h('div', { class: 'row-body' },
+        st.judge ? h('div', { class: 'p-judge' }, st.judge) : null,
+        st.prepared ? h('div', { class: 'prepared' }, h('span', { class: 'ok' }, '✓'), st.prepared, tag(N.ui.fromDoc, 'doc')) : null,
+        list));
   }
   function gaps() {
-    var t = tentCount(), miss = missingList().length, parts = [];
-    if (t) parts.push('Zero 以「' + N.ui.tentative + '」值處理了 ' + t + ' 項' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
+    var ti = tentItems(), t = ti.length, miss = missingList().length, parts = [];
+    if (t) parts.push(tentSum(ti));
     if (miss) parts.push((t ? '另有 ' : '有 ') + miss + ' 項未有答案');
     if (!parts.length) return null;
     var txt = parts.join('；') + '。毋須現在全部作答。';
@@ -1091,8 +1432,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       li.classList.remove('dragging'); li.style.transform = ''; document.body.classList.remove('is-dragging');
       var order = Array.prototype.map.call(list.children, function (x) { return x.dataset.mid; });
       if (order.join('|') !== S.order.join('|')) {
-        S.order = order; save();
-        if (S.confirmed) S.changedAfter = true;
+        S.order = order;
+        save();
         S.focus = { sel: '[data-h="' + CSS.escape(li.dataset.mid) + '"]' };
         render();
         announce('已移到第 ' + (order.indexOf(li.dataset.mid) + 1) + ' 站');
@@ -1110,8 +1451,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var i = S.order.indexOf(mid), j = ev.key === 'ArrowUp' ? i - 1 : i + 1;
     if (j < 0 || j >= S.order.length) return;
     var o = S.order.slice(); o.splice(i, 1); o.splice(j, 0, mid);
-    S.order = o; save();
-    if (S.confirmed) S.changedAfter = true;
+    S.order = o;
+    save();
     S.focus = { sel: '[data-h="' + CSS.escape(mid) + '"]' };
     render();
     announce('已移到第 ' + (j + 1) + ' 站');
@@ -1219,20 +1560,21 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   }
   function renderBar() {
     var bar = $('#cbar'), n = Object.keys(S.edits).length, q = qStats();
-    var pct = q.total ? Math.round(q.done / q.total * 100) : 100;
+    var done = delivered(), left = done ? 0 : q.left;
+    var pct = q.total && !done ? Math.round(q.done / q.total * 100) : 100;
     bar.hidden = false;
     bar.replaceChildren(h('div', { class: 'cbar-in' },
       h('div', { class: 'prog' },
         h('div', { class: 'prog-top' },
           aiBusy() ? h('span', { class: 'tr-live' }, '⏳ ' + N.ui.trackRunning) : null,
-          h('b', { class: 'prog-n' }, q.total ? (q.left ? T('pendingProgress', { n: q.done, t: q.total }) : N.ui.pendingAllDone) : N.ui.noPending),
+          h('b', { class: 'prog-n' }, done ? N.ui.barConfirmed : q.total ? (q.left ? T('pendingProgress', { n: q.done, t: q.total }) : N.ui.pendingAllDone) : N.ui.noDecide),
           n ? h('span', { class: 'cbar-txt' }, T('changedN', { n: n })) : null,
-          q.left ? h('button', { type: 'button', class: 'btn small', onclick: nextQ }, N.ui.next) : null),
+          left ? h('button', { type: 'button', class: 'btn small', onclick: nextQ }, N.ui.next) : null),
         h('div', {
-          class: 'prog-bar' + (q.left ? '' : ' full'), role: 'progressbar', 'aria-label': N.ui.pending,
+          class: 'prog-bar' + (left ? '' : ' full'), role: 'progressbar', 'aria-label': N.ui.pending,
           'aria-valuemin': '0', 'aria-valuemax': String(q.total), 'aria-valuenow': String(q.done)
         }, h('i', { style: 'width:' + pct + '%' }))),
-      h('button', { type: 'button', class: 'btn primary big', onclick: openModal }, mainLabel())));
+      mainBtn(null)));
     document.body.style.paddingBottom = (bar.offsetHeight + 28) + 'px';
   }
 
@@ -1240,18 +1582,18 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   var pollTimer = null;
   function hm(iso) { var m = /T(\d{2}:\d{2})/.exec(String(iso || '')); return m ? m[1] : ''; }
   function probeServer() {
-    if (!/^https?:$/.test(location.protocol)) { S.server = null; renderTrack(); return; }
+    if (!/^https?:$/.test(location.protocol)) { S.server = null; S.srv = 'offline'; renderTrack(); return; }
     fetch('/api/status', { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { S.server = j && j.ok ? j : null; if (S.server) S.instance = S.server.instance; render(); if (S.server) poll(); })
-      .catch(function () { S.server = null; renderTrack(); });
+      .then(function (j) { S.server = j && j.ok ? j : null; S.srv = S.server ? 'ok' : 'fail'; if (S.server) { S.instance = S.server.instance; adoptSnapshot(); } render(); if (S.server) poll(); })
+      .catch(function () { S.server = null; S.srv = 'fail'; render(); });
   }
   // 我啱啱送出嗰份仲排緊隊（伺服器收咗、外殼未開始）
   function queued() { return !!(S.sent && S.server && (S.server.pending || []).indexOf(S.sent.name) >= 0); }
   function myRun() {
     var runs = (S.server && S.server.runs) || [];
     if (S.sent) {
-      for (var i = 0; i < runs.length; i++) if ((runs[i].replyFiles || []).indexOf(S.sent.name) >= 0) return runs[i];
+      for (var i = 0; i < runs.length; i++) if ((runs[i].replyFiles || []).indexOf(S.sent.name) >= 0) return failedRun() && matchesServer() ? null : runs[i];   // 套用失敗之後伺服器已有相同內容：不再顯示過時的失敗
       if (queued()) return null;
     }
     // 重開頁時唔顯示「版本變咗、套用唔到」嗰類過時失敗；AI 步失敗就照顯示，方便重試
@@ -1265,17 +1607,22 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var r = myRun();
     return queued() || !!(r && r.state === 'running');
   }
-  function trackKey() { var r = myRun(); return JSON.stringify([r, S.server && S.server.pending, S.lost, S.stale]); }
+  function trackKey() { var r = myRun(); return JSON.stringify([r, S.server && S.server.pending, S.lost, S.stale, S.server && S.server.openAsks, delivered()]); }
   function poll() {
     clearTimeout(pollTimer);
     fetch('/api/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        var before = trackKey(), oldCompany = S.server && S.server.company || {}; S.server = j; S.lost = false;
+        var before = trackKey(), oldCompany = S.server && S.server.company || {}, wasDelivered = delivered(), wasRestored = S.restored; S.server = j; S.srv = 'ok'; S.lost = false;
+        var adopted = adoptSnapshot();
         // 伺服器重新開過（例如升級後再打開 Founder Desk）：呢頁可能過時
         if (j.instance && S.instance && j.instance !== S.instance) S.stale = true;
-        if (!!oldCompany.confirmed !== !!(j.company && j.company.confirmed)) render();
-        else if (trackKey() !== before) { renderTrack(); renderBar(); }
+        // 確認狀態或「已交付」改變（例如套用確認失敗）：大卡、作答區標題、底部列、按鈕一併重畫。
+        // 創辦人輸入中途（編輯器打開、確認視窗開着、拖動中）不整頁重畫，免得輸入框失去焦點：只更新進度，記下待重畫，閒下來才重畫一次（大掣及底部列也不先改，免得變成「再確認一次」而沒有提示）
+        var changed = adopted || wasRestored !== S.restored || !!oldCompany.confirmed !== !!(j.company && j.company.confirmed) || wasDelivered !== delivered();
+        if (changed && busyInput()) { S.repaint = true; renderTrack(); }
+        else if (changed || (S.repaint && !busyInput())) { S.repaint = false; render(); }
+        else if (trackKey() !== before) { renderTrack(); refreshMain(); }
       })
       .catch(function () { if (!S.lost) { S.lost = true; renderTrack(); } })
       .then(function () { pollTimer = setTimeout(poll, aiBusy() ? 2000 : 10000); });
@@ -1335,22 +1682,33 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           : [ready ? null : h('p', { class: 'tr-sub' }, '請先安裝並登入 AI 工具（' + aiName + '），再按「' + N.ui.retry + '」。'),
             h('button', { type: 'button', class: 'btn primary', onclick: retryRun }, N.ui.retry)]]);
     }
-    if (state === 'done' && r.result) {
+    if (state === 'done') {
       var res = r.result, box = h('div', { class: 'tr-result' });
-      box.append(h('p', null, N.fix(res.summary)));
-      if (res.artifacts.length) box.append(h('h4', null, N.ui.aiOutputs));
-      res.artifacts.forEach(function (a, i) {
-        var d = h('details', null, h('summary', null, a.title), window.SOS_MD ? SOS_MD(a.text) : h('pre', null, a.text));
-        if (i === 0) d.open = true;
-        box.append(d);
-      });
-      if (res.founderNext && res.founderNext.length) box.append(h('h4', null, N.ui.yourNext), h('ul', null, res.founderNext.map(function (x) { return h('li', null, x); })));
-      if (res.needsYourDecision && res.needsYourDecision.length) box.append(h('h4', null, N.ui.pending), h('ul', null, res.needsYourDecision.map(function (x) { return h('li', null, x); })));
-      box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，Zero 未有對外發送任何內容。'));
-      if (res.asks && res.asks.length) {
+      if (res) {
+        // 結果摘要與最後一步的字句相同時不重複顯示
+        var lastLabel = rows.length ? String(rows[rows.length - 1].label || '').trim() : '';
+        if (N.fix(res.summary).trim() !== lastLabel) box.append(h('p', null, N.fix(res.summary)));
+        if (res.artifacts.length) box.append(h('h4', null, N.ui.aiOutputs));
+        res.artifacts.forEach(function (a, i) {
+          var d = h('details', null, h('summary', null, a.title), window.SOS_MD ? SOS_MD(a.text) : h('pre', null, a.text));
+          if (i === 0) d.open = true;
+          box.append(d);
+        });
+        if (res.needsYourDecision && res.needsYourDecision.length) box.append(h('h4', null, N.ui.pending), h('ul', null, res.needsYourDecision.map(function (x) { return h('li', null, x); })));
+        box.append(h('p', { class: 'tr-sub' }, '以上全部為草稿，Zero 未有對外發送任何內容。'));
+      }
+      // 「你的下一步」放在卡的最後：Zero 新開的問題照舊；否則只寫伺服器的真實待辦數目
+      var nextAsks = (res && res.asks) || [], nextNote = res && res.founderNext || [];
+      if (nextAsks.length) {
+        box.append(h('h4', null, N.ui.yourNext));
+        if (nextNote.length) box.append(h('ul', null, nextNote.map(function (x) { return h('li', null, x); })));
         box.append(h('div', { class: 'asks-next' },
-          h('b', null, T('aiFollowAskN', { n: res.asks.reduce(function (n, a) { return n + a.count; }, 0) }) + '：'),
-          res.asks.map(function (a) { return h('a', { class: 'btn primary', href: '/#/ask/' + encodeURIComponent(a.id) }, N.fix(a.title) + ' → ' + N.ui.goAnswer); })));
+          h('b', null, T('aiFollowAskN', { n: nextAsks.reduce(function (n, a) { return n + a.count; }, 0) }) + '：'),
+          nextAsks.map(function (a) { return h('a', { class: 'btn', href: '/#/ask/' + encodeURIComponent(a.id) }, N.fix(a.title) + ' → ' + N.ui.goAnswer); })));
+      } else {
+        var nb = DESK.nextBlock(st.openAsks);
+        if (nextNote.length) nb.querySelector('h4').after(h('ul', null, nextNote.map(function (x) { return h('li', null, x); })));
+        box.append(nb);
       }
       card.append(box);
     }
@@ -1364,14 +1722,18 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       var e = REG[id];
       return { id: id, plan: e.plan || null, label: e.label, ai: showVal(e, String(e.value == null ? '' : e.value)), founder: showVal(e, S.edits[id]), value: S.edits[id] };
     });
-    var kept = all().filter(function (e) { return !isEdited(e.id); });
+    // 隨目前目標期限調整的日期（不是創辦人親自改）：分開列出，回覆檔帶出新值
+    var autos = all().filter(function (e) { return isAuto(e.id); }).map(function (e) {
+      return { id: e.id, plan: e.plan || null, label: e.label, ai: showVal(e, String(e.value == null ? '' : e.value)), founder: showVal(e, cur(e.id)), value: cur(e.id), auto: true };
+    });
+    var kept = all().filter(function (e) { return !isEdited(e.id) && !isAuto(e.id); });
     var tentKept = kept.filter(function (e) { return e.tentative; });
     var missing = missingList();
     var effects = ((D.detail && D.detail.rules) || []).filter(function (r) { return r.effect; });
     var L = [];
     L.push('# 確認回覆：' + D.company.name + ' ' + N.ui.company, '');
     L.push('確認時間：' + human(now));
-    L.push('結果：' + (edits.length || oc ? '已確認（你修改了 ' + edits.length + ' 項' + (oc ? '，並調整了次序' : '') + '）' : '已確認，全部採用 Zero 建議'), '');
+    L.push('結果：' + (edits.length || oc || autos.length ? '已確認（你修改了 ' + edits.length + ' 項' + (oc ? '，並調整了次序' : '') + (autos.length ? '；另有 ' + autos.length + ' 項' + N.ui.autoAdjusted : '') + '）' : '已確認，全部採用 Zero 建議'), '');
     L.push('## ' + N.ui.nowAfter);
     L.push('- 開局答案：目標、目前進度、下一個對外動作、負責人');
     L.push('- ' + N.ui.route + '次序' + (oc ? '（' + N.ui.changed + '）' : '（' + N.ui.adopted + '）') + '：');
@@ -1385,8 +1747,12 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     L.push('', '## 你修改的項目（' + edits.length + ' 項）');
     if (!edits.length) L.push('- 沒有');
     edits.forEach(function (x) { L.push('- ' + x.label, '  - Zero：' + (x.ai || N.ui.fillShort), '  - 你：' + x.founder); });
+    if (autos.length) {
+      L.push('', '## ' + T('autoReplyHead', { n: autos.length }));
+      autos.forEach(function (x) { L.push('- ' + x.label, '  - Zero：' + (x.ai || N.ui.fillShort), '  - ' + N.ui.adjustedTo + '：' + x.founder); });
+    }
     L.push('', '## 其餘採用 Zero 建議');
-    L.push('- 當中 ' + tentKept.length + ' 項為「' + N.ui.tentative + '」' + (D.page.nextAskOn ? '，' + md(D.page.nextAskOn) + '再詢問你' : ''));
+    L.push('- ' + (tentKept.length ? tentSum(tentKept) : '當中 0 項為「' + N.ui.tentative + '」'));
     if (missing.length) L.push('- ' + missing.length + ' 項尚未有答案：' + missing.map(function (e) { return e.label; }).join('；') + '。Zero 會開設一項工作尋找答案，找到後再詢問你。');
     L.push('');
     if (S.note.trim()) L.push('## 你的備註', S.note.trim(), '');
@@ -1402,20 +1768,20 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         else list.push({ id: id, answered: answered(id) });
         return list;
       }, []),
-      edits: edits,
+      edits: edits.concat(autos),
       keptAsAI: kept.map(function (e) { return e.id; }),
-      tentativeKept: tentKept.map(function (e) { return { id: e.id, until: e.tentative.until }; }),
+      tentativeKept: tentKept.map(function (e) { return { id: e.id, until: untilOf(e) }; }),
       stillMissing: missing.map(function (e) { return e.id; }),
       kinds: (function () { var o = {}; S.order.forEach(function (mid) { o[mid] = kindOf(byId()[mid]); }); return o; })(), kindsChanged: kindChanged(),
       note: S.note.trim()
     };
     L.push('## 機器讀取部分（供 CrewZero 使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
-    var head = ['kind: proofread', 'ref: ' + D.page.id, 'option: ' + (edits.length || oc || kindChanged().length ? 'confirm-with-edits' : 'confirm'),
+    var head = ['kind: proofread', 'ref: ' + D.page.id, 'option: ' + (edits.length || autos.length || oc || kindChanged().length ? 'confirm-with-edits' : 'confirm'),
       'rev: ' + (D.page.revision || 0), 'hash: ' + HASH, 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
     return {
       text: head.join('\n') + '\n\n' + L.join('\n') + '\n',
       name: stamp(now) + '-proofread-' + safeName(D.page.id) + '.md',
-      edits: edits, kept: kept, tentKept: tentKept, missing: missing, oc: oc, effects: effects, fm: fm
+      edits: edits.concat(autos), nEdits: edits.length, autos: autos, kept: kept, tentKept: tentKept, missing: missing, oc: oc, effects: effects, fm: fm
     };
   }
 
@@ -1425,6 +1791,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (!root.firstChild) return;
     root.replaceChildren();
     document.removeEventListener('keydown', modalKeys, true);
+    if (S.repaint && !busyInput()) { S.repaint = false; render(); }   // 確認視窗開着期間伺服器內容改變過：現在補畫
     if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
   }
   function modalKeys(ev) {
@@ -1449,7 +1816,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     if (!D) return;
     lastFocus = document.activeElement;
     S.open = null;
-    var now = new Date(), R = buildReply(now), ms = byId(), pr = proposed();
+    var now = new Date(), R = buildReply(now), ms = byId(), pr = proposed(), dg = digestNow();
     var pre = h('pre', { class: 'file' }, R.text);
     var note = h('input', { class: 'note-in', type: 'text', placeholder: '需要補充一句？（可留空）', 'aria-label': '備註', value: S.note });
     note.addEventListener('input', function () { S.note = note.value; save(); R = buildReply(now); pre.textContent = R.text; });
@@ -1475,11 +1842,11 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     body.append(h('div', { class: 'm-sec effect' }, h('h4', null, N.ui.nowAfter), sum));
     var qs = qStats();
     body.append(h('p', { class: 'p-judge m-rest' },
-      (R.edits.length ? '你修改了 ' + R.edits.length + ' 項；' : '') + (kindChanged().length ? '你改了 ' + kindChanged().length + ' 站的' + N.ui.kindReal + '／' + N.ui.kindTask + '判斷；' : '') +
+      (R.nEdits ? '你修改了 ' + R.nEdits + ' 項；' : '') + (R.autos.length ? R.autos.length + ' 項' + N.ui.autoAdjusted + '；' : '') + (kindChanged().length ? '你改了 ' + kindChanged().length + ' 站的' + N.ui.kindReal + '／' + N.ui.kindTask + '判斷；' : '') +
       (qs.left ? '未作答的 ' + qs.left + ' 條按 Zero 建議；' : '') +
-      '其餘採用 Zero 建議' + (R.tentKept.length && D.page.nextAskOn ? '，「' + N.ui.tentative + '」項目由 ' + md(D.page.nextAskOn) + ' 起分批再詢問你' : '') + '。'));
+      '其餘採用 Zero 建議' + (R.tentKept.length ? '。' + tentSum(R.tentKept) : '') + '。'));
     var changes = R.edits.length ? h('ul', { class: 'chg' }, R.edits.map(function (x) {
-      return h('li', null, x.label + '：', h('span', { class: 'was' }, clip(x.ai || N.ui.fillShort, 40)), ' → ', h('span', { class: 'now' }, x.founder));
+      return h('li', null, x.label + (x.auto ? '（' + N.ui.autoAdjusted + '）' : '') + '：', h('span', { class: 'was' }, clip(x.ai || N.ui.fillShort, 40)), ' → ', h('span', { class: 'now' }, x.founder));
     })) : h('p', { class: 'p-judge' }, '未作修改，全部採用 Zero 建議。');
     body.append(h('details', { class: 'm-sec' }, h('summary', null, N.ui.reviewMore),
       h('h4', null, N.ui.changedItems), changes, h('div', { class: 'm-sec' }, note), pre));
@@ -1505,8 +1872,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
       } catch (e) { ok = false; }
       if (!ok) { doCopy(); return; }
-      S.confirmed = { at: human(now), name: R.name };
-      S.restored = false; S.changedAfter = false; save();
+      S.confirmed = { at: human(now), name: R.name, digest: dg };   // 存入已算好的摘要：離線時也能只按內容判斷確認後有沒有再改
+      S.restored = false; save();
       closeModal(); render(); window.scrollTo(0, 0);
       toast('已確認，回覆檔已下載至瀏覽器的下載資料夾。');
     }
@@ -1523,8 +1890,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
         .then(function (j) {
           S.sent = { name: j.file, at: j.receivedAt };
           S.server.pending = (S.server.pending || []).concat([j.file]);
-          S.confirmed = { at: human(now), name: j.file, sent: true };
-          S.restored = false; S.changedAfter = false; save();
+          S.confirmed = { at: human(now), name: j.file, sent: true, digest: dg };
+          S.restored = false; save();
           closeModal(); render(); window.scrollTo(0, 0); poll();
           toast(N.ui.sent);
         })

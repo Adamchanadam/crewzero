@@ -91,7 +91,7 @@ try {
   ok('頂部大掣「採用 AI 建議並開始」', (await text('#go-main')) === N.ui.adoptStart);
   ok('只有 3 張「要你決定」卡', (await ev(`document.querySelectorAll('.dq').length`)) === 3);
   ok('三張卡係規劃書 3.1 嘅三條（而家去到邊、下一步、本季目標）', await ev(`['dq-status','dq-next-action','dq-goal-quarter'].every(i=>document.getElementById(i))`));
-  ok('進度：要你決定：已答 0／3', (await prog()) === '待決事項：已答 0／3', await prog());
+  ok('進度：要你決定：已答 0／3', (await prog()) === '請你先決定：已答 0／3', await prog());
   ok('「未答」標記只得 3 個', (await ev(`document.querySelectorAll('.tag.qn').length`)) === 3);
   ok('全文預設收埋（第一眼唔見細項）', !(await ev(`!!document.getElementById('layer1')`)));
   ok('收埋區直接見到五站路線', (await ev(`document.querySelectorAll('#rest .route .stop').length`)) === 5);
@@ -104,7 +104,7 @@ try {
   ok('「下一條」跳去第一張未答卡', (await ev(`document.activeElement?.id`)) === 'dq-status', await ev(`document.activeElement?.id`));
   // 卡 2：下一步揀第二個
   await click('#dq-next-action > .opt:nth-of-type(2)');
-  ok('揀選項即算答咗', (await prog()) === '待決事項：已答 1／3');
+  ok('揀選項即算答咗', (await prog()) === '請你先決定：已答 1／3');
   ok('頂部說明跟住下一步改', (await text('.hero-p')).includes('先約何師傅'));
   ok('大掣變「其餘採用 AI 建議並開始」', (await text('#go-main')) === N.ui.adoptRestStart);
   // 卡 1：而家去到邊，撳一項再揀程度
@@ -112,13 +112,13 @@ try {
   ok('撳咗嘅項目出程度選擇', (await ev(`document.querySelectorAll('#dq-status .grade-row').length`)) === 1);
   await click('#dq-status .grade-row .seg:nth-of-type(2)');
   ok('程度改為「實際行動」（以前叫有人做過）', (await text('#dq-status .grade-row .seg.on')) === '實際行動');
-  ok('而家去到邊算答咗', (await prog()) === '待決事項：已答 2／3');
+  ok('而家去到邊算答咗', (await prog()) === '請你先決定：已答 2／3');
   // 卡 3：期限用快捷鍵改，再揀 AI 建議目標
   await click('#dq-goal-quarter [data-k="q~goal-quarter-due"]');
   ok('期限有日曆欄', await ev(`!!document.querySelector('#dq-goal-quarter .panel input[type=date]')`));
   await click('#dq-goal-quarter .panel .opt:nth-of-type(3)');
   await click('#dq-goal-quarter > .opt:nth-of-type(1)');
-  ok('三條都答咗', (await prog()) === '✓ 待決事項已全部作答', await prog());
+  ok('三條都答咗', (await prog()) === '✓ 要你先決定的事已全部作答', await prog());
   ok('大掣變「確認並開始」', (await text('#go-main')) === '確認並開始');
   // 自己寫
   await click('#dq-next-action .dq-foot .btn.small');
@@ -161,7 +161,7 @@ try {
   ok('離線下載咗回覆檔', downloads().length === 1, downloads());
   ok('確認後提示（離線，AI 未收到）', (await text('.notice')).includes('Zero 尚未收到'));
   await nav(PAGE);
-  ok('重開保留答案', (await prog()) === '✓ 待決事項已全部作答');
+  ok('重開保留答案', (await prog()) === '✓ 要你先決定的事已全部作答');
 
   /* ---------- 手機 ---------- */
   await metrics(390, 844, true);
@@ -172,7 +172,7 @@ try {
   await shot('m1-top.png');
   await tap('#dq-next-action > .opt:nth-of-type(1)');
   await tap('#dq-status .chip');
-  ok('手機：撳卡即答', (await prog()) === '待決事項：已答 2／3');
+  ok('手機：撳卡即答', (await prog()) === '請你先決定：已答 2／3');
   await scrollTo('#dq-status'); await shot('m2-cards.png');
   await tap('#rest-toggle');
   await tap('#layer2 .layer-toggle');

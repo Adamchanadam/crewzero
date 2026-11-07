@@ -9,6 +9,8 @@ const PROTO = path.resolve(process.argv[2] || 'prototypes/proofread');
 const NAMES = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const brain = await import(pathToFileURL(path.join(PROTO, 'brain-lib.mjs')));
 const practice = await import(pathToFileURL(path.join(PROTO, 'practice-lib.mjs')));
+const prefillLib = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs')));
+const pageCheck = await import(pathToFileURL(path.join(PROTO, 'company-page-check.mjs')));
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-first-batch-'));
 const previous = process.cwd(), previousData = process.env.SOS_DATA;
 let passed = 0, total = 0;
@@ -27,7 +29,7 @@ try {
   const ck = JSON.parse(fs.readFileSync(path.join(sb, 'out', 'checkup.json')));
   const src = fs.readFileSync(path.join(PROTO, 'run.mjs'), 'utf8');
   const section = (a, b) => src.slice(src.indexOf(a), src.indexOf(b, src.indexOf(a)));
-  const ctx = { NAMES, Date, readJSON: (f, fallback) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : fallback, brainFile: () => path.join(data, 'ledger', 'checkup.json'), DIR: { data, sandbox: sb, ledger: path.join(data, 'ledger'), company: path.join(data, 'company') }, clockNow: () => Date.parse('2026-11-12T00:00:00Z'), fs, path, loadState: () => state, log() {} };
+  const ctx = { NAMES, Date, readJSON: (f, fallback) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : fallback, brainFile: () => path.join(data, 'ledger', 'checkup.json'), DIR: { data, sandbox: sb, ledger: path.join(data, 'ledger'), company: path.join(data, 'company') }, clockNow: () => Date.parse('2026-11-12T00:00:00Z'), fs, path, loadState: () => state, log() {}, U: NAMES.ui, matchDelivered: prefillLib.matchDelivered };
   ctx.writeJSON = j;
   vm.createContext(ctx);
   vm.runInContext(section('function checkCheckup(', '// 一次工作入面加一步') + '\n' + section('const checkupStale =', 'function brainLedger()') + '\nthis.checkCheckup=checkCheckup; this.checkupStale=checkupStale;', ctx);
@@ -39,7 +41,8 @@ try {
   const prospects = brain.pipelineOf({ data, ledger: path.join(data, 'ledger'), company: path.join(data, 'company') }).prospects;
   check('對象前綴沿用舊名字配對及編號穩定', JSON.stringify(actors) === JSON.stringify(again) && prospects.find(x => x.name === '陳').stage === 2 && prospects.find(x => x.name === '陳經理').stage === 2);
   j(path.join(sb, 'job.json'), { type: 'debrief' });
-  vm.runInContext(section('function checkEvent(', 'function eventPack(') + '\nthis.checkEvent=checkEvent;', ctx);
+  // checkEvent 用到 run.mjs 模組層的 unreadList（再用到 U、matchDelivered、log、readJSON、loadState）：一併放入環境，否則會 ReferenceError
+  vm.runInContext(section('const unreadList =', '\n') + '\n' + section('function checkEvent(', 'function eventPack(') + '\nthis.checkEvent=checkEvent;', ctx);
   const before = fs.readFileSync(stateFile, 'utf8');
   fs.writeFileSync(path.join(data, 'fake-mode.txt'), 'debrief:auto-grade\n');
   await import(pathToFileURL(path.join(PROTO, '..', '..', 'tests', 'prototype', 'lib', 'fake-ai.mjs')).href + '?grade');
@@ -104,7 +107,8 @@ try {
   const sync = { NAMES, JSON, Date, loadPage: () => samplePage, readJSON: () => confirmation, CONFIRMED: 'confirmed', loadState: () => state, saveState: v => j(stateFile, v),
     milestonesFromPage: dash.milestonesFromPage, assumptionsFromPage: dash.assumptionsFromPage, deriveActors: brain.deriveActors,
     registry: () => ({}), listOf: x => Array.isArray(x) ? x : [], pick: (o, keys) => Object.fromEntries(keys.filter(k => Object.hasOwn(o, k)).map(k => [k, o[k]])),
-    ROW_PLANS: [], RULE_PLANS: [], CELLS: [], ensureActive() {}, rhythmFromText: () => ({ interviewWeekday: 1 }), nextWeekday: () => '2026-11-12', todayIso: () => '2026-11-05', localIso: ctx.localIso, clip: ctx.clip, log() {}, intakeArchive: () => '' };
+    // syncLedger 用到 company-page-check 的 validDay、openingFields（run.mjs 模組層匯入），要一併放入環境
+    validDay: pageCheck.validDay, openingFields: pageCheck.openingFields, ROW_PLANS: [], RULE_PLANS: [], CELLS: [], ensureActive() {}, rhythmFromText: () => ({ interviewWeekday: 1 }), nextWeekday: () => '2026-11-12', todayIso: () => '2026-11-05', localIso: ctx.localIso, clip: ctx.clip, log() {}, intakeArchive: () => '' };
   vm.createContext(sync); vm.runInContext(section('const MS_KEEP =', '// 交資料嘅封存資料夾') + '\nthis.syncLedger=syncLedger;', sync);
   sync.syncLedger();
   const afterSync = brain.pipelineOf(DIR).prospects.map(p => [p.name, p.stage]);

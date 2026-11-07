@@ -18,7 +18,7 @@ const DATA = path.join(OUT, 'data');
 process.env.SOS_DATA = DATA;
 fs.rmSync(DATA, { recursive: true, force: true });
 
-const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs')], { cwd: PROTO, env: { ...process.env, SOS_ADAPTER: ADAPTER, SOS_DATA: DATA }, stdio: ['ignore', 'pipe', 'pipe'] });
+const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), ...(process.env.CDP_ASK_PORT ? ['--port', process.env.CDP_ASK_PORT] : [])], { cwd: PROTO, env: { ...process.env, SOS_ADAPTER: ADAPTER, SOS_DATA: DATA }, stdio: ['ignore', 'pipe', 'pipe'] });
 let srvLog = ''; srv.stdout.on('data', d => { srvLog += d; }); srv.stderr.on('data', d => { srvLog += d; });
 let BASE = null;
 for (let i = 0; i < 40 && !BASE; i++) {

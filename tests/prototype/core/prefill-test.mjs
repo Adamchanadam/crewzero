@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
@@ -103,8 +103,50 @@ try {
   const pv2 = (JSON.parse((md2.match(/```json\s*([\s\S]*?)```\s*$/) || [, '{}'])[1]).provenance) || {};
   ok('未能核對嘅預填：記「已確認的 AI 預填 · 未能核對是否原句」', pv2.q1 && pv2.q1.kind === 'adopted' && pv2.q1.label === 'unverified' && pv2.q1.confirmed && md2.includes('未能核對是否原句') && pv2.q2.kind === 'founder', { pv2, md: md2.slice(0, 300) });
   // AI 交錯格式
+  // 0.39.1 第八輪：只交 Word 檔（讀不到）→ 結果不可說成「文件未有」，要逐份列出未能讀取的檔案
+  const DOCX = { name: '計劃書.docx', data: Buffer.from('PK fake docx').toString('base64') };
+  mode('prefill:prefill-unread');
+  const r5 = await post('/api/intake', { kind: 'prefill', files: [DOCX] });
+  const st5 = await prefillDone(r5.j.id);
+  const P5 = st5 && st5.prefill || {};
+  ok('第八輪-5：只交 Word 檔：紀錄保留「未能讀取的檔案」（檔名、原因）', st5 && st5.state === 'done' && Array.isArray(P5.unreadable) && P5.unreadable.length === 1 && P5.unreadable[0].file === '計劃書.docx' && /讀不到/.test(P5.unreadable[0].reason), P5);
+  const run5 = (await get('/api/status')).j.runs.find(r => r.kind === 'prefill' && r.ref === r5.j.id);
+  ok('第八輪-5：只交 Word 檔：結果摘要不說「文件未有」，說明全部文件未能讀取', run5 && run5.state === 'done' && !/文件未有/.test(run5.result.summary) && run5.result.summary === N.ui.prefillAllUnread && !N.styleIssues(run5.result.summary).length, run5 && run5.result);
+  ok('第八輪-5：結果逐份列出未能讀取的檔案（檔名、原因）', run5 && Array.isArray(run5.result.unreadable) && run5.result.unreadable.length === 1 && run5.result.unreadable[0].file === '計劃書.docx', run5 && run5.result);
+  ok('第八輪-5：全部文件都讀不到時標記 allUnread，頁面據此不說「文件未有這項資料」', P5.missing && P5.missing.length === 8 && P5.allUnread === true, P5);
+  // 文字檔加 Word 檔：可讀的照常預填，未能讀取另列；「文件未有」只指可讀文件
+  mode('prefill:prefill-ok');
+  const r6 = await post('/api/intake', { kind: 'prefill', files: [DOCS[0], DOCX] });
+  const st6 = await prefillDone(r6.j.id);
+  const P6 = st6 && st6.prefill || {};
+  const run6 = (await get('/api/status')).j.runs.find(r => r.kind === 'prefill' && r.ref === r6.j.id);
+  ok('第八輪-5：文字檔加 Word 檔：可讀的照常預填，Word 檔列入未能讀取', P6.answers && P6.answers.q1 && P6.unreadable && P6.unreadable.length === 1 && P6.unreadable[0].file === '計劃書.docx' && !P6.allUnread, P6);
+  ok('第八輪-5：混合時摘要說「可讀取的文件未有 N 條」及未能讀取的份數', run6 && /可讀取的文件未有 \d+ 條/.test(run6.result.summary) && /1 份文件未能讀取/.test(run6.result.summary) && !/；文件未有/.test(run6.result.summary), run6 && run6.result);
+  // 假檔名：AI 列出不是這次交入的檔案 → 不採用
+  mode('prefill:prefill-unread-bogus');
+  const r7 = await post('/api/intake', { kind: 'prefill', files: [DOCX] });
+  const st7 = await prefillDone(r7.j.id);
+  const P7 = st7 && st7.prefill || {};
+  ok('第八輪-5：AI 列出不屬於這次交入的檔名：核對器不接受，只留真正交入的', P7.unreadable && P7.unreadable.length === 1 && P7.unreadable[0].file === '計劃書.docx', P7);
+  // 0.39.1 第九輪：真實 AI 常加 files/ 前綴、副檔名大小寫不同、原因寫成口語 → 仍要認得是同一份、不退回「文件未有」
+  mode('prefill:prefill-unread-loose');
+  const r8 = await post('/api/intake', { kind: 'prefill', files: [DOCX] });
+  const st8 = await prefillDone(r8.j.id);
+  const P8 = st8 && st8.prefill || {};
+  const run8 = (await get('/api/status')).j.runs.find(r => r.kind === 'prefill' && r.ref === r8.j.id);
+  ok('第九輪-5：AI 寫 files/計劃書.DOCX：核對器換回實際檔名「計劃書.docx」', P8.unreadable && P8.unreadable.length === 1 && P8.unreadable[0].file === '計劃書.docx', P8);
+  ok('第九輪-5：不退回「文件未有」：全部未能讀取，摘要如實說明', P8.allUnread === true && run8 && run8.state === 'done' && !/文件未有/.test(run8.result.summary) && run8.result.summary === N.ui.prefillAllUnread, run8 && run8.result);
+  ok('第九輪-5：AI 的口語原因只保存作紀錄，畫面用字由 names.js 固定（unreadReason）', P8.unreadable[0].reason === 'Word 檔目前讀唔到' && N.unreadReason('計劃書.docx') === N.t('unreadReasonOffice', { page: N.ui.intakeTitle }), P8.unreadable);
+  const pl = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs')).href);
+  const names9 = ['計劃書.docx', 'Plan.PPTX', 'Résumé.pdf'];
+  const mdv = x => typeof pl.matchDelivered === 'function' ? pl.matchDelivered(x, names9) : '（沒有 matchDelivered）';
+  ok('第九輪-5：matchDelivered 去掉 files/ 或 files\\，不分大小寫，換回實際檔名', mdv('files/計劃書.docx') === '計劃書.docx' && mdv('files\\Plan.pptx') === 'Plan.PPTX' && mdv('FILES/計劃書.DOCX') === '計劃書.docx' && mdv('plan.pptx') === 'Plan.PPTX', [mdv('files/計劃書.docx'), mdv('files\\Plan.pptx'), mdv('plan.pptx')]);
+  ok('第九輪-5：matchDelivered 認 Unicode 不同寫法（NFD 與 NFC）', mdv('Résumé.pdf'.normalize('NFD')) === 'Résumé.pdf', mdv('Résumé.pdf'.normalize('NFD')));
+  ok('第九輪-5：路徑穿越及不屬本次的檔名照舊拒絕', ['../計劃書.docx', 'files/../計劃書.docx', 'sub/計劃書.docx', '..\\計劃書.docx', '/etc/passwd', '..', '', '別的檔案.docx', 'files/'].every(x => mdv(x) === null), ['../計劃書.docx', 'files/../計劃書.docx', 'sub/計劃書.docx', '..\\計劃書.docx', '..', '別的檔案.docx'].map(x => [x, mdv(x)]));
+  mode('prefill:prefill-ok');
+  ok('第八輪-5：全部可讀時不出現未能讀取', !(st1.prefill.unreadable && st1.prefill.unreadable.length) && !/份文件未能讀取/.test(run.result.summary), st1.prefill.unreadable);
   mode('prefill:prefill-bad');
-  const r3 = await post('/api/intake', { kind: 'prefill', files: DOCS.slice(0, 1) });
+  const r3 =await post('/api/intake', { kind: 'prefill', files: DOCS.slice(0, 1) });
   const st3 = await prefillDone(r3.j.id);
   ok('AI 交錯格式：預填失敗並講原因，唔寫任何結果', st3 && st3.state === 'failed' && !fs.existsSync(path.join(DATA, 'ledger', 'prefill', r3.j.id + '.json')), st3);
   const g404 = await get('/api/prefill?id=../../x');

@@ -1,2 +1,5 @@
 # 插件程式係生成物，MANIFEST.sha256 按位元組校驗；Windows 預設 core.autocrlf 會改換行符令更新被擋
 prototypes/proofread/adapters/claude-code/crewzero/program/** -text
+# 授權原文及作者聲明必須保持原位元組（LICENSE 雜湊有測試校驗），不可被換行轉換
+LICENSE -text
+NOTICE -text

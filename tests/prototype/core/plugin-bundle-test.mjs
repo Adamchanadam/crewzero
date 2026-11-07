@@ -35,6 +35,9 @@ try {
   const man = fs.existsSync(path.join(PROG, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(PROG, 'MANIFEST.sha256'), 'utf8').trim().split(/\r?\n/).map(l => l.split('  ')) : [];
   ok('MANIFEST.sha256 列齊每個程式檔同正確雜湊', man.length === want.length && man.every(([h, f]) => want.includes(f) && sha(path.join(PROG, f)) === h), man.length + ' vs ' + want.length);
   const pj = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, 'crewzero', '.claude-plugin', 'plugin.json'), 'utf8')), mk = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, '.claude-plugin', 'marketplace.json'), 'utf8'));
+  const LIC_SHA = 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30', PLUGIN_ROOT = path.join(PLUGIN_SRC, 'crewzero');
+  const licOk = fs.existsSync(path.join(PLUGIN_ROOT, 'LICENSE')) && sha(path.join(PLUGIN_ROOT, 'LICENSE')) === LIC_SHA, noticeOk = fs.existsSync(path.join(PLUGIN_ROOT, 'NOTICE')) && fs.readFileSync(path.join(PLUGIN_ROOT, 'NOTICE'), 'utf8').includes('由 Adam Chan 製作');
+  ok('插件根目錄有 Apache-2.0 LICENSE（雜湊等於官方原文）及 NOTICE（含作者聲明），plugin.json 的 license 是 Apache-2.0', licOk && noticeOk && pj.license === 'Apache-2.0', { license: licOk, notice: noticeOk, pluginJson: pj.license });
   ok('插件資訊檔同市集檔版本一致', pj.version === mk.version && mk.plugins.every(p => p.version === pj.version), { plugin: pj.version, market: mk.version });
   const skills = ['install', 'desk', 'dashboard', 'update'].map(s => path.join(PLUGIN_SRC, 'crewzero', 'skills', s, 'SKILL.md'));
   ok('四個指令齊（install、desk、dashboard、update）', skills.every(f => fs.existsSync(f)), skills.filter(f => !fs.existsSync(f)));

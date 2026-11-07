@@ -57,6 +57,12 @@ CrewZero 是 startup-os 的新名字。已在用 startup-os 的話，按你的�
 
 公司資料只存放在這部電腦。只有已配對的瀏覽器或手機可以讀取及寫入；手機配對可以隨時撤銷。手機只可在與這部電腦相同的家中或辦公室 Wi-Fi 使用；其他人要使用，請在這部電腦的瀏覽器開啟。
 
+## 授權及作者
+
+CrewZero（零號隊員）由 Adam Chan 製作，以 [Apache License 2.0](LICENSE) 授權，任何人可免費使用，包括用於經營業務；轉載或改編時須保留 `LICENSE` 及 `NOTICE`。
+
+CrewZero、零號隊員名稱、標誌及 Zero 角色圖不在授權範圍內。
+
 ## 意見及支持
 
 歡迎[給意見](https://docs.google.com/forms/d/e/1FAIpQLScnJzUP1-pt5IfWE29x8URA9fJpVBvgji4vHHdj12wIb2zRgA/viewform)，或[支持 CrewZero](https://buymeacoffee.com/adamchan)。

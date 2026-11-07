@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { hosts, version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
+import { confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, overviewIsCurrent } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
@@ -818,7 +818,7 @@ function statusPayload() {
   const runs = (st.runs || []).slice(0, 5).map(r => r && r.state === 'failed' && r.ref && failedByRef[r.ref] >= 2 ? { ...r, repeatFailed: true } : r);
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), sample: (readJSON(path.join(DIR.ledger, 'state.json'), null) || {}).demo === true, today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, celebrations: (() => { const { entries, seen } = celebrationState(); return entries.filter(e => !seen.has(e.id)).slice(-5).reverse(); })(), ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI 工具', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: companyStatus(), helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: { ...companyStatus(), confirmedSnapshot: confirmedSnapshotNow() }, helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -840,12 +840,16 @@ function saveLogo(body) {
   drop(ext); say(`公司標誌已更換（${ext.toUpperCase()}，${Math.ceil(bytes.length / 1024)}KB）`);
   return [200, { ok: true, logo: companyLogo(DIR).v }];
 }
+// 校對頁用：目前這一頁已確認的內容（值、次序、類別、摘要）；只放在受通行證保護的 /api/status，不放進其他入口用的 companyStatus()
+function confirmedSnapshotNow() {
+  return confirmedSnapshot(readJSON(path.join(DIR.ledger, 'confirmed.json'), null), readJSON(path.join(DIR.company, 'page.json'), null));
+}
 function companyStatus() {
   const c = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
   const page = readJSON(path.join(DIR.company, 'page.json'), null), co = page?.company || {};
   const biz = readJSON(path.join(DIR.company, 'biz.json'), null);
   const { entries, seen } = celebrationState();
-  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, confirmed: !!c, confirmedAt: c ? c.confirmedAt : null, firstConfirmedAt: c ? (c.firstConfirmedAt || c.confirmedAt) : null, firstFlagSeen: entries.some(e => e.level === 'top' && seen.has(e.id)),
+  return { name: co.name || '', initials: co.initials || '', logo: (companyLogo(DIR) || {}).v || 0, oneLiner: co.oneLiner || '', ready: !!page, pageId: page?.page?.id || '', confirmed: !!c, confirmedPageId: c?.pageId || '', confirmedDigest: c ? confirmedDigest(c, page) : '', confirmedAt: c ? c.confirmedAt : null, firstConfirmedAt: c ? (c.firstConfirmedAt || c.confirmedAt) : null, firstFlagSeen: entries.some(e => e.level === 'top' && seen.has(e.id)),
     ...(biz && BIZ_TYPES[biz.type] ? { bizType: biz.type } : {}) };
 }
 const isDay = value => {

@@ -1,7 +1,8 @@
 {
   "name": "crewzero",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "CrewZero（零號隊員）：Zero 團隊與創辦人一起經營初創，同一份插件配合 Claude Code、Codex 或 Antigravity 使用。四個指令：install 把 CrewZero 裝入項目並登記每日排程；desk 打開 Founder Desk（創辦人做決定嘅頁面）；dashboard 打開營運監察台（公司日常運作）；update 把項目內的程式更新到插件的新版本（data/ 不改動，可還原）。叫法：Claude Code /crewzero:desk、Codex $crewzero:desk、Antigravity /desk（其餘三個同一規律）。",
   "author": { "name": "Adam Chan" },
+  "license": "Apache-2.0",
   "keywords": ["crewzero", "founder-desk", "decision", "human-in-loop", "cantonese"]
 }

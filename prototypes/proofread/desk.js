@@ -186,6 +186,7 @@ body.settled .layer,body.settled .panel,body.settled .hero{animation:none}
 .track.bad{border-color:rgba(242,162,158,.45);border-left-color:var(--red)}
 .track.off{border-color:rgba(239,179,127,.45);border-left-color:var(--wait)}
 .track h3{margin:2px 0 4px;font-size:var(--fs-title)}
+.next-step{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}.next-step h4{margin:0 0 4px;font-size:var(--fs-sub)}.next-step p{margin:0 0 8px}.next-step a{text-decoration:none}
 .tr-steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
 .tr-steps li{display:flex;gap:10px;align-items:flex-start}
 .tr-ic{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:var(--fs-min);border:1px solid var(--line);color:var(--muted);margin-top:1px}
@@ -920,7 +921,20 @@ body.paused .bg *{animation:none!important}
       null);
   }
 
+  // 送出或完成後的下一步（唯一定義）：有待你處理就指去 Founder Desk 首頁，沒有就回到首頁；數字取自 /api/status 的 openAsks
+  function nextStep(n) {
+    n = Math.max(0, Number(n) || 0);
+    return { n: n, href: '/#/', button: n ? N.t('goPending', { n: n }) : U.backDesk, line: n ? N.t('deskHasPending', { n: n }) : U.deskNoPending };
+  }
+  // 「你的下一步」區塊：一句真實情況＋一個按鈕（opts.primary：沒有其他主要按鈕的頁面才用主按鈕）
+  function nextBlock(n, opts) {
+    var s = nextStep(n);
+    return el('div', { cls: 'next-step', id: 'next-step' }, el('h4', null, U.yourNext), el('p', { id: 'next-line' }, s.line),
+      el('a', { cls: 'btn' + (opts && opts.primary ? ' primary' : ''), id: 'next-desk', href: s.href, 'data-pending': String(s.n) }, s.button));
+  }
+
   g.SOS_DESK = {
+    nextStep: nextStep, nextBlock: nextBlock,
     shell: shell, header: header, note: note, devices: devices, title: title, feedbackDialog: feedbackDialog, feedbackPrompt: feedbackPrompt, nav: function (page, pending) { return toolbar((PAGE[page] || [page])[0], { pending: pending || 0 }); },
     logFilters: logFilters, aiTele: aiTele, update: update, setConn: setConn, livePulse: livePulse, provide: provide, odo: odo, setOdo: setOdo, toast: toast, watchHelp: watchHelp,
     send: send, why: why, netError: netError, apiError: apiError,

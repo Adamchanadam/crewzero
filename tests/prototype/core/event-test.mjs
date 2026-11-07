@@ -76,6 +76,8 @@ try {
   const hits = shown(P1).flatMap(t => N.styleIssues(String(t || '')).map(h => h.term));
   ok('確認問題包畫面文字：零內部術語、零口語字、零編號', !hits.length, hits);
   ok('AI 工作說明有列可用的站同假設（ledger.json）', fs.existsSync(path.join(DATA, 'sandbox', r.id, 'ledger.json')) && fs.readFileSync(path.join(DATA, 'sandbox', r.id, 'task-seen.md'), 'utf8').includes('out/event.json'));
+  { const evMd = fs.readFileSync(path.join(DATA, 'sandbox', r.id, 'event.md'), 'utf8'); ok('event.md 逐份列出附件檔名（不只寫份數）', /證明文件：1 份（在 files\/）/.test(evMd) && evMd.includes('  - files/會後紀錄.md'), evMd.slice(0, 200)); }
+  { const ai = fs.readFileSync(path.join(PROTO, 'ai-event.md'), 'utf8'); ok('工作說明：PDF 整份一次讀、不用 pages；Word／PowerPoint／Excel 要如實列出未能讀取及建議另存 PDF', /一次過讀整份/.test(ai) && /唔好用 `pages` 參數/.test(ai) && /Word、PowerPoint、Excel/.test(ai) && /另存為 PDF/.test(ai)); }
   let dash = await get('/api/dashboard');
   ok('監察台：待你處理有確認真實事件、現實輸入「等你回覆」有一項', dash.todo.some(t => t.id === P1.id) && dash.inputs.awaiting.some(a => a.packId === P1.id), { todo: dash.todo.map(t => t.text), awaiting: dash.inputs.awaiting });
 
@@ -165,6 +167,51 @@ try {
   const sub3 = await post('/api/intake', { kind: 'note', type: 'event', text: '收到 陳先生 的電郵，內容只是問候。', date: '2026-11-06' });
   r = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
   ok('冇影響：唔出問題包，記錄並講明', r && r.state === 'done' && !(r.result.asks || []).length && r.result.summary.includes(N.ui.eventNoChange) && state().inputs.find(i => i.id === 'in-' + sub3.j.id).status === 'processed', r && r.result);
+
+  // 0.39.1 第八輪-6：四份各 80 字檔名的 Word 附件讀不到 → 摘要只寫事件重點（≤300 字），未能讀取的檔案走獨立清單，結果卡及真實進展逐份顯示
+  mode('event:event-unread');
+  seen = await seenIds();
+  const longDocs = ['甲', '乙', '丙', '丁'].map(c => ({ name: c.repeat(75) + '.docx', data: Buffer.from('PK fake docx').toString('base64') }));
+  const sub6 = await post('/api/intake', { kind: 'note', type: 'event', text: '11 月 7 日 陳先生 寄來四份 Word 附件，內容未能閱讀。', date: '2026-11-07', files: longDocs });
+  ok('第八輪-6：四份長檔名 Word 附件的事件：收到', sub6.code === 202 && sub6.j.id, sub6);
+  r = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
+  const in6 = state().inputs.find(i => i.id === 'in-' + sub6.j.id);
+  ok('第八輪-6：事件處理成功（不因未能讀取而被 300 字上限拒絕），摘要只寫事件重點', r && r.state === 'done' && in6 && in6.summary.length <= 300 && !longDocs.some(d => in6.summary.includes(d.name.slice(0, 10))), r && { state: r.state, error: r.error, summary: in6 && in6.summary });
+  ok('第八輪-6：事件紀錄保留結構化的「未能讀取的檔案」，四份逐份列出且檔名完整', in6 && Array.isArray(in6.unreadable) && in6.unreadable.length === 4 && longDocs.every(d => in6.unreadable.some(u => u.file === d.name && /讀不到/.test(u.reason))), in6 && in6.unreadable);
+  ok('第八輪-6：結果卡（工作結果）帶同一份清單', r && r.result && Array.isArray(r.result.unreadable) && r.result.unreadable.length === 4, r && r.result);
+  const dash6 = await get('/api/dashboard');
+  const ev6 = (dash6.inputs.events || []).find(e => e.id === in6.id);
+  ok('第八輪-6：監察台「真實進展」的事件紀錄帶未能讀取的檔案清單', ev6 && Array.isArray(ev6.unreadable) && ev6.unreadable.length === 4, ev6);
+  // 假檔名：AI 列出不屬於這次附件的檔名 → 核對不通過，叫 AI 修正一次（修正後只留真正的附件），不留假紀錄
+  mode('event:event-unread-bogus');
+  seen = await seenIds();
+  const sub7 = await post('/api/intake', { kind: 'note', type: 'event', text: '11 月 8 日 陳先生 再寄一份 Word 附件。', date: '2026-11-08', files: [longDocs[0]] });
+  r = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
+  const in7 = state().inputs.find(i => i.id === 'in-' + sub7.j.id);
+  ok('第八輪-6：AI 列出不是這次附件的檔名：外殼不接受並叫 AI 修正一次，紀錄只留真正的附件', r && r.state === 'done' && /unreadable 第 \d+ 項/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')) && in7 && Array.isArray(in7.unreadable) && in7.unreadable.length === 1 && in7.unreadable[0].file === longDocs[0].name, r && { state: r.state, error: r.error, unreadable: in7 && in7.unreadable });
+  // 0.39.1 第九輪：AI 常加 files/ 前綴、副檔名大小寫不同、原因寫成口語 → 認得是同一份附件（換回實際檔名），事件不會被判為不合格
+  mode('event:event-unread-loose');
+  seen = await seenIds();
+  const fixCount = () => (fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8').match(/unreadable 第 \d+ 項/g) || []).length;
+  const fix0 = fixCount();
+  const sub8 = await post('/api/intake', { kind: 'note', type: 'event', text: '11 月 9 日 陳先生 又寄來一份 Word 附件。', date: '2026-11-09', files: [{ name: '會後紀錄.docx', data: Buffer.from('PK fake docx').toString('base64') }] });
+  r = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
+  const in8 = state().inputs.find(i => i.id === 'in-' + sub8.j.id);
+  ok('第九輪-6：AI 寫 files/會後紀錄.DOCX：不被判為不合格（沒有叫 AI 修正），事件處理成功', r && r.state === 'done' && fixCount() === fix0, r && { state: r.state, error: r.error, fixes: fixCount() - fix0 });
+  ok('第九輪-6：紀錄換回實際檔名「會後紀錄.docx」', in8 && Array.isArray(in8.unreadable) && in8.unreadable.length === 1 && in8.unreadable[0].file === '會後紀錄.docx', in8 && in8.unreadable);
+  ok('第九輪-6：AI 的口語原因只保存作紀錄，畫面原因由 names.js 固定（Office 檔一句）', in8 && in8.unreadable[0].reason === 'Word 檔目前讀唔到' && N.unreadReason('會後紀錄.docx') === N.t('unreadReasonOffice', { page: N.ui.intakeTitle }) && !/讀唔到|唔/.test(N.unreadReason('會後紀錄.docx')), in8 && in8.unreadable);
+  // 0.39.1 第十輪：原因超過 80 字 → 截斷並記警告，不判整份事件不合格（與預填一致）
+  mode('event:event-unread-longreason');
+  seen = await seenIds();
+  const fix10 = fixCount();
+  const sub10 = await post('/api/intake', { kind: 'note', type: 'event', text: '11 月 10 日 陳先生 再寄一份 Word 附件。', date: '2026-11-10', files: [{ name: '補充說明.docx', data: Buffer.from('PK fake docx').toString('base64') }] });
+  r = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
+  const in10 = state().inputs.find(i => i.id === 'in-' + sub10.j.id);
+  ok('第十輪-3：AI 寫的未能讀取原因超過 80 字：不被判為不合格（沒有叫 AI 修正），事件處理成功', r && r.state === 'done' && fixCount() === fix10, r && { state: r.state, error: r.error, fixes: fixCount() - fix10 });
+  ok('第十輪-3：紀錄的原因截斷為 80 字，檔名完整保留', in10 && Array.isArray(in10.unreadable) && in10.unreadable.length === 1 && in10.unreadable[0].file === '補充說明.docx' && in10.unreadable[0].reason.length === 80, in10 && in10.unreadable);
+  ok('第十輪-3：後台日誌記了截斷警告', /未能讀取原因超過 80 字，已截斷/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')));
+  ok('第十輪-3：事件說明（ai-event.md）寫明原因最多 80 字', /最多 80 字/.test(fs.readFileSync(path.join(PROTO, 'ai-event.md'), 'utf8').split(/\r?\n/).filter(l => /unreadable/.test(l) && /reason/.test(l)).join('')));
+  mode('event:event-ok');
 
   // 缺口 3：提示句建議 → 「不知道／稍後提供」；答咗之後到期前唔再問
   const raw = { format: 'startup-os.ask/0.1', title: '會面前的資料', questions: [

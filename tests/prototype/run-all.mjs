@@ -1,5 +1,5 @@
 // CrewZero 原型回歸測試：一條命令跑全套（隔離資料夾、假 AI、零費用；唔掂原型嘅 data/）。
-// 用法：node tests/prototype/run-all.mjs [--proto <原型資料夾>] [--out <輸出資料夾>] [--chrome <Chrome 路徑>] [--port <起始埠>] [--only <名稱或檔名，逗號分隔>] [--no-browser]
+// 用法：node tests/prototype/run-all.mjs [--proto <原型資料夾>] [--out <輸出資料夾>] [--chrome <Chrome 路徑>] [--port <起始埠>] [--only <名稱或檔名，逗號分隔>] [--no-browser] [--ports（只列出各組埠段後結束）]
 // 亦可用環境變數：SOS_TEST_PROTO、SOS_TEST_OUT、SOS_TEST_CHROME、SOS_TEST_PORT。詳情見同一資料夾嘅 README.md。
 import fs from 'node:fs';
 import os from 'node:os';
@@ -36,7 +36,7 @@ const cleanupErrors = [];
 const quietly = (fn, fallback = null) => { try { return fn(); } catch (e) { cleanupErrors.push(String(e && e.message || e)); return fallback; } };
 quietly(() => sweepInterrupted(OUTPUT_ROOTS));
 quietly(() => pruneOutputs(OUTPUT_ROOTS, OUT));
-// 不可用嘅埠（其他服務、真實實例、模擬實例）；每項測試佔 10 個埠
+// 不可用嘅埠（其他服務、真實實例、模擬實例）；每項測試預設佔 10 個埠，需要更多的組在 TESTS 第 5 欄寫明（例如「目標日期」20 個）
 // 另加 Fetch 標準封鎖嘅埠（Node fetch 同 Chrome 都拒絕連，例如 6000 會報 bad port，伺服器起咗都連唔到）
 // 5040：Windows 系統服務長期佔用（綁唔到，伺服器會自動跳去下一個埠，測試就連錯埠）
 const RESERVED = [4318, 4380, 4381, 4398, 4402, 4470, 4471, 4650, 5040, 5354, 5530,
@@ -55,7 +55,8 @@ const AD = writeAdapters(path.join(OUT, 'adapters'));
 const FX = path.join(HERE, 'fixtures');
 const fileUrl = p => 'file:///' + p.replace(/\\/g, '/');
 
-// [名稱, 檔案, 參數, 要瀏覽器]；{out} 每項自己一個資料夾，{port} 每項自己一段埠
+// [名稱, 檔案, 參數, 要瀏覽器, 埠段大小（預設 10）]；{out} 每項自己一個資料夾，{port} 每項自己一段埠，{span} 這一段有多少個埠
+// 測試自己另選埠時（例如「目標日期」第九節起）只可在 {port} 起、{span} 個埠之內選，否則會落入下一組的埠段
 const TESTS = [
   ['後端', 'core/backend-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['裝置通行證', 'core/pass-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
@@ -78,6 +79,7 @@ const TESTS = [
   ['鏈（缺 AI）', 'core/cdp-chain.mjs', ['{chrome}', '{out}', '{proto}', '{missing}', '{port}', 'missing', '60'], true],
   ['開機補做', 'core/catchup.mjs', ['{proto}', '{fake}', '{port}']],
   ['校對頁', 'core/proofread-page-test.mjs', ['{chrome}', '{out}', fileUrl(path.join(PROTO, 'proofread.html')) + '?data=fixtures/sample-company-page.js', fileUrl(path.join(FX, 'farm-page.js'))], true],
+  ['目標日期', 'core/goal-dates-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}', '{span}'], true, 20],
   ['舊分頁', 'core/stale.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['並發', 'core/race.mjs', ['{proto}', '{out}', '{port}']],
   ['名稱表', 'core/names-check.mjs', ['{proto}', '{out}']],
@@ -150,6 +152,25 @@ function run(file, args) {
     child.on('exit', code => { clearTimeout(kill); resolve({ text, code }); });
   });
 }
+// 埠段分配：每組佔 [起點, 起點 + 段大小)，段與段不重疊，也不含不可用的埠
+function allocatePorts() {
+  const plan = new Map(); let p = PORT; const taken = [];
+  for (const [i, [name, file, , , span = 10]] of TESTS.entries()) {
+    if (ONLY.length && !ONLY.some(o => name.includes(o) || file.includes(o))) continue;
+    while (RESERVED.some(r => r >= p && r < p + span)) p += 10;
+    const seg = { name, from: p, to: p + span - 1, span };
+    const clash = taken.find(t => seg.from <= t.to && t.from <= seg.to);
+    if (clash) { console.log(`埠段重疊：${seg.name} ${seg.from}-${seg.to} 與 ${clash.name} ${clash.from}-${clash.to}`); process.exit(2); }
+    taken.push(seg); plan.set(i, seg); p += span;
+  }
+  return { plan, taken };
+}
+const PORTS = allocatePorts();
+if (argv.includes('--ports')) {
+  for (const t of PORTS.taken) console.log(`${t.from}-${t.to}（${t.span}）${t.name}`);
+  console.log(`共 ${PORTS.taken.length} 組，埠段互不重疊`);
+  process.exit(0);
+}
 const results = [];
 let evidenceBytes = 0;
 function writeSummary(finished, output) {
@@ -157,11 +178,10 @@ function writeSummary(finished, output) {
   if (output) summary.output = output;
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
 }
-let port = PORT;
 console.log(`原型：${PROTO}\n輸出：${OUT}\nChrome：${CHROME || '（冇；要瀏覽器嘅測試唔會跑）'}\n`);
 for (const [i, [name, file, params, browser]] of TESTS.entries()) {
   if (ONLY.length && !ONLY.some(o => name.includes(o) || file.includes(o))) continue;
-  while (RESERVED.some(r => r >= port && r < port + 10)) port += 10;
+  const seg = PORTS.plan.get(i), port = seg.from;
   const out = path.join(OUT, 'runs', pad(i + 1) + '-' + path.basename(file, '.mjs'));
   if (browser && !CHROME) {
     results.push({ name, file, pass: false, score: '未跑', note: '冇 Chrome', evidence: null, leftBytes: 0 });
@@ -169,7 +189,7 @@ for (const [i, [name, file, params, browser]] of TESTS.entries()) {
     console.log(`－ ${name}：未跑（冇 Chrome）`); continue;
   }
   quietly(() => updateOutputMarker(OUT, { heartbeatAt: new Date().toISOString() }));
-  const map = { '{proto}': PROTO, '{out}': out, '{port}': String(port), '{fake}': AD.fake, '{web}': AD.web, '{missing}': AD.missing, '{chrome}': CHROME };
+  const map = { '{proto}': PROTO, '{out}': out, '{port}': String(port), '{span}': String(seg.span), '{fake}': AD.fake, '{web}': AD.web, '{missing}': AD.missing, '{chrome}': CHROME };
   const list = params.map(p => map[p] ?? p);
   const t0 = Date.now(), log = path.join(OUT, 'logs', pad(i + 1) + '-' + path.basename(file, '.mjs') + '.txt');
   let { text, code } = await run(file, { list, out });
@@ -195,7 +215,6 @@ for (const [i, [name, file, params, browser]] of TESTS.entries()) {
   results.push({ name, file, port, ...v, ...(first ? { retried: true, firstScore: first } : {}), seconds: Math.round((Date.now() - t0) / 1000), evidence, leftBytes, ...(cleared.left.length ? { cleanupLeft: cleared.left } : {}) });
   writeSummary(false);
   console.log(`${v.pass ? '✓' : '✗'} ${name}：${v.score}${first ? (v.pass ? '（重試後通過；第一次 ' + first + '）' : '（重試都唔通過；第一次 ' + first + '）') : ''}（${Math.round((Date.now() - t0) / 1000)} 秒）`);
-  port += 10;
 }
 const failed = results.filter(r => !r.pass), retriedOk = results.filter(r => r.pass && r.retried);
 if (!KEEP_RUNS && fs.existsSync(path.join(OUT, 'runs'))) quietly(() => safeRemove(path.join(OUT, 'runs'), OUT));

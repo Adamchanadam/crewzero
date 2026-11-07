@@ -27,7 +27,30 @@ export function labelOf(a, docs) {
   }
   return 'inferred';
 }
-// 核對 AI 交嘅 out/prefill.json → { ok, answers, warnings }；answers 只含有文字嘅題
+// AI 寫的附件檔名 → 本次實際的檔名（唯一定義處；預填與真實事件共用）：
+// 去掉開頭的 files/（或 files\），只取檔名；以 Unicode NFC、不分大小寫比對，換回實際檔名（先找逐字相同的）。
+// 檔名內仍有路徑（../、子資料夾）或不屬本次的檔名一律不接受（回 null）。
+export function matchDelivered(raw, names) {
+  const f = String(raw == null ? '' : raw).trim().replace(/^files[\\/]/i, '');
+  if (!f || f === '.' || f === '..' || /[\\/]/.test(f)) return null;
+  const list = [...(names || [])].map(String), key = x => x.normalize('NFC').toLowerCase();
+  return list.find(n => n === f) ?? list.find(n => key(n) === key(f)) ?? null;
+}
+// 未能讀取的檔案：AI 列出的 { file, reason } 只接受本次交入的檔名（去掉 files/、不分大小寫後相同，換回實際檔名），其餘丟棄並記警告；每份只記一次，原因最多 80 字
+// （原因只保存作紀錄，畫面不顯示：畫面的原因由 names.js 按副檔名固定寫出）
+export function checkUnreadable(raw, docs) {
+  const warnings = [], out = [], seen = new Set();
+  for (const x of Array.isArray(raw) ? raw : []) {
+    const given = x && typeof x === 'object' ? String(x.file || '').trim() : '', reason = x && typeof x === 'object' ? String(x.reason || '').trim().slice(0, 80) : '';
+    if (!given) continue;
+    const file = matchDelivered(given, docs.map(d => d.name));
+    if (!file) { warnings.push('未能讀取清單內的「' + given.slice(0, 40) + '」不是這次交入的檔案，已忽略'); continue; }
+    if (seen.has(file)) continue;
+    seen.add(file); out.push({ file, reason });
+  }
+  return { unreadable: out, warnings };
+}
+// 核對 AI 交嘅 out/prefill.json → { ok, answers, unreadable, warnings }；answers 只含有文字嘅題
 export function checkPrefill(raw, docs) {
   const warnings = [];
   if (!raw || typeof raw !== 'object' || !raw.answers || typeof raw.answers !== 'object') return { ok: false, errors: ['未有交出預填，或者格式不正確'] };
@@ -42,7 +65,8 @@ export function checkPrefill(raw, docs) {
     if (a.quote === true && label === 'inferred') warnings.push(q + '：Zero 標示為文件原句，但未能在文件找到，已改為按文件推斷');
     answers[q] = { text, label, source: hit ? hit.name : named ? named.name : '', at, ...(a.quote === true && label !== 'quote' ? { downgraded: true } : {}) };
   }
-  return { ok: true, answers, warnings };
+  const un = checkUnreadable(raw.unreadable, docs);
+  return { ok: true, answers, unreadable: un.unreadable, warnings: warnings.concat(un.warnings) };
 }
 // 送出交資料：按預填紀錄重新判定每題來源（頁面講嘅只係提示）
 // prefills：所有預填紀錄，今次頁面講嘅嗰次排最先；同一題搵唔到就再搵其他題（抄咗去第二題都唔算你寫的，記 moved）

@@ -58,12 +58,21 @@
         "plan": "G2",
         "label": "下一個檢查期",
         "kind": "text",
-        "value": "四星期內：兩個農場書面答覆是否供貨",
+        "value": "兩個農場書面答覆是否供貨",
         "origin": "ai",
         "tentative": {
           "by": "ai",
           "until": "2026-10-29",
           "test": "約見農場丙時直接問何時可書面答覆"
+        },
+        "due": {
+          "id": "g2-due",
+          "plan": "G2.endsOn",
+          "label": "短期目標檢查日",
+          "kind": "date",
+          "value": "2026-10-29",
+          "origin": "ai",
+          "why": "設定日之後四星期，不遲於目前目標期限。"
         }
       },
       {

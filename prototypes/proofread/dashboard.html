@@ -1761,7 +1761,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       h('div', { class: 'tags' }, h('a', { class: 'btn primary', id: 'in-event', href: '/#/request/event' }, D.reqEvent)),
       h('p', { class: 'small muted' }, '公司以外發生的事（見面結果、對方答應或拒絕）；Zero 擬定證據級及站點進度，經你確認後更新。'),
       h('h4', null, D.evRecent),
-      evs.length ? h('ul', { id: 'ev-list' }, evs.map(function (e) { return h('li', null, e.title + '（' + stName(e.status) + '）' + (e.effects.length ? '：' + e.effects.join('；') : '')); })) : h('p', { class: 'empty' }, '未有。'));
+      evs.length ? h('ul', { id: 'ev-list' }, evs.map(function (e) { return h('li', null, e.title + '（' + stName(e.status) + '）' + (e.effects.length ? '：' + e.effects.join('；') : ''), (e.unreadable || []).length ? h('ul', { class: 'small muted ev-unread' }, e.unreadable.map(function (u) { return h('li', null, N.t('unreadFileLine', { f: u.file, r: N.unreadReason(u.file) })); })) : null); })) : h('p', { class: 'empty' }, '未有。'));
     var input = h('input', { type: 'file', multiple: true, hidden: true, id: 'doc-files' });
     input.addEventListener('change', function () { Array.prototype.forEach.call(input.files, function (f) { if (!IP.files.some(function (y) { return y.name === f.name && y.size === f.size; })) IP.files.push(f); }); input.value = ''; docList(); });
     var drop = h('div', { class: 'drop', id: 'doc-drop' }, h('p', { class: 'small' }, U.docDrop), h('button', { type: 'button', class: 'btn', onclick: function () { input.click(); } }, '選擇文件'), input, h('div', { id: 'doc-list' }));

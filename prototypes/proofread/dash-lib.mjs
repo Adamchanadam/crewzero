@@ -270,7 +270,9 @@ export function dashboardState(DIR, extra = {}) {
   const values = page ? registryValues(page, confirmed) : {};
   const goalRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G1');
   const nextRow = page && page.glance && (page.glance.rows || []).find(r => r.plan === 'G5');
-  const goals = state.goals || { quarter: goalRow ? { text: String(values[goalRow.id] ?? goalRow.value), endsOn: goalRow.due ? String(values[goalRow.due.id] ?? goalRow.due.value ?? '') : '' } : null };
+  const pageQuarter = goalRow ? { text: String(values[goalRow.id] ?? goalRow.value), endsOn: goalRow.due ? String(values[goalRow.due.id] ?? goalRow.due.value ?? '') : '' } : null;
+  // 逐欄合併：帳本的目標（例如每月覆核改寫的文字）沒有期限時，期限回落到已確認的公司概覽
+  const goals = state.goals ? { ...state.goals, quarter: state.goals.quarter ? { ...state.goals.quarter, endsOn: state.goals.quarter.endsOn || (pageQuarter ? pageQuarter.endsOn : '') } : pageQuarter } : { quarter: pageQuarter };
   const storedNextAction = (state.company && state.company.nextExternalAction) || (nextRow ? { text: String(values[nextRow.id] ?? nextRow.value), milestoneId: confirmed && confirmed.nextActionMilestone || nextRow.flagTo || '' } : null);
 
   /* 里程碑 */
@@ -411,7 +413,7 @@ export function dashboardState(DIR, extra = {}) {
   const awaiting = inputs.filter(i => i.status === 'awaitingFounder').map(i => ({ id: i.id, title: i.title || '', question: i.awaitingFounderText || '', packId: i.packId || '', at: i.receivedAt }));
   const recentInputs = inputs.filter(i => i.status === 'processed').sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0, 3).map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt, effects: (i.effects || []).map(e => e.change).filter(Boolean) }));
   // 輸入頁「真實事件」欄：最近記錄嘅真實事件（任何狀態）同各自收據
-  const eventInputs = inputs.filter(i => i.eventDate && i.via !== 'doc').sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0, 4).map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt, date: i.eventDate, status: i.status, packId: i.packId || '', effects: (i.effects || []).map(e => e.change).filter(Boolean) }));
+  const eventInputs = inputs.filter(i => i.eventDate && i.via !== 'doc').sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0, 4).map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt, date: i.eventDate, status: i.status, packId: i.packId || '', effects: (i.effects || []).map(e => e.change).filter(Boolean), unreadable: Array.isArray(i.unreadable) ? i.unreadable.map(u => ({ file: String(u.file || ''), reason: String(u.reason || '') })) : [] }));
   const interviews = state.interviews || null;
   const rhythm = state.company && state.company.rhythm || null;
   // 排程狀態（系統頁）：邊個負責按時叫 AI 開工、上次實際觸發、下次開工；作業系統排程未安裝就冇「下次」

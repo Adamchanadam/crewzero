@@ -42,6 +42,62 @@ function completeReading(page) {
     return f;
   }).concat(reading.filter(x => x && !READING_PLANS.includes(x.plan)));
 }
+// 日子次序（只在 ready 核對時當錯誤，叫 AI 修正一次；仍有問題不阻校對，校對頁會提示、確認時再收窄）
+const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+// 只認存在的日子（2027-02-30 這類會被日期物件溢出成 3 月 2 日，不當有效）
+export function validDay(s) {
+  const m = DAY.exec(String(s || ''));
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3];
+}
+// 句首日期規則：與校對頁 legacyDate() 用同一組（前綴「至／在／於」可有可無；ISO 日期同樣；日期後可有「前」）
+export const LEGACY_LEAD = {
+  iso: /^\s*(?:至|在|於)?\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*(?:前|之前|止)?\s*[：:，,]\s*/,
+  zh: /^\s*(?:至|在|於)?\s*(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(?:前|之前|止)?\s*[：:，,]\s*/
+};
+// 以日期開頭（不論有沒有冒號）：任何一項都報告
+const DATE_LEAD = /^\s*(?:至|在|於)?\s*(?:(?:\d{4}\s*年\s*)?\d{1,2}\s*月\s*\d{1,2}\s*日|\d{4}-\d{1,2}-\d{1,2})/;
+// 內容任何位置的日期（月日，不論有無年份；或 ISO）：只查 G1、G2
+const DATE_ANY = /(?:\d{4}\s*年\s*)?\d{1,2}\s*月\s*\d{1,2}\s*日|\d{4}-\d{1,2}-\d{1,2}/;
+export function dateOrderIssues(page) {
+  const out = [], rows = (page && page.glance && Array.isArray(page.glance.rows)) ? page.glance.rows : [];
+  const g1 = rows.find(r => r && r.plan === 'G1'), g2 = rows.find(r => r && r.plan === 'G2');
+  const dueVal = r => r && r.due ? String(r.due.value || '') : '';
+  const g1Due = validDay(dueVal(g1)) ? dueVal(g1) : '', g2Due = validDay(dueVal(g2)) ? dueVal(g2) : '';
+  for (const [r, nm] of [[g1, 'G1.endsOn'], [g2, 'G2.endsOn']]) if (r && dueVal(r) && !validDay(dueVal(r))) out.push('「' + NAMES.field[nm] + '」（' + dueVal(r) + '）不是存在的日子：請改為真實存在的日子（YYYY-MM-DD）');
+  if (g2 && !dueVal(g2)) out.push('「' + NAMES.field.G2 + '」沒有獨立期限：請加 due（plan 寫 "G2.endsOn"、kind 寫 "date"、value 寫 YYYY-MM-DD），日期預設取目前目標期限與設定日加 28 日中較早的一個');
+  for (const r of rows) {
+    const v = String(r && r.value || '');
+    if (!r || r.kind === 'grade') continue;
+    // 只防「期限寫進句子」：任何一項以日期開頭都報告；G1、G2 內容任何位置有日期都報告（其他項目中間的事實日期可以有，例如「2026 年 11 月 6 日已答應加入」）
+    const name = '「' + (NAMES.field[r.plan] || r.label || '一項') + '」';
+    if (DATE_LEAD.test(v)) out.push(name + '內容以日期開頭：日期只可放在 due，內容不要以日期開頭');
+    else if (['G1', 'G2'].includes(r.plan) && DATE_ANY.test(v)) out.push(name + '內容寫了日期：期限只可放在 due，內容不要寫日期');
+  }
+  if (g1Due && g2Due && g2Due > g1Due) out.push('「' + NAMES.field['G2.endsOn'] + '」（' + g2Due + '）遲於「' + NAMES.field['G1.endsOn'] + '」（' + g1Due + '）：請改為不遲於目前目標期限');
+  const badUntil = fieldsOf(page).filter(f => f.tentative && f.tentative.until != null && String(f.tentative.until) !== '' && !validDay(f.tentative.until));
+  if (badUntil.length) out.push(badUntil.length + ' 項暫定值的覆核日不是存在的日子（' + badUntil.slice(0, 3).map(f => f.label || f.id).join('、') + (badUntil.length > 3 ? ' 等' : '') + '）：請改為真實存在的日子（YYYY-MM-DD）');
+  if (g1Due) {
+    const late = fieldsOf(page).filter(f => f.tentative && validDay(f.tentative.until) && f.tentative.until > g1Due);
+    if (late.length) out.push(late.length + ' 項暫定值的覆核日遲於「' + NAMES.field['G1.endsOn'] + '」（' + g1Due + '）：請把 tentative.until 改為不遲於目前目標期限（' + late.slice(0, 3).map(f => f.label || f.id).join('、') + (late.length > 3 ? ' 等' : '') + '）');
+  }
+  return out;
+}
+// 開局答案欄（唯一定義處之一；proofread.html 的 openingIds() 用同一判斷寫法）：
+// 每個 G1–G10 計劃只有一個欄是開局答案——「目標與現況」(glance) 內的欄優先，其次規則區 (detail.rules)，再其次其他位置（按文件次序，先出現的）。
+// 里程碑內同一計劃的欄位（例如各站負責人也用 plan:G6）在概覽已有該欄時不是開局答案，不承諾每週覆核。
+export function openingFields(page) {
+  const out = {};
+  const walk = o => {
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (!o || typeof o !== 'object') return;
+    if (typeof o.id === 'string' && 'value' in o && 'label' in o && /^G(?:10|[1-9])$/.test(String(o.plan || '')) && o.kind !== 'grade' && !out[o.plan]) out[o.plan] = o;
+    for (const k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+  };
+  walk(page && page.glance); walk(page && page.detail && page.detail.rules); walk(page);
+  return out;
+}
 export const ROW_PLANS = ['G1', 'G2', 'G3', 'G5', 'G6', 'G9'];
 export const RULE_PLANS = ['G7', 'G8', 'G10'];
 export const CELLS = [['event', 'milestone.event'], ['actor', 'milestone.actor'], ['witness', 'milestone.witness'], ['proof', 'milestone.evidence']];
@@ -91,7 +147,7 @@ export function normalizePage(page, options = {}) {
     if (!f.tentative || typeof f.tentative !== 'object') { if (f.tentative) delete f.tentative; continue; }
     const t = f.tentative;
     if (!['ai', 'actor', 'founder'].includes(t.by)) t.by = 'ai';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(t.until || '')) || t.until > latest || t.until < prepared) t.until = latest;
+    if (!validDay(t.until) || t.until > latest || t.until < prepared) t.until = latest;
   }
   // 四格：缺嘅格加空欄（由你補，或者 AI 再建議）；真事／工作：AI 冇判就按事件字面推斷（寫好文件一類係工作）
   const msIds = new Set();
@@ -148,6 +204,7 @@ export function checkCompanyPage(page, options = {}) {
   if (!errors.length && options.ready) {
     const r = readiness(page);
     for (const p of r.absent) errors.push('缺少「' + (p === 'G4' ? '目前去到哪裏' : NAMES.field[p]) + '」一欄（照格式說明「一定要齊」一節補上；文件沒有寫就寫 Zero 建議值並標為暫定）');
+    errors.push(...dateOrderIssues(page));
     const ms = (page.path && page.path.milestones) || [];
     for (const c of r.cells) { const miss = CELLS.filter((x, i) => !c.have[i]).map(x => NAMES.field[x[1]]); const m = ms.find(x => x.id === c.id); if (miss.length) errors.push('「' + ((m && m.short) || '一個里程碑') + '」缺少：' + miss.join('、') + '（文件沒有寫就寫 Zero 建議值）'); }
   }

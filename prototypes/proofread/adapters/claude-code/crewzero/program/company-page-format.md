@@ -10,7 +10,7 @@
 
 可改項目有唯一 `id`、`label`、`value`、`origin`；`kind` 為 `choice`、`grade`、`date`、`text`、`multi`，選項放 `options`，每項可有 `text`、`note`、`rec`；亦可有 `why`、`ask`、`judge`、`hint`。`plan` 用 `biz.type`、`canvas.*`（見下列清單）、G1 至 G10、`milestone.event`、`milestone.actor`、`milestone.witness`、`milestone.evidence`、`milestone.deliveryCondition`、`milestone.targetDate`、`depth.1` 至 `depth.5` 表示欄位用途。
 
-`origin` 只能是 `doc`、`ai`、`default`、`missing`。文件明確寫出的資料用 `doc`，附 `src: [{"from":"來源編號","at":"位置"}]`；未知用 `missing`，在 `detail.missing` 說明怎樣找答案。文件未寫的建議或未發生、未有的狀態用 `ai`，預設規則用 `default`。暫定值加 `tentative: {"by":"ai","until":"YYYY-MM-DD","test":"最低成本的驗證方法"}`，期限最遲四星期。
+`origin` 只能是 `doc`、`ai`、`default`、`missing`。文件明確寫出的資料用 `doc`，附 `src: [{"from":"來源編號","at":"位置"}]`；未知用 `missing`，在 `detail.missing` 說明怎樣找答案。文件未寫的建議或未發生、未有的狀態用 `ai`，預設規則用 `default`。暫定值加 `tentative: {"by":"ai","until":"YYYY-MM-DD","test":"最低成本的驗證方法"}`，期限最遲四星期，且不可遲於 G1 的期限。
 
 虛構例子：`{"id":"g1","plan":"G1","label":"目前目標","value":"三間餐廳試單","origin":"doc","src":[{"from":"資料一","at":"目標"}]}`。
 
@@ -38,10 +38,10 @@
   其餘項目：創辦人答案或者文件寫明嘅用 `origin: "doc"` 並按現有來源規則附 `src`；AI 推斷用 `origin: "ai"`；不適用寫「不適用」；唔知而且推斷唔到嘅用 `origin: "missing"`、`value: "待你補充"`，並喺 `detail.missing` 說明。呢區嘅數字、人名、金額只可以來自答案或者文件，唔可以虛構。現有替代方案可以按行業常識或者公開資料估計，標 `origin: "ai"`；用到外部事實要按現有規則列標題、網址、查閱日期，只有摘要就寫明。
 
 - **G1–G10 每項都要有值**；冇數字、冇金額、冇日期都要填：寫「對方書面答覆是否合作」一類不需數字的事件，或者「由對方提出」，或者 AI 建議值（加 `tentative`）。
-  - `glance.rows` 要有以下可改項目，各帶 `plan`（括號係核對訊息用嘅名）：`G1` 目前目標（期限放 `due`）、`G2`「短期目標」＝下一個檢查期（預設四星期，由 G1 倒推）、`G3`「怎樣才算有進展」（付款、簽名、使用紀錄、文件、對方書面答覆一類，唔可以係活動次數）、`G5`「下一個對外動作」、`G6`「負責人」＝已有人負責的事（每項寫「我自己／具名的人／未有」）、`G9`「產品或服務的要求與特色」。
+  - `glance.rows` 要有以下可改項目，各帶 `plan`（括號係核對訊息用嘅名）：`G1` 目前目標（期限放 `due`）、`G2`「短期目標」＝下一個檢查期（要帶 `due`：`plan: "G2.endsOn"`、`kind: "date"`；日期預設＝G1 期限與 `preparedAt` 加 28 日中較早的一個，不可遲於 G1 期限）、`G3`「怎樣才算有進展」（付款、簽名、使用紀錄、文件、對方書面答覆一類，唔可以係活動次數）、`G5`「下一個對外動作」、`G6`「負責人」＝已有人負責的事（每項寫「我自己／具名的人／未有」）、`G9`「產品或服務的要求與特色」。G1、G2 的 `value` 不寫日期，期限只放 `due`；`glance.rows` 任何一項的 `value` 都不要以日期開頭（例如「至 12 月 4 日：」）。其他項目內容中間的事實日期（例如「2026 年 11 月 6 日已答應加入」）可以寫。
   - `G4` 就係 `glance.status.items`（目前去到哪裏）。只有某一項本身就是某個里程碑的 `event` 或 `deliveryCondition`，才加 `"milestone": "里程碑 id"`；通往該站的前置步驟（例如「表示有興趣」）不可加。已實際發生並達「實際行動」或以上，而且文件寫明的項目，成頁確認後該站才當已完成。
   - `detail.rules` 要有 `plan: "G7"`「Zero 可自行處理的事」（三格權限，連 `boxes`）、`plan: "G8"`「經營節奏」（文件冇寫就 `origin: "default"`，值寫「用預設：每日晚上 9 時工作一次；逢星期一了解近況」）、`plan: "G10"`「業務線數目」（預設「一條業務線」）。
-- **暫定值一定要寫來源同限期**：`tentative: {"by": "ai"|"actor"|"founder", "until": "YYYY-MM-DD", "test": "最低成本的驗證方法"}`；`ai`＝AI 建議、`actor`＝由對方提出、`founder`＝創辦人暫定；限期最遲四星期。文件冇寫、由你建議嘅 G 欄值一律暫定。
+- **暫定值一定要寫來源同限期**：`tentative: {"by": "ai"|"actor"|"founder", "until": "YYYY-MM-DD", "test": "最低成本的驗證方法"}`；`ai`＝AI 建議、`actor`＝由對方提出、`founder`＝創辦人暫定；限期最遲四星期，且不可遲於 G1 嘅期限。文件冇寫、由你建議嘅 G 欄值一律暫定。
 - **每個里程碑四格都要填**：`event`「里程碑事件」（公司以外真係發生嘅事）、`actor`「決策者」（邊個外部角色要點頭）、`witness`「見證人」（邊個見證，唔可以係 AI 或者創辦人本人）、`proof`「證明方式」（用乜證明：文件、紀錄或收據一類）。文件冇寫就寫建議值、`origin: "ai"`。
 - **每個里程碑五條為甚麼（`depth`）都要有答案**：文件冇寫就寫 AI 推斷（`origin: "ai"`，加 `test` 最低成本嘅驗證方法）；唔好留空。創辦人會逐條確認或者改寫。
 - **每個里程碑加 `kind`**：`"real"`（真事：公司以外有人做咗某件事）或者 `"task"`（工作：我方自己做嘅事，例如寫好一份文件）；可加 `kindWhy` 一句理由。創辦人會逐站判斷。

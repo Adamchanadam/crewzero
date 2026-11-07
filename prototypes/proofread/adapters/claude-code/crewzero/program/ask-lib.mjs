@@ -69,6 +69,49 @@ export function fnv(str) {
   return ('0000000' + x.toString(16)).slice(-8);
 }
 
+// 公司概覽「最近一次確認內容」的摘要值（唯一定義處之一；proofread.html 的 digestOf() 用同一算法）：
+// 以 { 全部欄位 id 排序後的 [id, 值]、路線次序、各站真事／工作 } 串起後取 fnv。
+// 校對頁以目前有效內容算同一個值，與伺服器確認內容的摘要值相同才算「已交付」。
+const digestOf = (values, order, kinds) => fnv(JSON.stringify([
+  Object.keys(values).sort().map(id => [id, String(values[id] ?? '')]),
+  order.map(String),
+  Object.keys(kinds).sort().map(id => [id, kinds[id] === 'task' ? 'task' : 'real'])]));
+// 公司概覽資料裡的全部欄位（id → 值）：與外殼 run.mjs 的 registry() 同一走法
+function pageFieldValues(page) {
+  const out = {};
+  (function walk(o) {
+    if (Array.isArray(o)) return o.forEach(walk);
+    if (!o || typeof o !== 'object') return;
+    if (typeof o.id === 'string' && 'value' in o && 'label' in o) out[o.id] = String(o.value ?? '');
+    for (const k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]);
+  })(page);
+  return out;
+}
+// 伺服器已確認的內容（值、路線次序、各站真事／工作類別、摘要值）。給了公司概覽資料（page）就按該頁補齊：
+// 欄位缺的用 Zero 原值、類別缺的用該站原本的類別、次序缺的用原次序（例如示範資料的確認紀錄沒有 kinds），
+// 令校對頁用同一算法算出的摘要值一致。confirmed.json 沒有版次欄位：確認只可能屬於目前這一頁（新頁安裝時舊確認會被移走），
+// 這裡再核對 pageId；不屬本頁就沒有快照。
+export function confirmedSnapshot(c, page) {
+  if (!c || typeof c !== 'object' || !c.values || typeof c.values !== 'object') return null;
+  if (page) {
+    if (!page.page || !page.page.id || c.pageId !== page.page.id) return null;
+    const ms = Array.isArray(page.path && page.path.milestones) ? page.path.milestones : [];
+    const base = pageFieldValues(page), values = {};
+    for (const id of Object.keys(base)) values[id] = String(c.values[id] ?? base[id]);
+    const ck = c.kinds && typeof c.kinds === 'object' ? c.kinds : {}, kinds = {};
+    for (const m of ms) kinds[m.id] = (ck[m.id] ?? m.kind) === 'task' ? 'task' : 'real';
+    const order = Array.isArray(c.order) ? c.order.map(String) : ms.map(m => String(m.id));
+    return { pageId: c.pageId, revision: page.page.revision || 0, digest: digestOf(values, order, kinds), values, order, kinds, autoIds: (Array.isArray(c.autoEdits) ? c.autoEdits : []).map(e => e && e.id).filter(id => typeof id === 'string' && id in values), confirmedAt: c.confirmedAt || '', replyFile: c.replyFile || '' };
+  }
+  const values = {}; for (const id of Object.keys(c.values)) values[id] = String(c.values[id] ?? '');
+  const kinds = c.kinds && typeof c.kinds === 'object' ? c.kinds : {};
+  return { pageId: c.pageId, revision: null, digest: digestOf(values, Array.isArray(c.order) ? c.order : [], kinds), values, order: Array.isArray(c.order) ? c.order.map(String) : [], kinds, autoIds: [], confirmedAt: c.confirmedAt || '', replyFile: c.replyFile || '' };
+}
+export function confirmedDigest(c, page) {
+  const s = confirmedSnapshot(c, page);
+  return s ? s.digest : '';
+}
+
 // 伺服器用嚟認返自己（同一個資料夾）；ask.mjs 用嚟搵返開緊嘅伺服器
 // 資料夾識別碼：完整路徑嘅雜湊（舊算法只取路徑尾段，唔同項目資料夾名尾幾個字相同就會撞）
 export const rootId = root => crypto.createHash('sha256').update(String(root).toLowerCase()).digest('hex').slice(0, 24);
@@ -100,7 +143,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.39.0';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.39.1';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

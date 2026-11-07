@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { certified, execute, modelCandidates, webAccess } from './host-lib.mjs';
-import { checkCompanyPage, normalizePage, ROW_PLANS, RULE_PLANS, CELLS } from './company-page-check.mjs';
+import { checkCompanyPage, normalizePage, validDay, openingFields, ROW_PLANS, RULE_PLANS, CELLS } from './company-page-check.mjs';
 import { scanOutput, fixOutput } from './style-check.mjs';
 import { loadBrain, cardText, brainSource, brainFile, pipelineOf, ledgerAssumptions, deriveActors, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { pad, localIso, stamp, readJSON, writeJSON, fnv, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
-import { PREFILL_Q, docTexts, checkPrefill } from './prefill-lib.mjs';
+import { PREFILL_Q, docTexts, checkPrefill, matchDelivered } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps, overviewIsCurrent } from './dash-lib.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
@@ -238,6 +238,9 @@ function syncLedger() {
   const as = assumptionsFromPage(page).map(a => { const o = oldAs.find(x => same ? x.pageRef === a.pageRef : x.text === a.text); return !o ? a : { ...a, ...pick(o, AS_KEEP), ...(o.cheapestTestBy === 'checkup' && !String(a.cheapestTest || '').trim() ? pick(o, ['cheapestTest', 'cheapestTestBy', 'cheapestTestAt', 'cheapestTestPartial']) : {}) }; });
   const reg = registry(page), vals = c.values || {}, edited = new Set((c.edits || []).map(e => e.id));
   const v = f => String(vals[f.id] ?? f.value ?? '');
+  // 暫定值的覆核日不遲於目前目標期限（創辦人改過的值或 Zero 原值，即 G1 列的 due）；只在確認公司概覽時收窄
+  const g1Row = listOf(page.glance && page.glance.rows).find(r => r && r.plan === 'G1'), g1Due = g1Row && g1Row.due ? v(g1Row.due) : '';
+  const capUntil = t => validDay(g1Due) && t && validDay(t.until) && g1Due < String(t.until) ? { ...t, until: g1Due } : t;
   // 「目前去到哪裏」（G4）推導站點起始狀態：某項連住一站、已實際發生，而且有文件出處或者由你改過 → 嗰站完成（證明＝交資料嘅封存文件）
   s.events = s.events || [];
   const status = listOf(page.glance && page.glance.status && page.glance.status.items);
@@ -250,7 +253,8 @@ function syncLedger() {
   }
   // 開局答案（3.1、附錄 A intake.answers）：每欄嘅值、來源同暫定標記；未答齊嘅欄列入 missing
   const answers = {}, fieldsByPlan = {};
-  for (const f of Object.values(reg)) if (/^G(?:10|[1-9])$/.test(String(f.plan || '')) && f.kind !== 'grade') { fieldsByPlan[f.plan] = f; answers[f.plan] = { value: v(f), origin: edited.has(f.id) ? 'founder' : f.origin, ...(f.tentative && !edited.has(f.id) ? { tentative: f.tentative } : {}) }; }
+  // 每個計劃只取一個開局答案欄（概覽內的欄優先，各站的同計劃欄位不是開局答案；與校對頁 isRecheck() 同一規則）
+  for (const [plan, f] of Object.entries(openingFields(page))) { fieldsByPlan[plan] = f; answers[plan] = { value: v(f), origin: edited.has(f.id) ? 'founder' : f.origin, ...(f.tentative && !edited.has(f.id) ? { tentative: capUntil(f.tentative) } : {}) }; }
   const rules = listOf(page.detail && page.detail.rules);
   if (!fieldsByPlan.G7) { const r = rules.find(x => x.boxes); if (r) fieldsByPlan.G7 = r; }
   // 你喺每週訪問答「照用再暫定」嘅暫定值：到期日延後（3.9）
@@ -1005,9 +1009,12 @@ async function handleEvent(run, raw, text, dest) {
   eventTask(sb, s, { text, date, files: files.map(f => path.join(dest, f)), ref: run.ref, pre, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
   await runAIStep(run, sb, U.stepEventAI, true);
 }
+// 附件檔名清單：逐份列出（不能列資料夾的 AI 工具，例如 Antigravity，不用再猜檔名）
+const fileListLines = names => names.map(n => `  - files/${n}`);
 function eventTask(sb, s, ev) {
-  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${ev.files.length ? ev.files.length + ' 份（在 files/）' : '沒有'}`, '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
-  if (ev.files.length) { fs.mkdirSync(path.join(sb, 'files'), { recursive: true }); for (const f of ev.files) fs.copyFileSync(f, path.join(sb, 'files', path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''))); }
+  const fileNames = ev.files.map(f => path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''));
+  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${ev.files.length ? ev.files.length + ' 份（在 files/）' : '沒有'}`, ...fileListLines(fileNames), '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
+  if (ev.files.length) { fs.mkdirSync(path.join(sb, 'files'), { recursive: true }); ev.files.forEach((f, i) => fs.copyFileSync(f, path.join(sb, 'files', fileNames[i]))); }
   writeJSON(path.join(sb, 'ledger.json'), {
     milestones: (s.milestones || []).filter(m => m.pathStatus !== 'retired').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short, event: m.event || '', witness: m.witness || '', proof: m.evidence || '', deliveryCondition: m.deliveryCondition || '', done: m.state === 'done' })),
     assumptions: ((s.company || {}).assumptions || []).map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '' })),
@@ -1048,10 +1055,27 @@ function checkEvent(out) {
     } else return errors.push(at + '：kind 必須是 assumption、milestone 或 nextAction');
     seen.add(it.kind + ':' + it.id); items.push(it);
   });
+  // 未能讀取的附件：結構化清單（檔名必須是這次附件的檔名），摘要不再兼顧逐份列出
+  let unreadable = [];
+  if (ev.unreadable != null) {
+    const delivered = (() => { try { return fs.readdirSync(path.join(out, '..', 'files')); } catch { return []; } })();
+    if (!Array.isArray(ev.unreadable)) errors.push('unreadable 必須是清單（沒有未能讀取的附件就省略或寫空清單）');
+    else ev.unreadable.forEach((x, i) => {
+      const at = `unreadable 第 ${i + 1} 項`;
+      if (!x || typeof x !== 'object' || typeof x.file !== 'string' || !x.file.trim()) return errors.push(at + '格式不正確（需要 file 檔名及 reason 原因）');
+      const actual = matchDelivered(x.file, delivered);
+      if (!actual) return errors.push(at + '：「' + x.file.slice(0, 60) + '」不是這次附件的檔名（file 只寫附件的檔名，不加 files/，也不可自行編造）');
+      // 原因只保存作紀錄（畫面不顯示），與預填一致：太長就截斷並記警告，不因此判整份事件不合格
+      if (x.reason != null && typeof x.reason !== 'string') return errors.push(at + '的 reason 必須是一句文字（最多 80 字）');
+      const reason = String(x.reason || '').trim();
+      if (reason.length > 80) log('真實事件的未能讀取原因超過 80 字，已截斷：' + actual.slice(0, 40));
+      if (!unreadable.some(u => u.file === actual)) unreadable.push({ file: actual, reason: reason.slice(0, 80) });
+    });
+  }
   if (errors.length) return { ok: false, errors };
   if (items.length > 3) log(`真實事件建議多過三項，只問頭三項：${items.slice(3).map(x => x.kind + ':' + x.id).join('、')}`);
 
-  return { ok: true, ev, items: items.slice(0, 3) };
+  return { ok: true, ev, items: items.slice(0, 3), unreadable: unreadList(unreadable) };
 }
 function eventPack(run, s, input, items) {
   const qs = items.map((it, i) => {
@@ -1095,16 +1119,18 @@ async function finishEvent(run, sb, label, styleWarnings) {
   writeJSON(path.join(DIR.work, run.id, 'run.json'), { id: run.id, kind: run.kind, ref: run.ref, label, startedAt: run.startedAt, aiCost: run.aiCost || null });
   input.summary = clip(chk.ev.summary.trim(), 300);
   if (chk.ev.grade) input.grade = chk.ev.grade;
+  if (chk.unreadable.length) input.unreadable = chk.unreadable; else delete input.unreadable;
+  const unread = chk.unreadable.length ? { unreadable: chk.unreadable } : {};
   if (!chk.items.length) {
     input.status = 'processed'; input.processedAt = localIso(); saveState(s);
-    run.result = { summary: input.summary + ' ' + U.eventNoChange, artifacts: [], founderNext: [], styleWarnings };
+    run.result = { summary: input.summary + ' ' + U.eventNoChange, artifacts: [], founderNext: [], styleWarnings, ...unread };
     step(run, 'ai', label, 'done', U.eventNoChange); return finish(run, 'done');
   }
   const pack = eventPack(run, s, input, chk.items);
   const placed = placePacks(DIR, [pack]);
   input.status = 'awaitingFounder'; input.awaitingFounderText = U.eventAwaiting; input.packId = placed[0].id;
   saveState(s);
-  run.result = { summary: input.summary, artifacts: [], founderNext: [], asks: placed, styleWarnings };
+  run.result = { summary: input.summary, artifacts: [], founderNext: [], asks: placed, styleWarnings, ...unread };
   step(run, 'ai', label, 'done', `已擬定 ${placed[0].count} 條確認問題，等你確認`);
   finish(run, 'done');
 }
@@ -1270,6 +1296,7 @@ async function handleIntake(run, file) {
   fs.copyFileSync(path.join(DIR.inbox, file), path.join(sb, 'intake.md'));
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   for (const f of files) fs.copyFileSync(path.join(DIR.inbox, f), path.join(sb, 'files', f.slice((id + '-intake-').length).replace(/^\d+-/, '')));
+  if (files.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...fileListLines(files.map(f => f.slice((id + '-intake-').length).replace(/^\d+-/, '')))].join('\n') + '\n');
   // 收件匣唔可以越積越亂：登記完即搬去封存
   const now = clockNow(), dest = path.join(DIR.archive, `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, 'intake-' + id);
   fs.mkdirSync(dest, { recursive: true });
@@ -1290,6 +1317,7 @@ async function handlePrefill(run, file) {
   const sb = newSandbox(run, selectedBiz), files = fs.readdirSync(DIR.inbox).filter(f => f.startsWith(id + '-prefill-')).sort();
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   for (const f of files) fs.copyFileSync(path.join(DIR.inbox, f), path.join(sb, 'files', f.slice((id + '-prefill-').length).replace(/^\d+-/, '')));
+  if (files.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...fileListLines(files.map(f => f.slice((id + '-prefill-').length).replace(/^\d+-/, '')))].join('\n') + '\n');
   // 收件匣唔可以越積越亂：登記完即搬去封存（掃描工具之後照呢份文件核對）
   const now = clockNow(), dest = path.join(DIR.archive, `${now.getFullYear()}-${pad(now.getMonth() + 1)}`, 'prefill-' + id);
   fs.mkdirSync(dest, { recursive: true });
@@ -1300,16 +1328,22 @@ async function handlePrefill(run, file) {
   step(run, 'applied', U.stepPrefillRegistered, 'done', files.length + ' 份文件');
   await runAIStep(run, sb, U.stepPrefillAI, true);
 }
+// 未能讀取的檔案清單：沒有寫原因的補上預設原因（用字在 names.js）
+const unreadList = xs => (xs || []).map(x => ({ file: x.file, reason: x.reason || NAMES.unreadReason(x.file) }));
 function finishPrefill(run, sb, label) {
   const raw = readJSON(path.join(sb, 'out', 'prefill.json'), null);
   const chk = checkPrefill(raw, docTexts(path.join(sb, 'files')));
   if (!chk.ok) { step(run, 'ai', label, 'failed', U.prefillBad); return finish(run, 'failed', U.prefillBad); }
   for (const w of chk.warnings) log(`${run.id} 預填：${w}`);
-  const rec = { id: run.ref, at: localIso(), files: fs.readdirSync(path.join(sb, 'files')), answers: chk.answers, missing: PREFILL_Q.filter(q => !chk.answers[q]), runId: run.id };
+  // 未能讀取的檔案（例如 Word、PowerPoint、Excel）：單獨記錄，不算「文件未有」；全部文件都讀不到時不採用任何預填答案
+  const files = fs.readdirSync(path.join(sb, 'files')), unreadable = unreadList(chk.unreadable);
+  const allUnread = files.length > 0 && files.every(f => unreadable.some(u => u.file === f));
+  if (allUnread && Object.keys(chk.answers).length) { log(`${run.id} 預填：所有文件都未能讀取，丟棄 ${Object.keys(chk.answers).length} 條不可能出自文件的答案`); chk.answers = {}; }
+  const rec = { id: run.ref, at: localIso(), files, answers: chk.answers, missing: PREFILL_Q.filter(q => !chk.answers[q]), runId: run.id, ...(unreadable.length ? { unreadable } : {}), ...(allUnread ? { allUnread: true } : {}) };
   fs.mkdirSync(path.join(DIR.ledger, 'prefill'), { recursive: true });
   writeJSON(path.join(DIR.ledger, 'prefill', run.ref + '.json'), rec);
-  const n = k => Object.values(chk.answers).filter(a => a.label === k).length;
-  run.result = { summary: NAMES.t('prefillDoneSum', { n: Object.keys(chk.answers).length, a: n('quote'), b: n('inferred'), c: n('unverified'), d: rec.missing.length }), artifacts: [], founderNext: [] };
+  const n = k => Object.values(chk.answers).filter(a => a.label === k).length, sumArgs = { n: Object.keys(chk.answers).length, a: n('quote'), b: n('inferred'), c: n('unverified'), d: rec.missing.length, u: unreadable.length };
+  run.result = { summary: allUnread ? U.prefillAllUnread : unreadable.length ? NAMES.t('prefillDoneUnreadSum', sumArgs) : NAMES.t('prefillDoneSum', sumArgs), artifacts: [], founderNext: [], ...(unreadable.length ? { unreadable } : {}) };
   step(run, 'ai', label, 'done', run.result.summary);
   return finish(run, 'done');
 }
@@ -1668,11 +1702,13 @@ async function handleProofread(run, files) {
   if (why) { archive(files); step(run, 'applied', U.stepApplyConfirm, 'failed', why); return finish(run, 'failed', why); }
   const values = {};
   for (const [id, e] of Object.entries(reg)) values[id] = String(e.value ?? '');
-  for (const ed of machine.edits || []) if (reg[ed.id]) values[ed.id] = String(ed.value ?? '');
+  const allEdits = Array.isArray(machine.edits) ? machine.edits : [];
+  for (const ed of allEdits) if (ed && reg[ed.id]) values[ed.id] = String(ed.value ?? '');
+  // 回覆檔內 auto:true 的項目是頁面按目前目標期限自動調整的日期，不是創辦人的答案：另記，不計入創辦人修改
   const c = {
     company: page.company.name, pageId: page.page.id, confirmedAt: machine.confirmedAt, replyFile: latest,
     order: machine.order, orderChanged: !!machine.orderChanged, nextActionMilestone: machine.nextActionMilestone,
-    edits: machine.edits || [], stillMissing: machine.stillMissing || [], note: machine.note || '', values,
+    edits: allEdits.filter(e => !(e && e.auto === true)), autoEdits: allEdits.filter(e => e && e.auto === true && reg[e.id]), stillMissing: machine.stillMissing || [], note: machine.note || '', values,
     kinds: Object.fromEntries(page.path.milestones.map(m => [m.id, (machine.kinds || {})[m.id] === 'task' || (!(machine.kinds || {})[m.id] && m.kind === 'task') ? 'task' : 'real'])), kindsChanged: Array.isArray(machine.kindsChanged) ? machine.kindsChanged.filter(id => page.path.milestones.some(m => m.id === id)) : []
   };
   const prev = readJSON(CONFIRMED, null);
@@ -1687,7 +1723,8 @@ async function handleProofread(run, files) {
   const at = localIso(), base = { at, source: 'proofread', via, packId: page.page.id, packTitle: U.company, reply: latest, runId: run.id };
   const effectIds = new Set(listOf(page.detail && page.detail.rules).filter(r => r.effect).map(r => r.id));
   const entries = c.edits.map(e => ({ ...base, qid: e.id, question: e.label, ai: e.ai, answer: e.founder, changed: true, effect: effectIds.has(e.id) ? 'now' : 'tentative' }));
-  const editedIds = new Set(c.edits.map(e => e.id));
+  for (const e of c.autoEdits) entries.push({ ...base, qid: e.id, question: e.label + '（' + NAMES.ui.autoAdjusted + '）', ai: e.ai, answer: e.founder, changed: true, auto: true, effect: 'tentative' });
+  const editedIds = new Set(c.edits.map(e => e.id).concat(c.autoEdits.map(e => e.id)));
   for (const d of machine.decided || []) {
     if (!d.answered || editedIds.has(d.id) || !reg[d.id]) continue;
     entries.push({ ...base, qid: d.id, question: reg[d.id].ask || reg[d.id].label, ai: show(reg[d.id], reg[d.id].value), answer: show(reg[d.id], reg[d.id].value), changed: false, effect: 'tentative' });
@@ -1699,7 +1736,7 @@ async function handleProofread(run, files) {
   entries.push({ ...base, qid: 'rest', question: U.restAI, ai: '', answer: U.restAdopted, changed: false, effect: 'tentative' });
   appendLog(DIR, entries);
   const n = c.edits.length;
-  step(run, 'applied', U.stepAppliedConfirm, 'done', `${n ? '修改了 ' + n + ' 項' : '全部按 Zero 建議'}；次序${c.orderChanged ? '由你調整' : '按 Zero 建議'}`);
+  step(run, 'applied', U.stepAppliedConfirm, 'done', `${n ? '修改了 ' + n + ' 項' : '全部按 Zero 建議'}${c.autoEdits.length ? '；另有 ' + c.autoEdits.length + ' 項' + NAMES.ui.autoAdjusted : ''}；次序${c.orderChanged ? '由你調整' : '按 Zero 建議'}`);
   // 再次確認：只有首次確認，或者改動影響下一步（下一個對外動作、佢屬邊一站、路線次序）先開 AI 準備下一步，免得改一個程度都重做
   const flag = Object.values(reg).find(e => e.flagTo);
   const affectsNext = !prev || prev.pageId !== c.pageId || prev.nextActionMilestone !== c.nextActionMilestone
@@ -3084,6 +3121,7 @@ async function main() {
         if (!fs.existsSync(path.join(old, 'intake.md'))) { finish(run, 'failed', '找不到上次提交的資料，請重新提交資料'); return; }
         fs.copyFileSync(path.join(old, 'intake.md'), path.join(sb, 'intake.md'));
         if (fs.existsSync(path.join(old, 'files'))) fs.cpSync(path.join(old, 'files'), path.join(sb, 'files'), { recursive: true });
+        if (fs.existsSync(path.join(old, 'files.md'))) fs.copyFileSync(path.join(old, 'files.md'), path.join(sb, 'files.md'));
         intakeTask(sb);
         await runAIStep(run, sb, U.stepIntakeAI, true);
         return;

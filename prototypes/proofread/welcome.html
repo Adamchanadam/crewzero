@@ -212,7 +212,7 @@ h1 em { font-style: normal; color: var(--amber-soft); }
   var demoLinks = [].slice.call(document.querySelectorAll('[data-welcome-demo]'));
   var note = document.getElementById('demo-note');
   function setSetup(ready) {
-    setupLinks.forEach(function (link) { link.textContent = ready ? '回到 Founder Desk' : '開始設定'; link.href = ready ? '/' : '/#/setup'; });
+    setupLinks.forEach(function (link) { link.textContent = ready ? ((window.SOS_NAMES || {}).ui || {}).backDesk : '開始設定'; link.href = ready ? '/' : '/#/setup'; });
   }
   function showPair() {
     var U = (window.SOS_NAMES || {}).ui || {}, box = document.getElementById('no-pass');
