@@ -15,7 +15,7 @@ import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeR
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkLinks } from './link-check.mjs';
-import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId } from './people-ops.mjs';
+import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId, kindOf, founderNamesIn, checkPeopleSync, applyKindFix, peopleSyncDue, nextActorId, duplicateActor, mixSpace } from './people-ops.mjs';
 import { pad, localIso, stamp, readJSON, writeJSON, fnv, proofreadHash, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
@@ -157,11 +157,12 @@ function founderEventTitle(op, st = null) {
   if (op.op === 'setRhythm') return U.rhythmSaved;
   if (op.op === 'setSourceUrl') return NAMES.t('sourceUrlFixed', { t: clip(v.title, 40) });
   if (op.op === 'actorRename') return NAMES.t('actorRenamed', { a: clip(who(op.target), 20), b: clip(v.name, 20) });
-  if (op.op === 'actorKind') return NAMES.t('actorKinded', { n: clip(who(op.target), 20), k: NAMES.dash['ppl_kind_' + v.kind] || '' });
+  if (op.op === 'actorKind') return mixSpace(NAMES.t('actorKinded', { n: clip(who(op.target), 20), k: NAMES.dash['ppl_kind_' + v.kind] || '' }));
   if (op.op === 'actorMerge') return NAMES.t('actorMerged', { a: clip(who(op.target), 20), b: clip(who(v.into), 20) });
   if (op.op === 'actorStatus') return NAMES.t(v.status === 'active' ? 'actorReopened' : 'actorClosed', { n: clip(who(op.target), 20) });
   if (op.op === 'actorTeam') return NAMES.t('actorTeamed', { n: clip(who(op.target), 20) });
   if (op.op === 'taskOwner') return NAMES.t('taskOwnerChanged', { t: clip(taskTitle(op.target), 20), n: v.owner === 'founder' ? NAMES.ui.chgOwnerMe : who(v.owner) });
+  if (op.op === 'peopleSync') return U.peopleSyncRequested;
   return U.founderUnsnoozed;
 }
 const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
@@ -1209,8 +1210,9 @@ function checkEvent(out, input = null, lenient = false) {
     if (!it || typeof it !== 'object') return errors.push(at + '格式不正確');
     if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
     if (it.kind === 'newActor') {
-      const r = checkNewActorItem(it, { actors: (s.company || {}).actors || [], texts: [said0, ...fileTexts], at });
-      if (r.status === 'drop') { log(`真實事件建議的新對象已丟棄（${r.reason === 'full' ? '名單已滿' : '名稱已在名單內'}）：${clip(it.name, 20)}`); return; }
+      // 已答「不加入」兩次的名稱及創辦人本人（公司概覽「我自己（X）」）一律丟棄（設計狀態表第 5 行）
+      const r = checkNewActorItem(it, { actors: (s.company || {}).actors || [], texts: [said0, ...fileTexts], at, declined: ((s.peopleSync || {}).declined) || {}, founderNames: founderNamesIn(peopleSyncG6(loadPage(), readJSON(CONFIRMED, null), s)) });
+      if (r.status === 'drop') { log(`真實事件建議的新對象已丟棄（${({ full: '名單已滿', declined: '創辦人已答不加入', founder: '創辦人本人' })[r.reason] || '名稱已在名單內'}）：${clip(it.name, 20)}`); return; }
       // 新對象退回修正一次後仍不合格：只丟棄這一項，不令整件事失敗（lenient＝修正後的第二次核對）
       if (r.status === 'error') { if (lenient) { log(`真實事件建議的新對象修正後仍不合格，已丟棄：${clip(it.name, 20)}（${r.errors[0]}）`); return; } return errors.push(...r.errors); }
       const key = 'newActor:' + pnorm(r.item.name);
@@ -1276,6 +1278,169 @@ function checkEvent(out, input = null, lenient = false) {
 
   return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason };
 }
+// 新對象確認題（真實事件及 Zero 整理名單共用）：二選項，或疑似變體時三選項；askKey 決定問句（這件事提到／公司概覽提到）
+function newActorQuestion(s, it, i, askKey) {
+  const kn = NAMES.dash['ppl_kind_' + it.actorKind], who = (it.org || '') + it.name + (it.role ? '（' + it.role + '）' : ''), me = pnorm(it.name);
+  const sim = it.similarTo ? (((s.company || {}).actors) || []).find(a => a.id === it.similarTo) : null;
+  const item = { name: it.name, ...(it.org ? { org: it.org } : {}), ...(it.role ? { role: it.role } : {}), actorKind: it.actorKind, ...(it.teamType ? { teamType: it.teamType } : {}), ...(it.fromDoc ? { fromDoc: true } : {}) };
+  const add = { text: NAMES.t('newActorYes', { k: kn }), apply: { op: 'addActor', mode: 'add', item } }, no = { text: U.newActorNo, apply: { op: 'keep' } };
+  let options;
+  if (sim) {
+    const alias = { text: NAMES.t('newActorAlias', { n: sim.name }), apply: { op: 'addActor', mode: 'alias', aliasOf: sim.id, item } }, other = { text: NAMES.t('newActorOther', { k: kn }), apply: { op: 'addActor', mode: 'add', item } };
+    (nameKeys(sim).some(x => x !== me && (x.includes(me) || me.includes(x))) ? alias : other).rec = true;
+    options = [alias, other, no];
+  } else { add.rec = true; options = [add, no]; }
+  return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.name, 30), ask: mixSpace(NAMES.t(askKey, { who })), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
+}
+// 名單類別名稱表（套用時寫入效果及事件用）
+const kindTexts = () => ({ kind: Object.fromEntries(['customer', 'partner', 'investor', 'advisor', 'team'].map(k => [k, NAMES.dash['ppl_kind_' + k]])), added: U.peopleAdded, aliased: U.peopleAliased, skipped: U.peopleSkipped });
+
+/* ---------- Zero 整理名單（people-sync）：讀已確認公司概覽及現有名單，建議加入團隊成員、顧問等及改舊類別；題目放待決事項，每包最多 3 題；
+   狀態家 state.peopleSync（純函數在 people-ops.mjs；設計及狀態表見 docs/evidence/people-fix-2026-11-07/chain.md）。 ---------- */
+const PEOPLE_SYNC_MAX = 3;
+const openPeopleSync = () => listPacks(DIR).filter(p => p.open).map(p => loadPack(DIR, p.id)).find(p => p && p.peopleSync) || null;
+// 已確認概覽的原文（逐字核對用）：confirmed.json 全部欄值、頁面每個項目的 label／value、里程碑決策者
+function peopleSyncTexts(page, c, s) {
+  const out = [];
+  for (const v of Object.values((c && c.values) || {})) if (typeof v === 'string') out.push(v);
+  (function walk(o) { if (!o || typeof o !== 'object') return; if (Array.isArray(o)) return o.forEach(walk); if (typeof o.label === 'string') out.push(o.label); if (typeof o.value === 'string') out.push(o.value); for (const k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]); })(page);
+  for (const m of (s && s.milestones) || []) if (m && m.actorName) out.push(String(m.actorName));
+  for (const a of Object.values(((s && s.intake) || {}).answers || {})) if (a && typeof a.value === 'string') out.push(a.value);
+  return out;
+}
+function peopleSyncG6(page, c, s) {
+  const row = listOf(page && page.glance && page.glance.rows).find(r => r && r.plan === 'G6');
+  const fromAns = (((s && s.intake) || {}).answers || {}).G6;
+  return String(row ? ((c && c.values || {})[row.id] ?? row.value ?? '') : (fromAns && fromAns.value) || '').trim();
+}
+function placePeopleSyncBatch(s) {
+  const ps = s.peopleSync || {}, actors = ((s.company || {}).actors || []).filter(Boolean), declined = ps.declined || {};
+  // 擱置項目放出前重新核對：名字已在名單（含別名、已合併、不再接觸）或已答「不加入」的不再問；改類別對象已不在、類別已相同或已答「維持」的不再問
+  const live = (ps.pending || []).filter(it => {
+    if (!it) return false;
+    if (it.kind === 'newActor') return !duplicateActor(actors, it.name) && !declined[pnorm(it.name)];
+    const a = actors.find(x => x.id === it.id && !x.mergedInto); return !!a && kindOf(a) !== it.actorKind && !declined['kind:' + it.id + ':' + it.actorKind];
+  });
+  const items = live.slice(0, PEOPLE_SYNC_MAX), rest = live.slice(PEOPLE_SYNC_MAX);
+  if (!items.length) { if ((ps.pending || []).length) { const s0 = loadState(); s0.peopleSync = { ...(s0.peopleSync || {}), pending: [] }; saveState(s0); } return null; }
+  const kn = k => NAMES.dash['ppl_kind_' + k] || '';
+  const qs = items.map((it, i) => {
+    if (it.kind === 'newActor') return newActorQuestion(s, it, i, 'peopleSyncAsk');
+    const yes = { text: NAMES.t('peopleSyncKindYes', { b: kn(it.actorKind) }), rec: true, apply: { op: 'fixKind', id: it.id, kind: it.actorKind, ...(it.role ? { role: it.role } : {}) } };
+    return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.name, 30), ask: mixSpace(NAMES.t('peopleSyncKindAsk', { n: it.name, a: kn(it.from), b: kn(it.actorKind) })), judge: U.peopleSyncKindJudge, kind: 'choice', effect: 'now',
+      options: [yes, { text: NAMES.t('peopleSyncKindNo', { a: kn(it.from) }), apply: { op: 'keep' } }], value: yes.text, why: clip(it.why, 200) };
+  });
+  const placed = placePacks(DIR, [rhythmPack('ps', { title: U.peopleSyncTitle, context: U.peopleSyncContext, afterConfirm: U.peopleSyncAfter, todoType: 'decision', peopleSync: { key: ps.for || '' }, questions: qs })])[0];
+  const s2 = loadState(); s2.peopleSync = { ...(s2.peopleSync || {}), pending: rest, packId: placed.id };
+  s2.events = s2.events || []; s2.events.push({ id: 'e' + stamp() + '-' + s2.events.length, at: localIso(), actor: 'ai', type: 'brain', title: NAMES.t('peopleSyncDone', { n: qs.length }), relatedIds: [placed.id], moduleIds: ['ai-week', 'now'] });
+  saveState(s2);
+  log(`Zero 整理名單已出題：${placed.id}（${qs.length} 條，擱置 ${rest.length} 項）`);
+  return placed;
+}
+// key：日常工作內用 'people'（同一 run 另有日常 AI 步驟）；創辦人按鍵觸發的獨立 run 用 'ai'（recordInboxRun 以 'ai' 步驟判斷 Zero 有沒有開工）
+// 任何失敗：清 requested（畫面恢復按鈕並寫一句原因）、記 lastTry（同一概覽版本當日不再自動重試）；不留下一直重開 AI 的狀態
+function peopleSyncFail(run, key, label, due, reason) {
+  // 團隊頁的按鈕叫「請 Zero 整理名單」，AI 工具的通用原因句叫人按「重試」：換成本頁的按鈕名
+  const why = clip(String(reason || U.peopleSyncFailed).replace(/\s+/g, ' ').replace(/再按一次「重試」/g, '再按「' + NAMES.dash.ppl_syncBtn + '」'), 80);
+  const s = loadState(); s.peopleSync = { ...(s.peopleSync || {}), requested: false, lastTry: { key: due.key, day: todayIso(), reason: why } }; saveState(s);
+  step(run, key, label, 'failed', why);
+  log(`${run.id} Zero 整理名單未能完成：${why}`);
+  return false;
+}
+async function peopleSyncStep(run, due, key = 'people') {
+  const label = U.brainJob_people;
+  if (due.due === 'batch') { const p = placePeopleSyncBatch(loadState()); if (p) { step(run, key, label, 'done', NAMES.t('peopleSyncDone', { n: p.count })); run.result = { summary: NAMES.t('peopleSyncDone', { n: p.count }), artifacts: [], founderNext: [], asks: [p] }; } return !!p; }
+  const cert = certified(ROOT, DIR.ledger);
+  if (pausedNow()) return peopleSyncFail(run, key, label, due, U.skip_pausedByFounder);
+  if (!cert.host) return peopleSyncFail(run, key, label, due, cert.reason);
+  if (budgetLeft() <= 0) return peopleSyncFail(run, key, label, due, U.skip_budgetExhausted);
+  let s = loadState();
+  const page = loadPage(), c = readJSON(CONFIRMED, null);
+  if (!page || !c) return peopleSyncFail(run, key, label, due, U.peopleSyncFailed);
+  const sb = path.join(DIR.sandbox, run.id + '-people');
+  fs.mkdirSync(path.join(sb, 'out'), { recursive: true });
+  writeConfirmedPage(sb);
+  const actors = ((s.company || {}).actors || []).filter(x => x && !x.mergedInto), ps = s.peopleSync || {}, declined = ps.declined || {};
+  const g6 = peopleSyncG6(page, c, s), founderNames = founderNamesIn(g6);
+  const decisionMakers = listOf(page.detail && page.detail.actors && page.detail.actors.items).map(it => `- ${it.label}：${String(((c.values || {})[it.id] ?? it.value) || '')}`);
+  fs.writeFileSync(path.join(sb, 'people.md'), ['# 整理名單的材料', '', '## 已有人負責的事（公司概覽 G6 原文）', '', g6 || '（沒有填寫）', '', '## 公司以外的決策者（公司概覽原文）', '', ...(decisionMakers.length ? decisionMakers : ['（沒有）']), '',
+    '## 各站要點頭的人（公司概覽原文）', '', ...((s.milestones || []).filter(m => m && m.actorName).map(m => `- ${m.short}：${m.actorName}`) || []), '',
+    '## 現有名單', '', ...(actors.length ? actors.map(a => `- ${a.name}（${NAMES.dash['ppl_kind_' + kindOf(a)] || ''}${a.org ? '；' + a.org : ''}${a.role ? '；' + a.role : ''}${a.addedFrom ? '' : '；類別未經核對'}）`) : ['（沒有）']), '',
+    '## 創辦人已答「不加入」的名稱（不要再建議）', '', ...(Object.keys(declined).filter(k => !k.startsWith('kind:')).length ? Object.keys(declined).filter(k => !k.startsWith('kind:')).map(k => '- ' + k) : ['（沒有）']), ''].join('\n'));
+  writeJSON(path.join(sb, 'ledger.json'), { actors: actors.slice(0, 80).map(x => ({ name: x.name, aliases: x.aliases || [], kind: kindOf(x), ...(x.org ? { org: x.org } : {}), ...(x.role ? { role: x.role } : {}), unverifiedKind: !x.addedFrom })),
+    milestones: (s.milestones || []).filter(m => m && m.pathStatus !== 'retired').map(m => ({ id: m.id, name: m.short, actor: m.actorName || '' })) });
+  fs.copyFileSync(path.join(ROOT, 'ai-people.md'), path.join(sb, 'task.md'));
+  writeJSON(path.join(sb, 'job.json'), { type: 'people-sync' });
+  step(run, key, label, 'running', 'Zero 處理中');
+  const r = await runAI(sb);
+  if (r.meta) run.aiCost = { usd: ((run.aiCost && run.aiCost.usd) || 0) + (r.meta.total_cost_usd || 0), ms: ((run.aiCost && run.aiCost.ms) || 0) + (r.meta.duration_ms || 0) };
+  if (!r.ok || r.waiting) return peopleSyncFail(run, key, label, due, r.reason || U.peopleSyncFailed);
+  const texts = peopleSyncTexts(page, c, s), opts = { actors: (s.company || {}).actors || [], texts, declined, founderNames };
+  let chk = checkPeopleSync(readJSON(path.join(sb, 'out', 'people.json'), null), opts);
+  if (!chk.ok) {
+    log(`${run.id} 整理名單建議格式唔啱：${chk.errors.join('；')}；叫 AI 修正一次`);
+    writeJSON(path.join(sb, 'job.json'), { type: 'people-sync-repair', errors: chk.errors });
+    fs.writeFileSync(path.join(sb, 'task.md'), ['# 你今次嘅工作：修正整理名單建議', '', '你啱啱寫嘅 `out/people.json` 有以下問題，請照 `ai-people.md` 嘅格式改好，其他項目唔好改：', '', ...chk.errors.map((e, i) => `${i + 1}. ${e}`), '', '改完覆寫 `out/people.json`。只可以寫 `out/`。'].join('\n') + '\n');
+    fs.copyFileSync(path.join(ROOT, 'ai-people.md'), path.join(sb, 'ai-people.md'));
+    const r2 = await runAI(sb);
+    if (r2.meta && run.aiCost) run.aiCost.usd = (run.aiCost.usd || 0) + (r2.meta.total_cost_usd || 0);
+    chk = checkPeopleSync(readJSON(path.join(sb, 'out', 'people.json'), null), { ...opts, lenient: true });
+  }
+  if (!chk.ok) return peopleSyncFail(run, key, label, due, U.peopleSyncFailed);
+  for (const d of chk.dropped) log(`${run.id} 整理名單建議已丟棄（${d.reason}）：${clip(d.name, 20)}`);
+  s = loadState();
+  { const { lastTry, ...rest } = s.peopleSync || {}; s.peopleSync = { ...rest, for: due.key, at: localIso(), requested: false, pending: chk.items, declined: rest.declined || {} }; }
+  if (!chk.items.length) {
+    s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'ai', type: 'brain', title: U.peopleSyncNone, relatedIds: [], moduleIds: ['ai-week'] });
+    saveState(s); step(run, key, label, 'done', U.peopleSyncNone); run.result = { summary: U.peopleSyncNone, artifacts: [], founderNext: [] }; return true;
+  }
+  saveState(s);
+  const placed = placePeopleSyncBatch(loadState());
+  step(run, key, label, 'done', NAMES.t('peopleSyncDone', { n: placed.count }));
+  run.result = { summary: NAMES.t('peopleSyncDone', { n: placed.count }), artifacts: [], founderNext: [], asks: [placed] };
+  return true;
+}
+// 你回答整理名單的題：加入名單／記為別名才寫；「不加入」記入 declined（之後不再建議同名）；改類別答「改為」才改；同一題不套用兩次；答齊而仍有擱置項目就放下一包
+function handlePeopleSyncAnswer(run, pack, store) {
+  const s = loadState(); s.peopleSync = s.peopleSync || {}; const ps = s.peopleSync; ps.applied = ps.applied || {}; ps.declined = ps.declined || {};
+  const done = new Set(ps.applied[pack.id] || []), said = [], tx = kindTexts();
+  s.events = s.events || [];
+  const ev = (title, ids) => s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type: 'decision', title, relatedIds: ids, moduleIds: ['now', 'inputs'] });
+  for (const q of pack.questions) {
+    const a = store.answers[q.id];
+    if (!a || done.has(q.id)) continue;
+    done.add(q.id);
+    const opts = q.options || [], opt = opts.find(o => o.text === a.value), ap = opt ? opt.apply : null;
+    const na = opts.find(o => o.apply && o.apply.op === 'addActor');
+    if (na) {
+      const sel = ap && ap.op === 'addActor' ? ap : null, it = { kind: 'newActor', ...na.apply.item };
+      const before = JSON.stringify((s.company || {}).actors || []);
+      mergeInPlace(s, applyNewActor(s, { inputId: pack.id, qid: q.id, item: it, answer: sel ? sel.mode : 'skip', aliasOf: sel && sel.aliasOf, today: todayIso(), now: localIso(), addedFrom: 'overview', t: tx }));
+      if (!sel) { ps.declined[pnorm(it.name)] = (ps.declined[pnorm(it.name)] || 0) + 1; said.push(mixSpace(NAMES.t('peopleSkipped', { n: it.name }))); continue; }
+      // 名字其間已在名單（答題前另一條路加入了）：純函數原樣返回，不寫「已加入名單」事件
+      if (before === JSON.stringify((s.company || {}).actors || [])) { log(`${run.id} 整理名單：「${clip(it.name, 20)}」已在名單，沒有再加入`); continue; }
+      const t = mixSpace(sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(x => x.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] }));
+      // 事件只連問題包，不連對象編號：加入名單或改類別不是與他的「接觸」（peopleView 以創辦人事件的 relatedIds 計最近接觸）
+      ev(t, [pack.id]); said.push(t);
+      continue;
+    }
+    const kf = opts.find(o => o.apply && o.apply.op === 'fixKind');
+    if (!kf) continue;
+    if (ap && ap.op === 'fixKind') {
+      const next = applyKindFix(s, ap);
+      if (next !== s) { mergeInPlace(s, next); const t = mixSpace(NAMES.t('actorKinded', { n: clip(q.about, 20), k: tx.kind[ap.kind] })); ev(t, [pack.id]); said.push(t); }
+    } else { ps.declined['kind:' + kf.apply.id + ':' + kf.apply.kind] = 1; said.push(NAMES.t('peopleKindKept', { n: clip(q.about, 20) })); }
+  }
+  ps.applied[pack.id] = [...done];
+  const allAnswered = pack.questions.every(q => store.answers[q.id]);
+  if (allAnswered && ps.packId === pack.id) ps.packId = '';
+  saveState(s);
+  let placed = null;
+  if (allAnswered && (ps.pending || []).length) placed = placePeopleSyncBatch(loadState());
+  run.result = { summary: said.join('；') || U.peopleSyncNoted, artifacts: [], founderNext: [], ...(placed ? { asks: [placed] } : {}) };
+  step(run, 'applied', U.stepAppliedAns, 'done', said.join('；') || U.peopleSyncNoted);
+  return finish(run, 'done');
+}
 function eventPack(run, s, input, items) {
   const qs = items.map((it, i) => {
     if (it.kind === 'assumption') {
@@ -1289,19 +1454,7 @@ function eventPack(run, s, input, items) {
       return { id: 'q' + (i + 1), priority: i + 1, about: U.nextActionAsk, ask: U.nextActionAsk, kind: 'choice', effect: 'now',
         options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '' } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why };
     }
-    if (it.kind === 'newActor') {
-      const kn = NAMES.dash['ppl_kind_' + it.actorKind], who = (it.org || '') + it.name + (it.role ? '（' + it.role + '）' : ''), me = pnorm(it.name);
-      const sim = it.similarTo ? (((s.company || {}).actors) || []).find(a => a.id === it.similarTo) : null;
-      const item = { name: it.name, ...(it.org ? { org: it.org } : {}), ...(it.role ? { role: it.role } : {}), actorKind: it.actorKind, ...(it.teamType ? { teamType: it.teamType } : {}), ...(it.fromDoc ? { fromDoc: true } : {}) };
-      const add = { text: NAMES.t('newActorYes', { k: kn }), apply: { op: 'addActor', mode: 'add', item } }, no = { text: U.newActorNo, apply: { op: 'keep' } };
-      let options;
-      if (sim) {
-        const alias = { text: NAMES.t('newActorAlias', { n: sim.name }), apply: { op: 'addActor', mode: 'alias', aliasOf: sim.id, item } }, other = { text: NAMES.t('newActorOther', { k: kn }), apply: { op: 'addActor', mode: 'add', item } };
-        (nameKeys(sim).some(x => x !== me && (x.includes(me) || me.includes(x))) ? alias : other).rec = true;
-        options = [alias, other, no];
-      } else { add.rec = true; options = [add, no]; }
-      return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.name, 30), ask: NAMES.t('newActorAsk', { who }), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
-    }
+    if (it.kind === 'newActor') return newActorQuestion(s, it, i, 'newActorAsk');
     if (it.kind === 'followUp') {
       return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.action, 40), ask: NAMES.t('followUpAsk', { d: dayText(it.date), a: it.action }), judge: U.followUpJudge, kind: 'choice', effect: 'now',
         options: [{ text: U.followUpYes, rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '' } }, { text: U.followUpNo, apply: { op: 'keep' } }], value: U.followUpYes, why: it.why };
@@ -1390,7 +1543,9 @@ function handleEventConfirm(run, pack, store) {
       const sel = opt && opt.apply && opt.apply.op === 'addActor' ? opt.apply : null, it = { kind: 'newActor', ...naOpt.apply.item };
       const tx = { kind: Object.fromEntries(['customer', 'partner', 'investor', 'advisor', 'team'].map(k => [k, NAMES.dash['ppl_kind_' + k]])), added: U.peopleAdded, aliased: U.peopleAliased, skipped: U.peopleSkipped };
       sync(applyNewActor(s, { inputId: input.id, qid: q.id, item: it, answer: sel ? sel.mode : 'skip', aliasOf: sel && sel.aliasOf, today: todayIso(), now: localIso(), addedFrom: input.source === 'chat' ? 'chat' : it.fromDoc ? 'doc' : 'event', t: tx }));
-      if (sel) { const t = sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(a => a.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] }); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); }
+      // 答「不加入」：計一次（同一名稱兩次後不再建議；整理名單一次即止）
+      if (!sel) { s.peopleSync = s.peopleSync || {}; s.peopleSync.declined = { ...(s.peopleSync.declined || {}) }; s.peopleSync.declined[pnorm(it.name)] = (s.peopleSync.declined[pnorm(it.name)] || 0) + 1; }
+      if (sel) { const t = mixSpace(sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(a => a.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] })); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); }
       continue;
     }
     const fuOpt = opts.find(o => o.apply && o.apply.op === 'addFollowUp');
@@ -2119,6 +2274,7 @@ async function handleAsk(run, file) {
     if (k === 'opportunity') return handleOpportunityAnswer(run, pack, store);
     if (k === 'autoStop' || k === 'paused') return handleStopAnswer(run, pack, store);
     if (k === 'retire') return handleRetireAnswer(run, pack, store); }
+  if (pack.peopleSync) return handlePeopleSyncAnswer(run, pack, store);
   if (pack.realEvent) return handleEventConfirm(run, pack, store);
   if (pack.depth) return handleDepthAnswer(run, pack, store);
   if (pack.acceptance) return handleAcceptance(run, pack, store);
@@ -3321,6 +3477,8 @@ async function rhythmRun() {
   // AI 日常工作：只喺沙盒做；收尾由外殼判定
   const run = { id: lr.id, kind: 'rhythm', ref: type, startedAt: lr.startedAt, state: 'running', replyFiles: [], steps: [], trigger: RUN_TRIGGER };
   step(run, 'received', U['runType_' + type], 'done', U['trig_' + RUN_TRIGGER]);
+  // Zero 整理名單：此版概覽未整理過而名單有缺口（升級前已確認嘅公司沒有成員、或有舊對象）、或創辦人要求：日常工作先補做一次
+  { const due = peopleSyncDue(loadState(), { packOpen: !!openPeopleSync(), today }); if (due.due) await peopleSyncStep(run, due); }
   // 已確認但未做過生意體檢（升級前已確認嘅公司）：日常工作先補做
   if (readJSON(CONFIRMED, null) && (!fs.existsSync(brainFile(DIR, 'checkup')) || ((readJSON(brainFile(DIR, 'checkup'), null) || {}).partial === true && checkupStale()))) await brainStep(run, 'checkup');
   if (opportunitiesDue(s0, today)) await brainStep(run, 'opportunities', { timeoutMinutes: Math.max(3, Math.floor((r.runCapMinutes || 30) / 3)) });
@@ -3354,7 +3512,7 @@ function recordInboxRun(run, hadInput) {
   const aiStarted = !!ai && ai.state !== 'waiting';
   const appliedOnly = run.state === 'done' && !aiStarted && !ADVANCED;
   recordRun({ id: run.id, type: 'inbox', trigger: RUN_TRIGGER, ...(RUN_TYPE ? { slot: RUN_SLOT || todayIso() } : {}), startedAt: run.startedAt, endedAt: run.endedAt || localIso(), capMinutes: rhythmOf(loadState()).runCapMinutes, aiStarted,
-    state: run.state === 'waiting' || appliedOnly ? 'skipped' : 'ended', ...(run.state === 'waiting' ? { skipReason: run.waitingFor === 'paused' ? 'pausedByFounder' : 'adapterNotCertified' } : appliedOnly ? { skipReason: 'appliedOnly' } : { ending: ADVANCED ? 'advanced' : (run.kind === 'intake' && run.state === 'done') || (run.result && (run.result.artifacts || []).length) ? 'artifact' : run.state === 'done' && run.result && (run.result.asks || []).length && ['event', 'doc', 'debrief', 'adhoc', 'order'].includes(run.noteType) ? 'asked' : 'blocked' }),
+    state: run.state === 'waiting' || appliedOnly ? 'skipped' : 'ended', ...(run.state === 'waiting' ? { skipReason: run.waitingFor === 'paused' ? 'pausedByFounder' : 'adapterNotCertified' } : appliedOnly ? { skipReason: 'appliedOnly' } : { ending: ADVANCED ? 'advanced' : (run.kind === 'intake' && run.state === 'done') || (run.result && (run.result.artifacts || []).length) ? 'artifact' : run.state === 'done' && run.result && (run.result.asks || []).length && (['event', 'doc', 'debrief', 'adhoc', 'order'].includes(run.noteType) || run.kind === 'people') ? 'asked' : run.state === 'done' && run.kind === 'people' ? 'checked' : 'blocked' }),
     ...(run.state === 'failed' ? { rejected: true, rejectReason: run.error || '' } : {}), label: (ai && ai.label) || ((run.steps || [])[0] || {}).label || U.runType_inbox, summary: (run.result && run.result.summary) || run.error || '', artifacts: (run.result && (run.result.artifacts || []).length) || 0, moduleIds: ['inputs', 'ai-week'] });
   if (hadInput && run.state !== 'waiting' && !appliedOnly) countStreak(true);
 }
@@ -3377,7 +3535,12 @@ async function main() {
     const founderFiles = replies.length + intakes.length + notes.length + prefills.length;
     // 排程 run：冇你嘅新回覆就做日常工作；有就先處理回覆（記成處理收件，3.6）
     if (RUN_TYPE && !founderFiles) { await rhythmRun(); return; }
-    if (!founderFiles && !retry && !debates.length) return;
+    if (!founderFiles && !retry && !debates.length) {
+      // 創辦人按「請 Zero 整理名單」（或上一包答齊仍有擱置項目）：伺服器按鍵後即叫外殼，這裏先做，不等下一次日常工作
+      const due = peopleSyncDue(loadState(), { packOpen: !!openPeopleSync(), today: todayIso() });
+      if (due.due === 'manual' || due.due === 'batch') { run = { id: 'R' + stamp() + '-' + String(process.pid).slice(-3), kind: 'people', startedAt: localIso(), state: 'running', replyFiles: [], steps: [] }; const okRun = await peopleSyncStep(run, due, 'ai'); if (run.state === 'running') finish(run, okRun ? 'done' : 'failed', okRun ? '' : (((loadState().peopleSync || {}).lastTry || {}).reason || U.peopleSyncFailed)); }
+      return;
+    }
     // 由文件預填：只讀文件交返預填，唔遷移、唔同步公司紀錄、唔出任何題（規劃書 3.1）
     if (prefills.length) { run = { id: 'R' + stamp() + '-' + String(process.pid).slice(-3), startedAt: localIso(), state: 'running', replyFiles: [], steps: [] }; hadInput = true; noteFounderInput(); await handlePrefill(run, prefills[0]); return; }
     // 舊安裝：公司概覽先遷移到新格式；已確認公司概覽但帳本未有里程碑同假設清單，喺有工作時先補種子（冇改動就唔寫）

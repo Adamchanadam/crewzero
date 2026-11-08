@@ -46,6 +46,11 @@ function ready(p) {
     { id: 'ru8', plan: 'G8', label: '經營節奏', kind: 'text', value: '用預設', origin: 'default' }, { id: 'ru10', plan: 'G10', label: '業務線數目', kind: 'text', value: '一條業務線', origin: 'default' }];
   for (const m of p.path.milestones) for (const [k, plan, v] of [['actor', 'milestone.actor', '對方負責人'], ['witness', 'milestone.witness', '對方負責人'], ['proof', 'milestone.evidence', '書面紀錄']]) if (!m[k]) m[k] = { id: m.id + '-' + k, plan, label: k, kind: 'text', value: v, origin: 'ai' };
   p.path.milestones.forEach((m, i) => { m.kind = i === 2 ? 'task' : 'real'; });
+  // 新公司名單（測試設 SOS_FAKE_ACTORS=1 才加，免改動其他測試的對象數目）：照 ai-intake.md 格式帶 actorKind、role、team，涵蓋合作方、團隊成員、顧問
+  if (process.env.SOS_FAKE_ACTORS === '1') p.detail.actors = { title: '公司以外的決策者及團隊', judge: '只列文件或答案提到的人。', items: [
+    { id: 'act-1', label: '農場甲（供應）', kind: 'text', value: '已簽供應意向書。', origin: 'ai', actorKind: 'partner', org: '農場甲' },
+    { id: 'act-2', label: '表哥', kind: 'text', value: '已確定負責送貨。', origin: 'ai', actorKind: 'team', role: '送貨', team: { type: 'parttime', owns: [p.path.milestones[0].id] } },
+    { id: 'act-3', label: '阿明（顧問）', kind: 'text', value: '提供餐飲業意見，不負責營運。', origin: 'ai', actorKind: 'advisor', role: '餐飲業顧問' }] };
   return p;
 }
 function farmPage() { return JSON.parse(fs.readFileSync(FIX, 'utf8').trim().replace(/^window\.STARTUP_OS_PAGE\s*=\s*/, '').replace(/;\s*$/, '')); }
@@ -211,6 +216,36 @@ if (type === 'work' && outputMode === 'agy') {
   const ev = { summary: '測試 AI：' + said, grade: 'did', read: { summary: '測試 AI：讀了創辦人原話及 ' + fl.length + ' 份附件，對照了假設及站點。', highlights: [{ text: '會議紀錄寫明須在兩星期內回覆報價。', page: 2, ...(fl[0] ? { file: fl[0] } : {}) }] }, ...(finalItems.length ? {} : { reason: '測試理由：這件事沒有改變對方做到哪一步，也沒有新的日期。' }), items: finalItems, ...(unreadable.length ? { unreadable } : {}) };
   if (type === 'event' && M === 'event-bad') ev.items = [{ kind: 'assumption', id: 'H99', grade: 'great' }];
   fs.writeFileSync('out/event.json', JSON.stringify(ev, null, 2));
+  done();
+} else if (type === 'people-sync' || type === 'people-sync-repair') {
+  // Zero 整理名單：讀 people.md「已有人負責的事」原文，每段「工作：人名」拆出人名（「及」「、」分隔），括號有「顧問」當顧問、有「已答應加入」或其他當團隊成員（兼職）；
+  // 跳過「我自己」「未有」。現有名單標「類別未經核對」嘅第一個對象建議改為顧問。
+  // 模式：people-none 交空清單；people-ghost 加一個原文冇嘅名；people-self 加「我自己（X）」括號內嘅創辦人名；people-contact 第一次喺 role 寫電話（修正後改好）
+  const md = fs.readFileSync('people.md', 'utf8');
+  const sec = (h) => (md.split('## ' + h)[1] || '').split(/\r?\n## /)[0].trim();
+  const g6 = sec('已有人負責的事（公司概覽 G6 原文）').split(/\r?\n/).filter(l => l && !l.startsWith('（')).join('；');
+  const items = [];
+  // 括號（可巢狀）內的字只用來判斷身分，先整段抽走再按「及」「、」分人；太長或含句讀的不是人名
+  const stripParens = t => { let s = t, prev; do { prev = s; s = s.replace(/[（(][^（）()]*[）)]/g, ''); } while (s !== prev); return s; };
+  // 只在括號外按「及」「、」「和」分人（括號內的頓號是身分說明，不是分隔）
+  const splitTop = t => { const out = []; let depth = 0, cur = ''; for (const ch of t) { if ('（('.includes(ch)) depth++; if ('）)'.includes(ch)) depth = Math.max(0, depth - 1); if (depth === 0 && '及、和'.includes(ch)) { out.push(cur); cur = ''; continue; } cur += ch; } out.push(cur); return out; };
+  for (const seg of g6.split(/[；;]/)) {
+    const m = /^([^：:]+)[：:](.+)$/.exec(seg.trim()); if (!m) continue;
+    const role = m[1].trim().slice(0, 40);
+    if (/^未有/.test(stripParens(m[2]).trim())) continue;   // 「未有（…）」整段沒有人
+    for (const raw of splitTop(m[2])) {
+      const paren = (/[（(]([\s\S]*)[）)]/.exec(raw) || [])[1] || '', name = stripParens(raw).replace(/[，,。].*$/, '').trim();
+      if (!name || /我自己|未有|^我$|負責|推廣/.test(name) || name.length > 12) continue;
+      if (/顧問/.test(paren)) items.push({ kind: 'newActor', name, role: '顧問', actorKind: 'advisor', why: '已有人負責的事寫明他是顧問：' + role + '。' });
+      else items.push({ kind: 'newActor', name, role: M === 'people-contact' && type === 'people-sync' ? role + ' 電話 91234567' : role, actorKind: 'team', teamType: /已答應加入/.test(paren) ? 'fulltime' : 'parttime', why: '已有人負責的事寫明他負責' + role + '。' });
+    }
+  }
+  const legacyLines = sec('現有名單').split(/\r?\n/).filter(l => /類別未經核對/.test(l)).map(l => l.replace(/^- /, '').split('（')[0].trim());
+  const legacy = legacyLines.find(n => /[A-Za-z]/.test(n)) || legacyLines[0] || '';
+  if (legacy) items.push({ kind: 'actorKind', name: legacy, actorKind: 'advisor', why: '按公司概覽的描述，他提供意見而不負責營運，較接近顧問或協助者。' });
+  if (M === 'people-ghost') items.push({ kind: 'newActor', name: '周先生', role: '送貨', actorKind: 'team', teamType: 'parttime', why: '測試：原文沒有的名字。' });
+  if (M === 'people-self') { const self = (/我自己[（(]([^）)]+)[）)]/.exec(g6) || [])[1]; if (self) items.push({ kind: 'newActor', name: self.trim(), role: '創辦人', actorKind: 'team', teamType: 'cofounder', why: '測試：創辦人本人。' }); }
+  fs.writeFileSync('out/people.json', JSON.stringify({ summary: '測試 AI：建議 ' + items.length + ' 項。', items: M === 'people-none' ? [] : items }, null, 2));
   done();
 } else if (type === 'rhythm') {
   // 日常工作：按紀錄做一份準備；內容只跟紀錄，紀錄冇變就同上次一樣（外殼會判定冇新產出）。

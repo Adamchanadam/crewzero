@@ -65,10 +65,14 @@ export const nextActorId = (inputId, qid) => 'pc-' + String(inputId || '').repla
 /* ---------- Zero 建議的新對象：核對（checkEvent 用） ----------
    it：{ kind:'newActor', name, org?, role?, actorKind, teamType?, why }；texts：創辦人原話及附件文字版（字串陣列）。
    回傳 { status:'ok', item } 或 { status:'drop', reason }（靜默丟棄，只記日誌）或 { status:'error', errors }（退回 Zero 修正一次）。 */
-export function checkNewActorItem(it, { actors = [], texts = [], at = '項目' } = {}) {
+// declined：曾答「不加入」的名稱（正規化）→ 次數；事件路徑拒絕兩次後丟棄（設計狀態表第 5 行），整理名單路徑一次即丟棄（呼叫者傳 declineLimit: 1）
+export function checkNewActorItem(it, { actors = [], texts = [], at = '項目', declined = {}, declineLimit = 2, founderNames = [] } = {}) {
   const errors = [], str = (v, n) => typeof v === 'string' && v.trim() && v.trim().length <= n;
   if (!it || typeof it !== 'object') return { status: 'error', errors: [at + '格式不正確'] };
+  if (str(it.name, NAME_MAX) && isFounderName(it.name, founderNames)) return { status: 'drop', reason: 'founder' };
+  if (str(it.name, NAME_MAX) && (declined[norm(it.name)] || 0) >= declineLimit) return { status: 'drop', reason: 'declined' };
   if (!str(it.name, NAME_MAX)) errors.push(at + '：新對象 name 必須是名稱（最多 ' + NAME_MAX + ' 字）');
+  else if (/[，。；：、（）()「」]/.test(it.name)) errors.push(at + '：name 只寫名稱，不可含標點或整句（「' + clip(it.name, 20) + '」）');
   if (it.org != null && it.org !== '' && !str(it.org, ORG_MAX)) errors.push(at + '：org 最多 ' + ORG_MAX + ' 字');
   if (it.role != null && it.role !== '' && !str(it.role, ROLE_MAX)) errors.push(at + '：role 最多 ' + ROLE_MAX + ' 字');
   if (!KINDS.includes(it.actorKind)) errors.push(at + '：actorKind 必須是 ' + KINDS.join('、') + ' 之一');
@@ -271,6 +275,83 @@ export function ownershipOf(state) {
   const stations = new Set(actors.flatMap(a => (a.team && a.team.owns) || []));
   for (const id of stations) { const owners = actors.filter(a => (a.team.owns || []).includes(id)); if (short(id) && owners.every(a => teamStateOf(a) === 'left')) unowned.push({ station: short(id), formerOwners: owners.map(a => a.name) }); }
   return { lines, unowned };
+}
+
+/* ---------- 創辦人本人：永不列入名單（company-page-format.md「創辦人本人不寫」；工作負責人已有「我自己」） ----------
+   founderNamesIn(text)：從已確認概覽原文抽「我自己（X）」「本人（X）」括號內的名字；SELF 是固定代稱。 */
+const SELF = ['我自己', '我', '本人', '創辦人', '我本人'];
+export function founderNamesIn(text) {
+  const out = new Set(); const re = /(?:我自己|本人|我)[（(]([^（）()]{1,40})[）)]/g; let m;
+  const t = String(text || '');
+  while ((m = re.exec(t))) for (const part of m[1].split(/[、，,／/及和]/)) { const n = part.trim(); if (n && n.length <= NAME_MAX && !hasContactInfo(n)) out.add(n); }
+  return [...out];
+}
+export const isFounderName = (name, founderNames = []) => { const k = norm(name); return !!k && (SELF.some(s => norm(s) === k) || founderNames.some(n => norm(n) === k)); };
+
+/* ---------- Zero 整理名單（people-sync）：狀態家 state.peopleSync（設計見 docs/evidence/people-fix-2026-11-07/chain.md） ----------
+   { for, at, requested, packId, pending[], declined{ key: n }, applied{ packId: [qid] } }
+   key＝ledgerFrom|intake.confirmedAt：每個已確認的概覽版本最多自動整理一次；創辦人按「請 Zero 整理名單」則下一次先做。 */
+export const peopleSyncKey = s => { const st = s || {}; return st.ledgerFrom && st.intake && st.intake.confirmedAt ? st.ledgerFrom + '|' + st.intake.confirmedAt : ''; };
+const legacyActor = a => a && !a.mergedInto && !a.addedFrom;   // 0.40.0 前自動帶入、類別未經核對
+// 回傳 { due: 'manual'|'auto'|'batch'|'', key }：manual＝創辦人要求；auto＝此版概覽未整理過而名單有缺口（沒有在職成員，或有舊對象）；batch＝上一包答完、仍有擱置項目（不開 AI）
+// 中英文（或數字）相鄰處加空格（名字填入句子時用）；標點旁不加
+export const mixSpace = s => String(s == null ? '' : s).replace(/([㐀-鿿豈-﫿])([A-Za-z0-9])/g, '$1 $2').replace(/([A-Za-z0-9])([㐀-鿿豈-﫿])/g, '$1 $2');
+// today：自動路徑失敗後（lastTry）同一概覽版本當日不再自動重試；創辦人按鍵（requested）不受此限
+export function peopleSyncDue(s, { packOpen = false, today = '' } = {}) {
+  const st = s || {}, ps = st.peopleSync || {}, key = peopleSyncKey(st);
+  if (!key || st.demo === true) return { due: '', key };
+  if (packOpen) return { due: '', key };
+  if (Array.isArray(ps.pending) && ps.pending.length) return { due: 'batch', key };
+  if (ps.requested) return { due: 'manual', key };
+  if (ps.for === key) return { due: '', key };
+  if (ps.lastTry && ps.lastTry.key === key && today && ps.lastTry.day === today) return { due: '', key };
+  const actors = ((st.company || {}).actors || []).filter(Boolean);
+  const hasTeam = actors.some(a => isLive(a) && kindOf(a) === 'team');
+  return { due: !hasTeam || actors.some(legacyActor) ? 'auto' : '', key };
+}
+// 整理名單項目的次序：成員 ＞ 顧問 ＞ 投資者 ＞ 合作方 ＞ 客戶 ＞ 改類別
+const SYNC_RANK = { team: 0, advisor: 1, investor: 2, partner: 3, customer: 4 };
+export const orderSyncItems = items => (items || []).map((x, i) => ({ x, i })).sort((a, b) => ((a.x.kind === 'actorKind' ? 9 : SYNC_RANK[a.x.actorKind] ?? 8) - (b.x.kind === 'actorKind' ? 9 : SYNC_RANK[b.x.actorKind] ?? 8)) || a.i - b.i).map(o => o.x);
+/* 核對 Zero 交回的 out/people.json：{ summary?, items[] }，項目是 newActor（沿 checkNewActorItem）或 actorKind { name, actorKind, role?, why }。
+   texts：已確認概覽原文（欄值、項目 label／value、里程碑決策者）。回傳 { ok, errors, items, dropped[] }；errors 非空時由呼叫者退回修正一次（lenient 時只丟棄不合格項）。 */
+export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, founderNames = [], lenient = false } = {}) {
+  const errors = [], items = [], dropped = [], seen = new Set(), str = (v, n) => typeof v === 'string' && v.trim() && v.trim().length <= n;
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return { ok: false, errors: ['out/people.json 必須有 items 清單（沒有建議就寫空清單）'], items, dropped };
+  const bad = (at, msg, name) => { if (lenient) dropped.push({ name, reason: msg }); else errors.push(at + '：' + msg); };
+  raw.items.forEach((it, i) => {
+    const at = `items 第 ${i + 1} 項`;
+    if (!it || typeof it !== 'object') return bad(at, '格式不正確', '');
+    if (it.kind === 'newActor') {
+      const r = checkNewActorItem(it, { actors, texts, at, declined, declineLimit: 1, founderNames });
+      if (r.status === 'drop') return dropped.push({ name: String(it.name || ''), reason: r.reason });
+      if (r.status === 'error') return bad(at, r.errors[0].replace(/^[^：]*：/, ''), String(it.name || ''));
+      const key = 'n:' + norm(r.item.name); if (seen.has(key)) return; seen.add(key);
+      return items.push(r.item);
+    }
+    if (it.kind === 'actorKind') {
+      if (!str(it.name, NAME_MAX)) return bad(at, '改類別的 name 必須是名單內的名稱', '');
+      if (!KINDS.includes(it.actorKind)) return bad(at, 'actorKind 必須是 ' + KINDS.join('、') + ' 之一', it.name);
+      if (!str(it.why, 200)) return bad(at, '缺少理由 why（一句，最多 200 字）', it.name);
+      const a = (actors || []).find(x => x && !x.mergedInto && nameKeys(x).includes(norm(it.name)));
+      if (!a) return dropped.push({ name: it.name, reason: 'notFound' });
+      if (kindOf(a) === it.actorKind) return dropped.push({ name: it.name, reason: 'sameKind' });
+      const role = str(it.role, ROLE_MAX) && !hasContactInfo(it.role) ? it.role.trim() : String(a.role || '').trim();
+      if (it.actorKind === 'team' && !role) return bad(at, '改為團隊成員須有 role', it.name);
+      if (declined['kind:' + a.id + ':' + it.actorKind]) return dropped.push({ name: it.name, reason: 'declined' });
+      const key = 'k:' + a.id; if (seen.has(key)) return; seen.add(key);
+      return items.push({ kind: 'actorKind', id: a.id, name: a.name, from: kindOf(a), actorKind: it.actorKind, ...(it.actorKind === 'team' && !String(a.role || '').trim() ? { role } : {}), why: it.why.trim() });
+    }
+    return bad(at, 'kind 必須是 newActor 或 actorKind', String(it.name || ''));
+  });
+  return { ok: !errors.length, errors, items: orderSyncItems(items), dropped };
+}
+// 改類別題答「改為」：改為成員而沒有角色時先寫建議的 role；純函數，失敗原樣返回
+export function applyKindFix(state, { id, kind, role = '' } = {}) {
+  const s = clone(state || {}); const a = ((s.company || {}).actors || []).find(x => x && x.id === id);
+  if (!a || isMerged(a)) return state;
+  if (kind === 'team' && !String(a.role || '').trim() && role) a.role = String(role).trim().slice(0, ROLE_MAX);
+  const r = applyActorOp(s, 'actorKind', { id, kind });
+  return r.ok ? r.state : state;
 }
 
 /* ---------- 真實事件確認項目：每件事最多一個新對象；三項上限內先排序再截（假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作） ---------- */

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { hosts, modelCandidates, modelName } from './host-lib.mjs';
 import { NAMES, BIZ_TYPES, readJSON, listPacks, loadPack, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
-import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS } from './people-ops.mjs';
+import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS, peopleSyncKey } from './people-ops.mjs';
 import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
 
 // 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
@@ -127,6 +127,9 @@ export function applyFounderOps(state, ops = []) {
         const time = /T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(String(task.dueAt || ''));
         task.dueAt = value.date + (time ? time[0] : '');
       }
+    } else if (item.op === 'peopleSync') {
+      // 請 Zero 整理名單：只記「已要求」，外殼下一次先做（people-ops peopleSyncDue）
+      out.peopleSync = { ...(out.peopleSync || {}), requested: true, requestedAt: item.at || localIso() };
     } else if (ACTOR_OPS.includes(item.op) && typeof item.target === 'string') {
       // 名單改正（改名、類別、合併、不再接觸、成員狀態、工作負責人）：純函數在 people-ops.mjs；失敗（找不到、重名、已合併）時原樣不動
       const r = applyActorOp({ company: out.company || {}, tasks: out.tasks || [] }, item.op, { ...value, id: item.target, from: item.target });
@@ -134,6 +137,19 @@ export function applyFounderOps(state, ops = []) {
     }
   }
   return out;
+}
+
+// Zero 整理名單的狀態（團隊頁及推進板入口用）：none（未確認概覽／示範）、requested（已要求，Zero 下一次先做）、asked（已擬好題，packId 指向待決事項）、done（此版概覽已整理）、idle（可以要求）
+export function peopleSyncView(DIR, state) {
+  const s = state || {}, ps = s.peopleSync || {}, key = peopleSyncKey(s);
+  if (!key || s.demo === true) return { state: 'none' };
+  const open = ps.packId && (listPacks(DIR).find(p => p.id === ps.packId && p.open) || null);
+  if (open) return { state: 'asked', packId: open.id, count: open.open };
+  if (ps.requested) return { state: 'requested' };
+  if (Array.isArray(ps.pending) && ps.pending.length) return { state: 'requested', pending: ps.pending.length };
+  const failed = ps.lastTry && ps.lastTry.key === key && ps.lastTry.reason ? { failed: ps.lastTry.reason } : {};
+  if (ps.for === key) return { state: 'done', at: ps.at || '', ...failed };
+  return { state: 'idle', ...failed };
 }
 
 // 月曆只帶每日歸納，不能把完整帳本 runs 送到畫面。未完成比完成重，完成比跳過重。
@@ -578,7 +594,7 @@ export function dashboardState(DIR, extra = {}) {
     company, goals, nextAction, metrics, since, pathTouched,
     ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', ...modelDisplay(DIR, cert), busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
     lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, calendar, tasks, parallel,
-    brain, people: { ...(() => { const v = peopleView(state, { today: ymd(today) }); return { external: v.external, closed: v.closed, team: v.team }; })(), ownership: ownershipOf(state), gapDays: GAP_DAYS },
+    brain, people: { ...(() => { const v = peopleView(state, { today: ymd(today) }); return { external: v.external, closed: v.closed, team: v.team }; })(), ownership: ownershipOf(state), gapDays: GAP_DAYS, sync: peopleSyncView(DIR, state) },
     teammates: teammates.map(t => ({ ...t, milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: t.lifecycle === 'planned' ? 'not_started' : tasks.some(x => x.teammate === t.name && workingTasks.has(x.id)) ? 'working' : tasks.some(x => x.teammate === t.name && x.column === 'doing') ? 'doing' : tasks.some(x => x.teammate === t.name && (x.column === 'waiting' || x.column === 'review')) ? 'waiting' : 'idle' })),
     capabilities: Array.isArray(state.capabilities) ? state.capabilities : [],
     events: events.slice(0, 400), recent: businessEvents.slice(0, 8),

@@ -39,7 +39,7 @@ quietly(() => pruneOutputs(OUTPUT_ROOTS, OUT));
 // 不可用嘅埠（其他服務、真實實例、模擬實例）；每項測試預設佔 10 個埠，需要更多的組在 TESTS 第 5 欄寫明（例如「目標日期」20 個）
 // 另加 Fetch 標準封鎖嘅埠（Node fetch 同 Chrome 都拒絕連，例如 6000 會報 bad port，伺服器起咗都連唔到）
 // 5040：Windows 系統服務長期佔用（綁唔到，伺服器會自動跳去下一個埠，測試就連錯埠）
-const RESERVED = [4318, 4380, 4381, 4398, 4402, 4470, 4471, 4650, 5040, 5354, 5530,
+const RESERVED = [4318, 4380, 4381, 7680, 4398, 4402, 4470, 4471, 4650, 5040, 5354, 5530,
   1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080];
 function findChrome() {
   const c = opt('chrome', 'SOS_TEST_CHROME');
@@ -88,6 +88,7 @@ const TESTS = [
   ['帳本寫入純函數', 'core/ledger-state-test.mjs', ['{proto}', '{out}']],
   ['人物及機構名單', 'core/people-test.mjs', ['{proto}', '{out}']],
   ['人物及機構名單後台', 'core/people-backend-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['Zero 整理名單', 'core/people-sync-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['公司概覽確認後狀態', 'core/overview-state-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['後台收件與回饋', 'core/inputs-v040-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['與 Zero 討論指令', 'core/tell-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],

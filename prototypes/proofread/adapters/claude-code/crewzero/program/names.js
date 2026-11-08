@@ -758,7 +758,7 @@
 
   // ── 0.40.0 後台新鍵 ──
   Object.assign(ui, {
-    runEnd_asked: '已交你確認',
+    runEnd_asked: '已交你確認', runEnd_checked: '已核對，名單沒有缺口',
     pbOwnNone: '目前沒有人接手：{s}', pbOwnPaused: '暫停中', pbOwnLine: '{n}（{r}）：{w}',
     pbErr_notFound: '找不到這個對象。', pbErr_invalid: '這項更正的內容不正確。', pbErr_duplicateName: '名單內已有另一個對象用這個名稱，請改用合併。', pbErr_contactInfo: '名單不記電郵、電話等聯絡方式。',
     pbErr_merged: '這個對象已併入另一個對象。', pbErr_needRole: '改為團隊成員前，請先寫下他的角色。', pbErr_useTeam: '團隊成員請在團隊頁改變狀態。', pbErr_notTeam: '只有團隊成員可以這樣更正。',
@@ -810,7 +810,13 @@
     actorRenamed: '更正名單：「{a}」改為「{b}」', actorKinded: '更正名單：{n}的類別改為{k}', actorMerged: '更正名單：把「{a}」併入「{b}」',
     actorClosed: '更正名單：{n}標為不再接觸', actorReopened: '更正名單：恢復與{n}接觸', actorTeamed: '更正名單：更新團隊成員{n}', taskOwnerChanged: '更正工作負責人：「{t}」改由{n}負責',
     chgOwner: '負責人', chgOwnerMe: '我自己', chgOwnerSaved: '已更改負責人',
-    g6FromTeam: '由團隊成員的分工自動整理，不需另寫。', g6EditTeam: '到團隊頁更正'
+    g6FromTeam: '由團隊成員的分工自動整理，不需另寫。', g6EditTeam: '到團隊頁更正',
+    // Zero 整理名單（0.40.1）：讀已確認的公司概覽，建議加入團隊成員、顧問等及更正舊類別；每包最多 3 題
+    brainJob_people: 'Zero 整理名單', peopleSyncTitle: 'Zero 整理名單', peopleSyncContext: 'Zero 讀過你確認的公司概覽，以下的人或機構還沒有在名單內，或類別可能不對。每項經你確認後才會記入名單；名單只記名稱、角色和你寫過的接觸，不記聯絡方式。',
+    peopleSyncAfter: '確認的項目即時記入名單；其餘的建議會分批再問', peopleSyncAsk: '公司概覽提到{who}：加入名單？',
+    peopleSyncKindAsk: '{n}目前記為{a}，改為{b}？', peopleSyncKindYes: '改為{b}', peopleSyncKindNo: '維持{a}', peopleSyncKindJudge: '改類別不會影響關係進度和已有的紀錄；之後仍可在名單更正。',
+    peopleSyncRequested: '請 Zero 整理名單', peopleSyncDone: 'Zero 整理名單：擬好 {n} 條確認題，等你確認', peopleSyncNone: 'Zero 整理名單：公司概覽沒有需要補充的人或機構', peopleSyncFailed: 'Zero 未能完成整理名單，請稍後再試',
+    peopleSyncNoted: '已記錄你的答案', peopleKindKept: '{n}的類別維持不變'
   });
 
   // CrewZero：畫面名稱（書面語）；狀態、欄名、圖例都由呢度讀
@@ -942,7 +948,9 @@
     ppl_mergeTitle: '把「{a}」併入「{b}」？', ppl_mergePick: '「{a}」要併入哪一個對象？', ppl_mergeBody: '兩邊的紀錄會合在一起，「{a}」之後會記為「{b}」的另一個稱呼。已經寫下的事不會改動。', ppl_mergeDo: '合併', ppl_mergeBack: '重新選擇', ppl_mergeNone: '沒有可以合併的對象。',
     ppl_closeTitle: '{n}不再接觸？', ppl_closeBody: '名單主區不再列出，也不再提醒跟進；已有的紀錄全部保留，之後可以恢復。', ppl_closeDo: '標為不再接觸',
     ppl_save: '儲存', ppl_cancel: '取消', ppl_saved: '已更正', ppl_errDuplicate: '已有同名的對象。要合在一起，請用「合併」。', ppl_errContact: '名稱不能包含電郵或電話號碼。', ppl_errNeedRole: '改為團隊成員前，需要先有角色。', ppl_errMerged: '這個對象已經併入其他對象。', ppl_errGeneric: '這項更正未能儲存，請再試一次。',
-    ppl_teamTitle: '團隊成員', ppl_teamEyebrow: '團隊 · 團隊成員', ppl_teamIntro: '共同創辦人、全職、兼職和外判成員。Zero 從你記下的事建議加入，你確認才記入；狀態和分工在這裏更正。', ppl_teamEmpty: '記下團隊成員加入或分工的事，Zero 會建議加入名單。',
+    ppl_teamTitle: '團隊成員', ppl_teamEyebrow: '團隊 · 團隊成員', ppl_teamIntro: '共同創辦人、全職、兼職和外判成員。Zero 從公司概覽和你記下的事建議加入，你確認才記入；狀態和分工在這裏更正。', ppl_teamEmpty: '名單還沒有團隊成員。Zero 可以讀你確認的公司概覽，建議加入團隊成員和顧問，你確認後才記入；之後你記下成員加入或分工的事，Zero 也會建議。',
+    ppl_teamNoneBoard: '名單還沒有團隊成員；成員在團隊頁整理。', ppl_toTeamPage: '到團隊頁',
+    ppl_syncBtn: '請 Zero 整理名單', ppl_syncFailed: '上次整理未能完成：{r}', ppl_syncRequested: 'Zero 正在整理名單，擬好確認題後會放到待決事項。', ppl_syncAsked: 'Zero 已擬好 {n} 條名單確認題，等你確認。', ppl_syncGo: '到待決事項作答', ppl_syncDone: 'Zero 已在{d}整理過這版公司概覽的名單。',
     team_cofounder: '共同創辦人', team_fulltime: '全職', team_parttime: '兼職', team_contractor: '外判', ts_active: '在職', ts_paused: '暫停', ts_left: '已離開',
     ppl_stations: '負責的站', ppl_works: '負責的工作', ppl_worksN: '{n} 項', ppl_worksNext: '{n} 項（下一項：{d}）', ppl_noWorks: '沒有未完成的工作', ppl_noStations: '尚未分配',
     ppl_setActive: '改為在職', ppl_setPaused: '改為暫停', ppl_setLeft: '標為已離開', ppl_leftTitle: '已離開（{n}）', ppl_leftTasks: '他名下 {n} 項工作未完成，已歸到你名下顯示：', ppl_reassignMe: '改派給我自己', ppl_reassignTo: '改派給{n}',

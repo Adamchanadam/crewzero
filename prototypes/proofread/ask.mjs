@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dataDirs, preparePacks, placePacks, listPacks, readJSON, rootId, legacyRootId, SERVER_VERSION, BASE_PORT, NAMES } from './ask-lib.mjs';
 import { rhythmOf } from './rhythm-lib.mjs';
 import { pipelineOf } from './brain-lib.mjs';
-import { peopleView } from './people-ops.mjs';
+import { peopleView, resolveActorId } from './people-ops.mjs';
 import { seedDemo, DEMO_DIR } from './demo-seed.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { dashboardState, guideCard } from './dash-lib.mjs';
@@ -93,7 +93,7 @@ if (BRIEF) {
       }
       const members = pv.team.filter(p => p.team.state !== 'left');
       if (members.length) out.push('團隊成員：' + members.map(p => {
-        const mine = (state.tasks || []).filter(t => t && !['done', 'cancelled'].includes(t.status) && t.owner === p.id).map(t => safe(t.title)).slice(0, 2);
+        const mine = (state.tasks || []).filter(t => t && !['done', 'cancelled'].includes(t.status) && resolveActorId(((state.company || {}).actors) || [], t.owner) === p.id).map(t => safe(t.title)).slice(0, 2);
         return safe(p.name) + '（' + [p.role ? safe(p.role) : '', '負責：' + ([...p.team.owns.map(stationName).filter(Boolean), ...mine].join('、') || '分工未定'), p.team.state === 'paused' ? NAMES.ui.pbOwnPaused : ''].filter(Boolean).join('；') + '）';
       }).join('；'));
     }

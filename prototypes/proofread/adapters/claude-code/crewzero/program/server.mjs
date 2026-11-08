@@ -959,12 +959,16 @@ function fixSourceUrl(body) {
 function founderOp(body) {
   const state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
   if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
-  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', ...ACTOR_OPS].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ACTOR_OPS].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
-  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'] }[body.op];
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'] }[body.op];
   if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
-  if (body.op === 'reschedule') {
+  if (body.op === 'peopleSync') {
+    // 請 Zero 整理名單：只在公司概覽已確認、未有未答的整理題、未在整理中時接受；只記「已要求」，不寫名單
+    const sync = (ds.people || {}).sync || { state: 'none' };
+    if (body.target !== 'people' || !['idle', 'done'].includes(sync.state)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  } else if (body.op === 'reschedule') {
     if (body.target !== 'nextAction' || !ds.nextAction?.text || ds.nextAction.cancelledAt || !isDay(value.date)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   } else if (body.op === 'cancelNext') {
     if (body.target !== 'nextAction' || !ds.nextAction?.text || ds.nextAction.cancelledAt) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };

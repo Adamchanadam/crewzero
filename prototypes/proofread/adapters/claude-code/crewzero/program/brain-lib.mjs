@@ -205,20 +205,34 @@ export function deriveActors(page, ms, existing = [], opts = {}) {
   const today = opts.today || '';
   const entries = ((page && page.detail && page.detail.actors && page.detail.actors.items) || []).filter(a => a && a.label);
   const raw = entries.length ? entries.map((a, i) => ({ id: 'pr-' + (a.id || i), label: String(a.label), value: String(a.value || ''), item: a })) : ms.flatMap(m => String(m.actorName || '').split(/[；;]/)).map(t => t.trim()).filter((t, i, all) => t && all.findIndex(x => x.split(/[（(·：:]/)[0].trim() === t.split(/[（(·：:]/)[0].trim()) === i).map((label, i) => ({ id: 'pr-m' + i, label, value: '', item: null }));
-  const out = existing.map(a => ({ ...a, fromMilestoneIds: [...(a.fromMilestoneIds || [])] }));
+  const out = existing.map(a => ({ ...a, fromMilestoneIds: [...(a.fromMilestoneIds || [])] })), fresh = new Set(), matched = new Set();
+  // 機構：org 欄，沒有就取 label 括號內的字（「陳先生（甲餐廳）」→ 甲餐廳）；括號內若是身分（顧問、經理、全職…）或等於／包含該項 role，不當機構
+  const parenOf = label => ((/[（(]([^（）()]*)[）)]/.exec(String(label || '')) || [])[1] || '').trim();
+  const ROLE_LIKE = /顧問|經理|負責人|主管|總監|校長|主任|老闆|店主|東主|創辦人|成員|全職|兼職|外判|合夥|股東|投資|先生|小姐|女士|太太|博士|律師|會計|醫生|老師|教授/;
+  const orgNorm = t => norm(t).replace(/(有限公司|股份有限公司|公司|集團|企業|limited|ltd\.?|inc\.?|co\.?)$/i, '');
+  const orgLike = (text, role) => { const t = String(text || '').trim(); if (!t) return ''; const r = norm(role || ''); if (r && (norm(t) === r || norm(t).includes(r) || r.includes(norm(t)))) return ''; return ROLE_LIKE.test(t) ? '' : orgNorm(t); };
+  const orgOf = x => x.org ? orgNorm(x.org) : orgLike(parenOf(x.label), x.role);
+  // 一方包含另一方即同一機構（甲餐廳 ＝ 甲餐廳有限公司）；任何一方沒有明確機構也當同一人
+  const sameOrg = (p, q) => !p || !q || p.includes(q) || q.includes(p);
   for (const a of raw) {
     const name = a.label.split(/[（(·：:]/)[0].trim(); if (!name) continue;
-    const existingActor = out.find(x => entries.length ? x.id === a.id : (x.name === name || nameKeys(x).includes(norm(name))));
+    const it0 = a.item || {}, orgKey = it0.org ? orgNorm(it0.org) : orgLike(parenOf(a.label), it0.role);
+    // 名稱優先配對（設計狀態表第 13 行）：頁面名稱等於「上次已有」對象的 name／aliases（含已合併、不再接觸、事件加入的）→ 同一對象，不新增、不改名。
+    // 每個舊對象每次只配對一項；只有兩邊都有明確而互不包含的機構才當作另一個人（重擬概覽的「陳先生（丙學校）」不是「陳先生（甲餐廳）」）。
+    // 不按項目編號配對：重擬概覽的 act-1 可能是另一個人，按編號會把舊對象改名（0.40.0 斷點）。同一頁內兩項同名仍各自保留（1b 既有行為）。
+    const cands = out.filter(x => !fresh.has(x.id) && nameKeys(x).includes(norm(name)) && sameOrg(orgKey, orgOf(x)));
+    const existingActor = cands.find(x => !matched.has(x.id) && orgKey && orgOf(x) === orgKey) || cands.find(x => !matched.has(x.id));
     if (existingActor) {
-      // 創辦人改過名、或已有別名：以創辦人的名稱為準，頁面上的舊名只補進別名；沒有別名的照舊跟頁面
-      if ((existingActor.aliases || []).length) { if (!nameKeys(existingActor).includes(norm(name))) existingActor.aliases.push(name); }
-      else { existingActor.name = name; existingActor.label = a.label.trim(); }
+      matched.add(existingActor.id);
+      // 只在對方沒有別名、名稱相同、仍在接觸、未合併時更新顯示 label
+      if (!(existingActor.aliases || []).length && norm(existingActor.name) === norm(name) && !existingActor.mergedInto && existingActor.status !== 'inactive') existingActor.label = a.label.trim();
       continue;
     }
-    // 頁面重新校對後換了項目編號、名稱沒變：視為同一對象（已有別名者，或顯示名稱相同者）
-    if (out.some(x => nameKeys(x).includes(norm(name)) && ((x.aliases || []).length || norm(x.label) === norm(a.label)))) continue;
+    // 同一頁重複列了同一個人（名稱相同、兩邊都沒有機構）：不再新增
+    if (!orgKey && cands.some(x => matched.has(x.id) && norm(x.name) === norm(name) && !orgOf(x))) continue;
     if (hasContactInfo(name)) continue;
     let id = a.id, n = 1; while (out.some(x => x.id === id)) id = a.id + '-' + n++;
+    fresh.add(id);
     const it = a.item || {}, kind = KINDS.includes(it.actorKind) ? it.actorKind : /客戶|付款|付費|顧客/.test(a.label + a.value) ? 'customer' : 'partner';
     const org = cut(it.org, 40), role = cut(it.role, 40);
     const msIds = new Set(ms.map(m => m.id));
