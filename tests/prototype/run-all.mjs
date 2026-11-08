@@ -40,7 +40,9 @@ quietly(() => pruneOutputs(OUTPUT_ROOTS, OUT));
 // 另加 Fetch 標準封鎖嘅埠（Node fetch 同 Chrome 都拒絕連，例如 6000 會報 bad port，伺服器起咗都連唔到）
 // 5040：Windows 系統服務長期佔用（綁唔到，伺服器會自動跳去下一個埠，測試就連錯埠）
 const RESERVED = [4318, 4380, 4381, 7680, 4398, 4402, 4470, 4471, 4650, 5040, 5354, 5530,
-  1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080];
+  1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080,
+  // 9222：本機常有其他程式佔用（Chrome 預設遙距除錯埠；2026-11-08 全套時被佔，「監察台」伺服器開不到）
+  9222];
 function findChrome() {
   const c = opt('chrome', 'SOS_TEST_CHROME');
   if (c) return fs.existsSync(c) ? c : '';
@@ -92,6 +94,13 @@ const TESTS = [
   ['公司概覽確認後狀態', 'core/overview-state-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['後台收件與回饋', 'core/inputs-v040-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['0.40.2 十項修正', 'core/fixes-0402-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['Zero 團隊分工設計純函數', 'core/roles-design-test.mjs', []],
+  ['Zero 團隊崗位接線', 'core/roles-run-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['Zero 團隊伺服器', 'core/roles-server-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['看板崗位及節奏畫面資料', 'core/roles-dash-test.mjs', ['{proto}', '{out}']],
+  ['Zero 崗位題目', 'core/roles-ask-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['崗位指示及示範', 'core/roles-prompts-test.mjs', ['{proto}', '{out}']],
+  ['Zero 團隊端到端', 'core/roles-chain-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['與 Zero 討論指令', 'core/tell-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['Office 轉文字', 'core/office-text-test.mjs', []],
   ['Google 連結取回', 'core/link-fetch-test.mjs', []],

@@ -44,7 +44,8 @@
       "interviewWeekday": 3,
       "runCapMinutes": 30,
       "triggeredRunsPerHour": 6,
-      "aiStartsPerDay": 40
+      "aiStartsPerDay": 40,
+      "pace": "standard"
     },
     "actors": [
       {
@@ -240,7 +241,41 @@
           "owns": []
         }
       }
-    ]
+    ],
+    "permissions": {
+      "self": [
+        "讀取與分析公司紀錄內的檔案",
+        "上網研究、核對與查證，每條引用附出處",
+        "起草內部文件與草稿（訊息草稿、簡介、清單、研究摘要）",
+        "有訊號時草擬路線建議，不自行啟動",
+        "更新工作、事件與系統狀態",
+        "處理交來的資料並歸檔",
+        "準備訪問問題"
+      ],
+      "tellAfter": [
+        "因訪問或資料而更新商業模式讀解與假設",
+        "同一站內新增或重排工作",
+        "擬新崗位卡及其啟用任務",
+        "為對話或筆記中的事實建立確認題",
+        "清走「等待對方回覆」標記"
+      ],
+      "askFirst": [
+        "任何對外發送（電郵、訊息、填表、登入、留言、發布、付款、提交）",
+        "花錢或簽約",
+        "作出承諾（價格、日期、條件）",
+        "啟用崗位",
+        "同時開第二站",
+        "把暫定值定案",
+        "改變站的次序或目標",
+        "改動已確認站的標題、事件、證明、交付條件或目標日期",
+        "採用路線選項、撤回站、轉向",
+        "刪除或移走你的檔案",
+        "安裝軟件或其他不可回復的操作",
+        "新功能",
+        "最終交付品質驗收"
+      ],
+      "source": "default"
+    }
   },
   "lines": [
     {
@@ -286,7 +321,7 @@
       "targetDate": "@+5d",
       "ownerKind": "teammate",
       "ownerId": "tm-buy",
-      "ownerName": "採購伙伴",
+      "ownerName": "農場採購專員",
       "depthAnswers": [
         "有穩定每週出貨與直接客戶（假設）",
         "農場主本人決定，一次會面可簽（假設）",
@@ -413,7 +448,7 @@
       },
       "ownerKind": "teammate",
       "ownerId": "tm-comp",
-      "ownerName": "合規助理",
+      "ownerName": "牌照及保險主任",
       "depthAnswers": [
         "按申請程序批出（須核實）",
         "由創辦人向主管機關查清",
@@ -453,7 +488,7 @@
       "targetDate": "@+26d",
       "ownerKind": "teammate",
       "ownerId": "tm-rest",
-      "ownerName": "餐廳拓展",
+      "ownerName": "餐廳拓展經理",
       "depthAnswers": [
         "來源可追溯與穩定供應",
         "月底檢視供應商，廚師先試食",
@@ -534,7 +569,7 @@
       "targetDate": "@+65d",
       "ownerKind": "teammate",
       "ownerId": "tm-rest",
-      "ownerName": "餐廳拓展",
+      "ownerName": "餐廳拓展經理",
       "depthAnswers": [
         "品質穩定與來源可追溯",
         "每週下一至兩次單、月底檢視",
@@ -633,73 +668,223 @@
   "teammates": [
     {
       "id": "tm-buy",
-      "name": "採購伙伴",
-      "mission": "替創辦人準備農場洽談所需的資料，令每次會面都可以即場簽約",
+      "name": "農場採購專員",
+      "title": "農場採購專員",
+      "mission": "替李家欣準備每次農場洽談所需的資料，令會面可以即場簽約。",
       "milestoneIds": [
         "m1",
         "m1t"
       ],
-      "lifecycle": "enabled",
+      "supports": [
+        "pc-tm-lee"
+      ],
+      "targets": [
+        "partner"
+      ],
       "how": [
         "整理農場資料及供應量",
-        "準備簡介與條款草案",
-        "記錄每次洽談結果"
+        "準備簡介與條款草案（不承諾價錢）",
+        "記錄每次洽談結果並寫下一步"
+      ],
+      "strategy": "農場簽約是進行中的站，Zero 替李家欣準備每次會面的資料，令會面可以即場簽約。",
+      "sources": [
+        "confirmedPage"
+      ],
+      "deliverables": [
+        "intro",
+        "proposal",
+        "checklist"
+      ],
+      "knowledge": [
+        {
+          "text": "三個農場簽供應協議是目前的完成條件，要有三份已簽的協議。",
+          "source": "confirmedPage"
+        },
+        {
+          "text": "三個農場簽供應協議以簽署協議為證，由農場主本人點頭。",
+          "source": "confirmedPage"
+        }
       ],
       "bounds": {
         "tellAfter": [
+          "因訪問或資料而更新商業模式讀解與假設",
+          "同一站內新增或重排工作",
+          "擬新崗位卡及其啟用任務",
+          "為對話或筆記中的事實建立確認題",
+          "清走「等待對方回覆」標記",
           "整理農場名單"
         ],
         "askFirst": [
-          "對外發訊息",
-          "答應任何價錢"
-        ]
-      }
+          "任何對外發送（電郵、訊息、填表、登入、留言、發布、付款、提交）",
+          "花錢或簽約",
+          "作出承諾（價格、日期、條件）",
+          "啟用崗位",
+          "同時開第二站",
+          "把暫定值定案",
+          "改變站的次序或目標",
+          "改動已確認站的標題、事件、證明、交付條件或目標日期",
+          "採用路線選項、撤回站、轉向",
+          "刪除或移走你的檔案",
+          "安裝軟件或其他不可回復的操作",
+          "新功能",
+          "最終交付品質驗收",
+          "聯絡任何農場",
+          "答應任何收購價或供應條件"
+        ],
+        "lockedAt": "@-18d"
+      },
+      "lifecycle": "enabled",
+      "activationTaskId": "t1",
+      "activation": {
+        "taskId": "t1",
+        "acceptedAt": "@-18d",
+        "replyFile": "demo",
+        "cardHash": "demo-tm-buy"
+      },
+      "activationReturns": 0,
+      "avatarKind": "procurement",
+      "createdAt": "@-19d",
+      "updatedAt": "@-18d"
     },
     {
       "id": "tm-comp",
-      "name": "合規助理",
-      "mission": "查清牌照與保險要求，避免送菜前出現問題",
+      "name": "牌照及保險主任",
+      "title": "牌照及保險主任",
+      "mission": "查清牌照與保險要求，避免送菜前出現問題。",
       "milestoneIds": [
         "m4"
       ],
-      "lifecycle": "enabled",
+      "supports": [
+        "pc-tm-wong"
+      ],
+      "targets": [],
       "how": [
         "整理查詢清單",
         "比較保險報價",
         "提醒申請期限"
       ],
+      "strategy": "這一站正等候牌照批出，Zero 先把要問發牌機關和保險公司的事整理好。",
+      "sources": [
+        "confirmedPage"
+      ],
+      "deliverables": [
+        "checklist",
+        "research",
+        "questions"
+      ],
+      "knowledge": [
+        {
+          "text": "牌照及第三者保險須在首次送菜到餐廳之前到位。",
+          "source": "confirmedPage"
+        }
+      ],
       "bounds": {
         "tellAfter": [
+          "因訪問或資料而更新商業模式讀解與假設",
+          "同一站內新增或重排工作",
+          "擬新崗位卡及其啟用任務",
+          "為對話或筆記中的事實建立確認題",
+          "清走「等待對方回覆」標記",
           "整理報價"
         ],
         "askFirst": [
-          "遞交任何申請",
-          "購買保險"
+          "任何對外發送（電郵、訊息、填表、登入、留言、發布、付款、提交）",
+          "花錢或簽約",
+          "作出承諾（價格、日期、條件）",
+          "啟用崗位",
+          "同時開第二站",
+          "把暫定值定案",
+          "改變站的次序或目標",
+          "改動已確認站的標題、事件、證明、交付條件或目標日期",
+          "採用路線選項、撤回站、轉向",
+          "刪除或移走你的檔案",
+          "安裝軟件或其他不可回復的操作",
+          "新功能",
+          "最終交付品質驗收",
+          "向任何機關或保險公司提交申請或資料"
         ]
-      }
+      },
+      "lifecycle": "paused",
+      "pausedReason": "這一站正等候牌照批出，而支援的黃師傅暫停中；其工作暫由 Zero 統籌承擔。",
+      "activationTaskId": "t5",
+      "activationReturns": 0,
+      "avatarKind": "compliance",
+      "createdAt": "@-9d",
+      "updatedAt": "@-2d"
     },
     {
       "id": "tm-rest",
-      "name": "餐廳拓展",
-      "mission": "找到願意試食與試單的餐廳",
+      "name": "餐廳拓展經理",
+      "title": "餐廳拓展經理",
+      "mission": "把每間餐廳由試單推進到每週固定下單。",
       "milestoneIds": [
         "m2",
         "m3",
         "m5"
       ],
-      "lifecycle": "planned",
-      "activationTaskId": "t7",
+      "supports": [
+        "pc-tm-chan"
+      ],
+      "targets": [
+        "customer"
+      ],
       "how": [
-        "整理餐廳名單",
-        "準備試食會流程",
-        "跟進回饋"
+        "準備每間餐廳的跟進訊息草稿",
+        "整理試單回饋與下一步",
+        "列出試食與試單的流程"
+      ],
+      "strategy": "三個站都對準餐廳，由同一個崗位跟進，每間餐廳的進展和下一步才會連貫。",
+      "sources": [
+        "confirmedPage"
+      ],
+      "deliverables": [
+        "message",
+        "intro",
+        "questions"
+      ],
+      "knowledge": [
+        {
+          "text": "五間餐廳各完成一次試單並給回饋，是目前的完成條件。",
+          "source": "confirmedPage"
+        },
+        {
+          "text": "三間餐廳連續四週每週下單，是季末目標。",
+          "source": "confirmedPage"
+        }
       ],
       "bounds": {
-        "tellAfter": [],
+        "tellAfter": [
+          "因訪問或資料而更新商業模式讀解與假設",
+          "同一站內新增或重排工作",
+          "擬新崗位卡及其啟用任務",
+          "為對話或筆記中的事實建立確認題",
+          "清走「等待對方回覆」標記"
+        ],
         "askFirst": [
-          "聯絡任何餐廳"
+          "任何對外發送（電郵、訊息、填表、登入、留言、發布、付款、提交）",
+          "花錢或簽約",
+          "作出承諾（價格、日期、條件）",
+          "啟用崗位",
+          "同時開第二站",
+          "把暫定值定案",
+          "改變站的次序或目標",
+          "改動已確認站的標題、事件、證明、交付條件或目標日期",
+          "採用路線選項、撤回站、轉向",
+          "刪除或移走你的檔案",
+          "安裝軟件或其他不可回復的操作",
+          "新功能",
+          "最終交付品質驗收",
+          "聯絡任何餐廳",
+          "答應價錢或送貨條件",
+          "向餐廳送出任何文件"
         ]
-      }
+      },
+      "lifecycle": "planned",
+      "activationTaskId": "t14",
+      "activationReturns": 0,
+      "avatarKind": "outreach",
+      "createdAt": "@-5d",
+      "updatedAt": "@-25m"
     }
   ],
   "capabilities": [
@@ -738,7 +923,8 @@
       "longWait": {
         "who": "發牌機關",
         "weeks": 3
-      }
+      },
+      "cadence": "activation"
     },
     {
       "id": "t13",
@@ -754,7 +940,8 @@
         "kind": "action",
         "id": "f2"
       },
-      "updatedAt": "@-1d"
+      "updatedAt": "@-1d",
+      "cadence": "daily"
     },
     {
       "id": "f1",
@@ -779,7 +966,8 @@
       "status": "active",
       "next": "整理農場丙的供應量及月結條件",
       "updatedAt": "@-4m",
-      "prepFor": "f1"
+      "prepFor": "f1",
+      "cadence": "daily"
     },
     {
       "id": "t11",
@@ -788,7 +976,8 @@
       "teammateId": "tm-buy",
       "status": "planned",
       "prepFor": "f1",
-      "updatedAt": "@-1d"
+      "updatedAt": "@-1d",
+      "cadence": "daily"
     },
     {
       "id": "t4",
@@ -802,7 +991,8 @@
         "who": "農場丙",
         "text": "可否增加供應量",
         "eta": "@+3d"
-      }
+      },
+      "cadence": "daily"
     },
     {
       "id": "t6",
@@ -815,16 +1005,31 @@
       "waitFor": {
         "kind": "decision",
         "packId": "ask-demo-licence"
-      }
+      },
+      "cadence": "daily"
     },
     {
       "id": "t7",
-      "title": "餐廳試食會流程清單（啟用任務）",
+      "title": "餐廳試食會流程清單",
       "milestoneId": "m2",
       "teammateId": "tm-rest",
       "status": "planned",
       "updatedAt": "@-5d",
-      "riskTest": "餐廳願意為可追溯來源付較高價錢"
+      "riskTest": "餐廳願意為可追溯來源付較高價錢",
+      "cadence": "daily"
+    },
+    {
+      "id": "t14",
+      "title": "餐廳乙試單安排確認訊息草稿",
+      "milestoneId": "m2",
+      "teammateId": "tm-rest",
+      "cadence": "activation",
+      "status": "done",
+      "needsAcceptance": true,
+      "packId": "ask-demo-activation",
+      "updatedAt": "@-25m",
+      "artifactTitle": "餐廳乙試單安排確認訊息草稿",
+      "fromRun": "R-demo-e"
     },
     {
       "id": "t12",
@@ -833,7 +1038,8 @@
       "teammateId": "tm-rest",
       "status": "planned",
       "riskTest": "餐廳願意為可追溯來源付較高價錢",
-      "updatedAt": "@-2d"
+      "updatedAt": "@-2d",
+      "cadence": "daily"
     },
     {
       "id": "t8",
@@ -878,7 +1084,8 @@
       "needsAcceptance": true,
       "packId": "ask-demo-accept",
       "updatedAt": "@-20m",
-      "artifactTitle": "農場合作一頁簡介"
+      "artifactTitle": "農場合作一頁簡介",
+      "cadence": "daily"
     },
     {
       "id": "t1",
@@ -888,7 +1095,8 @@
       "status": "done",
       "needsAcceptance": true,
       "acceptedBy": "founder",
-      "updatedAt": "@-18d"
+      "updatedAt": "@-18d",
+      "cadence": "activation"
     },
     {
       "id": "t9",
@@ -898,7 +1106,8 @@
       "status": "done",
       "needsAcceptance": true,
       "acceptedBy": "founder",
-      "updatedAt": "@-14d"
+      "updatedAt": "@-14d",
+      "cadence": "daily"
     },
     {
       "id": "t10",
@@ -906,7 +1115,8 @@
       "capabilityId": "cap1",
       "teammateId": "tm-rest",
       "status": "active",
-      "updatedAt": "@-1d"
+      "updatedAt": "@-1d",
+      "cadence": "daily"
     },
     {
       "id": "a1",
@@ -1034,6 +1244,25 @@
       "askedAt": "@-1d 08:00",
       "milestoneId": "m1t",
       "todoType": "action"
+    },
+    {
+      "id": "d-roles",
+      "title": "確認 Zero 崗位",
+      "kind": "other",
+      "status": "pending",
+      "packId": "ask-demo-roles",
+      "askedAt": "@-1d 21:05",
+      "todoType": "decision"
+    },
+    {
+      "id": "d-activation",
+      "title": "驗收啟用任務：餐廳拓展經理",
+      "kind": "other",
+      "status": "pending",
+      "packId": "ask-demo-activation",
+      "askedAt": "@-25m",
+      "milestoneId": "m2",
+      "todoType": "acceptance"
     }
   ],
   "inputs": [
@@ -1112,6 +1341,12 @@
   },
   "artifacts": [
     {
+      "title": "餐廳乙試單安排確認訊息草稿",
+      "runId": "R-demo-e",
+      "at": "@-25m",
+      "milestoneId": "m2"
+    },
+    {
       "title": "農場合作一頁簡介",
       "runId": "R-demo-a",
       "at": "@-20m",
@@ -1159,6 +1394,34 @@
       "summary": "按農場甲會面紀錄擬好一頁簡介，待你驗收。",
       "artifacts": 1,
       "aiStarted": true,
+      "moduleIds": [
+        "ai-week",
+        "artifacts"
+      ]
+    },
+    {
+      "id": "R-demo-e",
+      "type": "rhythm",
+      "trigger": "schedule",
+      "startedAt": "@-50m",
+      "endedAt": "@-25m",
+      "state": "ended",
+      "ending": "artifact",
+      "label": "擬好餐廳乙試單安排確認訊息草稿",
+      "summary": "擬好啟用任務的確認訊息草稿，統籌已校對，待你驗收。",
+      "artifacts": 1,
+      "aiStarted": true,
+      "taskIds": [
+        "t14"
+      ],
+      "teammateId": "tm-rest",
+      "qa": {
+        "audience": "external",
+        "verdict": "pass",
+        "line": "沒有承諾價錢或日期；姓名與機構核對無誤；依據兩條皆有出處。",
+        "rounds": 1,
+        "issues": []
+      },
       "moduleIds": [
         "ai-week",
         "artifacts"
@@ -1394,6 +1657,21 @@
       ]
     },
     {
+      "id": "e17",
+      "at": "@-25m",
+      "actor": "ai",
+      "type": "run",
+      "title": "Zero 完成工作：餐廳乙試單安排確認訊息草稿，待你驗收",
+      "relatedIds": [
+        "R-demo-e",
+        "t14"
+      ],
+      "moduleIds": [
+        "ai-week",
+        "artifacts"
+      ]
+    },
+    {
       "id": "e15",
       "at": "@-4m",
       "actor": "ai",
@@ -1429,6 +1707,23 @@
     "lastValidatedAt": "@-4m",
     "warnings": [
       "短期目標為 Zero 暫定值，兩日後到期時會再徵詢你"
+    ]
+  },
+  "rolesSync": {
+    "for": "demo",
+    "at": "@-1d 21:05",
+    "requested": false,
+    "packId": "ask-demo-roles",
+    "pending": [],
+    "unassigned": [],
+    "stationsAt": [
+      "m1",
+      "m1t",
+      "m4",
+      "m2",
+      "m3",
+      "m5",
+      "m7"
     ]
   }
 }

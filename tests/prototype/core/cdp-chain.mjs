@@ -94,7 +94,8 @@ try {
   } else {
     ok('中途顯示 AI 跟進緊', sawRunning);
     ok('AI 跟進好，頁面顯示成果', t2.includes('✓ 完成'), t2.slice(0, 300));
-    ok('頁面列出 AI 做咗嘅嘢（≥3 份）', (await ev(`document.querySelectorAll('#track details').length`)) >= 3);
+    // 0.41.0 起外殼每次只收兩份產出（Z33），假 AI 交 3 份時頁面列 2 份並寫明「只收兩份」
+    ok('頁面列出 AI 做咗嘅嘢（只收兩份，並寫明交了幾份）', (await ev(`document.querySelectorAll('#track details').length`)) === 2 && /只收兩份/.test(await ev(`document.querySelector('#track') ? document.querySelector('#track').innerText : ''`)));
     ok('寫明全部係草稿、冇對外發送', t2.includes('全部為草稿') && t2.includes('未有對外發送'));
     const data = DATA;
     const conf = JSON.parse(fs.readFileSync(path.join(data, 'ledger', 'confirmed.json'), 'utf8'));

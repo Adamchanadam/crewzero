@@ -108,9 +108,9 @@ try {
   for (let d = 1; d <= 14; d++) {
     // 夾具：第 6 日放一個已到期嘅試行站（原型冇採用路徑入口）
     if (d === 6 && !trialInjected) { const t = await today(); setSt(x => { x.milestones.push({ id: 'mt1', title: '試行：週末市集', short: '試行：週末市集', lineId: 'main', order: null, pathStatus: 'trial', state: 'active', kind: 'real', event: '週末市集擺檔兩次', depth: 'ok', trial: { adoptedAt: t, startedAt: lib.localIso(new Date(Date.parse(t) - 30 * 86400000)).slice(0, 10), until: lib.localIso(new Date(Date.parse(t) - 86400000)).slice(0, 10), successSignal: { text: '兩次擺檔都賣出三十箱', value: 1, target: 2, met: false }, stopSignal: { text: '任何一次賣不到十箱', met: false } } }); }); trialInjected = true; }
-    // 第 13 日：今日 AI 啟動上限（夾具改上限做 0），睇排程 run 跳過
-    if (d === 13) setSt(x => { x.company.rhythm.aiStartsPerDay = 0; });
-    if (d === 14) setSt(x => { x.company.rhythm.aiStartsPerDay = 40; });
+    // 第 13 日：今日 AI 啟動已達保險絲（0.41.0 起保險絲由節奏檔決定，標準 40；夾具預先寫滿今日 40 行啟動紀錄），睇排程 run 跳過；翌日是新工作日，自動恢復
+    // 寫入時模擬時鐘仍在前一日；排程 run 在推前之後的那一日開工，所以紀錄要寫那一日
+    if (d === 13) { const t13 = new Date(Date.parse((await today()) + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10); fs.appendFileSync(path.join(DATA, 'ledger', 'ai-starts.log'), Array.from({ length: 40 }, (_, i) => t13 + 'T00:00:00\twork\tRfill' + i).join('\n') + '\n'); }
     // 第 11 日：換成未認證嘅 AI（模擬面板），睇排程 run 跳過「AI 未設定」；之後換返
     if (d === 11) { const sw = await post('/api/sim', { action: 'ai', mode: 'real' }); certTested = sw.code === 200 && sw.j && sw.j.ready === false; }
     // 第 4 日：AI 建議開第二站

@@ -26,6 +26,7 @@ let srv = null, c = null;
 try {
   const DEMO = path.join(OUT, 'demo');
   seedDemo(DEMO, { reset: true });
+  const SEEDED_AT = Date.now();   // 示範的紅藍對打按建立後秒數逐幕出現（reveal.json，最後一幕 208 秒）；要驗證「資料冇變」的步驟之前先等它播完
   await kit.certifyDirect(DEMO, PROTO, ADAPTER);
   const SF = path.join(DEMO, 'ledger', 'state.json'), FAKE = path.join(DEMO, 'fake-observe.json');
   const norm = p => { const s = path.resolve(String(p)).replace(/\\/g, '/').replace(/\/+$/, ''); return process.platform === 'win32' ? s.toLowerCase() : s; };
@@ -131,6 +132,7 @@ try {
   ok('全部停止（唔重新載入）：零亮線、零粒子、運作環卡外框停', o && o.pts === 0 && o.moving === 0 && !(await c.ev(`document.querySelector('#arena-panel').classList.contains('running')`)), o || await orb());
 
   /* ---------- C. 就地更新、外框靜止、進場只播一次 ---------- */
+  { const left = 215000 - (Date.now() - SEEDED_AT); if (left > 0) await sleep(left); }
   await c.go(B + '/dashboard', 1440, 4000);
   await c.ev(`window.__mut=0;window.__panels=[...document.querySelectorAll('#app .panel')];new MutationObserver(ms=>{ms.forEach(m=>{const t=m.target.nodeType===1?m.target:m.target.parentElement;if(t&&t.closest('[data-hb],.phtele,.o-stage,.o-fxa,.o-canvas,.cd,[data-wait]'))return;window.__mut+=m.addedNodes.length+m.removedNodes.length})}).observe(document.querySelector('#app'),{childList:true,subtree:true,characterData:true})`);
   await sleep(11500);

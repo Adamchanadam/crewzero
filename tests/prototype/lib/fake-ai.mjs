@@ -247,7 +247,19 @@ if (type === 'work' && outputMode === 'agy') {
   if (M === 'people-self') { const self = (/我自己[（(]([^）)]+)[）)]/.exec(g6) || [])[1]; if (self) items.push({ kind: 'newActor', name: self.trim(), role: '創辦人', actorKind: 'team', teamType: 'cofounder', why: '測試：創辦人本人。' }); }
   fs.writeFileSync('out/people.json', JSON.stringify({ summary: '測試 AI：建議 ' + items.length + ' 項。', items: M === 'people-none' ? [] : items }, null, 2));
   done();
-} else if (type === 'rhythm') {
+} else if (type === 'roles' || type === 'roles-repair') {
+  // 擬崗位（0.41.0）：舊測試組不測崗位。交零張卡，把還沒有負責崗位的已確認／試行站全部列入 unassigned（J1：每個已確認的站不是有崗位就是在 unassigned），
+  // 這樣核對一次通過，每個合資格日只有一次 roles 啟動。站編號由外殼放的 roles-input.json 取得；非首次模式（加／建議／重擬／拆分）核對寬鬆，交空清單即可。
+  const inp = fs.existsSync('roles-input.json') ? JSON.parse(fs.readFileSync('roles-input.json', 'utf8')) : { stations: [], existingCards: [] };
+  const owned = new Set((inp.existingCards || []).flatMap(c => c.milestoneIds || []));
+  const un = job.mode && job.mode !== 'first' ? [] : (inp.stations || []).filter(s => ['confirmed', 'trial'].includes(s.pathStatus) && !owned.has(s.id)).map(s => ({ milestoneId: s.id, why: '測試 AI：暫由統籌承擔。' }));
+  fs.writeFileSync('out/roles.json', JSON.stringify({ summary: '測試 AI：沒有需要新增的崗位。', cards: [], unassigned: un }, null, 2));
+  done();
+} else if (type === 'proofread') {
+  // 統籌校對：六項檢查全過，通過
+  fs.writeFileSync('out/proofread.json', JSON.stringify({ verdict: 'pass', checks: ['facts', 'numbersDates', 'names', 'sources', 'deliverable', 'externalWording'].map(item => ({ item, ok: true, note: '測試 AI：核對無誤。' })), line: '測試 AI：核對無誤，可以交給創辦人。', issues: [] }, null, 2));
+  done();
+} else if (type === 'rhythm' || type === 'qa-rewrite') {
   // 日常工作：按紀錄做一份準備；內容只跟紀錄，紀錄冇變就同上次一樣（外殼會判定冇新產出）。
   // 模式：rhythm-blocked 冇得做、rhythm-second 建議開第二站、rhythm-ask 出一條問題
   const L = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));

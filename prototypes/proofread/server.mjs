@@ -12,14 +12,16 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { receiveAttachments, collectLinks, rereadLink } from './inbound-lib.mjs';
+import { receiveAttachments, collectLinks, rereadLink, rehomeInterruptedUploads } from './inbound-lib.mjs';
+import { ROLES_OPS, ROLES_OP_NAMES, checkRolesOp } from './ledger-ops.mjs';
+import { PACE_KEYS, timeoutOf } from './pace-lib.mjs';
 import { applyActorOp, ACTOR_OPS, ownerKind } from './people-ops.mjs';
 import { parseGoogleLink } from './link-fetch.mjs';
 import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, readFounderOpsSnapshot, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource, counterpartsOf } from './brain-lib.mjs';
@@ -407,6 +409,17 @@ function kick(args) {
 // 排程計時器：模擬每 5 秒、真實實例每 30 秒。未經批准（冇 mode:server 標記）唔會開 AI；你嘅回覆永遠排先。
 let firedDay = null;
 function overviewCurrent() { return overviewIsCurrent(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null)); }
+// 排程器逾時按檔（pace-lib.timeoutOf：45／90／240 分鐘）。帳本有合法的 pace 而登記標記的 limitMinutes 不同，就地改標記；
+// 沒有 pace 的舊帳本不動（維持 install-schedule 原公式）。只寫 ledger/schedule.json，其餘欄位（approvedAt、登入啟動）原樣保留。
+function syncMarkLimit(s, mark) {
+  try {
+    if (!mark || mark.mode !== 'server') return false;
+    const pace = s && s.company && s.company.rhythm && s.company.rhythm.pace;
+    if (!PACE_KEYS.includes(pace) || mark.limitMinutes === timeoutOf(s)) return false;
+    writeJSON(path.join(DIR.ledger, 'schedule.json'), { ...mark, limitMinutes: timeoutOf(s) });
+    return true;
+  } catch { return false; }
+}
 function rhythmTick() {
   maybeRecertify();
   if (certChild) return;
@@ -417,7 +430,9 @@ function rhythmTick() {
   // 模擬實例沿用原本嘅 5 秒試走；真實資料先必須有創辦人嘅 server 授權。
   if (!SIM && (!mark || mark.mode !== 'server')) return;
   // 節奏剛由系統頁提交時，先叫外殼合併；唔可以用舊設定喺中間開工。
-  if (pendingFounderOps(DIR, s).some(op => op && op.op === 'setRhythm')) { kick(); return; }
+  // 0.41.0：改節奏檔（setPace）同樣先合併；已套用的檔令排程器逾時跟着改（只更新登記標記，不碰作業系統排程）
+  syncMarkLimit(s, mark);
+  if (pendingFounderOps(DIR, s).some(op => op && (op.op === 'setRhythm' || op.op === 'setPace'))) { kick(); return; }
   const rhythm = rhythmOf(s), slot = scheduleEligibility(rhythm, clockNow(), { approvedAt: !SIM ? mark?.approvedAt : '', updatedAt: !SIM ? rhythm.updatedAt : '' }).slot;
   if (!slot) return;
   const day = ymd(slot), recorded = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === day);
@@ -944,7 +959,13 @@ function fixSourceUrl(body) {
   if (!Number.isInteger(n) || n < 0 || n >= page.sources.length || !raw || raw.length > 300) return bad;
   // 版本核對：請求必須帶該項來源的標題，與目前頁面第 n 項相符才寫（兩部瀏覽器、或頁面已重擬時序號可能對應另一項）；不符或沒有帶一律不寫
   const cur = page.sources[n];
-  if (typeof (body && body.title) !== 'string' || !cur || typeof cur !== 'object' || String(cur.title == null ? '' : cur.title) !== body.title) return { ok: false, error: 'stale', message: NAMES.ui.srcUrlStale };
+  // 0.41.0：請求帶來源 id 時，必須與目前第 n 項的 id 相同（同名來源不會配錯；沒有標題的來源可憑 id 更正）；id 相符時標題若有帶仍須相符。舊請求只帶標題，照舊只按標題核對。
+  const sid = body && body.id, hasId = sid !== undefined && sid !== null && sid !== '';
+  if (!cur || typeof cur !== 'object') return { ok: false, error: 'stale', message: NAMES.ui.srcUrlStale };
+  if (hasId) {
+    if ((typeof sid !== 'string' && typeof sid !== 'number') || cur.id == null || String(cur.id) !== String(sid)) return { ok: false, error: 'stale', message: NAMES.ui.srcUrlStale };
+    if (body.title !== undefined && (typeof body.title !== 'string' || String(cur.title == null ? '' : cur.title) !== body.title)) return { ok: false, error: 'stale', message: NAMES.ui.srcUrlStale };
+  } else if (typeof (body && body.title) !== 'string' || String(cur.title == null ? '' : cur.title) !== body.title) return { ok: false, error: 'stale', message: NAMES.ui.srcUrlStale };
   let u; try { u = new URL(raw); } catch { return bad; }
   const host = u.hostname.toLowerCase();
   // 只收 https 公開網址：不收帳密、本機名稱、私人網段、IPv6 位址
@@ -960,14 +981,23 @@ function fixSourceUrl(body) {
   return { ok: true, n, url: s.url, fixedOn: s.fixedOn, message: NAMES.ui.srcUrlSaved };
 }
 function founderOp(body) {
-  const state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
+  // 隊列先讀、state.json 最後讀（與外殼合併「改名 → 套用 → 存檔 → 刪批次檔」配合），剛排隊的暫停／恢復不會被漏看
+  const { state, pending } = readFounderOpsSnapshot(DIR);
   if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
-  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ACTOR_OPS].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ROLES_OP_NAMES, ...ACTOR_OPS].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
-  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'] }[body.op];
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], ...ROLES_OPS, actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'] }[body.op];
   if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
-  if (body.op === 'peopleSync') {
+  let opValue = value;
+  if (ROLES_OP_NAMES.includes(body.op)) {
+    // 0.41.0：節奏三檔、暫停／恢復 Zero、崗位暫停／恢復、請 Zero 重新擬崗位。核對在 ledger-ops.checkRolesOp（連同尚未合併的同類操作重播）；隊列只存整理過的欄位
+    const packs = listPacks(DIR).filter(p => p.open).map(p => loadPack(DIR, p.id)).filter(Boolean);
+    const rolesPackOpen = packs.some(p => p.rolesSync) || packs.some(p => p.id && p.id === ((state.rolesSync || {}).packId || ''));
+    const r = checkRolesOp(body.op, body.target, value, state, { pending, today: localIso().slice(0, 10), rolesPackOpen });
+    if (!r.ok) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+    opValue = r.value;
+  } else if (body.op === 'peopleSync') {
     // 請 Zero 整理名單：只在公司概覽已確認、未有未答的整理題、未在整理中時接受；只記「已要求」，不寫名單
     const sync = (ds.people || {}).sync || { state: 'none' };
     if (body.target !== 'people' || !['idle', 'done'].includes(sync.state)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
@@ -989,9 +1019,8 @@ function founderOp(body) {
   }
   // 名單改正（改名、類別、合併、不再接觸、成員狀態、工作負責人）：欄位白名單已在上面核對；這裏在「已疊加未合併操作」的帳本上試套一次，
   // 找不到對象、重名、聯絡方式（電郵／長串數字）、已合併、非在職成員等一律拒絕，不入隊列。隊列內只存整理過的欄位。
-  let opValue = value;
   if (ACTOR_OPS.includes(body.op)) {
-    const eff = applyFounderOps(state, pendingFounderOps(DIR, state));
+    const eff = applyFounderOps(state, pending);
     const trial = applyActorOp({ company: eff.company || {}, tasks: eff.tasks || [], milestones: eff.milestones || [] }, body.op, { ...value, id: body.target, from: body.target });
     if (!trial.ok) return { ok: false, error: 'invalid', message: NAMES.ui['pbErr_' + trial.error] || NAMES.ui.founderOpInvalid };
     if (body.op === 'actorTeam') { const t = value.team && typeof value.team === 'object' ? value.team : {}; opValue = { team: Object.fromEntries(['type', 'state', 'owns'].filter(k => k in t).map(k => [k, t[k]])) }; }
@@ -1552,6 +1581,11 @@ async function start() {
     try { process.kill(Number(j.pid)); killed = true; say(`發現${legacy ? '沒有通行證功能的' : ''}舊版正在運行（${port}），已關閉並改用新版`); } catch { }
   }
   if (killed) await new Promise(r => setTimeout(r, 800));
+  // 0.41.0：上次轉換 Office 檔途中伺服器重啟，收件匣會留下沒有主檔的附件。開機時搬到封存區（只搬不刪）；外殼仍在工作時不碰
+  try {
+    const moved = shellAlive() ? [] : rehomeInterruptedUploads({ inboxDir: DIR.inbox, archiveDir: DIR.archive });
+    if (moved.length) say(`收件匣有 ${moved.length} 個上次中斷的附件，已搬到封存區，不再算作待處理`);
+  } catch { }
   server.listen(PORT, '127.0.0.1', () => {
     release();
     say(`CrewZero 已開：${home()}`);

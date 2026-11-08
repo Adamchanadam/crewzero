@@ -3,7 +3,7 @@
     "format": "startup-os.ask/0.1",
     "id": "ask-demo-licence",
     "title": "牌照與保險的查詢次序",
-    "context": "合規助理須先知道查詢次序，才可以繼續比較保險報價。",
+    "context": "牌照及保險主任須先知道查詢次序，才可以繼續比較保險報價。",
     "afterConfirm": "Zero 會按你選擇的次序整理查詢清單及報價比較。",
     "askedBy": "AI",
     "askedAt": "@-9d 10:00",
@@ -205,6 +205,235 @@
           { "text": "未完成" },
           { "text": "需要改期" }
         ]
+      }
+    ]
+  },
+  {
+    "format": "startup-os.ask/0.1",
+    "id": "ask-demo-roles",
+    "title": "確認 Zero 崗位",
+    "context": "公司概覽已確認，Zero 按路線各站及已有人負責的事，擬了三個崗位。每個崗位會先做一件啟用任務給你驗收，驗收通過才正式接手。",
+    "afterConfirm": "確認後，Zero 下次開工先做三件啟用任務；你也可以逐題改名或不要。",
+    "askedBy": "AI",
+    "askedAt": "@-1d 21:05",
+    "fromRun": null,
+    "todoType": "decision",
+    "rolesSync": {
+      "key": "demo"
+    },
+    "followAll": true,
+    "questions": [
+      {
+        "id": "role-1",
+        "priority": 1,
+        "about": "農場採購專員",
+        "ask": "這個崗位由 Zero 承擔？",
+        "judge": "崗位名稱、負責的站和必須先問你的事，由你定下；確認後先做一件啟用任務給你驗收。",
+        "kind": "choice",
+        "effect": "now",
+        "options": [
+          {
+            "text": "由 Zero 承擔",
+            "rec": true,
+            "apply": {
+              "op": "roleAccept"
+            }
+          },
+          {
+            "text": "改名",
+            "input": true,
+            "apply": {
+              "op": "roleRename"
+            }
+          },
+          {
+            "text": "不要這個崗位",
+            "apply": {
+              "op": "roleDecline"
+            }
+          }
+        ],
+        "value": "由 Zero 承擔",
+        "why": "農場簽約是目前進行中的站，李家欣負責洽談，Zero 準備每次會面所需的資料，令會面可以即場簽約。",
+        "inputHint": "寫下你想用的崗位名稱",
+        "roleCard": {
+          "id": "card-1",
+          "title": "農場採購專員",
+          "avatarKind": "procurement",
+          "mission": "替李家欣準備每次農場洽談所需的資料，令會面可以即場簽約。",
+          "stations": [
+            "三個農場簽供應協議",
+            "先以兩個農場供貨試做兩週"
+          ],
+          "supports": [
+            "李家欣（共同創辦人・採購）"
+          ],
+          "askFirst": [
+            "聯絡任何農場",
+            "答應任何收購價或供應條件"
+          ],
+          "activation": "農場丙簽約前資料包（供你見農場丙時使用）"
+        }
+      },
+      {
+        "id": "role-2",
+        "priority": 2,
+        "about": "餐廳拓展經理",
+        "ask": "這個崗位由 Zero 承擔？",
+        "judge": "崗位名稱、負責的站和必須先問你的事，由你定下；確認後先做一件啟用任務給你驗收。",
+        "kind": "choice",
+        "effect": "now",
+        "options": [
+          {
+            "text": "由 Zero 承擔",
+            "rec": true,
+            "apply": {
+              "op": "roleAccept"
+            }
+          },
+          {
+            "text": "改名",
+            "input": true,
+            "apply": {
+              "op": "roleRename"
+            }
+          },
+          {
+            "text": "不要這個崗位",
+            "apply": {
+              "op": "roleDecline"
+            }
+          }
+        ],
+        "value": "由 Zero 承擔",
+        "why": "三個站都對準餐廳，由同一個崗位跟進，每間餐廳的進展和下一步才會連貫。",
+        "inputHint": "寫下你想用的崗位名稱",
+        "roleCard": {
+          "id": "card-2",
+          "title": "餐廳拓展經理",
+          "avatarKind": "outreach",
+          "mission": "把每間餐廳由試單推進到每週固定下單。",
+          "stations": [
+            "五間餐廳完成試單並給回饋",
+            "首條每週送貨路線",
+            "三間餐廳連續四週每週下單"
+          ],
+          "supports": [
+            "陳小明（兼職・配送）"
+          ],
+          "askFirst": [
+            "聯絡任何餐廳",
+            "答應價錢或送貨條件",
+            "向餐廳送出任何文件"
+          ],
+          "activation": "餐廳乙試單安排確認訊息草稿（開頭寫明「草稿，未發送」）"
+        }
+      },
+      {
+        "id": "role-3",
+        "priority": 3,
+        "about": "牌照及保險主任",
+        "ask": "這個崗位由 Zero 承擔？",
+        "judge": "崗位名稱、負責的站和必須先問你的事，由你定下；確認後先做一件啟用任務給你驗收。",
+        "kind": "choice",
+        "effect": "now",
+        "options": [
+          {
+            "text": "由 Zero 承擔",
+            "rec": true,
+            "apply": {
+              "op": "roleAccept"
+            }
+          },
+          {
+            "text": "改名",
+            "input": true,
+            "apply": {
+              "op": "roleRename"
+            }
+          },
+          {
+            "text": "不要這個崗位",
+            "apply": {
+              "op": "roleDecline"
+            }
+          }
+        ],
+        "value": "由 Zero 承擔",
+        "why": "這一站正等候牌照批出，黃師傅暫停期間要由你跟進，Zero 先把要問的事整理好。",
+        "inputHint": "寫下你想用的崗位名稱",
+        "roleCard": {
+          "id": "card-3",
+          "title": "牌照及保險主任",
+          "avatarKind": "compliance",
+          "mission": "查清牌照與保險要求，避免送菜前出現問題。",
+          "stations": [
+            "牌照與保險到位"
+          ],
+          "supports": [
+            "黃師傅（外判・牌照代辦，暫停中）"
+          ],
+          "askFirst": [
+            "向任何機關或保險公司提交申請或資料"
+          ],
+          "activation": "牌照要求查詢清單（你致電發牌機關前使用）"
+        }
+      }
+    ]
+  },
+  {
+    "format": "startup-os.ask/0.1",
+    "id": "ask-demo-activation",
+    "title": "驗收啟用任務：餐廳拓展經理",
+    "context": "餐廳拓展經理已交出啟用任務，統籌已校對；接受後，這個崗位開始接手它負責的三個餐廳站。",
+    "afterConfirm": "接受後，Zero 下次開工會按餐廳站的次序派工；退回的話，請寫一句要改甚麼。",
+    "askedBy": "AI",
+    "askedAt": "@-25m",
+    "fromRun": "R-demo-e",
+    "todoType": "acceptance",
+    "milestoneId": "m2",
+    "acceptance": {
+      "taskId": "t14",
+      "artifact": {
+        "title": "餐廳乙試單安排確認訊息草稿",
+        "text": "草稿，未發送\n\n陳經理，您好。想跟進餐廳乙試單的安排，想請教兩件事：方便試單的日期，以及試單的大約數量。收到您的意見後，我們再按需要準備當季蔬菜的組合。\n\n從田間到餐桌　敬上\n\n依據：\n1. 人物及機構名單：陳經理，餐廳乙的採購經理。\n2. 創辦人的行動「向陳經理跟進試單」：下一步是問清楚試單日期及數量。\n"
+      }
+    },
+    "questions": [
+      {
+        "id": "accept",
+        "priority": 1,
+        "ask": "接受即啟用「餐廳拓展經理」",
+        "judge": "草稿只問回饋、不承諾任何價錢、日期或條件，可直接使用即可。",
+        "kind": "choice",
+        "effect": "now",
+        "options": [
+          {
+            "text": "接受",
+            "rec": true
+          },
+          {
+            "text": "退回重做",
+            "input": true
+          },
+          {
+            "text": "接受，但我想改方向",
+            "input": true
+          }
+        ],
+        "value": "接受",
+        "why": "草稿只問回饋、不承諾任何條件，可直接使用；崗位啟用後，Zero 下次開工會按餐廳站的次序派工。",
+        "risk": "最壞情況是草稿語氣不合用；啟用前仍可退回。",
+        "acceptance": {
+          "taskId": "t14",
+          "teammateId": "tm-rest",
+          "roleTitle": "餐廳拓展經理",
+          "avatarKind": "outreach",
+          "artifactTitle": "餐廳乙試單安排確認訊息草稿",
+          "qaVerdict": "pass",
+          "qaLine": "沒有承諾價錢或日期；姓名與機構核對無誤；依據兩條皆有出處。",
+          "activation": true
+        }
       }
     ]
   }

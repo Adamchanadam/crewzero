@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { rhythmOf, nextRunAt } from '../../rhythm-lib.mjs';
+import { PACE_KEYS, timeoutOf } from '../../pace-lib.mjs';
 import { rootId, BASE_PORT } from '../../ask-lib.mjs';
 
 const PROTO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -19,7 +20,8 @@ const MARK = path.join(data, 'ledger', 'schedule.json');
 const readJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const state = readJSON(path.join(data, 'ledger', 'state.json')) || {};
 const r = rhythmOf(state);
-const LIMIT = (Number(r.runCapMinutes) || 30) + 15;
+// 0.41.0：逾時按節奏檔（pace-lib.timeoutOf：標準 45、加速 90、衝刺 240 分鐘）；舊帳本沒有 pace 時維持原公式（每次上限＋15 分鐘）
+const LIMIT = PACE_KEYS.includes(r.pace) ? timeoutOf(state) : (Number(r.runCapMinutes) || 30) + 15;
 const CADENCE = { daily: '每日', weekdays: '平日（星期一至五）', weekly: '每星期一次' };
 const say = s => console.log(s);
 const tech = s => console.error('（技術細節，只供 AI 排查，毋須交給創辦人）' + s);

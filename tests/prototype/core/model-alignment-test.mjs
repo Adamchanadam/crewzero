@@ -212,7 +212,7 @@ try {
   demo = true; certResult = { versionOnly: true }; now += 600001;
   ok('示範／模擬實例：不自動認證', vm.runInContext('maybeRecertify()', ctx) === false && launched === 2);
   demo = false; ctx.certChild = {}; let kicked = 0;
-  ctx.kick = () => { kicked++; }; vm.runInContext(tickSource, ctx); vm.runInContext('rhythmTick()', ctx);
+  ctx.kick = () => { kicked++; }; ctx.syncMarkLimit = () => { }; /* 0.41.0：rhythmTick 會按節奏更新排程標記的時限，本測試不涉及 */ vm.runInContext(tickSource, ctx); vm.runInContext('rhythmTick()', ctx);
   ok('認證進行時到期：不觸發當日開工', kicked === 0);
   Object.assign(ctx, { certChild: null, fs: { existsSync: () => false }, pendingFiles: () => [], pendingMatches: () => [], pendingFounderOps: () => [], SIM: false, rhythmOf: () => ({}), clockNow: () => new Date(), scheduleEligibility: () => ({ slot: new Date() }), ymd: () => '2026-11-04', firedDay: null, kick: () => { kicked++; return true; } });
   memory.set(path.join(ledger, 'schedule.json'), { mode: 'server' });

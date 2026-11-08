@@ -80,6 +80,34 @@ details.iq-opt summary{cursor:pointer;font-weight:600}
 details.art{border:1px solid var(--line);border-radius:7px;padding:6px 10px;margin-top:6px;background:rgba(255,255,255,.015)}
 details.art summary{cursor:pointer;font-weight:600}
 details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.65 var(--ui);margin:8px 0 2px}
+/* 0.41.0 Zero 崗位題：崗位卡、驗收交付物 */
+.rolecard{border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:12px;padding:12px 14px;margin:10px 0 12px;background:rgba(255,255,255,.015)}
+.rc-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.rc-name{font-size:var(--fs-title);font-weight:650}
+.rc-av{width:44px;height:44px;border-radius:12px;object-fit:cover;flex:none;background:rgba(255,255,255,.04)}
+.rc-av.sm{width:32px;height:32px;border-radius:9px}
+.rc-mission{margin:6px 0 0;font-size:var(--fs-sub);color:var(--muted)}
+dl.rc{margin:8px 0 0;display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 12px;font-size:var(--fs-sub)}
+dl.rc dt{color:var(--muted)}
+dl.rc dd{margin:0}
+.deliver{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0 12px;background:rgba(255,255,255,.015)}
+.dl-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:var(--fs-body)}
+.deliver .small{margin:6px 0 0}
+/* 首頁：今日 Zero 交付（R7）及交付回饋卡（R4） */
+.dv-top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.dv-top .hero-meta{margin:6px 0 0;flex:1 1 280px}
+.dvl{list-style:none;margin:6px 0 0;padding:0}
+.dv{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.dv:first-child{border-top:0}
+.dv-n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 var(--fs-min) var(--mono);background:rgba(255,255,255,.07);color:var(--muted)}
+.dv-b b{display:block;font-size:var(--fs-body);font-weight:600}
+.dv-b small{display:block;color:var(--muted);font-size:var(--fs-label);line-height:1.5}
+.dv-act{display:flex;gap:6px;align-items:center}
+.dv-sub{margin-top:14px}
+.dv-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:12px;background:rgba(255,255,255,.015)}
+.dv-card h3{margin:0;font-size:var(--fs-body);font-weight:650;line-height:1.5}
+.dv-card .q{margin:8px 0 0;font-size:var(--fs-sub)}
+.dv-card ul{margin:6px 0 0;padding-left:18px;font-size:var(--fs-sub)}
 .effect{border:1px solid rgba(232,141,79,.35);border-left:3px solid var(--amber);border-radius:12px;padding:10px 14px;background:rgba(232,141,79,.04);margin-top:10px}
 .effect h4{margin:0 0 4px;font-size:var(--fs-sub)}
 /* 情景演練 */
@@ -144,12 +172,16 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 }
 @media (max-width:600px){
   .dq-body{margin-left:0}
+  dl.rc{grid-template-columns:1fr;gap:2px}
+  dl.rc dt{margin-top:6px}
+  .dv{grid-template-columns:28px minmax(0,1fr)}
+  .dv-act{grid-column:2}
   .with-scene{min-height:0}
   .with-scene{min-height:0}
   .scene-bg{width:100%;opacity:.2;-webkit-mask-image:none;mask-image:none}
   input[type=date]{height:44px;font-size:var(--fs-title)}
   .cbar-in > .btn{width:100%}
-  .prog-top .btn{height:34px;margin-left:auto}
+  .prog-top .btn{height:44px;margin-left:auto}
   .m-foot .btn{flex:1 1 40%}
 }
 @media (max-width:390px){
@@ -571,7 +603,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
   function showHub() {
     // 只有頁面第一次載入待決事項先算「打開」（記低時間）；輪詢同返回唔算
     var seen = !V.homeSeen; V.homeSeen = true;
-    Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; })]).then(function (r) {
+    Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; }), get('/api/dashboard').catch(function () { return null; })]).then(function (r) {
       var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = (asks.todo || []).filter(function (t) { return t.kind !== 'overview'; }), snoozed = asks.snoozed || [], byId = {}, pendingHelp = {}, c = asks.company || st.company || {};
       asks.packs.forEach(function (p) { if (p.open && p.helpForPackId) pendingHelp[p.helpForPackId] = true; });
       (st.helpInFlight || []).forEach(function (x) { if (x.packId) pendingHelp[x.packId] = true; });
@@ -584,6 +616,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var quietToday = c.confirmed && key && key !== 'daily' && key !== 'waitInterview' ? todayCard(home, true) : null;
       var waitLine = c.confirmed && !todo.length && key === 'waitInterview' ? h('div', { class: 'row', id: 'today-card', 'data-key': key }, h('div', null, h('div', { class: 't', id: 'today-do' }, home.card.today), h('div', { class: 'small muted', id: 'today-not' }, N.ui.todayNotAuto + home.card.notAuto)), h('a', { class: 'btn', href: home.card.href, id: 'today-go' }, home.card.button)) : null;
       var next = todo.length || waitLine ? h('section', { class: 'layer', id: 'next-list' }, h('span', { class: 'eyebrow' }, N.ui.nextList), todo.slice(0, 3).map(function (t) { return todoRow(t, byId, false, pendingHelp); }), waitLine) : null;
+      var dvBlock = c.confirmed ? deliveriesBlock(r[3] && r[3].deliveries, todo.slice(0, 3).map(function (x) { return x.id; })) : null;
       var others = todo.length > 3 ? h('details', { class: 'layer', id: 'other-pending' }, h('summary', null, N.t('otherPendingN', { n: todo.length - 3 })), todo.slice(3).map(function (t) { return todoRow(t, byId, false, pendingHelp); })) : null;
       var snoozedCard = snoozed.length ? h('details', { class: 'layer', id: 'snoozed' }, h('summary', null, N.t('snoozedN', { n: snoozed.length })), snoozed.map(function (t) { return todoRow(t, byId, true, pendingHelp); })) : null;
       var brainLine = asks.brainPending ? h('p', { class: 'small muted', id: 'brain-line' }, h('a', { href: '/dashboard/brain' }, N.t('brainPendingN', { n: asks.brainPending }))) : null;
@@ -628,7 +661,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       var intakeLink = !c.ready ? h('p', { class: 'small muted' }, h('a', { href: '#/intake' }, N.ui.goIntake)) : null;
       var kept = [].map.call(document.querySelectorAll('#app details[id][open]'), function (d) { return d.id; });
       V.hubDirty = !!String(V.quickText || '').trim(); V.hubWatching = false;
-      setApp(head('pending', st), aiBlock(st), main, next, DESK.feedbackPrompt(st, asks), quietToday, others, snoozedCard, brainLine, sinceRow(home), tellBox(st, c, home), intakeLink, aiCard, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard,
+      setApp(head('pending', st), aiBlock(st), main, next, dvBlock, DESK.feedbackPrompt(st, asks), quietToday, others, snoozedCard, brainLine, sinceRow(home), tellBox(st, c, home), intakeLink, aiCard, h('p', { class: 'tools-label' }, N.ui.otherFeatures), helpRepliesCard, practiceCard, debateCard, companyCard,
         h('div', { class: 'desk-foot' }, h('a', { href: '#/setup' }, N.ui.setup)));
       // 慶祝只是加分項：讀不到慶祝程式也要照常顯示頁面
       if (window.SOS_CELEBRATE) window.SOS_CELEBRATE.handle(st, { allowed: function () { return location.hash === '#/' || location.hash === ''; } });
@@ -1119,7 +1152,7 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
 
   /* ---------- 答題：每次最多 3 條 ---------- */
   var P = null, A = null, S = null;
-  function manualQuestion(q) { return !!(P && (P.actionConfirm || (P.acceptance && q.id === 'accept'))); }
+  function manualQuestion(q) { return !!(P && (P.actionConfirm || (P.acceptance && q.id === 'accept') || (!P.acceptance && q && q.acceptance))); }
   function requiresFounderAnswer(q) { return !!(q && (P.ideate || q.effect === 'now' || q.conflict || q.bind === 'results' || manualQuestion(q))); }
   function cur(q) {
     if (manualQuestion(q) && !Object.prototype.hasOwnProperty.call(S.edits, q.id) && !S.ok[q.id]) return '';
@@ -1185,21 +1218,74 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     push('', String(q.value), true); push('一星期後', addDays(t, 7)); push('兩星期後', addDays(t, 14)); push('四星期後', addDays(t, 28)); push('本季最後一日', quarterEnd(t));
     return out;
   }
+  /* ---------- 0.41.0 Zero 崗位題 ---------- */
+  var ROLE_KINDS = ['outreach', 'content', 'partner', 'procurement', 'compliance', 'marketing', 'finance', 'operations', 'lead'];
+  function avatarImg(kind, cls) {
+    var k = ROLE_KINDS.indexOf(kind) >= 0 ? kind : 'operations';
+    return h('img', { class: cls || 'rc-av', src: '/assets/crew-role-' + k + '.webp', alt: '', 'aria-hidden': 'true', onerror: function () { this.hidden = true; } });
+  }
+  function listText(a) { return (Array.isArray(a) ? a : a ? [a] : []).map(function (x) { return String(x); }).filter(Boolean).join('；'); }
+  function roleCardEl(rc) {
+    var rows = [[N.dash.ppl_stations, listText(rc.stations)], [N.ui.role_cardSupports, listText(rc.supports)], [N.ui.role_cardAskFirst, listText(rc.askFirst)], [N.ui.role_cardActivation, listText(rc.activation)]]
+      .filter(function (r) { return r[1]; });
+    var dl = h('dl', { class: 'rc' });
+    rows.forEach(function (r) { dl.append(h('dt', null, r[0]), h('dd', null, N.fix(r[1]))); });
+    return h('div', { class: 'rolecard' },
+      h('div', { class: 'rc-head' }, avatarImg(rc.avatarKind, 'rc-av'), h('b', { class: 'rc-name' }, N.fix(rc.title || ''))),
+      rc.mission ? h('p', { class: 'rc-mission' }, N.fix(rc.mission)) : null, dl);
+  }
+  // 交付者及統籌校對一句：按校對結果選字句；沒有數字的「仍有要留意」不編造處數
+  function qaMeta(a) {
+    var v = a.qaVerdict, t = a.roleTitle || '';
+    if (v === 'pending') return T('qa_pending');
+    if (v === 'pass' || v === 'pass_with_notes') return T('qa_delivered', { t: t });
+    if (v === 'none') return T('qa_checked', { t: t });
+    if (v === 'flagged') { var n = Number(a.issueCount != null ? a.issueCount : P && P.acceptance && P.acceptance.issueCount); return n > 0 ? T('qa_flagged', { t: t, n: n }) : ''; }
+    return '';
+  }
+  // 交付內容每包只顯示一次：放在 accept 題；沒有 accept 題時放在第一條帶 acceptance 的題
+  function deliverHost(q) {
+    var qs = P.questions || [];
+    if (qs.some(function (x) { return x.id === 'accept'; })) return q.id === 'accept';
+    var first = qs.filter(function (x) { return x && x.acceptance; })[0];
+    return first === q;
+  }
+  function acceptanceEl(q) {
+    var a = q.acceptance, art = a.artifact || (P.acceptance && P.acceptance.artifact) || null;
+    var text = art && typeof art.text === 'string' ? art.text : typeof a.text === 'string' ? a.text : null;
+    var title = (art && art.title) || a.artifactTitle || N.ui.aiOutputs, meta = qaMeta(a);
+    return h('div', { class: 'deliver' },
+      h('div', { class: 'dl-head' }, avatarImg(a.avatarKind, 'rc-av sm'), meta ? h('b', null, meta) : null),
+      a.qaLine ? h('p', { class: 'small muted' }, N.ui.role_qaResult + '：' + N.fix(a.qaLine)) : null,
+      text != null
+        ? h('details', { class: 'art', open: true }, h('summary', null, title), window.SOS_MD ? SOS_MD(text) : h('pre', null, text))
+        : h('p', { class: 'small muted' }, N.ui.acceptanceMissing));
+  }
+  // 「照 Zero 建議，全部確認」：未作答的題全部採用建議，直接開預覽；已經自己改過的題不覆蓋
+  function followAll() {
+    var left = P.questions.filter(function (q) { return !A[q.id]; });
+    left.forEach(function (q) { if (!touched(q)) S.ok[q.id] = true; });
+    S.batch = left; S.rest = []; S.extra = false; S.open = null; S.allSame = false;
+    renderAsk(); openModal();
+  }
   function card(q, i) {
     var v = cur(q), done = touched(q), kind = q.kind || 'choice', manual = manualQuestion(q);
     var c = h('div', { class: 'dq' + (done ? ' done' : ''), id: 'q-' + q.id, tabindex: '-1' },
       h('div', { class: 'dq-head' }, h('span', { class: 'dq-n' }, String(i + 1)), h('span', { class: 'dq-q' }, N.fix(q.ask)),
         q.effect === 'now' ? tag(N.ui.nowAfter, 'eff') : null, done ? tag(N.ui.answered, 'qdone') : tag(N.ui.unanswered, 'qn')));
     var body = h('div', { class: 'dq-body' });
+    if (q.roleCard) body.append(roleCardEl(q.roleCard));
     if (q.judge) body.append(h('div', { class: 'why' }, N.fix(q.judge)));
-    if (!manual && q.why) body.append(h('div', { class: 'why' }, h('b', null, (q.preset ? N.ui.presetWhy : N.ui.why) + '：'), N.fix(q.why)));
+    var whyEl = !manual && q.why ? h('div', { class: 'why' }, h('b', null, (q.preset ? N.ui.presetWhy : N.ui.why) + '：'), N.fix(q.why)) : null;
+    if (whyEl && !q.roleCard) body.append(whyEl);
     if (q.risk) body.append(h('div', { class: 'why risk' }, h('b', null, N.ui.riskLabel + '：'), N.fix(q.risk)));
     if (q.conflict) body.append(h('div', { class: 'why conflict' }, h('b', null, N.ui.conflictLabel + '：'), N.fix(q.conflict)));
-    if (P.acceptance && q.id === 'accept') {
+    if (q.acceptance && deliverHost(q)) body.append(acceptanceEl(q));
+    else if (!q.acceptance && P.acceptance && q.id === 'accept') {
       var artifact = P.acceptance.artifact;
       body.append(artifact && typeof artifact.text === 'string' ? h('details', { class: 'art', open: true }, h('summary', null, artifact.title || N.ui.aiOutputs), window.SOS_MD ? SOS_MD(artifact.text) : h('pre', null, artifact.text)) : h('p', { class: 'small muted' }, N.ui.acceptanceMissing));
     }
-    var opts = P.actionConfirm ? [N.ui.actionDone, N.ui.actionNotDone, N.ui.actionReschedule].map(function (text) { return { text: text, val: text, rec: false }; }) : (q.options || []).map(function (o) { return { text: o.text, val: o.text, rec: !manual && !!o.rec, note: o.note }; });
+    var opts = P.actionConfirm ? [N.ui.actionDone, N.ui.actionNotDone, N.ui.actionReschedule].map(function (text) { return { text: text, val: text, rec: false }; }) : (q.options || []).map(function (o) { return { text: o.text, val: o.text, rec: !manual && !!o.rec, note: o.note, input: !!o.input }; });
     function optBtn(o, isCur, onclick) {
       return h('button', { type: 'button', class: 'opt' + (isCur ? ' cur' : ''), 'aria-pressed': isCur ? 'true' : 'false', onclick: onclick },
         h('span', { class: 'dot' }), h('span', null, o.text, o.rec ? h('span', { class: 'badge-ai' }, q.preset ? N.ui.presetTag : N.ui.aiRec) : null, o.note ? h('span', { class: 'o-note' }, o.note) : null));
@@ -1229,20 +1315,30 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       body.append(textArea, h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { var t = textArea.value.trim(); if (t) setAns(q, t); else textArea.focus(); } }, N.ui.interviewRecordAnswer)));
     } else {
       if (!opts.length) opts = [{ text: String(q.value), val: String(q.value), rec: true }];
-      opts.forEach(function (o) { body.append(optBtn(o, o.val === v, function () { setAns(q, o.val); })); });
+      var inputOpt = opts.filter(function (o) { return o.input; })[0], ikey = 'w~' + q.id;
+      var customVal = !!v && !opts.some(function (o) { return !o.input && o.val === v; });
+      opts.forEach(function (o) {
+        if (!o.input) { body.append(optBtn(o, o.val === v, function () { setAns(q, o.val); })); return; }
+        // 帶 input 的選項（例如「改名」）：先記下選項本身，再打開文字框；已有自己寫的答案就保留，只打開文字框
+        body.append(optBtn(o, customVal || v === o.val || S.open === ikey, function () {
+          if (!customVal) { if (same(o.val, q.value)) delete S.edits[q.id]; else S.edits[q.id] = o.val; S.ok[q.id] = true; S.allSame = false; }
+          S.open = ikey; renderAsk({ sel: '#q-' + q.id + ' textarea' });
+        }));
+      });
       if (!manual && v && !opts.some(function (o) { return o.val === v; })) body.append(h('div', { class: 'custom' }, h('b', null, N.ui.customIs + '：'), v));
       var key = 'w~' + q.id;
       if (!P.actionConfirm && S.open === key) {
-        var ta = h('textarea', { rows: '2', placeholder: q.hint ? N.fix(q.hint) : '自行填寫……（可使用系統語音輸入）', 'aria-label': N.ui.customIs + '：' + q.ask });
-        ta.value = S.drafts[key] || '';
+        var ta = h('textarea', { rows: '2', placeholder: inputOpt && q.inputHint ? N.fix(q.inputHint) : q.hint ? N.fix(q.hint) : '自行填寫……（可使用系統語音輸入）', 'aria-label': N.ui.customIs + '：' + q.ask });
+        ta.value = S.drafts[key] || (customVal ? String(v) : '');
         ta.addEventListener('input', function () { S.drafts[key] = ta.value; });
         body.append(ta, h('div', { class: 'foot' },
           h('button', { type: 'button', class: 'btn primary', onclick: function () { var t = ta.value.trim(); if (t) setAns(q, t); else ta.focus(); } }, N.ui.useCustom),
           h('button', { type: 'button', class: 'btn', onclick: function () { S.open = null; renderAsk(); } }, N.ui.collapse)));
-      } else if (!P.actionConfirm) {
+      } else if (!P.actionConfirm && !inputOpt) {
         var customBtn = h('button', { type: 'button', class: 'btn', onclick: function () { S.open = key; renderAsk({ sel: '#q-' + q.id + ' textarea' }); } }, N.ui.custom);
       }
     }
+    if (whyEl && q.roleCard) body.append(whyEl);
     var help = S.help[q.id] || (S.help[q.id] = {});
     var helpNote = h('span', { class: 'small muted help-status', 'aria-live': 'polite' }, help.sent && !help.noteId ? N.ui.helpAsked : help.error || '');
     var helpBtn = h('button', { type: 'button', class: 'btn link q-help', disabled: help.sent ? true : null, onclick: function () {
@@ -1256,6 +1352,58 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
     if (help.sent && help.noteId) { helpBtn.hidden = true; setTimeout(function () { DESK.watchHelp(help.noteId, helpNote); }, 0); }
     c.append(body);
     return c;
+  }
+  /* ---------- 首頁：今日 Zero 交付（R7）及交付回饋卡（R4）；資料來自 /api/dashboard 的 deliveries ---------- */
+  function dvTag(d) {
+    var g = d.qa && d.qa.tag, U = N.ui;
+    return g === 'proofread' ? [U.dv_tagProofread, 'mint'] : g === 'notes' ? [U.dv_tagNotes, 'wait'] : g === 'pending' ? [U.dv_tagPending, 'wait'] : [U.dv_tagChecked, ''];
+  }
+  function dvQaLong(d) { var q = d.qa || {}; return q.tag === 'notes' ? T('dv_notesLong', { n: q.n || 1 }) : dvTag(d)[0]; }
+  function dvAvatar(d) { return /^\/assets\/crew-[a-z0-9-]+\.webp$/.test(String(d.avatar || '')) ? h('img', { class: 'rc-av sm', src: d.avatar, alt: '', 'aria-hidden': 'true', onerror: function () { this.hidden = true; } }) : null; }
+  function dvAnswer(id, n) { return h('a', { class: 'btn primary', href: '#/ask/' + id, 'data-answer': id }, n ? T('answerN', { n: n }) : N.ui.dv_answer); }
+  function dvOutput(d, i) {
+    var tg = dvTag(d), second = (d.packId ? dvQaLong(d) + ' · ' + N.ui.dv_waitAccept : (d.qa && d.qa.audience === 'external' ? '' : N.ui.dv_internal + ' · ') + dvQaLong(d));
+    return h('li', { class: 'dv' }, h('span', { class: 'dv-n' }, String(i + 1)),
+      h('div', { class: 'dv-b' }, h('b', null, N.fix(d.title)), h('small', null, d.roleTitle + ' · ' + (d.standing || !d.station ? N.ui.dv_standing : d.station)), h('small', null, second)),
+      h('span', { class: 'dv-act' }, dvAvatar(d), tag(tg[0], tg[1]), d.packId ? dvAnswer(d.packId) : null));
+  }
+  // R4：一件交付一張卡：〈崗位〉交付 · 統籌校對結果、校對一句、要留意的地方、作答入口
+  function dvFeedbackCard(d) {
+    var q = d.qa || {}, tg = dvTag(d), U = N.ui;
+    var sub = [d.at ? T('dv_deliveredAt', { d: dayOf(d.at) + ' ' + hm(d.at) }) : '', d.station && !d.standing ? T('dv_forStation', { s: d.station }) : ''].filter(Boolean).join(' · ');
+    return h('div', { class: 'dv-card', 'data-dv-run': d.runId || '' },
+      h('h3', null, N.fix(q.text || '') + '：' + N.fix(d.title)),
+      h('p', { class: 'small muted' }, sub + (sub ? ' · ' : ''), tag(tg[0], tg[1])),
+      q.line ? h('p', { class: 'q' }, U.role_qaResult + '：' + N.fix(q.line)) : null,
+      q.issues && q.issues.length ? h('ul', null, q.issues.map(function (x) { return h('li', null, N.fix(x.where + '：' + x.what), x.fix ? '。' + T('dv_issueFix', { f: N.fix(x.fix) }) : ''); })) : null,
+      d.packId ? h('div', { class: 'foot' }, dvAnswer(d.packId, 1)) : null);
+  }
+  // 預設收成一行摘要加展開鍵，免得推走待決題；只有寬畫面而且待決列不足 3 題（首屏還有位置）才預設展開
+  function deliveriesBlock(dv, nextIds) {
+    if (!dv) return null;
+    var t = dv.today || {}, recent = dv.recent || [], U = N.ui;
+    var cards = recent.filter(function (d) { return d.packId; }).slice(0, 2);
+    if (!cards.length && !t.multi) cards = recent.slice(0, 1);
+    if (!t.multi && !cards.length) return null;
+    var narrow = !!(window.matchMedia && matchMedia('(max-width: 600px)').matches), open = V.dvOpen === undefined ? !narrow && nextIds.length < 3 : V.dvOpen;
+    var summary = t.multi ? [t.sprintUntil ? T('pace_sprintUntil', { d: dayOf(t.sprintUntil) }) : '', T('dv_doneN', { n: t.count, m: t.cap }), t.usageLine, t.stopText ? T('dv_stopLabel', { r: t.stopText }) : ''].filter(Boolean).join(' · ')
+      : N.fix((cards[0].qa || {}).text || '') + '：' + N.fix(cards[0].title);
+    var toggle = h('button', { type: 'button', class: 'btn', id: 'dv-toggle', 'aria-expanded': open ? 'true' : 'false', onclick: function () { V.dvOpen = !open; showHub(); } }, open ? U.collapseUp : U.viewAll);
+    var body = [];
+    if (open) {
+      if (t.multi) {
+        var decs = t.decisions || [], fresh = decs.filter(function (x) { return nextIds.indexOf(x.id) < 0; }).slice(0, 3);
+        var more = decs.length - decs.filter(function (x) { return nextIds.indexOf(x.id) >= 0; }).length - fresh.length;
+        if (fresh.length || more > 0) body.push(h('div', { class: 'dv-sub' }, h('span', { class: 'eyebrow' }, U.dv_decideTitle + ' · ' + T('dv_decideN', { n: decs.length })),
+          h('ul', { class: 'dvl' }, fresh.map(function (x, i) { return h('li', { class: 'dv' }, h('span', { class: 'dv-n' }, String(i + 1)), h('div', { class: 'dv-b' }, h('b', null, N.fix(x.text)), x.line ? h('small', null, N.fix(x.line)) : null), h('span', { class: 'dv-act' }, dvAnswer(x.id))); })),
+          more > 0 ? h('p', { class: 'small muted' }, T('dv_decideMore', { n: more })) : null));
+        body.push(h('div', { class: 'dv-sub' }, h('span', { class: 'eyebrow' }, U.dv_outputsTitle + ' · ' + T('dv_outputsN', { n: (t.items || []).length })), h('ul', { class: 'dvl' }, (t.items || []).map(dvOutput))));
+        (t.pausedRoles || []).forEach(function (r) { body.push(h('p', { class: 'small muted' }, T('dv_pausedRoles', { t: r.title, w: N.fix(r.reason) }))); });
+      }
+      cards.forEach(function (d) { body.push(dvFeedbackCard(d)); });
+    }
+    return h('section', { class: 'layer accent', id: 'deliveries' },
+      h('div', { class: 'dv-top' }, h('div', { style: 'flex:1 1 280px;min-width:0' }, h('span', { class: 'eyebrow' }, t.multi ? U.pace_deliveriesTitle : U.dv_recentTitle), h('p', { class: 'hero-meta', id: 'dv-summary' }, summary)), toggle), body);
   }
   function nextQ() {
     var q = S.batch.filter(function (x) { return !touched(x); })[0];
@@ -1282,7 +1430,8 @@ details.art pre{white-space:pre-wrap;word-break:break-word;font:var(--fs-sub)/1.
       h('div', { class: 'hero-meta' }, st.total ? (S.rest.length ? T('batchHeroRest', { n: st.total, r: S.rest.length }) : T('batchHero', { n: st.total })) : N.ui.packDone,
         P.afterConfirm ? h('span', null, ' · ' + N.ui.afterConfirm + '：' + P.afterConfirm) : null),
       st.total ? h('div', { class: 'hero-act' },
-        h('button', { type: 'button', class: 'btn primary big', id: 'go-main', onclick: openModal }, mainLabel()),
+        P.followAll && st.left ? h('button', { type: 'button', class: 'btn primary big', id: 'follow-all', onclick: followAll }, N.ui.role_confirmAll) : null,
+        h('button', { type: 'button', class: 'btn big' + (P.followAll && st.left ? '' : ' primary'), id: 'go-main', onclick: openModal }, mainLabel()),
         st.left && mainLabel() !== N.ui.oneByOne ? h('button', { type: 'button', class: 'btn link', onclick: nextQ }, N.ui.oneByOne) : null,
         P.rhythm && P.rhythm.kind === 'interview' && P.questions.some(function (q) { return !A[q.id] && q.noChange; }) ? h('button', { type: 'button', class: 'btn', id: 'all-same', title: N.ui.interviewAllSameNote, onclick: allSame }, P.questions.some(function (q) { return !A[q.id] && !q.noChange; }) ? N.ui.interviewAllSameRest : N.ui.interviewAllSame) : null) : null);
     var list = h('section', { class: 'cards' });

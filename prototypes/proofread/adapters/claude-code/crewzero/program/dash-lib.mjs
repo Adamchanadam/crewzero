@@ -11,6 +11,8 @@ import { isInboxAttachment, NAMES, BIZ_TYPES, readJSON, listPacks, loadPack, loa
 import { loadBrain } from './brain-lib.mjs';
 import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS, peopleSyncKey } from './people-ops.mjs';
 import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
+import { titleOf, liveCards, cardById, resolveCardId, avatarKindOf, AVATAR_KINDS, AVATAR_LEAD, isPausedToday, supportsLines, pauseCard, resumeCard, rolesKey, pausedCardsToday, overCap, permissionsOf, LIFECYCLES } from './roles-ops.mjs';
+import { PACES, PACE_KEYS, PACE_ESTIMATE, PACE_OPS, paceKey, fuseOf, itemsCapOf, countStarts, runIdsOfDay, proofreadStarts, applyPaceOps, addDays, SPRINT_MAX_DAYS, sprintDefaultUntil, unreadCount } from './pace-lib.mjs';
 
 // 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
 // v 係修改時間，頁面用嚟分辨換咗新圖；冇就 null。
@@ -63,27 +65,40 @@ const founderOpsFiles = DIR => {
     batches = fs.readdirSync(DIR.ledger).filter(file => /^\.founder-ops-\d+-\d+\.json$/.test(file))
       .sort((a, b) => founderOpsBatchTime(a) - founderOpsBatchTime(b) || a.localeCompare(b)).map(file => path.join(DIR.ledger, file));
   } catch { }
-  return batches.concat(path.join(DIR.ledger, 'founder-ops.json'));
+  return batches;
+};
+// 隊列原貌（未按 state 去重）。讀取次序固定：founder-ops.json 先、再列批次檔，呼叫者須在其後才讀 state.json。
+// 外殼合併是「改名 → 套用 → 存檔 → 刪批次檔」，所以此次序下，剛排隊的操作不是仍在隊列檔／批次檔，就是已寫入稍後才讀的 state.founderOpsDone。
+export const readFounderOpsQueue = DIR => {
+  const seen = new Set(), list = [], take = file => {
+    const ops = readJSON(file, []);
+    if (!Array.isArray(ops)) return;
+    for (const op of ops) {
+      if (!op || typeof op !== 'object' || op.id && seen.has(op.id)) continue;
+      list.push(op);
+      if (op.id) seen.add(op.id);
+    }
+  };
+  take(path.join(DIR.ledger, 'founder-ops.json'));
+  for (const file of founderOpsFiles(DIR)) take(file);
+  return list;
 };
 // 現時公司概覽係咪已確認：重新交資料會搬走確認檔；舊確認檔冇 pageId 當有效
 export const overviewIsCurrent = (page, confirmed) => !page?.page?.id || !!(confirmed && (!confirmed.pageId || confirmed.pageId === page.page.id));
-export const pendingFounderOps = (DIR, state) => {
-  const seen = new Set(Array.isArray(state && state.founderOpsDone) ? state.founderOpsDone : []), pending = [];
-  for (const file of founderOpsFiles(DIR)) {
-    const ops = readJSON(file, []);
-    if (!Array.isArray(ops)) continue;
-    for (const op of ops) {
-      if (!op || typeof op !== 'object' || op.id && seen.has(op.id)) continue;
-      pending.push(op);
-      if (op.id) seen.add(op.id);
-    }
-  }
-  return pending;
+export const filterFounderOps = (queue, state) => {
+  const done = new Set(Array.isArray(state && state.founderOpsDone) ? state.founderOpsDone : []);
+  return queue.filter(op => !(op.id && done.has(op.id)));
+};
+export const pendingFounderOps = (DIR, state) => filterFounderOps(readFounderOpsQueue(DIR), state);
+// 伺服器核對用：隊列先讀、state.json 最後讀，兩者互相一致
+export const readFounderOpsSnapshot = DIR => {
+  const queue = readFounderOpsQueue(DIR), state = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
+  return { state, pending: filterFounderOps(queue, state) };
 };
 // 所有新欄可缺，舊資料沒有覆蓋檔時保持原有行為。
 export function applyFounderOps(state, ops = []) {
   if (!Array.isArray(ops) || !ops.length) return state || {};
-  const out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) }, targetOverride: { ...((state && state.targetOverride) || {}) }, targetOverrideBase: { ...((state && state.targetOverrideBase) || {}) }, targetOverrideAt: { ...((state && state.targetOverrideAt) || {}) } };
+  let out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) }, targetOverride: { ...((state && state.targetOverride) || {}) }, targetOverrideBase: { ...((state && state.targetOverrideBase) || {}) }, targetOverrideAt: { ...((state && state.targetOverrideAt) || {}) } };
   if (state && state.company) out.company = { ...state.company };
   if (state && state.interviews) out.interviews = { ...state.interviews };
   if (Array.isArray(state && state.milestones)) out.milestones = state.milestones.map(m => ({ ...m }));
@@ -127,6 +142,16 @@ export function applyFounderOps(state, ops = []) {
         const time = /T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(String(task.dueAt || ''));
         task.dueAt = value.date + (time ? time[0] : '');
       }
+    } else if (PACE_OPS.includes(item.op)) {
+      // 節奏及暫停 Zero：交 pace-lib.applyPaceOps（只傳它會讀寫的欄），預覽與外殼套用同一套邏輯
+      out = paceOverlay(out, item);
+    } else if (item.op === 'rolePause' && typeof item.target === 'string') {
+      out = roleOverlay(out, pauseCard, { teammateId: item.target, reason: typeof value.reason === 'string' ? value.reason : '', now: item.at || localIso() });
+    } else if (item.op === 'roleResume' && typeof item.target === 'string') {
+      out = roleOverlay(out, resumeCard, { teammateId: item.target, now: item.at || localIso() });
+    } else if (item.op === 'rolesSync') {
+      // 請 Zero 重新擬崗位：只記「已要求」，外殼下一次先做（roles-ops rolesDue）
+      out.rolesSync = { ...(out.rolesSync || {}), requested: true, requestedAt: item.at || localIso() };
     } else if (item.op === 'peopleSync') {
       // 請 Zero 整理名單：只記「已要求」，外殼下一次先做（people-ops peopleSyncDue）
       out.peopleSync = { ...(out.peopleSync || {}), requested: true, requestedAt: item.at || localIso() };
@@ -139,6 +164,18 @@ export function applyFounderOps(state, ops = []) {
   return out;
 }
 
+// 預覽覆蓋用的兩個包裝：只把純函數會讀寫的欄傳入，結果寫回；純函數認為無效（找不到卡、已是該狀態）時原樣回傳
+function paceOverlay(out, item) {
+  const slice = { company: out.company || {}, health: out.health || {}, milestones: out.milestones || [], tasks: out.tasks || [] };
+  const today = String(item.at || localIso()).slice(0, 10);
+  const next = applyPaceOps(slice, [{ ...item, value: item.value && typeof item.value === 'object' ? item.value : {} }], { today });
+  return next === slice ? out : { ...out, company: next.company, health: next.health };
+}
+function roleOverlay(out, fn, args) {
+  const slice = { teammates: out.teammates || [], tasks: out.tasks || [] };
+  const next = fn(slice, args);
+  return next === slice ? out : { ...out, teammates: next.teammates, tasks: next.tasks };
+}
 // Zero 整理名單的狀態（團隊頁及推進板入口用）：none（未確認概覽／示範）、requested（已要求，Zero 下一次先做）、asked（已擬好題，packId 指向待決事項）、done（此版概覽已整理）、idle（可以要求）
 export function peopleSyncView(DIR, state) {
   const s = state || {}, ps = s.peopleSync || {}, key = peopleSyncKey(s);
@@ -150,6 +187,157 @@ export function peopleSyncView(DIR, state) {
   const failed = ps.lastTry && ps.lastTry.key === key && ps.lastTry.reason ? { failed: ps.lastTry.reason } : {};
   if (ps.for === key) return { state: 'done', at: ps.at || '', ...failed };
   return { state: 'idle', ...failed };
+}
+
+// Zero 重新擬崗位的狀態（團隊頁入口用，照 peopleSyncView）：none（未確認概覽／示範）、requested（已要求，Zero 下次先做）、asked（已擬好題，packId 指向待決事項）、done（此版概覽已擬過）、idle（可以要求）
+export function rolesSyncView(DIR, state) {
+  const s = state || {}, rs = s.rolesSync || {}, key = rolesKey(s);
+  if (!key || s.demo === true) return { state: 'none' };
+  const open = rs.packId && (listPacks(DIR).find(p => p.id === rs.packId && p.open) || null);
+  if (open) return { state: 'asked', packId: open.id, count: open.open };
+  if (rs.requested) return { state: 'requested' };
+  if (Array.isArray(rs.pending) && rs.pending.length) return { state: 'requested', pending: rs.pending.length };
+  const failed = rs.lastTry && rs.lastTry.key === key && rs.lastTry.reason ? { failed: rs.lastTry.reason } : {};
+  if (rs.for === key) return { state: 'done', at: rs.at || '', ...failed };
+  return { state: 'idle', ...failed };
+}
+
+/* ---------- 0.41.0 Zero 團隊分工：看板畫面資料（全部是純函數，頁面只畫、不推斷） ---------- */
+// 崗位色環：對應頭像胸章（avatars/README.md 色板欄）；統籌用琥珀
+export const ROLE_COLORS = { lead: '#e88d4f', outreach: '#e0474c', content: '#3a9a4a', partner: '#cf2fb8', procurement: '#5a5ee6', compliance: '#5b6577', marketing: '#14958f', finance: '#8c5a34', operations: '#8f8f1f' };
+export const roleAvatar = kind => '/assets/crew-role-' + kind + '.webp';
+// 舊資料沒有 avatarKind：由稱號（沒有 title 就用舊 name）即時推算，推不出用 operations
+export const avatarKindFor = card => AVATAR_KINDS.includes(card && card.avatarKind) ? card.avatarKind : avatarKindOf(titleOf(card));
+export const lifecycleOf = card => LIFECYCLES.includes(card && card.lifecycle) ? card.lifecycle : 'planned';
+const N_ = (key, v) => NAMES.t(key, v);
+const stripAuto = r => String(r || '').replace(/^等候：/, '');
+// 知識背景的出處：confirmedPage＝已確認的公司概覽；https 網址＝網站名；其他＝創辦人交過的文件（找不到標題就用泛稱）
+export function sourceView(src, state) {
+  const v = String(src || '');
+  if (v === 'confirmedPage') return { label: N_('tm_srcPage'), href: '' };
+  if (/^https:\/\//i.test(v)) { let host = ''; try { host = new URL(v).hostname.replace(/^www\./, ''); } catch { } return { label: host || N_('tm_srcWeb'), href: host ? v : '' }; }
+  const inp = ((state || {}).inputs || []).find(i => i && i.id === v);
+  return { label: inp && inp.title ? inp.title : N_('tm_srcInput'), href: '' };
+}
+// 必須先問你：卡內自己加的條目優先（寫入時已併入公司預設，全列會太長）；沒有自己加的才列全部
+export function askFirstView(card, state) {
+  const mine = ((card.bounds || {}).askFirst || []).filter(x => typeof x === 'string' && x.trim()).map(x => x.trim());
+  const base = new Set((permissionsOf(state).askFirst || []).map(x => String(x).trim()));
+  const extra = mine.filter(x => !base.has(x));
+  return (extra.length ? extra : mine).slice(0, 4);
+}
+// 團隊頁資料。ctx：{ today, msTitle(id), tasks（畫面工作列，需含 teammateId、column、packId、title、owner）, working（工作中的工作編號集合）, counts（countStarts 結果或 null）, actors }
+export function teamView(state, ctx = {}) {
+  const s = state || {}, today = ctx.today || '', tasks = ctx.tasks || [], working = ctx.working || new Set(), msTitle = ctx.msTitle || (id => id);
+  const actors = ctx.actors || ((s.company || {}).actors) || [];
+  const cardTitle = id => { const c = cardById(s, resolveCardId(s, id) || id); return c ? titleOf(c) : ''; };
+  const aiTasks = id => tasks.filter(x => x.owner !== 'founder' && (x.teammateId || '') === id);
+  const activityOf = (id, lc) => lc === 'planned' ? 'not_started' : lc === 'paused' ? 'waiting' : aiTasks(id).some(x => working.has(x.id)) ? 'working' : aiTasks(id).some(x => x.column === 'doing') ? 'doing' : aiTasks(id).some(x => x.column === 'waiting' || x.column === 'review') ? 'waiting' : 'idle';
+  const roles = liveCards(s).map(t => {
+    const lc = lifecycleOf(t), kind = avatarKindFor(t), autoToday = lc !== 'paused' && t.pausedAuto === true && (!today || t.pausedOn === today);
+    const actTask = t.activationTaskId ? tasks.find(x => x.id === t.activationTaskId) : null;
+    const activated = t.activation && typeof t.activation === 'object' ? t.activation : null;
+    const actDone = activated && activated.taskId ? (s.tasks || []).find(x => x && x.id === activated.taskId) : null;
+    return {
+      id: t.id, title: titleOf(t), hasTitle: !!t.title, avatarKind: kind, avatar: roleAvatar(kind), color: ROLE_COLORS[kind] || ROLE_COLORS.operations,
+      lifecycle: lc, lifecycleText: N_('role_lifecycle_' + lc), state: lc === 'paused' || autoToday ? 'paused' : lc, pausedAutoToday: autoToday,
+      pausedNote: lc === 'paused' ? (t.pausedReason ? N_('tm_pausedWhy', { r: t.pausedReason }) : '') : autoToday ? N_('role_pausedAuto', { w: stripAuto(t.pausedReason) || N_('tm_pausedWaitDefault') }) : '',
+      activity: activityOf(t.id, lc), mission: t.mission || '', strategy: t.strategy || '', how: (t.how || []).slice(0, 3),
+      stations: (t.milestoneIds || []).map(msTitle).filter(Boolean), supports: supportsLines(t, actors).map(l => l.paused ? N_('role_supportsPaused', { n: l.name }) : l.role ? N_('role_supports', { n: l.name, r: l.role }) : N_('tm_supportsNoRole', { n: l.name })),
+      askFirst: askFirstView(t, s), knowledge: (t.knowledge || []).slice(0, 6).filter(k => k && k.text).map(k => ({ text: k.text, ...sourceView(k.source, s) })),
+      activation: lc === 'planned' ? (actTask ? { taskId: actTask.id, title: actTask.title, column: actTask.column, packId: actTask.column === 'review' && actTask.packId ? actTask.packId : '' } : { none: true }) : null,
+      activatedAt: lc !== 'planned' && activated ? String(activated.acceptedAt || '').slice(0, 10) : '', activatedTask: actDone ? actDone.title : '',
+      canPause: lc === 'planned' || lc === 'enabled', canResume: lc === 'paused', returns: t.activationReturns || 0
+    };
+  });
+  const history = (s.teammates || []).filter(t => t && (t.lifecycle === 'merged' || t.lifecycle === 'retired')).map(t => ({
+    id: t.id, title: titleOf(t), lifecycle: t.lifecycle, lifecycleText: N_('role_lifecycle_' + t.lifecycle),
+    note: t.lifecycle === 'merged' ? (cardTitle(t.mergedInto) ? N_('tm_mergedInto', { t: cardTitle(t.mergedInto) }) : '') : t.retiredReason || ''
+  }));
+  const leadTasks = aiTasks('');
+  return {
+    lead: { title: N_('role_coordinator'), desc: N_('role_coordinatorDesc'), avatar: roleAvatar(AVATAR_LEAD), color: ROLE_COLORS.lead, activity: leadTasks.some(x => working.has(x.id)) ? 'working' : 'idle', proofreadToday: ctx.counts ? proofreadStarts(ctx.counts) : 0, lifecycleText: N_('role_lifecycle_enabled') },
+    roles, history, over: overCap(s), overText: overCap(s) ? N_('role_overCap') : ''
+  };
+}
+
+/* ---------- 節奏三檔、用量、衝刺提示（系統頁 R5） ----------
+   ctx：{ today, counts（countStarts 結果；沒有紀錄檔時 null）, tele（teleOf：starts、minutes、usd）, unread（未看產出數） } */
+export function paceView(state, ctx = {}) {
+  const s = state || {}, r = (s.company || {}).rhythm || {}, key = paceKey(s), today = ctx.today || '', tele = ctx.tele || {};
+  const used = ctx.counts ? ctx.counts.total : (tele.starts || 0), fuse = fuseOf(s), proofread = ctx.counts ? proofreadStarts(ctx.counts) : 0;
+  const unread = ctx.unread || 0;
+  const pause = key === 'sprint' && r.sprintPause && r.sprintPause.reason ? { reason: r.sprintPause.reason, since: r.sprintPause.since || '', text: r.sprintPause.reason === 'backlog' ? N_('pace_sprintPausedBacklog', { n: unread }) : N_('pace_sprintPausedNoReply') } : null;
+  const h = s.health || {};
+  return {
+    current: key,
+    options: PACE_KEYS.map(k => ({ key: k, text: NAMES.ui['pace_' + k] || k, estimate: N_('pace_estimate', { a: PACE_ESTIMATE[k].typical, b: PACE_ESTIMATE[k].worst }), fuse: PACES[k].fuse, fuseText: N_('pace_fuseOf', { n: PACES[k].fuse }), itemsPerDay: PACES[k].itemsPerDay, current: k === key })),
+    sprint: { until: key === 'sprint' && isDay(r.sprintUntil) ? r.sprintUntil : '', defaultUntil: today ? sprintDefaultUntil(s, today) : '', min: isDay(today) ? addDays(today, 1) : '', max: isDay(today) ? addDays(today, SPRINT_MAX_DAYS) : '',
+      startedOn: key === 'sprint' ? r.sprintStartedOn || '' : '', endedOn: key !== 'sprint' && isDay(r.sprintEndedOn) ? r.sprintEndedOn : '', endedText: key !== 'sprint' && isDay(r.sprintEndedOn) ? N_('pace_sprintEnded', { d: r.sprintEndedOn }) : '', pause },
+    usage: { used, fuse, proofread, line: N_('pace_usage', { a: used, b: fuse, n: proofread }), pct: fuse ? Math.min(100, Math.round(used / fuse * 1000) / 10) : 0, minutes: tele.minutes || 0, usd: tele.usd == null ? null : tele.usd, fuses: PACE_KEYS.map(k => ({ key: k, fuse: PACES[k].fuse })) },
+    zero: { paused: !!h.pausedByFounder, autoStopped: !!h.autoStopped, pausedAt: h.pausedByFounderAt || '' },
+    unread
+  };
+}
+
+/* ---------- 回饋卡（R4／R6）及今日交付一覽（R7） ---------- */
+// 〈崗位〉交付 · 統籌已校對／已核對／仍有 N 處要留意（只有 flagged；pass_with_notes 同 pass，Z29）。qa 缺（舊資料）＝已核對；teammateId 缺＝統籌
+export function qaLine(roleTitle, qa) {
+  const t = roleTitle || N_('role_coordinator'), q = qa && typeof qa === 'object' ? qa : {};
+  const issues = (Array.isArray(q.issues) ? q.issues : []).slice(0, 5).map(i => ({ where: String((i && i.where) || ''), what: String((i && i.what) || ''), fix: String((i && i.fix) || '') }));
+  const verdict = ['pass', 'pass_with_notes', 'flagged', 'pending'].includes(q.verdict) ? q.verdict : 'none';
+  const n = Math.max(1, issues.length);
+  const out = { verdict, audience: q.audience === 'external' ? 'external' : 'internal', line: String(q.line || ''), rounds: Number(q.rounds) || 0, issues };
+  if (verdict === 'pass' || verdict === 'pass_with_notes') return { ...out, tone: 'ok', tag: 'proofread', text: N_('qa_delivered', { t }) };
+  if (verdict === 'flagged') return { ...out, tone: 'wait', tag: 'notes', n, text: N_('qa_flagged', { t, n }) };
+  if (verdict === 'pending') return { ...out, tone: 'wait', tag: 'pending', text: N_('qa_pendingLine', { t }) };
+  return { ...out, tone: 'plain', tag: 'checked', text: N_('qa_checked', { t }) };
+}
+// ctx：{ today, tasks（帳本原始 tasks）, msTitle(id), readReceipt(runId)→收據或 null, todo（畫面待決清單）, pace（paceView）, openTodo（要你決定的題數）, counts }
+export function deliveriesView(state, ctx = {}) {
+  const s = state || {}, today = ctx.today || '', raw = s.tasks || [], taskBy = id => raw.find(t => t && t.id === id) || null;
+  const msTitle = ctx.msTitle || (() => ''), readReceipt = ctx.readReceipt || (() => null), todo = ctx.todo || [];
+  const roleOf = id => { const c = id ? cardById(s, resolveCardId(s, id) || id) : null; return c ? { id: c.id, title: titleOf(c), kind: avatarKindFor(c) } : { id: '', title: '', kind: AVATAR_LEAD }; };
+  const openPack = id => !!id && todo.some(x => x.id === id);
+  const mk = (run, item, rc) => {
+    const task = taskBy(item.taskId), role = roleOf(item.teammateId != null ? item.teammateId : task && task.teammateId);
+    const art = rc && Array.isArray(rc.artifacts) && rc.artifacts[0] ? rc.artifacts[0].title : '';
+    const milestoneId = task ? task.milestoneId || '' : '';
+    const packId = task && task.packId ? task.packId : '';
+    return { key: run.id + ':' + (item.taskId || ''), runId: run.id, taskId: item.taskId || '', at: item.endedAt || run.endedAt || run.startedAt || '', ending: item.ending || 'artifact',
+      title: (task && task.artifactTitle) || art || (task && task.title) || run.label || '', roleId: role.id, roleTitle: role.title || N_('role_coordinator'), avatar: roleAvatar(role.kind), color: ROLE_COLORS[role.kind] || ROLE_COLORS.operations,
+      station: msTitle(milestoneId), standing: !milestoneId || (task && task.cadence === 'standing'), packId: openPack(packId) ? packId : '', qa: qaLine(role.title, item.qa) };
+  };
+  const runs = (Array.isArray(s.runs) ? s.runs : []).filter(r => r && r.id).slice().sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+  const dayOf = r => String(r.workDay || r.startedAt || '').slice(0, 10);
+  let receipts = 0;
+  const entries = [];
+  for (const run of runs) {
+    if (Array.isArray(run.items) && run.items.length) { for (const it of run.items) if (it) entries.push({ run, d: mk(run, it, null), multi: true }); }
+    else if (run.state === 'ended' && run.aiStarted !== false && (run.ending === 'artifact' || run.artifacts > 0) && receipts++ < 12) {
+      const rc = readReceipt(run.id) || {};
+      entries.push({ run, d: mk(run, { taskId: (run.taskIds || [])[0] || rc.taskId || '', teammateId: rc.teammateId != null ? rc.teammateId : run.teammateId, qa: rc.qa || run.qa, ending: 'artifact' }, rc), multi: false });
+    }
+  }
+  const delivered = entries.filter(e => e.d.ending === 'artifact');
+  const todayEntries = entries.filter(e => dayOf(e.run) === today);
+  const accFirst = (a, b) => (b.packId ? 1 : 0) - (a.packId ? 1 : 0);   // 等你驗收的排前（R7 按優先排列）；同級保持交付先後
+  const todayDone = todayEntries.filter(e => e.d.ending === 'artifact').map(e => e.d).sort((a, b) => String(a.at).localeCompare(String(b.at))).sort(accFirst);
+  const multi = todayEntries.some(e => e.multi) && todayEntries.length >= 2;
+  const todayRuns = runs.filter(r => dayOf(r) === today && Array.isArray(r.items));
+  const stopRun = todayRuns.find(r => r.stopReason) || null, pace = ctx.pace || null, key = pace ? pace.current : paceKey(s);
+  // 上限跟那一次工作的節奏（run.pace），不跟現在的節奏；舊紀錄沒有 pace 才退回目前節奏
+  const runPace = stopRun && PACES[stopRun.pace] ? PACES[stopRun.pace].itemsPerDay : null, capNow = runPace != null ? runPace : itemsCapOf(s);
+  const stopN = { itemsCap: runPace != null && stopRun.stopReason === 'itemsCap' && Array.isArray(stopRun.items) && stopRun.items.length ? stopRun.items.length : capNow, waitingFounder: ctx.openTodo || 0, backlog: (pace && pace.unread) || 0 };
+  const stopKey = stopRun ? 'stop_' + stopRun.stopReason : '';
+  const stopText = stopRun && NAMES.ui[stopKey] ? N_(stopKey, { n: stopN[stopRun.stopReason] || 0 }) : '';
+  const decisions = todo.filter(x => x.type === 'acceptance').map(x => { const d = todayDone.concat(delivered.map(e => e.d)).find(z => z.packId === x.id); return { id: x.id, text: x.text, href: x.href, line: d ? d.qa.text : '' }; });
+  const paused = pausedCardsToday(s, today).filter(t => t.pausedAuto === true).map(t => ({ id: t.id, title: titleOf(t), reason: stripAuto(t.pausedReason) }));
+  const notDone = todayEntries.filter(e => e.d.ending !== 'artifact').map(e => e.d);
+  return {
+    recent: delivered.filter(e => !(multi && dayOf(e.run) === today)).slice(0, 6).map(e => e.d),
+    today: { day: today, multi, items: todayDone, count: todayEntries.length, cap: capNow, pace: key, sprintUntil: key === 'sprint' && pace ? pace.sprint.until : '', usageLine: pace ? pace.usage.line : '', stopReason: stopRun ? stopRun.stopReason : '', stopText, decisions, pausedRoles: paused, notDoneCount: notDone.length }
+  };
 }
 
 // 月曆只帶每日歸納，不能把完整帳本 runs 送到畫面。未完成比完成重，完成比跳過重。
@@ -396,9 +584,9 @@ export function dashboardState(DIR, extra = {}) {
     if (human(t) && t.status === 'done' && t.confirmedBy !== 'founder') col = 'review';
     const wait = waitOf(t), why = whyOf(t), ov = human(t) ? ownerView(t, actorsList) : null;
     return { id: t.id, title: t.title, status: t.status, column: col, milestoneId: t.milestoneId || '', milestone: msTitle(t.milestoneId), adhoc: t.adhoc === true || (!t.milestoneId && !t.capabilityId && !human(t)), capability: !!t.capabilityId,
-      owner: human(t) ? 'founder' : 'ai', ...(ov && ov.kind === 'team' ? { assigneeId: ov.actorId, assignee: ov.name, ...(ov.paused ? { assigneePaused: true } : {}) } : {}), ...(ov && ov.left ? { ownerLeft: true, formerOwner: ov.name } : {}), dueAt: t.dueAt || '', scenarioId: t.scenarioId || '', prepFor: [].concat(t.prepFor || []).map(id => (byTask[id] || {}).title).filter(Boolean),
+      owner: human(t) ? 'founder' : 'ai', teammateId: human(t) ? '' : t.teammateId || '', ...(ov && ov.kind === 'team' ? { assigneeId: ov.actorId, assignee: ov.name, ...(ov.paused ? { assigneePaused: true } : {}) } : {}), ...(ov && ov.left ? { ownerLeft: true, formerOwner: ov.name } : {}), dueAt: t.dueAt || '', scenarioId: t.scenarioId || '', prepFor: [].concat(t.prepFor || []).map(id => (byTask[id] || {}).title).filter(Boolean),
       wait: wait && !wait.done ? wait : null, ready: !(wait && !wait.done) && !founderDone(t) && col !== 'review', why,
-      teammate: human(t) ? (ov && ov.kind === 'team' ? ov.name : '你') : ((state.teammates || []).find(x => x.id === t.teammateId) || {}).name || '', next: t.next || '', updatedAt: t.updatedAt || '', packId: t.packId || '', waitingFor: t.waitingFor || '', artifact: t.artifactTitle || '' };
+      teammate: human(t) ? (ov && ov.kind === 'team' ? ov.name : '你') : titleOf((state.teammates || []).find(x => x.id === t.teammateId)), next: t.next || '', updatedAt: t.updatedAt || '', packId: t.packId || '', waitingFor: t.waitingFor || '', artifact: t.artifactTitle || '' };
   }).filter(t => t.column).sort((a, b) => ((a.why ? a.why.rule : 9) - (b.why ? b.why.rule : 9)) || String(a.why ? a.why.key : '').localeCompare(String(b.why ? b.why.key : '')));
 
   /* 兩站並行：最多兩站同時進行（試行另計），第二站要你確認 */
@@ -589,29 +777,42 @@ export function dashboardState(DIR, extra = {}) {
   const hasInterview = !!(interviews && interviews.nextOn) && todo.some(t => t.type === 'interview');
   const guide = !cert ? 'noAI' : !company.ready ? 'noCompany' : !company.confirmed ? 'proofread' : firstAccept ? 'accept' : !ivDone ? (hasInterview ? 'firstInterview' : 'waitInterview') : 'daily';
 
+  /* 0.41.0 Zero 團隊分工：團隊頁（R2）、節奏及用量（R5）、回饋卡及今日交付（R4、R6、R7）；舊資料沒有新欄時照資料約定「舊資料沒有時」 */
+  let startLines = [];
+  try { startLines = fs.readFileSync(path.join(DIR.ledger, 'ai-starts.log'), 'utf8').split('\n').filter(Boolean); } catch { }
+  const dayKey = ymd(today);
+  const startCounts = startLines.length ? countStarts(startLines, dayKey, { runIds: runIdsOfDay(state, dayKey) }) : null;
+  const teleNow = teleOf(runs, rhythm, rhythmInfo, now, state);
+  const unreadN = todo.filter(t => t.type === 'acceptance').length;
+  const pace = paceView(state, { today: dayKey, counts: startCounts, tele: teleNow, unread: unreadN });
+  const team = teamView(state, { today: dayKey, msTitle, tasks, working: workingTasks, counts: startCounts, actors: actorsList });
+  const readReceipt = id => /^R[\w-]{1,40}$/.test(String(id || '')) && DIR.work ? readJSON(path.join(DIR.work, id, 'receipt.json'), null) : null;
+  const deliveries = deliveriesView(state, { today: dayKey, msTitle, readReceipt, todo, pace, openTodo: todo.filter(t => ['decision', 'blocking', 'path', 'autoStop', 'acceptance'].includes(t.type)).length });
+
   return {
     ok: true, sample, now: localIso(now), today: ymd(today), guide, firstWeekDone: ivDone,
     company, goals, nextAction, metrics, since, pathTouched,
     ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', ...modelDisplay(DIR, cert), busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
     lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, calendar, tasks, parallel,
     brain, people: { ...(() => { const v = peopleView(state, { today: ymd(today) }); return { external: v.external, closed: v.closed, team: v.team }; })(), ownership: ownershipOf(state), gapDays: GAP_DAYS, sync: peopleSyncView(DIR, state) },
-    teammates: teammates.map(t => ({ ...t, milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: t.lifecycle === 'planned' ? 'not_started' : tasks.some(x => x.teammate === t.name && workingTasks.has(x.id)) ? 'working' : tasks.some(x => x.teammate === t.name && x.column === 'doing') ? 'doing' : tasks.some(x => x.teammate === t.name && (x.column === 'waiting' || x.column === 'review')) ? 'waiting' : 'idle' })),
+    teammates: teammates.map(t => { const v = team.roles.find(r => r.id === t.id); return { ...t, name: titleOf(t), title: titleOf(t), avatarKind: avatarKindFor(t), lifecycle: lifecycleOf(t), milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: v ? v.activity : 'idle' }; }),
+    team, pace, deliveries, rolesSync: rolesSyncView(DIR, state),
     capabilities: Array.isArray(state.capabilities) ? state.capabilities : [],
     events: events.slice(0, 400), recent: businessEvents.slice(0, 8),
     inputs: { unprocessed, awaiting, recent: recentInputs, events: eventInputs, all: inputList(DIR, state, { packs: listPacks(DIR), runs: status.runs || [] }) },
-    interviews, rhythm, rhythmInfo, tele: teleOf(runs, rhythm, rhythmInfo, now), sim: extra.sim || null, runs: runs.slice(0, 20), health, activity, deck, work,
+    interviews, rhythm, rhythmInfo, tele: teleOf(runs, rhythm, rhythmInfo, now, state), sim: extra.sim || null, runs: runs.slice(0, 20), health, activity, deck, work,
     artifacts: (Array.isArray(state.artifacts) ? state.artifacts : []).concat(shellRuns.filter(r => r.artifacts).map(r => ({ title: r.label, runId: r.id, at: r.endedAt || r.startedAt, milestoneId: '' }))).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 6)
   };
 }
 
 /* ---------- 即時微動畫用嘅真數據（規劃書 4.7 (3)）：下次排程 AI 工作、今日 AI 啟動次數、今日用時同費用 ----------
    頁面每秒用本機時鐘重算倒數，唔打網路；冇費用紀錄就唔寫費用。 */
-function teleOf(runs, rhythm, rhythmInfo, now) {
+function teleOf(runs, rhythm, rhythmInfo, now, state = null) {
   const day = localIso(now).slice(0, 10);
   const today = runs.filter(r => String(r.startedAt || '').slice(0, 10) === day && r.aiStarted !== false && r.state !== 'skipped');
   const minutes = Math.round(today.reduce((a, r) => a + Math.max(0, (new Date(r.endedAt || now).getTime() - new Date(r.startedAt).getTime()) / 60000), 0));
   const costed = today.filter(r => r.aiCost && typeof r.aiCost.usd === 'number');
-  return { nextRunAt: (rhythmInfo && rhythmInfo.nextRunAt) || '', starts: today.length, cap: (rhythm && rhythm.aiStartsPerDay) || 0, minutes, usd: costed.length ? Math.round(costed.reduce((a, r) => a + r.aiCost.usd, 0) * 100) / 100 : null };
+  return { nextRunAt: (rhythmInfo && rhythmInfo.nextRunAt) || '', starts: today.length, cap: fuseOf(state || { company: { rhythm } }), minutes, usd: costed.length ? Math.round(costed.reduce((a, r) => a + r.aiCost.usd, 0) * 100) / 100 : null };
 }
 
 /* ---------- 作業網資料（設計稿 2026-10-28 第 3 節；唯一定義處）：頁面只畫、唔推斷 ----------

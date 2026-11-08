@@ -870,6 +870,43 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
 .tm[data-activity="idle"] .sig:after,.tm[data-activity="doing"] .sig:after{width:15%;opacity:.7}
 .teamlegend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:var(--fs-label);margin:0 0 10px}
 .teamlegend i{display:inline-block;width:14px;height:2px;margin-right:5px;vertical-align:middle;background:var(--c)}
+/* 0.41.0 Zero 團隊分工：崗位頭像色環、崗位卡、節奏三檔、今日交付 */
+.rc-head{display:flex;gap:12px;align-items:center}
+.rc-id{display:flex;gap:6px 8px;align-items:center;flex-wrap:wrap;min-width:0;flex:1}
+.rc-name{font-size:var(--fs-title);font-weight:650;overflow-wrap:anywhere}
+.rc-av{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none;box-sizing:border-box;border:3px solid var(--ring,var(--line));background:#15161b}
+.rc-av.sm{width:40px;height:40px;border-width:2px}
+.mcard.tm.lead{border-top-color:var(--amber);background:linear-gradient(180deg,rgba(232,141,79,.08),rgba(14,15,19,.95) 60%);margin-bottom:12px}
+.tm[data-activity="waiting"]{--sig:#efb37f}
+.mcard.tm p,.mcard.tm li{line-height:1.55}
+.mcard.tm .know{margin:6px 0 0;padding-left:18px;font-size:var(--fs-sub)}
+.mcard.tm .know small{color:var(--muted)}
+.mcard.tm .know a{color:var(--text)}
+.rc-foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.rc-grid{margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.rolepg .sync{margin-top:12px}
+.hist{margin-top:12px}.hist .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:6px 0;font-size:var(--fs-sub);border-top:1px solid var(--line)}
+.paces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:8px 0 10px}
+.pace{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer;background:rgba(255,255,255,.02);min-height:92px}
+.pace:focus-visible{outline:2px solid var(--mint);outline-offset:2px}.pace[disabled]{cursor:default}
+.pace b{font-size:var(--fs-title);font-weight:650}.pace span{font-size:var(--fs-sub);color:var(--text);line-height:1.5}.pace small{font-size:var(--fs-label);color:var(--muted)}
+.pace.cur{border-color:var(--amber);background:linear-gradient(180deg,rgba(232,141,79,.14),rgba(232,141,79,.04))}
+.sprint-f{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 4px;font-size:var(--fs-sub)}
+.sprint-f input{background:#0e0f13;border:1px solid var(--line);color:var(--text);border-radius:9px;height:36px;padding:0 10px;font:inherit;color-scheme:dark}
+.usage b{font-family:var(--mono);font-weight:500;font-size:var(--fs-title)}
+.usagebar{height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:12px}.usagebar i{display:block;height:100%;background:var(--amber);border-radius:999px}
+.dvl{list-style:none;margin:6px 0 0;padding:0}
+.dv{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.dv:first-child{border-top:0}
+.dv-n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 var(--fs-min) var(--mono);background:rgba(255,255,255,.07);color:var(--muted)}
+.dv-b b{display:block;font-size:var(--fs-body);font-weight:600}.dv-b small{display:block;color:var(--muted);font-size:var(--fs-label);line-height:1.5}
+.dv-act{display:flex;gap:6px;align-items:center}
+.dv-meta{color:var(--muted);font-size:var(--fs-sub);margin:4px 0 0;line-height:1.6}
+.dv-card .dv-head{display:flex;gap:12px;align-items:center}.dv-card .dv-title{margin:2px 0 0;font-size:var(--fs-title);font-weight:650;line-height:1.4;overflow-wrap:anywhere}
+.dv-card[data-tone="ok"]{border-left:3px solid var(--mint)}.dv-card[data-tone="wait"]{border-left:3px solid #efb37f}
+.dv-card .q{margin:8px 0 0}.dv-card ul{margin:6px 0 0;padding-left:18px;font-size:var(--fs-sub)}
+@media (max-width:900px){.paces{grid-template-columns:1fr}}
+@media (max-width:600px){.rolepg .btn,.rolepg .btn.small,.pacepg .btn,.pacepg .btn.small,.dvpg .btn,.dvpg .btn.small,.rolepg summary{min-height:44px;height:auto;padding:8px 16px}.pace{min-height:64px}.sprint-f input{height:44px}.dv{grid-template-columns:28px minmax(0,1fr)}.dv-act{grid-column:2}.rolepg .mcard.tm a{display:inline-block;padding:10px 0}.dvpg .dv-b a{display:inline-block;padding:10px 0}}
 /* 關鍵影格（對應參考監察台 22 個；名稱前綴 ov-） */
 @keyframes ov-float{50%{transform:translateY(-5px)}}
 @keyframes ov-spin{to{transform:rotate(360deg)}}
@@ -1268,7 +1305,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       case 'team':
         var tms = x.teammates || [];
         if (!tms.length) { out.push(ln('未有角色卡'), ln('Zero 會按里程碑建議角色卡，你驗收啟用任務後才開始工作。', 'sub')); break; }
-        tms.slice(0, full ? 20 : 3).forEach(function (t) { out.push(ln([h('b', null, t.name), ' · ', t.milestones.join('、'), ' · ', D['act_' + t.activity]])); });
+        tms.slice(0, full ? 20 : 3).forEach(function (t) { out.push(ln([h('b', null, t.title || t.name), ' · ', t.milestones.join('、'), ' · ', D['act_' + t.activity]])); });
         if ((x.capabilities || []).length) out.push(ln(D.capabilities + '：進行中 ' + x.capabilities.filter(function (c) { return c.status === 'active'; }).length + ' · 已證明使用 ' + x.capabilities.filter(function (c) { return c.status === 'proven'; }).length, 'sub'));
         break;
       case 'recent':
@@ -1778,7 +1815,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var workCol = h('section', { class: 'panel', id: 'in-work' }, h('div', { class: 'ph' }, h('h2', null, D.recWork)),
       runs.length ? h('div', { class: 'rows' }, runs.map(function (r) { return h('div', { class: 'row-item' }, h('time', null, when(r.startedAt)), h('span', null, h('b', null, r.label || 'Zero 工作'), r.summary || r.skipReason ? h('span', { class: 'small muted', style: 'display:block' }, r.summary || U['skip_' + r.skipReason] || '') : null)); })) : h('p', { class: 'empty' }, D.recRunsNone),
       h('h4', null, D.recAuto), x.rhythm && x.rhythm.runTime ? h('p', null, rhythmWhen(x.rhythm), (x.rhythmInfo && x.rhythmInfo.scheduler && x.rhythmInfo.scheduler !== 'none') ? '（已開啟）' : '', ' ', h('a', { href: '/dashboard/system' }, '更改時間')) : h('p', { class: 'muted' }, '確認公司概覽後，Zero 會按經營節奏開工。'));
-    return [blockCard(), h('div', { class: 'grid-in' }, inCol, h('div', { class: 'stack' }, workCol, ivCol))];
+    return [blockCard()].concat(deliveriesBlock(), [h('div', { class: 'grid-in' }, inCol, h('div', { class: 'stack' }, workCol, ivCol))]);
   }
   /* ---------- 分頁：團隊（工作看板、角色卡、能力建設） ---------- */
   var COLS = ['todo', 'doing', 'waiting', 'blocked', 'review', 'done'];
@@ -1816,28 +1853,78 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return h('section', { class: 'panel' }, h('div', { class: 'ph' }, h('h2', null, D.kanban), h('div', { class: 'r' }, h('span', null, '唯讀：狀態只會因你在待決事項作答或 Zero 交付而改變；每欄按優先次序排列；你的行動由 Zero 負責準備，完成須由你確認。'), h('label', null, D.ownerFilter + ' ', own), h('label', null, D.filterMs + ' ', sel))),
       (x.tasks || []).length ? board : h('p', { class: 'empty' }, x.company.confirmed ? 'Zero 尚未分配工作；Zero 下次開工後，工作會按狀態排列於此。' : '確認公司概覽後，Zero 會按里程碑分配工作，並按狀態在此顯示。'));
   }
-  // 未啟用嘅角色卡：啟用任務做好就有驗收入口；未做好就講明等緊乜
-  function activation(t) {
-    var task = (V.data.tasks || []).filter(function (k) { return k.id === t.activationTaskId; })[0];
-    if (task && task.column === 'review' && task.packId) return h('p', { class: 'small' }, '啟用任務已完成：', h('a', { class: 'btn small primary', href: '/#/ask/' + task.packId }, '★ 驗收啟用任務'));
-    return h('p', { class: 'small muted' }, task ? '啟用任務「' + task.title + '」' + D['col_' + task.column] + '；完成後會請你驗收，驗收後才開始工作。' : '尚未有啟用任務；Zero 擬定後會請你驗收。');
+  /* ---------- 0.41.0 Zero 團隊（R2）：統籌在最上，崗位同級；頭像＋色環，稱號一直顯示 ---------- */
+  function ring(src, color, small) { return h('img', { class: 'rc-av' + (small ? ' sm' : ''), src: src, alt: '', width: small ? 40 : 56, height: small ? 40 : 56, 'aria-hidden': 'true', style: '--ring:' + color }); }
+  function roleOp(op, target, value, btn, done) {
+    if (btn) btn.disabled = true;
+    return postJSON('/api/founder-op', { op: op, target: target, value: value || {} }).then(function (j) {
+      if (j && j.ok === false) throw j;
+      toast(done); return load().then(function () { return true; });
+    }).catch(function (e) { if (btn) btn.disabled = false; toast(fixError(e)); return false; });
+  }
+  function canAct() { return !V.data.sample && !V.data.localOnly; }
+  // 啟用任務入口（待啟用卡）：做好就有驗收入口；未做好就講明等緊乜
+  function activation(a) {
+    var U = N.ui;
+    if (!a || a.none) return h('p', { class: 'small muted' }, U.tm_actNone);
+    if (a.packId) return h('p', { class: 'small' }, U.tm_actDone, h('a', { class: 'btn small primary', href: '/#/ask/' + a.packId }, U.tm_actAccept));
+    return h('p', { class: 'small muted' }, N.t('tm_actDoing', { t: a.title, c: D['col_' + a.column] || '' }));
+  }
+  function leadCard(L) {
+    var U = N.ui;
+    return h('div', { class: 'mcard tm lead', 'data-activity': L.activity, 'data-role': 'lead', id: 'team-lead' },
+      h('div', { class: 'rc-head' }, ring(L.avatar, L.color), h('div', { class: 'rc-id' }, h('b', { class: 'rc-name' }, L.title), tag(L.lifecycleText, 'mine'))),
+      h('div', { class: 'sigrow' }, h('span', null, D.signalL + ' · ' + (D['act_' + L.activity] || L.activity)), h('span', { class: 'sig', 'aria-hidden': 'true' })),
+      h('p', { class: 'small' }, L.desc),
+      L.proofreadToday ? h('p', { class: 'small muted' }, N.t('tm_leadToday', { n: L.proofreadToday })) : null);
+  }
+  function roleCard(t) {
+    var U = N.ui, act = t.activity;
+    var foot = [];
+    if (canAct()) {
+      if (t.canResume) foot.push(h('button', { type: 'button', class: 'btn small', 'data-op': 'roleResume', onclick: function (e) { roleOp('roleResume', t.id, {}, e.currentTarget, U.tm_resumed); } }, U.tm_resume));
+      else if (t.canPause) foot.push(h('button', { type: 'button', class: 'btn small', 'data-op': 'rolePause', onclick: function (e) { roleOp('rolePause', t.id, {}, e.currentTarget, U.tm_paused); } }, U.tm_pause));
+    }
+    return h('div', { class: 'mcard tm', 'data-activity': act, 'data-state': t.state, 'data-role': t.id },
+      h('div', { class: 'rc-head' }, ring(t.avatar, t.color), h('div', { class: 'rc-id' }, h('b', { class: 'rc-name' }, t.title), tag(t.lifecycleText, t.lifecycle === 'enabled' ? 'mine' : t.lifecycle === 'paused' ? 'wait' : ''))),
+      h('div', { class: 'sigrow' }, h('span', null, D.signalL + ' · ' + (D['act_' + act] || act)), h('span', { class: 'sig', 'aria-hidden': 'true' })),
+      t.mission ? h('p', { class: 'small' }, t.mission) : null,
+      t.stations.length ? h('p', { class: 'small muted' }, N.t('tm_resp', { s: t.stations.join('、') })) : null,
+      t.supports.map(function (line) { return h('p', { class: 'small muted' }, line); }),
+      t.how.length ? h('ul', null, t.how.map(function (w) { return h('li', null, w); })) : null,
+      t.strategy ? h('p', { class: 'small muted' }, N.t('tm_strategy', { s: t.strategy })) : null,
+      t.knowledge.length ? [h('p', { class: 'small muted', style: 'margin-bottom:0' }, U.tm_knowledge), h('ul', { class: 'know' }, t.knowledge.map(function (k) {
+        return h('li', null, k.text, ' ', h('small', null, U.tm_source, k.href ? h('a', { href: k.href, target: '_blank', rel: 'noopener noreferrer' }, k.label) : k.label));
+      }))] : null,
+      t.askFirst.length ? h('p', { class: 'small muted' }, N.t('tm_askFirst', { s: t.askFirst.join('、') })) : null,
+      t.activation ? activation(t.activation) : null,
+      t.activatedAt ? h('p', { class: 'small muted' }, N.t('tm_activated', { d: md(t.activatedAt), t: t.activatedTask })) : null,
+      t.pausedNote ? h('p', { class: 'small muted', 'data-note': 'paused' }, t.pausedNote) : null,
+      foot.length ? h('div', { class: 'rc-foot' }, foot) : null);
+  }
+  // 請 Zero 重新擬崗位的入口及狀態：可以要求／已要求／已擬好確認題（連到待決事項）；示範或未確認概覽不顯示
+  function rolesSyncBox() {
+    var U = N.ui, sy = V.data.rolesSync || { state: 'none' };
+    if (sy.state === 'none' || !canAct()) return null;
+    if (sy.state === 'requested') return h('p', { class: 'small muted sync', id: 'roles-sync' }, U.tm_syncRequested);
+    if (sy.state === 'asked') return h('div', { class: 'sync', id: 'roles-sync' }, h('p', { class: 'small' }, N.t('tm_syncAsked', { n: sy.count })), h('a', { class: 'btn small', href: '/#/ask/' + sy.packId }, U.tm_syncGo + ' →'));
+    var btn = h('button', { type: 'button', class: 'btn small', 'data-op': 'rolesSync', onclick: function () { roleOp('rolesSync', 'roles', {}, btn, U.tm_syncRequested); } }, U.tm_syncBtn);
+    return h('div', { class: 'sync', id: 'roles-sync' }, sy.failed ? h('p', { class: 'small muted' }, N.t('tm_syncFailed', { r: sy.failed })) : null, btn);
+  }
+  function rolesPanel() {
+    var x = V.data, U = N.ui, T = x.team || { lead: null, roles: [], history: [] };
+    var legend = h('div', { class: 'teamlegend', 'aria-label': D.teamLegendL }, [['working', '#9ae5ba'], ['idle', '#a5c9ff'], ['waiting', '#efb37f'], ['not_started', '#838d9e']].map(function (k) { return h('span', null, h('i', { style: '--c:' + k[1] }), D['act_' + k[0]]); }));
+    return h('section', { class: 'panel rolepg', id: 'team-roles', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, U.tm_title)),
+      h('p', { class: 'small muted' }, U.tm_intro), T.overText ? DESK.note('tip', T.overText) : null,
+      T.roles.length || T.lead ? legend : null,
+      T.lead ? leadCard(T.lead) : null,
+      T.roles.length ? h('div', { class: 'role rc-grid' }, T.roles.map(roleCard)) : h('p', { class: 'empty' }, U.tm_empty),
+      T.history.length ? h('details', { class: 'hist' }, h('summary', null, N.t('tm_history', { n: T.history.length })), T.history.map(function (z) { return h('div', { class: 'row' }, h('b', null, z.title), tag(z.lifecycleText), z.note ? h('span', { class: 'small muted' }, z.note) : null); })) : null,
+      rolesSyncBox(), h('p', { class: 'small muted', style: 'margin-top:12px' }, U.tm_changeHint));
   }
   function pageTeam() {
     var x = V.data;
-    return [blockCard()].concat(teamPeople(), [kanban(),
-      h('section', { class: 'panel', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.roleCards)),
-        // 角色卡頂邊狀態色＋信號條（工作中先流動；只由真實工作推導，規劃書 4.8）＋圖例
-        (x.teammates || []).length ? h('div', { class: 'teamlegend', 'aria-label': D.teamLegendL }, [['working', '#9ae5ba'], ['doing', '#9ae5ba'], ['idle', '#a5c9ff'], ['not_started', '#838d9e']].map(function (k) { return h('span', null, h('i', { style: '--c:' + k[1] }), D['act_' + k[0]]); })) : null,
-        (x.teammates || []).length ? h('div', { class: 'role' }, x.teammates.map(function (t) {
-          var act = t.lifecycle === 'planned' ? 'not_started' : t.activity;
-          return h('div', { class: 'mcard tm', 'data-activity': act }, h('h4', null, t.name, tag(t.lifecycle === 'planned' ? D.act_not_started : D['act_' + t.activity], t.activity === 'doing' ? 'mine' : '')),
-            h('div', { class: 'sigrow' }, h('span', null, D.signalL + ' · ' + (D['act_' + act] || act)), h('span', { class: 'sig', 'aria-hidden': 'true' })),
-            t.mission ? h('p', { class: 'small' }, t.mission) : null,
-            h('p', { class: 'small muted' }, '負責：' + t.milestones.join('、')),
-            t.how ? h('ul', null, t.how.map(function (w) { return h('li', null, w); })) : null,
-            t.bounds && t.bounds.askFirst && t.bounds.askFirst.length ? h('p', { class: 'small muted' }, '必須先問你：' + t.bounds.askFirst.join('、')) : null,
-            t.lifecycle === 'planned' ? activation(t) : null);
-        })) : h('p', { class: 'empty' }, '尚未有角色卡：Zero 會按里程碑提出建議，你驗收啟用任務後才開始工作。')),
+    return [blockCard(), rolesPanel()].concat(teamPeople(), [kanban(),
       h('section', { class: 'panel', style: 'margin-top:14px' }, h('div', { class: 'ph' }, h('h2', null, D.capabilities)),
         (x.capabilities || []).length ? h('div', { class: 'rows' }, x.capabilities.map(function (c) { return h('div', { class: 'row-item' }, h('b', null, c.title), tag({ proposed: '擬議', active: '進行中', proven: '已證明使用', retired: '已撤' }[c.status] || c.status), h('span', { class: 'muted small' }, '證明方式：' + c.proofMethod)); })) : h('p', { class: 'empty' }, '未有能力建設項目。'))]);
   }
@@ -1957,6 +2044,87 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     else body = V.rhythmEdit ? [note, rhythmEditor(x, ri, false)] : [rhythmTop(ri, U.rhythmOff), h('p', { class: 'rh-sub' }, U.rhythmOffNote), note, h('dl', { class: 'kv' }, h('dt', null, U.rhythmAfterOn), h('dd', null, rhythmWhen(r)), h('dt', null, U.rhythmInterview), h('dd', null, N.t('rhythmDay', { d: WD[(r.interviewWeekday || 1) % 7] }))), V.rhythmConfirm ? h('div', { class: 'rh-confirm', id: 'rh-confirm' }, DESK.note('tip', N.t('rhythmConfirmNote', { t: rhythmWhen(r) + ' ' })), h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-on-ok', disabled: V.rhythmBusy, onclick: function (e) { rhythmRequest({ action: 'schedule', op: 'on' }, e.target, function () { V.rhythmConfirm = false; }); } }, U.rhythmConfirmStart), h('button', { type: 'button', class: 'btn', id: 'rh-on-no', disabled: V.rhythmBusy, onclick: function () { V.rhythmConfirm = false; render(true); } }, U.rhythmCancel))) : h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'rh-on', disabled: V.rhythmBusy, onclick: function () { V.rhythmConfirm = true; V.rhythmNote = ''; render(true); } }, U.rhythmStart), h('button', { type: 'button', class: 'btn', id: 'rh-change', disabled: V.rhythmBusy, onclick: function () { V.rhythmEdit = { runCadence: r.runCadence, runTime: r.runTime, interviewWeekday: r.interviewWeekday }; V.rhythmNote = ''; render(true); } }, U.rhythmChange))];
     return h('section', { class: 'panel', id: 'sys-rhythm' }, h('div', { class: 'ph' }, h('h2', null, U.rhythmTitle)), body);
   }
+  /* ---------- 0.41.0 節奏三檔、今日用量、暫停 Zero（R5）：全部經創辦人操作隊列，不即時改檔 ---------- */
+  function splitPace(text) { var m = /^(.*?)（(.*)）$/.exec(String(text || '')); return m ? [m[1], m[2]] : [String(text || ''), '']; }
+  function paceDirty(P) { var e = V.paceEdit; return !!e && (e.pace !== P.current || (e.pace === 'sprint' && e.until !== P.sprint.until)); }
+  function pacePick(P, k) { V.paceEdit = { pace: k, until: k === 'sprint' ? (P.sprint.until || P.sprint.defaultUntil) : '' }; render(true); }
+  function paceSave(P, btn) {
+    var e = V.paceEdit; if (!e) return;
+    var value = { pace: e.pace }; if (e.pace === 'sprint' && e.until) value.sprintUntil = e.until;
+    roleOp('setPace', 'company', value, btn, N.ui.pace_saved).then(function (okk) { if (okk) { V.paceEdit = null; render(true); } });
+  }
+  function pacePanel(x) {
+    var U = N.ui, P = x.pace; if (!P) return null;
+    var can = canAct(), e = V.paceEdit, chosen = e ? e.pace : P.current, sp = P.sprint;
+    var notes = [];
+    if (sp.pause) notes.push(DESK.note('warn', sp.pause.text, { id: 'pace-pause' }));
+    if (sp.endedText) notes.push(DESK.note('tip', [sp.endedText, can ? [' ', h('button', { type: 'button', class: 'btn small', id: 'pace-resprint', onclick: function (ev) { roleOp('setPace', 'company', { pace: 'sprint', sprintUntil: sp.defaultUntil }, ev.currentTarget, U.pace_saved); } }, U.pace_sprintResume)] : null], { id: 'pace-ended' }));
+    var buttons = P.options.map(function (o) {
+      var t = splitPace(o.text), on = chosen === o.key;
+      return h('button', { type: 'button', class: 'pace' + (on ? ' cur' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-pace': o.key, disabled: !can, onclick: function () { pacePick(P, o.key); } },
+        h('b', null, t[0]), h('span', null, t[1]), h('small', null, o.estimate + ' · ' + o.fuseText));
+    });
+    var until = chosen === 'sprint' ? (e ? e.until : sp.until) : '';
+    var sprintField = chosen === 'sprint' ? h('div', { class: 'sprint-f' }, h('label', { for: 'sprint-until' }, U.pace_sprintTo),
+      can ? h('input', { type: 'date', id: 'sprint-until', value: until || '', min: sp.min || null, max: sp.max || null, oninput: function (ev) { V.paceEdit = V.paceEdit || { pace: 'sprint', until: '' }; V.paceEdit.until = ev.target.value; var sv = $('#pace-save'); if (sv) sv.disabled = !(ev.target.value >= sp.min && ev.target.value <= sp.max); } }) : h('b', null, until ? md(until) : ''),
+      h('span', { class: 'muted small' }, U.pace_sprintToHelp)) : null;
+    var z = P.zero;
+    var zeroRow = z.paused
+      ? h('div', { class: 'rh-top', id: 'zero-paused' }, tag(U.sysPaused, 'wait'), h('span', { class: 'small muted' }, U.zero_pausedNote), can ? h('button', { type: 'button', class: 'btn small', 'data-op': 'resumeZero', onclick: function (ev) { roleOp('resumeZero', 'company', {}, ev.currentTarget, U.zero_resumed); } }, U.zero_resume) : null)
+      : can ? h('div', { class: 'rh-top', id: 'zero-running' }, h('button', { type: 'button', class: 'btn small', 'data-op': 'pauseZero', onclick: function (ev) { roleOp('pauseZero', 'company', {}, ev.currentTarget, U.zero_paused); } }, U.zero_pause), h('span', { class: 'small muted' }, U.zero_pauseHelp)) : null;
+    return h('section', { class: 'panel pacepg', id: 'sys-pace' }, h('div', { class: 'ph' }, h('h2', null, U.pace_title)), notes,
+      h('div', { class: 'paces', role: 'group', 'aria-label': U.pace_title }, buttons), sprintField,
+      h('p', { class: 'small muted' }, U.pace_note, ' ', U.pace_itemCap),
+      can && paceDirty(P) ? h('div', { class: 'rh-acts' }, h('button', { type: 'button', class: 'btn primary', id: 'pace-save', disabled: chosen === 'sprint' && !(until >= sp.min && until <= sp.max), onclick: function (ev) { paceSave(P, ev.currentTarget); } }, U.rhythmSave), h('button', { type: 'button', class: 'btn', id: 'pace-cancel', onclick: function () { V.paceEdit = null; render(true); } }, D.ppl_cancel)) : null,
+      zeroRow);
+  }
+  function usagePanel(x) {
+    var U = N.ui, P = x.pace; if (!P) return null;
+    var u = P.usage, f = {}; u.fuses.forEach(function (z) { f[z.key] = z.fuse; });
+    return h('section', { class: 'panel pacepg', id: 'sys-usage' }, h('div', { class: 'ph' }, h('h2', null, U.pace_usageTitle)),
+      h('p', { class: 'usage', id: 'usage-line' }, u.line),
+      h('div', { class: 'usagebar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + u.pct + '%' })),
+      h('dl', { class: 'kv usage', style: 'margin-top:10px' },
+        h('dt', null, U.pace_timeLabel), h('dd', null, N.t('pace_minutes', { n: u.minutes })),
+        u.usd != null ? [h('dt', null, U.pace_costLabel), h('dd', null, N.t('pace_cost', { n: u.usd.toFixed(2) }))] : null,
+        h('dt', null, U.pace_fuseLabel), h('dd', null, N.t('pace_fuseAll', { a: f.standard, b: f.fast, c: f.sprint }), '；', U.pace_fuseNote)));
+  }
+  /* ---------- 0.41.0 回饋卡（R4、R6）及今日 Zero 交付（R7） ---------- */
+  var DV_TAG = { proofread: ['dv_tagProofread', 'mint'], notes: ['dv_tagNotes', 'wait'], checked: ['dv_tagChecked', ''], pending: ['dv_tagPending', 'wait'] };
+  function dvTag(d) { var k = DV_TAG[d.qa.tag] || DV_TAG.checked; return tag(N.ui[k[0]], k[1]); }
+  function dvLine2(d) {
+    var U = N.ui, long = d.qa.tag === 'proofread' ? U.dv_tagProofread : d.qa.tag === 'notes' ? N.t('dv_notesLong', { n: d.qa.n }) : d.qa.tag === 'pending' ? U.dv_tagPending : U.dv_tagChecked;
+    return [d.qa.audience === 'internal' ? U.dv_internal : '', long, d.packId ? U.dv_waitAccept : ''].filter(Boolean).join(' · ');
+  }
+  function feedbackCard(d) {
+    var U = N.ui, bits = [d.at ? N.t('dv_deliveredAt', { d: when(d.at) }) : '', d.station ? N.t('dv_forStation', { s: d.station }) : ''].filter(Boolean);
+    return h('section', { class: 'panel dv-card', 'data-run': d.runId, 'data-tone': d.qa.tone, 'data-verdict': d.qa.verdict },
+      h('div', { class: 'dv-head' }, ring(d.avatar, d.color, true), h('div', { style: 'min-width:0' }, h('span', { class: 'eyebrow' }, U.aiWork), h('h3', { class: 'dv-title' }, d.qa.text + (d.title ? '：' + d.title : '')))),
+      h('p', { class: 'dv-meta' }, bits.join(' · '), bits.length ? ' · ' : '', dvTag(d)),
+      d.qa.line ? h('p', { class: 'q' }, d.qa.line) : null,
+      d.qa.issues.length ? h('ul', null, d.qa.issues.map(function (i) { return h('li', null, [i.where, i.what].filter(Boolean).join('：'), i.fix ? ' ' + N.t('dv_issueFix', { f: i.fix }) : ''); })) : null,
+      d.packId ? h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '/#/ask/' + d.packId }, U.dv_answer)) : null);
+  }
+  function deliveriesBlock() {
+    var x = V.data, U = N.ui, DL = x.deliveries; if (!DL) return [];
+    var T = DL.today, out = [];
+    if (T.multi) {
+      var meta = [T.sprintUntil ? N.t('pace_sprintUntil', { d: md(T.sprintUntil) }) : '', N.t('dv_doneN', { n: T.count, m: T.cap }), T.usageLine, T.stopText ? N.t('dv_stopLabel', { r: T.stopText }) : ''].filter(Boolean).join(' · ');
+      var dec = T.decisions.slice(0, 3);
+      out.push(h('section', { class: 'panel dvpg', id: 'dv-today' }, h('div', { class: 'ph' }, h('h2', null, U.pace_deliveriesTitle)), h('p', { class: 'dv-meta', id: 'dv-meta' }, meta),
+        dec.length ? [h('h4', null, U.dv_decideTitle + ' · ' + N.t('dv_decideN', { n: T.decisions.length })), h('ul', { class: 'dvl', id: 'dv-decide' }, dec.map(function (z, i) {
+          return h('li', { class: 'dv' }, h('span', { class: 'dv-n' }, String(i + 1)), h('div', { class: 'dv-b' }, h('b', null, z.text), z.line ? h('small', null, z.line) : null), h('span', { class: 'dv-act' }, h('a', { class: 'btn small primary', href: z.href }, U.dv_answer)));
+        })), T.decisions.length > 3 ? h('p', { class: 'small muted' }, N.t('dv_decideMore', { n: T.decisions.length - 3 })) : null] : null,
+        h('h4', null, U.dv_outputsTitle + ' · ' + N.t('dv_outputsN', { n: T.items.length })), h('ul', { class: 'dvl', id: 'dv-items' }, T.items.map(function (d, i) {
+          return h('li', { class: 'dv', 'data-run': d.runId }, h('span', { class: 'dv-n' }, String(i + 1)), h('div', { class: 'dv-b' }, h('b', null, d.title),
+            h('small', null, d.roleTitle + ' · ' + (d.standing ? U.dv_standing : d.station)), h('small', null, dvLine2(d))), h('span', { class: 'dv-act' }, dvTag(d)));
+        })),
+        T.pausedRoles.length ? h('p', { class: 'small muted', id: 'dv-paused' }, T.pausedRoles.map(function (z) { return N.t('dv_pausedRoles', { t: z.title, w: z.reason || U.tm_pausedWaitDefault }); }).join(' ')) : null));
+    }
+    var recent = DL.recent.slice(0, 3);
+    if (recent.length) out.push(h('div', { class: 'dvpg', id: 'dv-recent' }, h('h3', { class: 'small muted', style: 'margin:14px 0 0' }, U.dv_recentTitle), recent.map(feedbackCard)));
+    return out;
+  }
   function pageSystem() {
     var x = V.data;
     var ST = { running: '進行中', ended: '完成', failed: '未完成', waiting: '等待 AI 工具設定', skipped: N.ui.runSkipped, interrupted: '未完成' };
@@ -1997,7 +2165,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         h('div', { id: 'sys-brain-src' }, !x.brain || !x.brain.source ? U.sysBrainEmpty : x.brain.source.kind === 'ledger' ? (x.brain.source.folderOff ? D.sourceLedger : '由公司紀錄供料') : x.brain.source.kind === 'folder' ? D.sourceFolder : x.brain.source.kind === 'demo' ? '示範（虛構）' : DESK.note('error', U.sysBrainMissing)),
         h('h4', null, D.sysHealth),
         (x.health.warnings || []).length ? x.health.warnings.map(function (w) { return DESK.note('warn', w); }) : h('p', { class: 'muted' }, '沒有。')),
-      h('div', { class: 'sys-right' }, rhythmPanel(x, ri, runTags),
+      h('div', { class: 'sys-right' }, rhythmPanel(x, ri, runTags), pacePanel(x), usagePanel(x),
         h('section', { class: 'panel', id: 'sys-runs' },
           h('div', { class: 'ph' }, h('h2', null, D.sysRuns)),
           (selectedRun || x.runs.length) ? h('div', { class: 'rows' }, (selectedRun ? [selectedRun].concat(x.runs.filter(function (r) { return r.id !== selectedRun.id; })) : x.runs).slice(0, 10).map(function (r) { return h('div', { class: 'row-item' }, h('time', null, when(r.startedAt)), h('span', null, h('b', null, r.label || 'Zero 工作'), ' ', runTags(r), r.summary || r.skipReason ? h('span', { class: 'small muted', style: 'display:block' }, r.summary || U['skip_' + r.skipReason] || '') : null)); })) : h('p', { class: 'empty' }, 'Zero 未開過工。'),
@@ -2850,7 +3018,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var x = V.data;
     document.body.classList.toggle('has-work', !!(x.work && x.work.meta.workingSessions));
     if (tab === 'overview') refreshOverview(false);
-    else if (tab === 'system') { var so = $('#sys-observe'), re = $('#rh-editor'); if (so && so.contains(document.activeElement) || re && re.contains(document.activeElement)) return; render(true); }
+    else if (tab === 'system') { var so = $('#sys-observe'), re = $('#rh-editor'), pc = $('#sys-pace'); if (so && so.contains(document.activeElement) || re && re.contains(document.activeElement) || pc && pc.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; render(true); }
     else if (tab === 'team') render(true);
   }
   function load() {

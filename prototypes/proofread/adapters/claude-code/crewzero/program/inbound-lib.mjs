@@ -163,3 +163,32 @@ export async function rereadLink({ url, dir, baseName, fetchImpl, now = () => ne
     }
   } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { } }
 }
+
+/* ---------- 開機時處理「轉換途中伺服器重啟」留下的附件（0.41.0；0.40.2 覆核建議 1） ----------
+   收件順序是：先寫全部附件、轉文字（同時最多 2 份）、最後才寫筆記主檔（外殼開工的訊號）。轉換途中伺服器重啟，收件匣就只剩附件、文字版或說明檔，
+   沒有主檔：那次送出創辦人當時沒有收到成功回應，這些檔不會有人處理，卻會長期算作待處理項目。
+   規則：認得出屬於哪個主檔（<編號>-note-<類型>.md、<編號>-intake.md、<編號>-prefill.md）的檔，而收件匣內沒有那個主檔，就整個搬到封存區 interrupted-uploads/。
+   只搬不刪：原檔、文字版、說明檔一律保留；搬不動（權限、被佔用）就原樣留在原處。命名規則與 ask-lib 的 isInboxAttachment 一致。 */
+const UPLOAD_RE = /^(.+?)-(?:note-(order|adhoc|event|doc)-file|(intake|prefill))-\d+-/;
+const UPLOAD_META_RE = /^(.+?)-(?:note-(order|adhoc|event|doc)-meta\.json|meta-(intake|prefill)\.json)$/;
+export function uploadOwner(name) {
+  const f = String(name || ''), m = UPLOAD_RE.exec(f) || UPLOAD_META_RE.exec(f);
+  if (!m) return '';
+  return m[2] ? `${m[1]}-note-${m[2]}.md` : `${m[1]}-${m[3]}.md`;
+}
+export function rehomeInterruptedUploads({ inboxDir, archiveDir, folder = 'interrupted-uploads' }) {
+  let names = [];
+  try { names = fs.readdirSync(inboxDir, { withFileTypes: true }).filter(e => e.isFile() && !e.name.startsWith('.')).map(e => e.name); } catch { return []; }
+  const have = new Set(names), moved = [];
+  const orphans = names.filter(n => { const o = uploadOwner(n); return o && !have.has(o); });
+  if (!orphans.length) return moved;
+  const dest = path.join(archiveDir, folder);
+  try { fs.mkdirSync(dest, { recursive: true }); } catch { return moved; }
+  for (const n of orphans) {
+    let to = path.join(dest, n);
+    for (let i = 2; fs.existsSync(to) && i < 1000; i++) to = path.join(dest, n.replace(/(\.[^.]*)?$/, `-${i}$1`));
+    if (fs.existsSync(to)) continue;
+    try { fs.renameSync(path.join(inboxDir, n), to); moved.push(n); } catch { }
+  }
+  return moved;
+}

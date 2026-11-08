@@ -349,7 +349,8 @@ const SYNC_RANK = { team: 0, advisor: 1, investor: 2, partner: 3, customer: 4 };
 export const orderSyncItems = items => (items || []).map((x, i) => ({ x, i })).sort((a, b) => ((a.x.kind === 'actorKind' ? 9 : SYNC_RANK[a.x.actorKind] ?? 8) - (b.x.kind === 'actorKind' ? 9 : SYNC_RANK[b.x.actorKind] ?? 8)) || a.i - b.i).map(o => o.x);
 /* 核對 Zero 交回的 out/people.json：{ summary?, items[] }，項目是 newActor（沿 checkNewActorItem）或 actorKind { name, actorKind, role?, why }。
    texts：已確認概覽原文（欄值、項目 label／value、里程碑決策者）。回傳 { ok, errors, items, dropped[] }；errors 非空時由呼叫者退回修正一次（lenient 時只丟棄不合格項）。 */
-export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, founderNames = [], lenient = false } = {}) {
+// reasked：自訂答案已再問兩次（值為 2）的對象不再建議（新對象以名稱、改類別以 kind:編號:類別 為鍵）
+export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, founderNames = [], lenient = false, reasked = {} } = {}) {
   const errors = [], items = [], dropped = [], seen = new Set(), str = (v, n) => typeof v === 'string' && v.trim() && v.trim().length <= n;
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return { ok: false, errors: ['out/people.json 必須有 items 清單（沒有建議就寫空清單）'], items, dropped };
   const bad = (at, msg, name) => { if (lenient) dropped.push({ name, reason: msg }); else errors.push(at + '：' + msg); };
@@ -357,6 +358,7 @@ export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, f
     const at = `items 第 ${i + 1} 項`;
     if (!it || typeof it !== 'object') return bad(at, '格式不正確', '');
     if (it.kind === 'newActor') {
+      if (str(it.name, NAME_MAX) && (reasked[norm(it.name)] || 0) >= 2) return dropped.push({ name: String(it.name), reason: 'reasked' });
       const r = checkNewActorItem(it, { actors, texts, at, declined, declineLimit: 1, founderNames });
       if (r.status === 'drop') return dropped.push({ name: String(it.name || ''), reason: r.reason });
       if (r.status === 'error') return bad(at, r.errors[0].replace(/^[^：]*：/, ''), String(it.name || ''));
@@ -373,6 +375,7 @@ export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, f
       const role = str(it.role, ROLE_MAX) && !hasContactInfo(it.role) ? it.role.trim() : String(a.role || '').trim();
       if (it.actorKind === 'team' && !role) return bad(at, '改為團隊成員須有 role', it.name);
       if (declined['kind:' + a.id + ':' + it.actorKind]) return dropped.push({ name: it.name, reason: 'declined' });
+      if ((reasked['kind:' + a.id + ':' + it.actorKind] || 0) >= 2) return dropped.push({ name: it.name, reason: 'reasked' });
       const key = 'k:' + a.id; if (seen.has(key)) return; seen.add(key);
       return items.push({ kind: 'actorKind', id: a.id, name: a.name, from: kindOf(a), actorKind: it.actorKind, ...(it.actorKind === 'team' && !String(a.role || '').trim() ? { role } : {}), why: it.why.trim() });
     }

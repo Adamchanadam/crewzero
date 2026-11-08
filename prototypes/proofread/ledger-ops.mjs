@@ -2,6 +2,9 @@
 // 所以每一行都可以單獨測；run.mjs／server.mjs 只負責讀檔、呼叫、存檔。對照表見 docs/evidence/v0400-ui-2026-11-07/backend-state-table.md。
 // 規矩：不改傳入的 state（先複製）；同一事件做兩次，結果與做一次相同（冪等）；失敗或拒絕時回傳原樣（內容相同）。
 
+import { PACE_KEYS, SPRINT_MAX_DAYS, applyPaceOps, addDays as paceAddDays } from './pace-lib.mjs';
+import { cardById, pauseCard, resumeCard, rolesKey } from './roles-ops.mjs';
+
 const clone = x => (x === undefined ? x : JSON.parse(JSON.stringify(x)));
 const isDay = v => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ''));
@@ -209,4 +212,62 @@ export function annotateBrokenLinks(entries, results, field, text) {
 export function fullTextSuffix(entry, suffix) {
   if (!entry || !entry.url) return '';
   return entry.fullText === true ? '' : suffix;
+}
+
+/* ---------- 0.41.0 創辦人操作（節奏、暫停 Zero、崗位暫停／恢復、重新擬崗位）的伺服器核對 ----------
+   凍結表見 docs/evidence/zero-roles-2026-11-08/impl-contract.md 第 2 節。純函數：只收操作、帳本狀態、待套用操作及今日日期。
+   「已暫停才接受」之類的狀態核對，先把尚未合併的同類操作按次序重播到帳本上再判斷，所以同一批連按（暫停兩次、暫停後再暫停同一卡）不會重複接受。 */
+export const ROLES_OPS = { setPace: ['pace', 'sprintUntil'], pauseZero: [], resumeZero: [], rolePause: ['reason'], roleResume: [], rolesSync: [] };
+export const ROLES_OP_NAMES = Object.keys(ROLES_OPS);
+export function replayRolesOps(state, ops) {
+  let s = state || {};
+  for (const op of Array.isArray(ops) ? ops : []) {
+    if (!op || typeof op !== 'object' || !ROLES_OP_NAMES.includes(op.op)) continue;
+    const v = op.value && typeof op.value === 'object' ? op.value : {};
+    if (op.op === 'setPace' || op.op === 'pauseZero' || op.op === 'resumeZero') s = applyPaceOps(s, [op], {});
+    else if (op.op === 'rolePause') s = pauseCard(s, { teammateId: op.target, reason: v.reason || '', now: op.at || '' });
+    else if (op.op === 'roleResume') s = resumeCard(s, { teammateId: op.target, now: op.at || '' });
+    else s = { ...s, rolesSync: { ...(s.rolesSync || {}), requested: true } };
+  }
+  return s;
+}
+// 回 { ok: true, value }（value 是要存進隊列的整理後欄位）或 { ok: false }。rolesPackOpen：已有未答完的崗位確認題包（由伺服器讀題目包得出）
+export function checkRolesOp(op, target, value, state, { pending = [], today = '', rolesPackOpen = false } = {}) {
+  const bad = { ok: false };
+  if (!ROLES_OP_NAMES.includes(op) || typeof target !== 'string') return bad;
+  const v = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  if (Object.keys(v).some(k => !ROLES_OPS[op].includes(k))) return bad;
+  const eff = replayRolesOps(state, pending);
+  const paused = !!(eff.health && eff.health.pausedByFounder);
+  if (op === 'setPace') {
+    if (target !== 'company' || !PACE_KEYS.includes(v.pace)) return bad;
+    const until = v.sprintUntil == null || v.sprintUntil === '' ? '' : v.sprintUntil;
+    if (until) {
+      // 期限只屬於衝刺；不早於今日、不遲於今日＋14 日
+      if (v.pace !== 'sprint' || typeof until !== 'string' || !isDay(until) || !isDay(today) || until < today || until > paceAddDays(today, SPRINT_MAX_DAYS)) return bad;
+    }
+    return { ok: true, value: { pace: v.pace, ...(until ? { sprintUntil: until } : {}) } };
+  }
+  if (op === 'pauseZero') return target === 'company' && !paused ? { ok: true, value: {} } : bad;
+  if (op === 'resumeZero') return target === 'company' && paused ? { ok: true, value: {} } : bad;
+  if (op === 'rolesSync') {
+    const rs = eff.rolesSync || {};
+    // 概覽已確認（此版有擬崗位依據）、沒有未答的崗位題、未在擬崗位中（已要求、或還有排隊未出的卡）
+    if (target !== 'roles' || !rolesKey(eff) || eff.demo === true || rolesPackOpen || rs.requested || (Array.isArray(rs.pending) && rs.pending.length)) return bad;
+    return { ok: true, value: {} };
+  }
+  // rolePause／roleResume：target 是崗位卡編號，卡必須存在
+  const card = target ? cardById(eff, target) : null;
+  if (!card) return bad;
+  if (op === 'rolePause') {
+    if (!['planned', 'enabled'].includes(card.lifecycle || 'planned')) return bad;
+    let reason = '';
+    if (v.reason != null) {
+      if (typeof v.reason !== 'string') return bad;
+      reason = v.reason.trim();
+      if (reason.length > 80) return bad;
+    }
+    return { ok: true, value: reason ? { reason } : {} };
+  }
+  return card.lifecycle === 'paused' ? { ok: true, value: {} } : bad;
 }

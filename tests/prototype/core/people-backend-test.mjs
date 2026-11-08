@@ -97,7 +97,8 @@ try {
   s = state();
   const tgt = s.company.actors.find(a => a.id === target.id), oth = s.company.actors.find(a => a.id === other.id);
   ok('外殼合併：改名換了 name 並把舊名放入別名；不再接觸寫入狀態；合併設 mergedInto 並把名字併入保留者別名；全部對象仍在名單（永不刪除）', tgt && tgt.mergedInto === other.id && oth.status === 'inactive' && oth.aliases.includes('陳總監') && s.company.actors.length === s.company.actors.length && s.company.actors.some(a => a.id === target.id), { tgt, oth });
-  ok('改正的帳本事件標題帶名稱（改名、合併、不再接觸），不是「取消暫停」', (s.events || []).filter(e => e.type === 'founder-op').map(e => e.title).every(t => !/取消暫停/.test(t)) && (s.events || []).some(e => e.title === N.t('actorRenamed', { a: target.name, b: '陳總監' })) && (s.events || []).some(e => e.title === N.t('actorMerged', { a: target.name, b: other.name })) && (s.events || []).some(e => e.title === N.t('actorClosed', { n: other.name })), (s.events || []).filter(e => e.type === 'founder-op').map(e => e.title));
+  // 合併標題用套用該批之前的名字：改名與合併同一批套用時是舊名，外殼中途已先套用改名（分兩批）時是新名「陳總監」；兩者都正確，視乎外殼何時合併操作
+  ok('改正的帳本事件標題帶名稱（改名、合併、不再接觸），不是「取消暫停」', (s.events || []).filter(e => e.type === 'founder-op').map(e => e.title).every(t => !/取消暫停/.test(t)) && (s.events || []).some(e => e.title === N.t('actorRenamed', { a: target.name, b: '陳總監' })) && (s.events || []).some(e => [target.name, '陳總監'].some(a => e.title === N.t('actorMerged', { a, b: other.name }))) && (s.events || []).some(e => e.title === N.t('actorClosed', { n: other.name })), (s.events || []).filter(e => e.type === 'founder-op').map(e => e.title));
   // 已併走的對象不再被十四日題問
   s = state(); s.interviews.contactSnooze = {}; s.interviews.packFor = ''; put(s);
   for (const f of fs.readdirSync(path.join(DATA, 'asks'))) { const pk = JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')); if (pk.rhythm && pk.rhythm.kind === 'interview') fs.rmSync(path.join(DATA, 'asks', f), { force: true }); }

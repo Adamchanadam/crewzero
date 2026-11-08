@@ -52,7 +52,7 @@ try {
   const d0 = await A.get('/api/dashboard');
   ok('示範資料標明係示範', d0.sample === true && d0.company.name === '從田間到餐桌');
   ok('指引：AI 已設定、公司已確認 → 日常', d0.guide === 'daily', d0.guide);
-  ok('待決事項 6 項（採用轉強留在生意大腦），逾期排第一', d0.todo.length === 6 && d0.brainTodo.length >= 1 && d0.todo[0].state === 'overdue' && d0.todo[0].overdueDays === 2, d0.todo.map(t => t.type + ':' + t.overdueDays));
+  ok('待決事項 8 項（含 0.41.0 示範的崗位確認及啟用驗收兩包；採用轉強留在生意大腦），逾期排第一', d0.todo.length === 8 && d0.brainTodo.length >= 1 && d0.todo[0].state === 'overdue' && d0.todo[0].overdueDays === 2, d0.todo.map(t => t.type + ':' + t.overdueDays));
   ok('待決事項入口全部深連答題頁', d0.todo.every(t => /^\/#\/ask\/ask-demo-/.test(t.href)), d0.todo.map(t => t.href));
   ok('日程只列未來兩星期（加逾期）', d0.schedule.length >= 6 && d0.schedule.every(s => s.overdue || (new Date(s.date) - new Date(d0.today)) / 86400000 <= 14), d0.schedule.map(s => s.date));
   ok('日程有訪問、試行到期、目標日、決定期限、AI 開工', ['interview', 'trial', 'target', 'decision', 'ai'].every(k => d0.schedule.some(s => s.kind === k)), d0.schedule.map(s => s.kind));

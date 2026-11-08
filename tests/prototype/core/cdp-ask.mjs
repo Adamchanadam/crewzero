@@ -18,7 +18,8 @@ const DATA = path.join(OUT, 'data');
 process.env.SOS_DATA = DATA;
 fs.rmSync(DATA, { recursive: true, force: true });
 
-const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), ...(process.env.CDP_ASK_PORT ? ['--port', process.env.CDP_ASK_PORT] : [])], { cwd: PROTO, env: { ...process.env, SOS_ADAPTER: ADAPTER, SOS_DATA: DATA }, stdio: ['ignore', 'pipe', 'pipe'] });
+// 一定指定測試埠：沒有 --port 時伺服器會自行揀 438x，曾佔用創辦人的 4381（2026-11-08）
+const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', process.env.CDP_ASK_PORT || '5850'], { cwd: PROTO, env: { ...process.env, SOS_ADAPTER: ADAPTER, SOS_DATA: DATA }, stdio: ['ignore', 'pipe', 'pipe'] });
 let srvLog = ''; srv.stdout.on('data', d => { srvLog += d; }); srv.stderr.on('data', d => { srvLog += d; });
 let BASE = null;
 for (let i = 0; i < 40 && !BASE; i++) {
@@ -32,12 +33,12 @@ seedCompany(DATA, PROTO);
 await certify(BASE);
 
 // 命令入口：14 條 → 自動拆成 12＋2
-const cli = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), DEMO, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA } });
+const cli = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), DEMO, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA, SOS_PORT: process.env.CDP_ASK_PORT || '5850' } });
 ok('命令入口：14 條自動拆成兩包', /（1／2）（共 12 條/.test(cli.stdout) && /（2／2）（共 2 條/.test(cli.stdout), cli.stdout.trim());
 ok('命令入口：印出答題網址', /CrewZero：http/.test(cli.stdout));
 const bad = path.join(OUT, 'bad.json');
 fs.writeFileSync(bad, JSON.stringify({ format: 'startup-os.ask/0.1', title: '壞', questions: [{ id: 'x', ask: '？', kind: 'text', value: '', why: '' }] }));
-const cli2 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), bad, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA } });
+const cli2 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), bad, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA, SOS_PORT: process.env.CDP_ASK_PORT || '5850' } });
 ok('命令入口：唔合規格就退回並講原因', cli2.status === 1 && /不符合規格/.test(cli2.stdout) && /缺少 Zero 建議答案/.test(cli2.stdout), cli2.stdout.trim());
 
 const cport = 9371;
@@ -137,7 +138,7 @@ try {
   fs.writeFileSync(dup, JSON.stringify({ format: 'startup-os.ask/0.1', title: '重複測試', questions: [
     { id: 'a', ask: '先推廣哪類餐廳？', options: [{ text: '甲', rec: true }, { text: '乙' }], value: '甲', why: '測試' },
     { id: 'b', ask: '全新問題？', options: [{ text: '甲', rec: true }, { text: '乙' }], value: '甲', why: '測試' }] }));
-  const cli3 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), dup, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA } });
+  const cli3 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), dup, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA, SOS_PORT: process.env.CDP_ASK_PORT || '5850' } });
   ok('答過嘅題目自動拎走', /有 1 條題目先前已回答/.test(cli3.stdout) && /重複測試（共 1 條/.test(cli3.stdout), cli3.stdout.trim());
   // 手機
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
