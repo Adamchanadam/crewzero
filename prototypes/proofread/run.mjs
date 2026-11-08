@@ -16,7 +16,7 @@ import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches,
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkLinks } from './link-check.mjs';
 import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId, kindOf, founderNamesIn, checkPeopleSync, applyKindFix, peopleSyncDue, nextActorId, duplicateActor, mixSpace } from './people-ops.mjs';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, proofreadHash, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
+import { pad, localIso, stamp, readJSON, writeJSON, fnv, proofreadHash, proofreadHashMatches, isInboxNote, isInboxIntake, isInboxPrefill, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill, matchDelivered } from './prefill-lib.mjs';
@@ -1349,7 +1349,13 @@ function peopleSyncFail(run, key, label, due, reason) {
 }
 async function peopleSyncStep(run, due, key = 'people') {
   const label = U.brainJob_people;
-  if (due.due === 'batch') { const p = placePeopleSyncBatch(loadState()); if (p) { step(run, key, label, 'done', NAMES.t('peopleSyncDone', { n: p.count })); run.result = { summary: NAMES.t('peopleSyncDone', { n: p.count }), artifacts: [], founderNext: [], asks: [p] }; } return !!p; }
+  if (due.due === 'batch') {
+    const p = placePeopleSyncBatch(loadState());
+    if (p) { step(run, key, label, 'done', NAMES.t('peopleSyncDone', { n: p.count })); run.result = { summary: NAMES.t('peopleSyncDone', { n: p.count }), artifacts: [], founderNext: [], asks: [p] }; return true; }
+    // 擱置項目放出前全部失效（名字其間已在名單、已答不加入等）：名單沒有缺口，照「已核對」收尾，不是失敗
+    log(`${run.id} 整理名單：擱置項目已全部失效，名單沒有缺口`);
+    step(run, key, label, 'done', U.peopleSyncNone); run.result = { summary: U.peopleSyncNone, artifacts: [], founderNext: [] }; return true;
+  }
   const cert = certified(ROOT, DIR.ledger);
   if (pausedNow()) return peopleSyncFail(run, key, label, due, U.skip_pausedByFounder);
   if (!cert.host) return peopleSyncFail(run, key, label, due, cert.reason);
@@ -1400,6 +1406,16 @@ async function peopleSyncStep(run, due, key = 'people') {
   run.result = { summary: NAMES.t('peopleSyncDone', { n: placed.count }), artifacts: [], founderNext: [], asks: [placed] };
   return true;
 }
+// 自訂答案（答案不在選項內）：不算「不加入」／「維持」。同一項第一次：記下原話、放回擱置清單，下一批再問一次；第二次仍是自訂答案：記下原話，不再問。回傳要顯示的一句。
+function customAnswered(s, ps, key, item, name, words) {
+  ps.reasked = ps.reasked || {};
+  const w = clip(String(words == null ? '' : words).replace(/\s+/g, ' ').trim(), 40);
+  if (ps.reasked[key] || !item) { ps.reasked[key] = 2; return mixSpace(NAMES.t('peopleCustomClosed', { n: clip(name, 20), s: w })); }
+  ps.reasked[key] = 1;
+  ps.pending = Array.isArray(ps.pending) ? ps.pending : [];
+  if (!ps.pending.some(x => x && (item.kind === 'newActor' ? x.kind === 'newActor' && pnorm(x.name) === key : x.kind === 'actorKind' && ('kind:' + x.id + ':' + x.actorKind) === key))) ps.pending.push(item);
+  return mixSpace(NAMES.t('peopleCustomAsked', { n: clip(name, 20), s: w }));
+}
 // 你回答整理名單的題：加入名單／記為別名才寫；「不加入」記入 declined（之後不再建議同名）；改類別答「改為」才改；同一題不套用兩次；答齊而仍有擱置項目就放下一包
 function handlePeopleSyncAnswer(run, pack, store) {
   const s = loadState(); s.peopleSync = s.peopleSync || {}; const ps = s.peopleSync; ps.applied = ps.applied || {}; ps.declined = ps.declined || {};
@@ -1416,6 +1432,11 @@ function handlePeopleSyncAnswer(run, pack, store) {
       const sel = ap && ap.op === 'addActor' ? ap : null, it = { kind: 'newActor', ...na.apply.item };
       const before = JSON.stringify((s.company || {}).actors || []);
       mergeInPlace(s, applyNewActor(s, { inputId: pack.id, qid: q.id, item: it, answer: sel ? sel.mode : 'skip', aliasOf: sel && sel.aliasOf, today: todayIso(), now: localIso(), addedFrom: 'overview', t: tx }));
+      if (!sel && !opt) { // 自訂答案（不在選項內）不是拒絕：記下原話，這一項留待下一批再問（只問一次）
+        const sim = opts.find(o => o.apply && o.apply.op === 'addActor' && o.apply.mode === 'alias');
+        const t = customAnswered(s, ps, pnorm(it.name), { ...it, why: q.why, ...(sim ? { similarTo: sim.apply.aliasOf } : {}) }, it.name, a.value);
+        ev(t, [pack.id]); said.push(t); continue;
+      }
       if (!sel) { ps.declined[pnorm(it.name)] = (ps.declined[pnorm(it.name)] || 0) + 1; said.push(mixSpace(NAMES.t('peopleSkipped', { n: it.name }))); continue; }
       // 名字其間已在名單（答題前另一條路加入了）：純函數原樣返回，不寫「已加入名單」事件
       if (before === JSON.stringify((s.company || {}).actors || [])) { log(`${run.id} 整理名單：「${clip(it.name, 20)}」已在名單，沒有再加入`); continue; }
@@ -1429,6 +1450,10 @@ function handlePeopleSyncAnswer(run, pack, store) {
     if (ap && ap.op === 'fixKind') {
       const next = applyKindFix(s, ap);
       if (next !== s) { mergeInPlace(s, next); const t = mixSpace(NAMES.t('actorKinded', { n: clip(q.about, 20), k: tx.kind[ap.kind] })); ev(t, [pack.id]); said.push(t); }
+    } else if (!opt) { // 自訂答案：不算「維持」，記下原話，留待下一批再問一次
+      const act = ((s.company || {}).actors || []).find(x => x && x.id === kf.apply.id);
+      const t = customAnswered(s, ps, 'kind:' + kf.apply.id + ':' + kf.apply.kind, act ? { kind: 'actorKind', id: act.id, name: act.name, from: kindOf(act), actorKind: kf.apply.kind, ...(kf.apply.role ? { role: kf.apply.role } : {}), why: q.why } : null, q.about, a.value);
+      ev(t, [pack.id]); said.push(t);
     } else { ps.declined['kind:' + kf.apply.id + ':' + kf.apply.kind] = 1; said.push(NAMES.t('peopleKindKept', { n: clip(q.about, 20) })); }
   }
   ps.applied[pack.id] = [...done];
@@ -2121,7 +2146,7 @@ async function handleProofread(run, files) {
   else if (!parsed.ok) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (head.kind !== 'proofread' || !machine) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (head.ref !== page.page.id) why = '回覆與目前的公司概覽不相符';
-  else if (head.hash !== hash) why = '你確認時所見的版本已經更改，請重新開啟頁面再確認';
+  else if (!proofreadHashMatches(page, head.hash)) why = '你確認時所見的版本已經更改，請重新開啟頁面再確認';
   if (why) { archive(files); step(run, 'applied', U.stepApplyConfirm, 'failed', why); return finish(run, 'failed', why); }
   const values = {};
   for (const [id, e] of Object.entries(reg)) values[id] = String(e.value ?? '');
@@ -3526,9 +3551,9 @@ async function main() {
     applyObserve();
     if (process.argv.includes('--plain')) { await plainAll(); return; }
     const replies = fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')).sort();
-    const intakes = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort();
-    const prefills = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-prefill.md')).sort();
-    const notes = fs.readdirSync(DIR.inbox).filter(f => /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate)\.md$/.test(f) || /-feedback-[a-z]+\.md$/.test(f)).sort();
+    const intakes = fs.readdirSync(DIR.inbox).filter(isInboxIntake).sort();
+    const prefills = fs.readdirSync(DIR.inbox).filter(isInboxPrefill).sort();
+    const notes = fs.readdirSync(DIR.inbox).filter(isInboxNote).sort();
     const retry = readJSON(RETRY, null);
     // 辯論回合排最後：創辦人嘅回覆同要求先處理
     const debates = pendingMatches(DIR);

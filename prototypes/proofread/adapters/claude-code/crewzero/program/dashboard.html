@@ -1432,6 +1432,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   /* 運作環資料：會話（宿主短名＋序號、標題、狀態、子代理、對應任務）、任務欄（≤ 8）、三個膠囊、並發數與等級 */
   var HOSTN = { claude: D.host_claude, codex: D.host_codex };
   function W() { return V.data.work || { observe: { state: 'unavailable', text: D.observeNone }, sessions: [], inbox: { processing: false }, tasks: [], events: [], meta: { workingSessions: 0, activeSubagents: 0, processingCount: 0, concurrency: 0, workLevel: 0 } }; }
+  function taskTitleOf(id) { var all = V.data.tasks || []; for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i].title || ''; return ''; }
   function taskNo(id) { var all = V.data.tasks || []; for (var i = 0; i < all.length; i++) if (all[i].id === id) return i + 1; return null; }
   function orbitSessions() {
     var w = W(), cnt = {}, ini = (V.data.company.initials || 'Z').slice(0, 2), live = V.conn === 'live';
@@ -1477,7 +1478,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       updatedAt: fresh && fresh.ledgerAt ? when(fresh.ledgerAt) : '—' };
   }
   function sessionDetail(z) {
-    var tasks = z.taskIds.length ? z.taskIds.map(function (id) { var t = (V.data.tasks || []).filter(function (k) { return k.id === id; })[0]; return D.tasksL + ' ' + (taskNo(id) || '') + (t ? ' · ' + t.title : ''); }).join('；') : D.notRegistered + (z.state === 'working' && !z.isRun ? '：' + D.unlinkedHint : '');
+    var tasks = z.taskIds.length ? z.taskIds.map(function (id) { var t = (V.data.tasks || []).filter(function (k) { return k.id === id; })[0]; return t ? t.title : D.tasksL; }).join('；') : D.notRegistered + (z.state === 'working' && !z.isRun ? '：' + D.unlinkedHint : '');
     modal(z.name + (z.title ? '：' + z.title : ''), h('dl', { class: 'kv' },
       h('dt', null, D.nameL), h('dd', null, z.title || D.noName),
       h('dt', null, D.latestReqL), h('dd', null, z.latestRequest || D.noReq),
@@ -1488,7 +1489,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   }
   function taskDetail(id) {
     var t = (V.data.tasks || []).filter(function (k) { return k.id === id; })[0]; if (!t) return;
-    modal(D.tasksL + ' ' + (taskNo(id) || '') + ' · ' + t.title, h('dl', { class: 'kv' },
+    modal(t.title, h('dl', { class: 'kv' },
       h('dt', null, D.stateL), h('dd', null, D['col_' + t.column] || t.column),
       h('dt', null, D.msL), h('dd', null, t.milestone || '—'),
       h('dt', null, D.ownerL), h('dd', null, t.teammate || D.hostShell),
@@ -1501,8 +1502,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return [h('li', { class: 'hub clay' }, clayImg(od.counts.pending > 0 && od.connected !== false ? 'door' : 'door-empty'), h('div', null, h('b', null, D.humanCore), h('span', null, d('pendingGlobal', { n: od.counts.pending })))),
       h('li', { class: 'hub clay', 'data-state': w.workingSessions ? 'working' : 'idle' }, pose ? clayImg('lead-' + pose) : h('span', { class: 'o-head' }), h('div', null, h('b', null, D.aiCore), h('span', null, w.workingSessions ? d('workingNow', { n: w.workingSessions, m: w.activeSubagents }) : D.noWorkPlain))),
       [[D.mPending, od.counts.pending, '/'], [D.awaiting, od.counts.awaiting, '/dashboard/inputs'], [D.inbox + ' ' + D.unprocessed, od.counts.inbox, '/dashboard/inputs']].map(function (n) { return h('li', { class: 'nd' }, h('i'), h('a', { href: n[2] }, n[0] + ' ' + n[1])); }),
-      od.sessions.map(function (z) { return h('li', { class: z.state === 'working' ? 'w' : '', 'data-state': z.state, tabindex: '0', role: 'button', onclick: function () { sessionDetail(z); }, onkeydown: function (e) { if (e.key === 'Enter') sessionDetail(z); } }, h('i'), clayImg(z.brainItem ? 'member-' + z.brainItem : 'member', 'o-lmem'), h('span', null, z.name + ' · ' + (D['act_' + z.state] || z.state) + (z.sub ? ' · ' + D.subagentsL + ' ' + z.sub : ''), h('small', null, z.title || D.noName)), h('em', null, z.state === 'working' ? (z.taskIds.length ? '→ ' + D.tasksL + ' ' + (taskNo(z.taskIds[0]) || '') : z.isRun ? '' : '→ ' + D.unlinkedWork) : '')); }),
-      od.tasks.map(function (t) { return h('li', { class: 'tk' }, h('i'), h('span', null, D.tasksL + ' ' + (t.no || '') + ' · ' + t.title), h('em', null, D['ms_' + t.status] || '')); })];
+      od.sessions.map(function (z) { return h('li', { class: z.state === 'working' ? 'w' : '', 'data-state': z.state, tabindex: '0', role: 'button', onclick: function () { sessionDetail(z); }, onkeydown: function (e) { if (e.key === 'Enter') sessionDetail(z); } }, h('i'), clayImg(z.brainItem ? 'member-' + z.brainItem : 'member', 'o-lmem'), h('span', null, z.name + ' · ' + (D['act_' + z.state] || z.state) + (z.sub ? ' · ' + D.subagentsL + ' ' + z.sub : ''), h('small', null, z.title || D.noName)), h('em', null, z.state === 'working' ? (z.taskIds.length ? '→ ' + (taskTitleOf(z.taskIds[0]) || D.tasksL) : z.isRun ? '' : '→ ' + D.unlinkedWork) : '')); }),
+      od.tasks.map(function (t) { return h('li', { class: 'tk' }, h('i'), h('span', null, t.title), h('em', null, D['ms_' + t.status] || '')); })];
   }
   function orbitHead(od) {
     return [h('div', null, h('h2', null, D.workNet)),
@@ -1540,7 +1541,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function evRow(e, fresh) {
     var who = e.observed ? 'observe' : e.actor === 'you' ? 'you' : e.actor === 'shell' ? 'team' : 'ai', no = e.taskId ? taskNo(e.taskId) : null;
     return h('li', { class: 'ev' + (fresh ? ' fresh' : '') + (e.observed ? ' obs' : ''), 'data-key': evKey(e) }, h('time', { class: 'at' }, evTime(e.at)), h('span', { class: 'who ' + who }, WHO[who]),
-      h('span', { class: 'tt' }, e.title, e.observed ? tag(D.eventObserved) : null, no ? h('span', { class: 'tk', role: 'button', tabindex: '0', onclick: function () { taskDetail(e.taskId); }, onkeydown: function (k) { if (k.key === 'Enter') taskDetail(e.taskId); } }, D.tasksL + ' ' + no) : null));
+      h('span', { class: 'tt' }, e.title, e.observed ? tag(D.eventObserved) : null, no ? h('span', { class: 'tk', role: 'button', tabindex: '0', onclick: function () { taskDetail(e.taskId); }, onkeydown: function (k) { if (k.key === 'Enter') taskDetail(e.taskId); } }, D.tasksL) : null));
   }
   function syncEvents() {
     var w = W(), keys = w.events.map(evKey), seen = V.evSeen, box = $('#evbody'); V.evSeen = keys;

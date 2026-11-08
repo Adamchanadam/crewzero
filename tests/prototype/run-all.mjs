@@ -91,6 +91,7 @@ const TESTS = [
   ['Zero 整理名單', 'core/people-sync-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['公司概覽確認後狀態', 'core/overview-state-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['後台收件與回饋', 'core/inputs-v040-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['0.40.2 十項修正', 'core/fixes-0402-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['與 Zero 討論指令', 'core/tell-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['Office 轉文字', 'core/office-text-test.mjs', []],
   ['Google 連結取回', 'core/link-fetch-test.mjs', []],

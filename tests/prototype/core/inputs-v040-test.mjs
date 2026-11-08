@@ -248,7 +248,7 @@ try {
   { const pg0 = JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8')), conf0 = JSON.parse(fs.readFileSync(path.join(DATA, 'ledger', 'confirmed.json'), 'utf8'));
     const NL = String.fromCharCode(10), loadHash = lib.proofreadHash(pg0);
     ok('A1 沒有連結欄的舊頁面：新雜湊與 0.39.1 的算法（整頁 JSON）結果相同', loadHash === lib.fnv(JSON.stringify(pg0)), [loadHash, lib.fnv(JSON.stringify(pg0))]);
-    const fixR = await A.post('/api/source-url', { n: 0, url: 'https://example.org/policy' });
+    const fixR = await A.post('/api/source-url', { n: 0, title: pg0.sources[0].title, url: 'https://example.org/policy' });
     const pg1 = JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8'));
     ok('A1 更正連結：page.json 的來源有連結及更正日期', fixR.code < 300 && pg1.sources[0].url === 'https://example.org/policy' && !!pg1.sources[0].fixedOn, fixR);
     ok('A1 更正前後雜湊相同（載入時算的雜湊仍然有效）；整頁 JSON 的雜湊則不同', lib.proofreadHash(pg1) === loadHash && lib.fnv(JSON.stringify(pg1)) !== loadHash);

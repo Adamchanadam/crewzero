@@ -75,6 +75,17 @@ export function proofreadHash(page) {
   const view = page && Array.isArray(page.sources) ? { ...page, sources: page.sources.map(s => { if (!s || typeof s !== 'object') return s; const { url, urlBefore, fixedOn, ...rest } = s; return rest; }) } : page;
   return fnv(JSON.stringify(view));
 }
+// 收件匣檔案分類（唯一定義處）：附件存檔名是「<編號>-note-<類型>-file-NN-<原名>」「<編號>-intake-NN-<原名>」「<編號>-prefill-NN-<原名>」，原名可以是任何字（例如以 -note-event.md、-intake.md 結尾），
+// 所以「看結尾認筆記」不可靠：先排除附件（舊檔同樣適用，不用改檔名），餘下才按筆記命名規則認。
+const NOTE_TYPES_RE = 'order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate';
+export const isInboxAttachment = f => /-note-(?:order|adhoc|event|doc)-file-\d+-/.test(String(f)) || /-(?:intake|prefill)-\d+-/.test(String(f));
+export const isInboxNote = f => !isInboxAttachment(f) && (new RegExp('-note-(?:' + NOTE_TYPES_RE + ')\\.md$').test(String(f)) || /-feedback-[a-z]+\.md$/.test(String(f)));
+export const isInboxNoteOf = (f, type) => !isInboxAttachment(f) && String(f).endsWith('-note-' + type + '.md');
+export const isInboxIntake = f => !isInboxAttachment(f) && String(f).endsWith('-intake.md');
+export const isInboxPrefill = f => !isInboxAttachment(f) && String(f).endsWith('-prefill.md');
+// 0.39.1 及以前的算法（整頁不略去任何欄）：升級前已載入的校對頁帶回這個值。只供「確認流程的版本比對」兼收，不用於新頁面。
+export function proofreadHashLegacy(page) { return fnv(JSON.stringify(page)); }
+export function proofreadHashMatches(page, hash) { return typeof hash === 'string' && (hash === proofreadHash(page) || hash === proofreadHashLegacy(page)); }
 
 // 公司概覽「最近一次確認內容」的摘要值（唯一定義處之一；proofread.html 的 digestOf() 用同一算法）：
 // 以 { 全部欄位 id 排序後的 [id, 值]、路線次序、各站真事／工作 } 串起後取 fnv。
@@ -150,7 +161,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.40.1';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.40.2';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

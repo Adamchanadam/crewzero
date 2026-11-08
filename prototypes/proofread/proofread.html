@@ -1582,7 +1582,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
       var inp = h('input', { class: 'in', type: 'url', maxlength: '300', value: s.url || '', placeholder: N.ui.srcUrlPlaceholder, 'aria-label': N.ui.srcUrlLabel, id: 'src-url-' + n }), msg = h('p', { class: 'small muted', 'aria-live': 'polite' });
       var save = h('button', { type: 'button', class: 'btn primary', 'data-save-link': String(n), onclick: function () {
         save.disabled = true; msg.textContent = N.ui.sending;
-        fetch('/api/source-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n: n, url: inp.value.trim() }) })
+        fetch('/api/source-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n: n, title: s.title, url: inp.value.trim() }) })
           .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j && j.message && /[一-鿿]/.test(j.message) ? j.message : N.ui.srcUrlBad); return j; }); })
           .then(function (j) { s.url = j.url; s.fixedOn = j.fixedOn; draw(); toast(j.message || N.ui.srcUrlSaved); })
           .catch(function (e) { save.disabled = false; msg.textContent = /[一-鿿]/.test(e.message) ? e.message : N.ui.srcUrlBad; });

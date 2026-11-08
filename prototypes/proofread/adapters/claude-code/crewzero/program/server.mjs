@@ -18,7 +18,7 @@ import { parseGoogleLink } from './link-fetch.mjs';
 import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
+import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
@@ -464,7 +464,7 @@ function simSetAI(mode) {
   hostCache = null;
   return [200, { ok: true, ai: mode, ready: fs.existsSync(CERT_FILE) }];
 }
-const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md') || f.endsWith('-prefill.md') || /-note-(?:order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate)\.md$/.test(f))].sort();
+const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => isInboxIntake(f) || isInboxPrefill(f) || isInboxNote(f))].sort();
 const EXTS = ['md', 'txt', 'csv', 'pdf', 'docx', 'pptx', 'xlsx', 'png', 'jpg', 'jpeg'];
 const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
 const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -716,7 +716,7 @@ async function rereadInput(body) {
 
 /* ---------- 情景演練：AI 扮對方（原型試行：伺服器開已認證嘅 AI 工具，冇工具、冇寫檔權） ---------- */
 function chatHost() { const c = certified(ROOT, DIR.ledger); return c.host && c.host.chat ? c.host : null; }
-function preparingPractice() { return fs.readdirSync(DIR.inbox).filter(f => /-note-practice-prep\.md$/.test(f)).length + (readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }).runs.some(r => r.kind === 'note' && r.noteType === 'practice-prep' && r.state === 'running') ? 1 : 0); }
+function preparingPractice() { return fs.readdirSync(DIR.inbox).filter(f => isInboxNoteOf(f, 'practice-prep')).length + (readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }).runs.some(r => r.kind === 'note' && r.noteType === 'practice-prep' && r.state === 'running') ? 1 : 0); }
 const busySessions = new Set();
 async function practiceAction(body) {
   const host = chatHost();
@@ -820,7 +820,7 @@ function helpInFlight(status = readJSON(path.join(DIR.ledger, 'status.json'), { 
     const runRef = /^[\w-]{1,80}$/.test(String(ref || '')) ? String(ref) : '';
     if ((pack || runRef) && !found.some(x => x.packId === pack && x.ref === runRef)) found.push({ packId: pack, ref: runRef, noteId: String(noteId || '') });
   };
-  for (const file of fs.readdirSync(DIR.inbox).filter(f => /-note-help\.md$/.test(f))) {
+  for (const file of fs.readdirSync(DIR.inbox).filter(f => isInboxNoteOf(f, 'help'))) {
     try {
       const parsed = parseFounderReply(fs.readFileSync(path.join(DIR.inbox, file), 'utf8'));
       const context = (parsed.machine || {}).context || {};
@@ -857,7 +857,7 @@ function statusPayload() {
   const lastOverviewRun = lastOverview && !runs.some(r => r && r.id === lastOverview.id) ? (({ result, ...rest }) => rest)(lastOverview) : null;
   return {
     ok: true, version: SERVER_VERSION, root: ROOT_ID, sim: simInfo(), sample: (readJSON(path.join(DIR.ledger, 'state.json'), null) || {}).demo === true, today: localIso().slice(0, 10), instance: INSTANCE, pid: process.pid, celebrations: (() => { const { entries, seen } = celebrationState(); return entries.filter(e => !seen.has(e.id)).slice(-5).reverse(); })(), ai: (() => { const c = certInfo(); return { name: c ? c.label : 'AI 工具', ready: !!c }; })(), busy: !!child,
-    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, lastOverviewRun, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: { ...companyStatus(), confirmedSnapshot: confirmedSnapshotNow() }, helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(f => f.endsWith('-intake.md')).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
+    cert: certInfo(), aiStale: certStale(), certify: (() => { const c = certifyState(); return c ? { state: c.state } : null; })(), pending: pendingFiles(), runs, lastOverviewRun, work, openAsks: todo.filter(t => t.kind === 'ask').length, company: { ...companyStatus(), confirmedSnapshot: confirmedSnapshotNow() }, helpInFlight: helpInFlight(st), intake: (() => { const r = st.runs.find(r => r.kind === 'intake'); const f = fs.readdirSync(DIR.inbox).filter(isInboxIntake).sort().at(-1); if (f && (!r || f.slice(0, -10) > r.ref)) return { id: f.slice(0, -10), state: 'pending', runId: null }; return r ? { id: r.ref, state: r.state, runId: r.id } : null; })()
   };
 }
 // 公司標誌（創辦人喺頁頭自己上載）：只收 PNG、JPG、WebP，1MB 以內，按檔頭認格式（唔信檔名或者頁面講嘅類型；SVG 一律唔收）。
@@ -942,6 +942,9 @@ function fixSourceUrl(body) {
   if (!page || !Array.isArray(page.sources)) return bad;
   const n = body && body.n, raw = body && typeof body.url === 'string' ? body.url.trim() : '';
   if (!Number.isInteger(n) || n < 0 || n >= page.sources.length || !raw || raw.length > 300) return bad;
+  // 版本核對：請求必須帶該項來源的標題，與目前頁面第 n 項相符才寫（兩部瀏覽器、或頁面已重擬時序號可能對應另一項）；不符或沒有帶一律不寫
+  const cur = page.sources[n];
+  if (typeof (body && body.title) !== 'string' || !cur || typeof cur !== 'object' || String(cur.title == null ? '' : cur.title) !== body.title) return { ok: false, error: 'stale', message: NAMES.ui.srcUrlStale };
   let u; try { u = new URL(raw); } catch { return bad; }
   const host = u.hostname.toLowerCase();
   // 只收 https 公開網址：不收帳密、本機名稱、私人網段、IPv6 位址
@@ -1381,7 +1384,7 @@ const handler = async (req, res) => {
         if (p === '/api/debate/match') { const v = all.find(x => x.id === url.searchParams.get('id')); return v ? send(res, 200, { ok: true, match: { ...v, matches: all.map(summaryOf) } }) : send(res, 404, { error: 'not found' }); }
         const st = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
         const routes = [...new Map(all.filter(v => v.synthesis).flatMap(v => v.synthesis.routes).map(r => [r.id, { id: r.id, name: r.name }])).values()];
-        const starting = fs.readdirSync(DIR.inbox).filter(f => /-note-debate-start\.md$/.test(f)).length;
+        const starting = fs.readdirSync(DIR.inbox).filter(f => isInboxNoteOf(f, 'debate-start')).length;
         return send(res, 200, { ok: true, types: TOPIC_TYPES.map(t => ({ id: t, seats: SEATS[t], format: formatFor(t), passes: passesFor(formatFor(t)).length })), levels: LEVELS,
           matches: all.map(summaryOf), suggestedSeat: [...all].reverse().find(m => m.suggestedSeat)?.suggestedSeat || null, routes, milestones: (st.milestones || []).filter(m => m.pathStatus === 'confirmed').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short || m.title })),
           ai: !!certified(ROOT, DIR.ledger).host, company: companyStatus(), starting });
@@ -1402,7 +1405,7 @@ const handler = async (req, res) => {
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       if (p === '/api/celebrations/seen') return send(res, ...claimCelebration(body.id));
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
-      if (p === '/api/source-url') { if (phone) return send(res, 403, { error: 'local' }); const result = fixSourceUrl(body); return send(res, result.ok ? 200 : 400, result); }
+      if (p === '/api/source-url') { if (phone) return send(res, 403, { error: 'local' }); const result = fixSourceUrl(body); return send(res, result.ok ? 200 : result.error === 'stale' ? 409 : 400, result); }
       if (p === '/api/founder-op') { const result = founderOp(body); return send(res, result.ok ? 202 : result.error === 'busy' ? 409 : 400, result); }
       if (p === '/api/input-reread') return send(res, ...await rereadInput(body));
       if (p === '/api/practice') return send(res, ...await practiceAction(body));

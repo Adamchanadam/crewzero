@@ -7,7 +7,7 @@
 // 規則：演練同紅隊結果唔算證據；只有真實客戶行為先令證據升級（頁面分開標示）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { readJSON, NAMES } from './ask-lib.mjs';
+import { readJSON, NAMES, isInboxNote } from './ask-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
 import { listMatches, summaryOf, matchIds } from './debate-lib.mjs';
 import { readDisplay, deCode, deCodeJSON, folderAssumptions } from './plain-lib.mjs';
@@ -345,7 +345,7 @@ export function counterpartsOf(DIR, opts = {}) {
 /* ---------- 結果卡意見：收件匣入面未處理嘅都計（外殼忙緊都見到已送出）；要改嘅跟住 AI 修改工作嘅狀態；附卡名同項目名（「你的回饋」列表用） ---------- */
 function feedbackOf(DIR, items, runs) {
   const feedback = readJSON(path.join(DIR.ledger, 'brain-feedback.json'), {}) || {};
-  for (const f of fs.existsSync(DIR.inbox) ? fs.readdirSync(DIR.inbox).filter(f => /-note-feedback\.md$|-feedback-[a-z]+\.md$/.test(f)).sort() : []) {
+  for (const f of fs.existsSync(DIR.inbox) ? fs.readdirSync(DIR.inbox).filter(f => isInboxNote(f) && /-note-feedback\.md$|-feedback-[a-z]+\.md$/.test(f)).sort() : []) {
     const raw = readText(path.join(DIR.inbox, f)) || '', j = /```json\s*([\s\S]*?)```/.exec(raw), at = (/^at: (.*)$/m.exec(raw) || [])[1] || '';
     let m = null; try { m = j && JSON.parse(j[1]); } catch { }
     if (m && m.cardId && !(feedback[m.cardId] && String(feedback[m.cardId].at) >= at)) feedback[m.cardId] = { item: m.item, verdict: m.verdict, text: m.text || '', at, pending: true };

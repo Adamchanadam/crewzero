@@ -56,12 +56,12 @@
   function ghost(o) { var to = S.pLead || S.pAI; if (!to) return; var g = clay('member', 'o-ghost'); g.style.transform = 'translate(' + o.x.toFixed(1) + 'px,' + o.y.toFixed(1) + 'px)'; S.stage.append(g); requestAnimationFrame(function () { requestAnimationFrame(function () { g.style.transform = 'translate(' + to.x.toFixed(1) + 'px,' + to.y.toFixed(1) + 'px) scale(.35)'; g.style.opacity = '0'; }); }); setTimeout(function () { g.remove(); }, 450); }
   function hostCode(s) { return s.hostShort || (s.host ? String(s.host).slice(0, 2).toUpperCase() : 'AI 工具'); }
   function stateName(st) { var n = S.n; return n['act_' + (st === 'stopped' ? 'blocked' : st)] || n['act_' + st] || st; }
-  // 任務編號：畫面寫「任務 n」（n 由頁面按看板次序給，唔寫內部代號）
-  function taskLabel(id) { var n = S.n, no = S.taskNo && S.taskNo[id]; return (n.tasksL || '任務') + ' ' + (no != null ? no : String(id).replace(/^t/, '')); }
+  // 工作的顯示名：寫工作標題（創辦人看得到的文字不出現編號）；查不到標題才寫「任務」二字，不寫編號
+  function taskLabel(id) { var n = S.n, tt = S.taskTitle && S.taskTitle[id]; return tt ? clip(tt, 14) : (n.tasksL || '任務'); }
 
   function build() {
     var old = S.nodes || [], firstBuild = !S.built, d = S.data, n = S.n, st = S.stage; st.textContent = ''; S.nodes = []; S.tasks = []; S.chips = [];
-    S.taskNo = {}; (d.tasks || []).forEach(function (t) { if (t.no != null) S.taskNo[t.id] = t.no; });
+    S.taskTitle = {}; (d.tasks || []).forEach(function (t) { if (t.title) S.taskTitle[t.id] = String(t.title); });
     var lv = (d.meta && d.meta.workLevel) || 0, work = lv > 0;
     S.root.dataset.level = String(lv); S.root.classList.toggle('has-work', work); S.root.classList.toggle('is-sim', !!d.sim); S.root.classList.toggle('offline', d.connected === false);
     S.root.dataset.name = n.orbit || '運作環';
@@ -124,9 +124,9 @@
     var working = {}; S.nodes.forEach(function (x) { if (x.working) x.taskIds.forEach(function (id) { working[id] = true; }); });
     tasks.forEach(function (t) {
       var c = el('button', 'o-task ' + (t.status || 'active') + (working[t.id] ? ' target' : '')); c.type = 'button'; c.dataset.node = 'task:' + t.id; c.dataset.state = t.status || '';
-      var k = el('span', 'k'); k.append(el('span', null, taskLabel(t.id)), el('span', null, n['ms_' + (t.status || 'active')] || n['act_' + t.status] || '')); c.append(k);
+      var k = el('span', 'k'); k.append(el('span', null, n.tasksL || '任務'), el('span', null, n['ms_' + (t.status || 'active')] || n['act_' + t.status] || '')); c.append(k);
       c.append(el('span', 'tt', t.title)); if (t.ms) c.append(el('small', null, t.ms));
-      c.title = taskLabel(t.id) + ' · ' + t.title; c.addEventListener('click', function () { if (d.onTask) d.onTask(t); });
+      c.title = t.title; c.addEventListener('click', function () { if (d.onTask) d.onTask(t); });
       st.append(c); S.tasks.push({ el: c, id: t.id, kind: 'task' });
     });
     if (tmore > 0) { var tm = el('button', 'o-task more'); tm.type = 'button'; tm.append(el('span', 'tt', '＋' + tmore + ' ' + (n.moreTasks || '項更多'))); tm.addEventListener('click', function () { if (d.onTask) d.onTask(null); }); st.append(tm); S.tasks.push({ el: tm, id: 'more', kind: 'more' }); }
@@ -148,7 +148,7 @@
     // 底部狀態行
     var foot = el('div', 'o-foot'); var route = el('span', 'route', 'view / ' + (n.orbit || '運作環')); route.append(el('i', 'cursor')); foot.append(route);
     var ws = S.nodes.filter(function (x) { return x.working; }), first = ws.map(function (x) { return x.taskIds[0]; }).filter(Boolean)[0], ft = first ? ((d.tasks || []).filter(function (t) { return t.id === first; })[0] || {}).title || '' : '';
-    foot.append(el('span', 'focus', d.connected === false ? (n.offlineFocus || '連線中斷 · 保留最後紀錄') : lv ? (n.act_working || '工作中') + ' · ' + (first ? taskLabel(first) + ' ' + ft : ws.length + ' ' + (n.unlinkedFocus || '個 AI 對話在做未登記的工作')) : (n.idleFocus || '目前沒有 Zero 在工作')));
+    foot.append(el('span', 'focus', d.connected === false ? (n.offlineFocus || '連線中斷 · 保留最後紀錄') : lv ? (n.act_working || '工作中') + ' · ' + (first ? (ft || taskLabel(first)) : ws.length + ' ' + (n.unlinkedFocus || '個 AI 對話在做未登記的工作')) : (n.idleFocus || '目前沒有 Zero 在工作')));
     var hb = el('span', 'hb'); hb.setAttribute('data-hb', '1'); hb.textContent = '讀回 0 秒前'; var lp = el('span', 'lp'); var l1 = el('b', null, '0'); l1.setAttribute('data-lit', '1'); var l2 = el('b', null, '0'); l2.setAttribute('data-pt', '1'); lp.append(document.createTextNode((n.litL || '工作連結') + ' '), l1, document.createTextNode(' · ' + (n.particlesL || '工作提示') + ' '), l2); foot.append(hb, lp, el('span', 'r', (n.taskUpdated || '任務更新') + ' ' + (d.updatedAt || '—')));
     st.append(foot); S.foot = foot;
   }

@@ -178,6 +178,42 @@ try {
   s = state(); s.peopleSync.pending = [{ kind: 'newActor', name: '陳小明', role: '送貨', actorKind: 'team', teamType: 'parttime', why: '測試：已在名單' }, { kind: 'newActor', name: '王伯', role: '顧問', actorKind: 'advisor', why: '測試：已拒絕' }, { kind: 'actorKind', id: 'pr-a1', name: '甲餐廳陳經理', from: 'customer', actorKind: 'advisor', why: '測試：已答維持' }, { kind: 'newActor', name: '擱置己', role: '測試', actorKind: 'advisor', why: '測試：仍要問' }]; s.peopleSync.packId = ''; s.peopleSync.requested = false; put(s);
   shell();
   { const pk = syncPacks().find(p => p.id === state().peopleSync.packId); ok('P7 放出擱置題時重新核對：已在名單、已拒絕、已答維持的不再問，只剩一題', pk && pk.questions.length === 1 && /擱置己/.test(pk.questions[0].ask) && state().peopleSync.pending.length === 0, pk && pk.questions.map(q => q.ask)); if (pk) await answer(pk, q => N.ui.newActorNo); }
+  /* 0.40.2 修正 8：自訂答案（答案不在選項內）不是「不加入」：記下原話，這一項下一批再問一次（只問一次） */
+  s = state(); s.peopleSync.pending = [{ kind: 'newActor', name: '自訂甲', role: '測試', actorKind: 'advisor', why: '測試：自訂答案' }]; s.peopleSync.packId = ''; s.peopleSync.requested = false; put(s);
+  shell();
+  const pkC = syncPacks().find(p => p.id === state().peopleSync.packId);
+  ok('8 前提：放出一題「自訂甲」', pkC && pkC.questions.length === 1 && /自訂甲/.test(pkC.questions[0].ask), pkC && pkC.questions.map(q => q.ask));
+  const words = '先不決定，等下個月見過他再說';
+  await answer(pkC, q => words);
+  s = state();
+  const pkC2 = syncPacks().find(p => p.id === s.peopleSync.packId);
+  ok('8 自訂答案不算拒絕：沒有記入 declined，也沒有加入名單', !s.peopleSync.declined[P.norm('自訂甲')] && !s.company.actors.some(a => a.name === '自訂甲'), s.peopleSync.declined);
+  ok('8 記下創辦人原話（事件）', (s.events || []).some(e => e.title.includes('自訂甲') && e.title.includes(words)), (s.events || []).slice(-3).map(e => e.title));
+  ok('8 這一項留待下一批再問一次：新一包仍是「自訂甲」，reasked 記為 1', pkC2 && pkC2.id !== pkC.id && /自訂甲/.test(pkC2.questions[0].ask) && s.peopleSync.reasked && s.peopleSync.reasked[P.norm('自訂甲')] === 1, { reasked: s.peopleSync.reasked, pk: pkC2 && pkC2.id });
+  const nSyncPacks = syncPacks().length;
+  await answer(pkC2, q => '還是再想想');
+  s = state();
+  ok('8 第二次仍用自訂答案：不再問（沒有新包、擱置清空）、仍不算拒絕、再記下原話', syncPacks().length === nSyncPacks && s.peopleSync.pending.length === 0 && !s.peopleSync.packId && !s.peopleSync.declined[P.norm('自訂甲')] && s.peopleSync.reasked[P.norm('自訂甲')] === 2 && (s.events || []).some(e => e.title.includes('還是再想想')), { packs: syncPacks().length, pending: s.peopleSync.pending, reasked: s.peopleSync.reasked });
+  ok('8 自訂答案的事件句不含內部編號及短日期', !styleHits((s.events || []).filter(e => e.title.includes('自訂甲')).map(e => e.title)).length);
+  // 改類別題：自訂答案不算「維持」，下一批再問；之後選「改為」照常套用
+  s = state(); s.peopleSync.pending = [{ kind: 'actorKind', id: 'pr-a2', name: '丙農場主', from: 'partner', actorKind: 'advisor', why: '測試：改類別自訂答案' }]; s.peopleSync.packId = ''; put(s);
+  shell();
+  const pkK = syncPacks().find(p => p.id === state().peopleSync.packId);
+  await answer(pkK, q => '要先問過農場主本人');
+  s = state();
+  const pkK2 = syncPacks().find(p => p.id === s.peopleSync.packId);
+  ok('8 改類別題的自訂答案：不記入 declined（不算維持）、類別沒變、下一批再問一次', !s.peopleSync.declined['kind:pr-a2:advisor'] && s.company.actors.find(a => a.id === 'pr-a2').kind === 'partner' && pkK2 && pkK2.id !== pkK.id && /丙農場主/.test(pkK2.questions[0].ask), { declined: s.peopleSync.declined, pk: pkK2 && pkK2.id });
+  if (pkK2) await answer(pkK2, q => q.options[0].text);
+  ok('8 再問時選「改為」：照常套用（丙農場主改為顧問或協助者）', state().company.actors.find(a => a.id === 'pr-a2').kind === 'advisor');
+  /* 0.40.2 修正 9：擱置項目放出時全部失效（名單沒有缺口）→ 收尾「已核對」，不記失敗 */
+  s = state(); s.peopleSync.pending = [{ kind: 'newActor', name: '陳小明', role: '送貨', actorKind: 'team', teamType: 'parttime', why: '測試：已在名單' }, { kind: 'newActor', name: '王伯', role: '顧問', actorKind: 'advisor', why: '測試：已拒絕' }]; s.peopleSync.packId = ''; s.peopleSync.requested = false; put(s);
+  const runIds9 = new Set(((await get('/api/status')).runs || []).map(r => r.id)), ledgerRuns9 = new Set((state().runs || []).map(r => r.id)), nPacks9 = syncPacks().length;
+  const r9 = shell();
+  const new9 = ((await get('/api/status')).runs || []).filter(r => !runIds9.has(r.id));
+  const led9 = (state().runs || []).filter(r => !ledgerRuns9.has(r.id));
+  ok('9 全部擱置項目已失效：外殼這次工作不是失敗（狀態 done、沒有錯誤）', new9.length === 1 && new9[0].state === 'done' && !new9[0].error, new9.map(r => [r.kind, r.state, r.error]));
+  ok('9 帳本工作記錄收尾值是 checked（已核對，名單沒有缺口），不是 blocked，也沒有 rejected', led9.length === 1 && led9[0].ending === 'checked' && !led9[0].rejected, led9.map(r => [r.ending, r.rejected, r.rejectReason]));
+  ok('9 沒有出新題；擱置清空；不留失敗原因（lastTry）', syncPacks().length === nPacks9 && state().peopleSync.pending.length === 0 && !state().peopleSync.lastTry, { packs: syncPacks().length - nPacks9, ps: state().peopleSync });
   /* P17 示範帳本：操作拒絕、入口不顯示 */
   s = state(); s.demo = true; put(s);
   const rd = await post('/api/founder-op', { op: 'peopleSync', target: 'people', value: {} });

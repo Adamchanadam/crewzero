@@ -115,16 +115,17 @@ try {
   const anon = await fetch(BASE + '/api/input-file?id=' + encodeURIComponent(idA) + '&n=0', { headers: { cookie: 'x=y' } });
   ok('讀附件：沒有通行證 403', anon.status === 403, anon.status);
   // 更正來源連結
+  const T1 = () => JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8')).sources[1].title;   // 0.40.2：更正連結須帶該項來源標題
   const confirmedFile = path.join(DATA, 'ledger', 'confirmed.json'), h0 = crypto.createHash('sha256').update(fs.readFileSync(confirmedFile)).digest('hex');
   const s0 = (await json('/api/status')).j;
   const badUrls = ['http://example.com/a', 'https://localhost/a', 'https://127.0.0.1/a', 'https://192.168.1.5/a', 'https://10.0.0.2/a', 'https://user:pw@example.com/a', 'https://[::1]/a', 'https://printer.local/a', 'https://example.com/' + 'a'.repeat(300), 'javascript:alert(1)', 'not a url', ''];
-  const badRes = await Promise.all(badUrls.map(async u => [u.slice(0, 30), (await post('/api/source-url', { n: 1, url: u })).code]));
+  const badRes = await Promise.all(badUrls.map(async u => [u.slice(0, 30), (await post('/api/source-url', { n: 1, title: T1(), url: u })).code]));
   ok('更正連結：不安全或無效網址全部拒絕', badRes.every(([, c]) => c === 400), badRes);
   ok('更正連結：來源序號無效拒絕', (await post('/api/source-url', { n: 99, url: 'https://example.com/a' })).code === 400 && (await post('/api/source-url', { n: 'x', url: 'https://example.com/a' })).code === 400);
-  const good = await post('/api/source-url', { n: 1, url: 'https://docs.google.com/spreadsheets/d/FIXED-ID/edit' });
+  const good = await post('/api/source-url', { n: 1, title: T1(), url: 'https://docs.google.com/spreadsheets/d/FIXED-ID/edit' });
   const pg = JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8'));
   ok('更正連結：寫入新網址、舊值存 urlBefore、記 fixedOn', good.code === 200 && pg.sources[1].url.endsWith('FIXED-ID/edit') && pg.sources[1].urlBefore.endsWith('EXAMPLE-ID/edit') && /^\d{4}-\d{2}-\d{2}$/.test(pg.sources[1].fixedOn), pg.sources[1]);
-  await post('/api/source-url', { n: 1, url: 'https://docs.google.com/spreadsheets/d/FIXED-2/edit' });
+  await post('/api/source-url', { n: 1, title: T1(), url: 'https://docs.google.com/spreadsheets/d/FIXED-2/edit' });
   const pg2 = JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8'));
   ok('更正連結：再次更正不蓋掉最初的舊值', pg2.sources[1].urlBefore.endsWith('EXAMPLE-ID/edit') && pg2.sources[1].url.endsWith('FIXED-2/edit'));
   ok('更正連結：其他來源及題目答案不受影響', pg2.sources[0].url === undefined && pg2.sources[2].title === pg.sources[2].title && JSON.stringify(pg2.glance) === JSON.stringify(JSON.parse(fs.readFileSync(path.join(DATA, 'company', 'page.json'), 'utf8')).glance));

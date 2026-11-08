@@ -66,6 +66,37 @@ export const nextActorId = (inputId, qid) => 'pc-' + String(inputId || '').repla
    it：{ kind:'newActor', name, org?, role?, actorKind, teamType?, why }；texts：創辦人原話及附件文字版（字串陣列）。
    回傳 { status:'ok', item } 或 { status:'drop', reason }（靜默丟棄，只記日誌）或 { status:'error', errors }（退回 Zero 修正一次）。 */
 // declined：曾答「不加入」的名稱（正規化）→ 次數；事件路徑拒絕兩次後丟棄（設計狀態表第 5 行），整理名單路徑一次即丟棄（呼叫者傳 declineLimit: 1）
+// 業務常用詞：名稱若整個由這些詞及「的」「可以」「及」等虛詞組成（「日常營運」「目標客戶」「日常的營運」），或含「負責」「我們」等整句用語，或英文兩個字以上全是常用業務字、單字是明確職能字（Marketing、Sales），就是片語，不是人名或機構名。
+// 只擋「整個都是常用詞」：真實名稱至少有一部分不是（「乙餐廳」「美的集團」「的近律師行」「區家明校長」「Kelvin Ho」「ABC Marketing Ltd」「Target」都放行）。
+const GENERIC_ZH = ['的', '之', '及', '與', '和', '可以', '日常', '主要', '目前', '現有', '未來', '相關', '其他', '整體', '全部', '所有', '一般', '基本', '重要', '核心', '關鍵', '潛在', '目標', '主力', '長期', '短期', '初期', '後續', '持續',
+  '營運', '運營', '管理', '市場', '推廣', '行銷', '營銷', '銷售', '客戶', '用戶', '顧客', '產品', '服務', '策略', '計劃', '方案', '流程', '團隊', '預算', '財務', '成本', '收入', '收益', '利潤', '合作', '夥伴', '伙伴',
+  '供應', '供應商', '渠道', '通路', '品牌', '宣傳', '定價', '價格', '需求', '資源', '資金', '人手', '人力', '分工', '工作', '事務', '業務', '生意', '項目', '活動', '研發', '開發', '技術', '系統', '平台', '數據', '資料',
+  '內容', '設計', '製作', '採購', '物流', '客服', '招聘', '培訓', '執行', '規劃', '會議', '進度', '合規', '法律', '行政', '運作', '維護', '支援', '支持', '決策', '決定', '創辦人', '老闆', '公司', '組織', '部門', '職能'];
+const GENERIC_EN = new Set(['daily', 'day', 'to', 'operations', 'operation', 'ops', 'marketing', 'market', 'sales', 'strategy', 'management', 'manager', 'team', 'customer', 'customers', 'client', 'clients', 'product', 'products', 'service', 'services',
+  'plan', 'planning', 'budget', 'finance', 'financial', 'cost', 'revenue', 'partner', 'partners', 'supplier', 'suppliers', 'channel', 'channels', 'brand', 'pricing', 'price', 'resources', 'general', 'main', 'current', 'future', 'target',
+  'potential', 'core', 'key', 'business', 'project', 'projects', 'activity', 'activities', 'development', 'research', 'design', 'production', 'procurement', 'logistics', 'hr', 'admin', 'administration', 'support', 'the', 'and', 'of', 'for', 'our', 'new', 'existing', 'other', 'all']);
+// 英文單字：只擋明確的職能字；Target、Design、Brand 等可以是品牌名，放行
+const FUNCTION_EN = new Set(['operations', 'operation', 'ops', 'marketing', 'sales', 'strategy', 'management', 'planning', 'budget', 'finance', 'procurement', 'logistics', 'hr', 'admin', 'administration',
+  'development', 'research', 'production', 'support', 'pricing', 'revenue', 'customers', 'clients', 'suppliers', 'partners', 'products', 'services', 'channels', 'resources', 'activities', 'projects']);
+const FUNCTION_ZH = /正在|需要|負責|已經|為了|我們|他們|沒有|如果|因為|所以/;
+export function looksLikePhrase(name) {
+  const t = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  if (FUNCTION_ZH.test(t)) return true;
+  if (/[A-Za-z]/.test(t)) {
+    const toks = t.toLowerCase().split(/[\s\-_/&]+/).filter(Boolean);
+    if (toks.length > 6) return true;
+    if (toks.length === 1 && FUNCTION_EN.has(toks[0])) return true;
+    if (toks.length > 1 && toks.every(x => GENERIC_EN.has(x))) return true;
+  }
+  const zh = t.replace(/[\s\-_/&]+/g, '');
+  if (zh && /^[㐀-鿿]+$/.test(zh)) {
+    const ok = new Array(zh.length + 1).fill(false); ok[0] = true;
+    for (let i = 1; i <= zh.length; i++) for (const w of GENERIC_ZH) if (w.length <= i && ok[i - w.length] && zh.slice(i - w.length, i) === w) { ok[i] = true; break; }
+    if (ok[zh.length]) return true;
+  }
+  return false;
+}
 export function checkNewActorItem(it, { actors = [], texts = [], at = '項目', declined = {}, declineLimit = 2, founderNames = [] } = {}) {
   const errors = [], str = (v, n) => typeof v === 'string' && v.trim() && v.trim().length <= n;
   if (!it || typeof it !== 'object') return { status: 'error', errors: [at + '格式不正確'] };
@@ -73,6 +104,7 @@ export function checkNewActorItem(it, { actors = [], texts = [], at = '項目', 
   if (str(it.name, NAME_MAX) && (declined[norm(it.name)] || 0) >= declineLimit) return { status: 'drop', reason: 'declined' };
   if (!str(it.name, NAME_MAX)) errors.push(at + '：新對象 name 必須是名稱（最多 ' + NAME_MAX + ' 字）');
   else if (/[，。；：、（）()「」]/.test(it.name)) errors.push(at + '：name 只寫名稱，不可含標點或整句（「' + clip(it.name, 20) + '」）');
+  else if (looksLikePhrase(it.name)) errors.push(at + '：name 必須是人名或機構名，不可寫工作範疇或片語（「' + clip(it.name, 20) + '」）');
   if (it.org != null && it.org !== '' && !str(it.org, ORG_MAX)) errors.push(at + '：org 最多 ' + ORG_MAX + ' 字');
   if (it.role != null && it.role !== '' && !str(it.role, ROLE_MAX)) errors.push(at + '：role 最多 ' + ROLE_MAX + ' 字');
   if (!KINDS.includes(it.actorKind)) errors.push(at + '：actorKind 必須是 ' + KINDS.join('、') + ' 之一');
@@ -146,7 +178,8 @@ export function applyActorOp(state, op, v = {}) {
     if (hasContactInfo(name)) return fail(state, 'contactInfo');
     if (isMerged(a)) return fail(state, 'merged');
     if (norm(name) === norm(a.name)) return { ok: true, state: s };
-    const dup = actors.find(x => x.id !== a.id && nameKeys(x).includes(norm(name)));
+    // 已併入保留者本身的對象（合併時名字進了保留者的別名）不算重名：合併後可把保留者改成被合併者的舊名
+    const dup = actors.find(x => x.id !== a.id && resolveActorId(actors, x.id) !== a.id && nameKeys(x).includes(norm(name)));
     if (dup) return fail(state, 'duplicateName');
     if (!(a.aliases || []).some(x => norm(x) === norm(a.name))) a.aliases = [...(a.aliases || []), a.name];
     a.aliases = (a.aliases || []).filter(x => norm(x) !== norm(name));   // 改回舊名：不留自己
@@ -156,8 +189,9 @@ export function applyActorOp(state, op, v = {}) {
   if (op === 'actorKind') {
     if (!KINDS.includes(v.kind)) return fail(state, 'invalid');
     if (isMerged(a)) return fail(state, 'merged');
-    if (v.kind === 'team') { if (!String(a.role || '').trim()) return fail(state, 'needRole'); if (!a.team) a.team = { type: 'parttime', state: 'active', owns: [] }; }
-    else delete a.team;
+    // 改離成員：team 資料（類型、狀態、負責的站及工作）原樣保留，只標 dormant（不生效，各處讀取以 kind 為準）；改回成員時還原
+    if (v.kind === 'team') { if (!String(a.role || '').trim()) return fail(state, 'needRole'); if (!a.team) a.team = { type: 'parttime', state: 'active', owns: [] }; else { const { dormant, ...rest } = a.team; a.team = rest; } }
+    else if (a.team) a.team = { ...a.team, dormant: true };
     a.kind = v.kind;
     return { ok: true, state: s };
   }
@@ -205,6 +239,7 @@ export function ownerView(task, actors) {
   if (k !== 'team') return { kind: k, name: '', left: false, actorId: '' };
   const id = resolveActorId(actors, task.owner), a = (actors || []).find(x => x.id === id);
   if (!a) return { kind: 'founder', name: '', left: true, actorId: '' };
+  if (kindOf(a) !== 'team') return { kind: 'founder', name: a.name, left: true, actorId: id };   // 已改為其他類別：不再是成員（team 資料保留，改回成員即還原）
   return teamStateOf(a) === 'left' || a.status === 'inactive' ? { kind: 'founder', name: a.name, left: true, actorId: id } : { kind: 'team', name: a.name, left: false, actorId: id, paused: teamStateOf(a) === 'paused' };
 }
 
@@ -245,7 +280,7 @@ export function peopleView(state, { today = '' } = {}) {
     const c = contact.get(a.id) || null, base = c ? c.date : (a.addedAt || ''), mine = tasks.filter(t => open(t) && (resolveActorId(actors, t.prospectId) === a.id)).filter(t => ownerKind(t.owner) !== 'ai').sort((x, y) => (x.dueAt ? 0 : 1) - (y.dueAt ? 0 : 1) || String(x.dueAt || '').localeCompare(String(y.dueAt || '')));
     const dd = docs.get(a.id) || [];
     return { id: a.id, name: a.name, label: a.label || a.name, kind: kindOf(a), org: a.org || '', role: a.role || '', status: a.status === 'inactive' ? 'inactive' : 'active', aliases: [...(a.aliases || [])], addedFrom: a.addedFrom || '', addedAt: a.addedAt || '',
-      ...(a.team ? { team: { type: a.team.type, state: teamStateOf(a), owns: [...(a.team.owns || [])] } } : {}),
+      ...(a.team && kindOf(a) === 'team' ? { team: { type: a.team.type, state: teamStateOf(a), owns: [...(a.team.owns || [])] } } : {}),
       lastContact: c ? { date: c.date, text: c.text, inputId: c.inputId } : null, gapDays: today && base ? diffDays(today, base) : null,
       nextTask: mine[0] ? { id: mine[0].id, title: mine[0].title, dueAt: mine[0].dueAt || '', owner: mine[0].owner || 'founder' } : null,
       docs: dd.filter((x, i) => dd.findIndex(y => y.inputId === x.inputId) === i) };
@@ -269,11 +304,11 @@ export function ownershipOf(state) {
   const open = t => t && !['done', 'cancelled'].includes(t.status);
   const lines = live.map(a => {
     const mine = (s.tasks || []).filter(t => open(t) && resolveActorId(((s.company || {}).actors) || [], t.owner) === a.id && ownerKind(t.owner) === 'team');
-    return { actorId: a.id, name: a.name, role: a.role || '', state: teamStateOf(a), stations: (a.team.owns || []).map(short).filter(Boolean), tasks: mine.slice(0, 2).map(t => t.title), moreTasks: Math.max(0, mine.length - 2) };
+    return { actorId: a.id, name: a.name, role: a.role || '', state: teamStateOf(a), stations: ((a.team || {}).owns || []).map(short).filter(Boolean), tasks: mine.slice(0, 2).map(t => t.title), moreTasks: Math.max(0, mine.length - 2) };
   });
   const unowned = [];
   const stations = new Set(actors.flatMap(a => (a.team && a.team.owns) || []));
-  for (const id of stations) { const owners = actors.filter(a => (a.team.owns || []).includes(id)); if (short(id) && owners.every(a => teamStateOf(a) === 'left')) unowned.push({ station: short(id), formerOwners: owners.map(a => a.name) }); }
+  for (const id of stations) { const owners = actors.filter(a => ((a.team || {}).owns || []).includes(id)); if (short(id) && owners.every(a => teamStateOf(a) === 'left')) unowned.push({ station: short(id), formerOwners: owners.map(a => a.name) }); }
   return { lines, unowned };
 }
 

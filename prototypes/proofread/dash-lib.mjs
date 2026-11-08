@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hosts, modelCandidates, modelName } from './host-lib.mjs';
-import { NAMES, BIZ_TYPES, readJSON, listPacks, loadPack, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
+import { isInboxAttachment, NAMES, BIZ_TYPES, readJSON, listPacks, loadPack, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
 import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS, peopleSyncKey } from './people-ops.mjs';
 import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
@@ -432,7 +432,7 @@ export function dashboardState(DIR, extra = {}) {
   const inboxFiles = fs.existsSync(DIR.inbox) ? fs.readdirSync(DIR.inbox).filter(f => !f.startsWith('.')) : [];
   const unprocessed = inputs.filter(i => i.status === 'unprocessed').map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt }));
   // 預填同放入文件嘅附件跟住說明檔，唔另計
-  for (const f of inboxFiles) if (!/-(?:prefill|note-doc-file)-\d+-/.test(f) && !unprocessed.some(u => u.title === f)) unprocessed.push({ id: f, title: /-intake(\.md|-)/.test(f) ? '公司資料（' + NAMES.ui.intake + '）' : /-prefill\.md$/.test(f) ? '由文件預填（Zero 正在讀）' : /-note-doc\.md$/.test(f) ? '文件（等 Zero 閱讀）' : /-note-/.test(f) ? '你的要求（等 Zero 處理）' : /-feedback-/.test(f) ? '你對生意大腦的意見' : '文件', at: '' });
+  for (const f of inboxFiles) if (!/-(?:prefill|note-doc-file)-\d+-/.test(f) && !(isInboxAttachment(f) && !/-intake-\d+-/.test(f)) && !unprocessed.some(u => u.title === f)) unprocessed.push({ id: f, title: /-intake(\.md|-)/.test(f) ? '公司資料（' + NAMES.ui.intake + '）' : /-prefill\.md$/.test(f) ? '由文件預填（Zero 正在讀）' : /-note-doc\.md$/.test(f) ? '文件（等 Zero 閱讀）' : /-note-/.test(f) ? '你的要求（等 Zero 處理）' : /-feedback-/.test(f) ? '你對生意大腦的意見' : '文件', at: '' });
   const awaiting = inputs.filter(i => i.status === 'awaitingFounder').map(i => ({ id: i.id, title: i.title || '', question: i.awaitingFounderText || '', packId: i.packId || '', at: i.receivedAt }));
   const recentInputs = inputs.filter(i => i.status === 'processed').sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))).slice(0, 3).map(i => ({ id: i.id, title: i.title || '', at: i.receivedAt, effects: (i.effects || []).map(e => e.change).filter(Boolean) }));
   // 輸入頁「真實事件」欄：最近記錄嘅真實事件（任何狀態）同各自收據

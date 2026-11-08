@@ -538,7 +538,7 @@
     unverified: '未經證實',
     sourcesTitle: 'Zero 依據',
     srcOpenFile: '開啟存檔', srcReadOn: '讀取日期：{d}', srcFixLink: '更正連結', srcAddLink: '加入連結', srcSave: '儲存', srcCancel: '取消',
-    srcFixed: '已更正（{d}）', srcUrlLabel: '資料來源連結', srcUrlPlaceholder: '貼上以 https 開頭的網址', srcUrlBad: '連結須以 https 開頭，並且是公開網址；請檢查後再儲存。', srcUrlSaved: '連結已更正。',
+    srcFixed: '已更正（{d}）', srcUrlStale: '頁面內容已經更新，請重新載入頁面後，再更正這項來源的連結。', srcUrlLabel: '資料來源連結', srcUrlPlaceholder: '貼上以 https 開頭的網址', srcUrlBad: '連結須以 https 開頭，並且是公開網址；請檢查後再儲存。', srcUrlSaved: '連結已更正。',
     sourceUrlFixed: '更正資料來源連結：{t}',
     previewOwners: '各里程碑負責人與目標日期',
     previewDepth: '各里程碑深度檢查',
@@ -816,7 +816,7 @@
     peopleSyncAfter: '確認的項目即時記入名單；其餘的建議會分批再問', peopleSyncAsk: '公司概覽提到{who}：加入名單？',
     peopleSyncKindAsk: '{n}目前記為{a}，改為{b}？', peopleSyncKindYes: '改為{b}', peopleSyncKindNo: '維持{a}', peopleSyncKindJudge: '改類別不會影響關係進度和已有的紀錄；之後仍可在名單更正。',
     peopleSyncRequested: '請 Zero 整理名單', peopleSyncDone: 'Zero 整理名單：擬好 {n} 條確認題，等你確認', peopleSyncNone: 'Zero 整理名單：公司概覽沒有需要補充的人或機構', peopleSyncFailed: 'Zero 未能完成整理名單，請稍後再試',
-    peopleSyncNoted: '已記錄你的答案', peopleKindKept: '{n}的類別維持不變'
+    peopleSyncNoted: '已記錄你的答案', peopleKindKept: '{n}的類別維持不變', peopleCustomAsked: '已記下你對「{n}」的答覆：「{s}」。Zero 會在下一批再問一次', peopleCustomClosed: '已記下你對「{n}」的答覆：「{s}」。Zero 不會再就此項詢問'
   });
 
   // CrewZero：畫面名稱（書面語）；狀態、欄名、圖例都由呢度讀
