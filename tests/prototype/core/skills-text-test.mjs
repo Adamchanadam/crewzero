@@ -47,6 +47,7 @@ const targets = [
   // dashboard 的 description 刻意保留舊叫法作觸發別名（只給 AI 看），所以只檢查技能正文
   ...NAMES.map(n => [`skills/${n}/SKILL.md`, n === 'dashboard' ? text[n].replace(/^description:.*$/m, '') : text[n]]),
   ['README.md', read(path.join(REPO, 'README.md'))],
+  ['插件 README.md', read(path.join(PROTO, 'adapters', 'claude-code', 'crewzero', 'README.md'))],
   ['site/index.html', read(path.join(REPO, 'site', 'index.html'))],
   ['welcome.html', read(path.join(PROTO, 'welcome.html'))],
   ['start-here-template.md', read(path.join(PROTO, 'start-here-template.md'))],
@@ -62,6 +63,10 @@ for (const [name, s] of targets) {
 const readme = read(path.join(REPO, 'README.md')), site = read(path.join(REPO, 'site', 'index.html'));
 ok('README：指令表有 install、dashboard、discuss、update 三種工具打法', ['/crewzero:install', '$crewzero:install', '/install', '/crewzero:dashboard', '$crewzero:dashboard', '/dashboard', '/crewzero:discuss', '$crewzero:discuss', '/discuss', '/crewzero:update', '$crewzero:update', '/update'].every(k => readme.includes(k)) && /和 Zero 討論/.test(readme) && /發生了一件事/.test(readme) && /請 Zero 做一件事/.test(readme) && /想改計劃/.test(readme));
 ok('介紹頁：四個指令齊、介紹和 Zero 討論及三類輸入、署名、授權及支持連結', ['/crewzero:discuss', '$crewzero:discuss', '/discuss', '/crewzero:dashboard'].every(k => site.includes(k)) && /和 Zero 討論/.test(site) && /發生了一件事/.test(site) && /由 Adam Chan 開發/.test(site) && /Apache-2\.0/.test(site) && site.includes('buymeacoffee.com/adamchan'));
+// 插件目錄以插件資料夾的 README 作介紹（最少 40 個字，不計程式碼區塊），並要寫明插件在電腦上做的事
+const pr = read(path.join(PROTO, 'adapters', 'claude-code', 'crewzero', 'README.md'));
+const prWords = pr.replace(/```[\s\S]*?```/g, '').split(/\s+/).filter(w => /[A-Za-z]/.test(w)).length;
+ok('插件 README：四個指令、英文段落至少 40 個英文字、列明本機伺服器、啟動 AI 工具、自動開工及網絡連線', ['/crewzero:install', '/crewzero:dashboard', '/crewzero:discuss', '/crewzero:update'].every(k => pr.includes(k)) && prWords >= 40 && ['127.0.0.1', 'docs.google.com', 'example.com', 'LaunchAgent', 'No analytics'].every(k => pr.includes(k)) && !/陶土|clay/i.test(pr), { englishWords: prWords });
 const sh = read(path.join(PROTO, 'start-here-template.md')), wl = read(path.join(PROTO, 'welcome.html'));
 ok('開始說明與歡迎頁：只教 dashboard 一個日常入口，並提到和 Zero 討論', sh.includes('/crewzero:dashboard') && sh.includes('/crewzero:discuss') && wl.includes('/crewzero:dashboard') && /和 Zero 討論/.test(wl) && /和 Zero 討論/.test(sh));
 

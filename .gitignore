@@ -10,6 +10,7 @@ backups/
 # 設計稿與截圖原檔（體積大，喺本機）
 prototypes/proofread/mockups/
 prototypes/proofread/screenshots/
+docs/plan/brand-characters/**/*.png
 # 舊版規劃書與測試紀錄（內有其他公司試驗內容）
 docs/plan/archive/
 docs/evidence/
