@@ -209,6 +209,15 @@ footer p { margin: 3px 0; }
 @keyframes drift { from { transform: scale(1.02); } to { transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
 
+/* Zero 團隊分工 */
+.thumb.wide img { aspect-ratio: 16 / 10; }
+.thumb-cap { margin: 10px 0 0; font-size: var(--fs-label); color: #8f9ab0; }
+.roles-sub { margin: 56px 0 18px; font-size: 22px; line-height: 1.35; }
+.shots3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+.shots3 .card { padding: 18px; display: flex; flex-direction: column; }
+.shots3 .thumb { margin-bottom: 14px; }
+.shots3 p { color: #b9c0cd; font-size: var(--fs-sub); margin: 0; }
+@media (max-width: 1000px) { .shots3 { grid-template-columns: minmax(0,1fr); } }
 /* 響應式 */
 @media (max-width: 1000px) {
   .pillars, .phases { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -287,8 +296,8 @@ footer p { margin: 3px 0; }
 <header class="bar">
   <div class="wrap">
     <a class="logo" href="#top"><i aria-hidden="true">CZ</i>CrewZero</a>
-    <nav aria-label="頁內導覽"><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a><a href="https://github.com/Adamchanadam/crewzero">GitHub</a></nav>
-    <details class="menu"><summary aria-label="頁內導覽選單">選單</summary><div><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a><a href="https://github.com/Adamchanadam/crewzero">GitHub</a></div></details>
+    <nav aria-label="頁內導覽"><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#roles">團隊分工</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a><a href="https://github.com/Adamchanadam/crewzero">GitHub</a></nav>
+    <details class="menu"><summary aria-label="頁內導覽選單">選單</summary><div><a href="#diff">分別</a><a href="#three">你做甚麼</a><a href="#product">產品畫面</a><a href="#roles">團隊分工</a><a href="#brain">生意大腦</a><a href="#vision">理念</a><a href="#start">怎樣開始</a><a href="#faq">常見問題</a><a href="https://github.com/Adamchanadam/crewzero">GitHub</a></div></details>
     <a class="btn primary" href="#start">開始使用</a>
   </div>
 </header>
@@ -387,6 +396,51 @@ footer p { margin: 3px 0; }
     </div>
   </section>
 
+  <section class="sec" id="roles" aria-labelledby="h-roles">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Zero 團隊分工</p>
+        <h2 id="h-roles">事情多起來，Zero 按業務路徑分崗位負責。</h2>
+        <p class="lead">公司概覽確認後，Zero 會為業務路徑上的各站擬出專業崗位，例如「餐廳拓展經理」。崗位由你確認，先做一件啟用任務給你驗收，才正式接手。</p>
+        <p class="sub">下面的生意大腦是幫你想生意的六位成員；這裏的崗位則按你的業務路徑分工，負責把事做出來。</p>
+      </div>
+      <div class="split">
+        <div>
+          <button class="thumb wide" type="button" data-lb="assets/feat-team.webp" data-cap="團隊頁：Zero 統籌在最上，下面是各崗位，每位有頭像、稱號、負責的站和狀態" aria-label="放大：團隊頁"><img src="assets/feat-team.webp" alt="產品畫面：團隊頁，Zero 統籌在最上，下面並排三個崗位，分別是已啟用、暫停和待啟用" loading="lazy"></button>
+          <p class="thumb-cap">團隊頁：Zero 統籌在最上，下面各崗位同級，每位都有頭像、稱號、負責的站和狀態。</p>
+        </div>
+        <div>
+          <ol class="steps3">
+            <li><span class="n">1</span><div><h3>Zero 擬崗位</h3><p>按你的業務路徑擬出崗位，寫明負責的站、支援的人、必須先問你的事，以及啟用任務。</p></div></li>
+            <li><span class="n">2</span><div><h3>你確認</h3><p>題目放在待決事項，每批最多 3 題。可按「照 Zero 建議，全部確認」，也可逐題選「由 Zero 承擔」「改名」或「不要這個崗位」。</p></div></li>
+            <li><span class="n">3</span><div><h3>先驗收，再接手</h3><p>每個崗位先做一件啟用任務給你驗收，接受後才正式接手負責的站；退回兩次，Zero 會問你改崗位卡還是取消這個崗位。</p></div></li>
+            <li><span class="n">4</span><div><h3>統籌把關對外產出</h3><p>訊息、報價、提案等會對外的產出，先由 Zero 統籌校對一次；不合格會重寫一次，仍有問題照樣交給你，並寫明要留意的地方。</p></div></li>
+          </ol>
+          <p class="rest">中途想加崗位，在「告訴 Zero 一件事」選「想改計劃」寫下；如業務路徑沒有對應的站，Zero 會在同一批問你加站及加崗位。</p>
+        </div>
+      </div>
+
+      <h3 class="roles-sub">為甚麼這樣設計</h3>
+      <div class="ind">
+        <div class="card"><h3>只有一層</h3><p>只有 Zero 統籌和各崗位，不設部門，崗位之下也沒有子崗位。你只需要認識幾位隊員，不用管組織圖。</p></div>
+        <div class="card"><h3>先驗收，才接手</h3><p>新崗位先交一件啟用任務，你接受才負責那一站。做得不好，寫一句原因退回，Zero 按原因重做。</p></div>
+        <div class="card"><h3>每件工作交代齊全</h3><p>交給崗位的每件工作都附完整工作說明：目標、範圍、來源、進度、權限、第一步、交付要求和停止條件。</p></div>
+        <div class="card"><h3>步伐由你定</h3><p>標準每日 1 件，加速最多 3 件；衝刺連續做到需要你決定，或當日做滿 10 件，最長兩星期。每日次數上限只作保險絲。</p></div>
+      </div>
+      <p class="tools-note">衝刺期間，如有超過 10 份產出等你驗收，或兩日沒有收到你的回覆，Zero 會自動暫停，你回覆後自動恢復。</p>
+
+      <h3 class="roles-sub">三個關鍵畫面</h3>
+      <div class="shots3">
+        <div class="card"><button class="thumb" type="button" data-lb="assets/feat-roles.webp" data-cap="待決事項：確認 Zero 崗位，一個按鈕照建議確認，或逐題改名、不要這個崗位" aria-label="放大：確認 Zero 崗位"><img src="assets/feat-roles.webp" alt="產品畫面：確認 Zero 崗位，農場採購專員的崗位卡，列明負責的站、支援的人、必須先問你的事和啟用任務" loading="lazy"></button>
+          <h3>確認崗位</h3><p>一個按鈕照建議確認；想改，逐題選「由 Zero 承擔」「改名」或「不要這個崗位」。</p></div>
+        <div class="card"><button class="thumb" type="button" data-lb="assets/feat-activation.webp" data-cap="驗收啟用任務：附統籌校對結果和草稿全文，接受後崗位才正式接手" aria-label="放大：驗收啟用任務"><img src="assets/feat-activation.webp" alt="產品畫面：驗收啟用任務，餐廳拓展經理交付確認訊息草稿，附統籌校對結果、草稿全文和接受、退回重做兩個選項" loading="lazy"></button>
+          <h3>驗收啟用任務</h3><p>崗位交出啟用任務，附統籌校對結果和草稿全文；你接受，崗位才正式接手。</p></div>
+        <div class="card"><button class="thumb" type="button" data-lb="assets/feat-deliveries.webp" data-cap="今日 Zero 交付（衝刺日示範）：做了幾件、用量、停止原因，要你決定的題排最前" aria-label="放大：今日 Zero 交付"><img src="assets/feat-deliveries.webp" alt="產品畫面：今日 Zero 交付，列出衝刺到期日、今日做了幾件、用量、停止原因，以及要你決定的題和今日產出" loading="lazy"></button>
+          <h3>今日 Zero 交付</h3><p>多件日的一覽：做了幾件、用量和停止原因，要你決定的題排最前。圖為衝刺日。</p></div>
+      </div>
+    </div>
+  </section>
+
   <section class="sec" id="brain" aria-labelledby="h-brain">
     <div class="wrap">
       <div class="sec-head">
@@ -465,9 +519,9 @@ footer p { margin: 3px 0; }
         <h2 id="h-faq">用之前，你可能想知道。</h2>
       </div>
       <div class="facts">
-        <div class="card"><h3>AI 工具用量</h3><ul><li>Zero 工作用你自己的 Claude Code、Codex 或 Antigravity 帳戶額度。</li><li>每日最多開工 40 次，Zero 每個工作步驟都有時限。</li><li>系統分頁列出每次開工的時間、用時與結果。</li></ul></div>
+        <div class="card"><h3>AI 工具用量</h3><ul><li>Zero 工作用你自己的 Claude Code、Codex 或 Antigravity 帳戶額度。</li><li>標準每日做 1 件，可在系統分頁改為加速或衝刺；每日開工次數另設保險絲（標準 40 次、加速 50 次、衝刺 80 次），只用來防止失控，每件工作都有時限。</li><li>今日用量會顯示 Zero 今日工作了多少次，其中校對幾次。</li><li>系統分頁列出每次開工的時間、用時與結果。</li></ul></div>
         <div class="card"><h3>資料去了哪裏</h3><ul><li>公司紀錄存放在你項目內的 crewzero 資料夾（由 startup-os 轉用的項目是 startup-os 資料夾）。</li><li>Zero 工作時，相關內容交給你選用的 AI 工具處理；商機掃描等工作會上網讀取公開資料（使用 Antigravity 時只作網上搜尋，不開啟網頁全文）。</li><li>CrewZero 不會把你的資料發送給其他人。</li></ul></div>
-        <div class="card"><h3>想停下來，或者出錯</h3><ul><li>連續兩次做不出新進展，Zero 會停下來問你，你可以選擇暫停。</li><li>不想 Zero 自動開工：到系統分頁按「停止自動開工」，隨時可以再開啟。</li><li>工作出錯會寫明原因，可按「重試」。完全移除：先停止自動開工，再刪除項目內的 crewzero 資料夾（由 startup-os 轉用的項目是 startup-os 資料夾）。</li></ul></div>
+        <div class="card"><h3>想停下來，或者出錯</h3><ul><li>連續兩次做不出新進展，Zero 會停下來問你，你可以選擇暫停。</li><li>不想 Zero 自動開工：到系統分頁按「停止自動開工」，隨時可以再開啟；系統分頁也可以暫停或恢復 Zero，團隊分頁可以單獨暫停某個崗位。</li><li>工作出錯會寫明原因，可按「重試」。完全移除：先停止自動開工，再刪除項目內的 crewzero 資料夾（由 startup-os 轉用的項目是 startup-os 資料夾）。</li></ul></div>
       </div>
     </div>
   </section>
@@ -492,15 +546,15 @@ footer p { margin: 3px 0; }
 <script>
 (function () {
   var P = [
-    ['待決事項', 'assets/feat-pending.webp', ['最頂先看下一個對外動作，可按已完成、改期或取消。', '接下來的問題每批最多三題，每題附 Zero 建議與理由；可以作答或暫緩。', '驗收 Zero 產出：接受，或寫一句原因退回。', '「上次離開之後」一行看新事；「今日要做的事」告訴你下一步。']],
+    ['待決事項', 'assets/feat-pending.webp', ['最頂先看下一個對外動作，可按已完成、改期或取消。', '接下來的問題每批最多三題，每題附 Zero 建議與理由；可以作答或暫緩。', '驗收 Zero 產出：接受，或寫一句原因退回。', '「Zero 近期交付」顯示崗位交付及統籌校對結果；多件日改為「今日 Zero 交付」一覽。', '「上次離開之後」一行看新事；「今日要做的事」告訴你下一步。']],
     ['告訴 Zero 一件事', 'assets/feat-inputs.webp', ['分三類：發生了一件事、請 Zero 做一件事、想改計劃。寫一兩句就可以，會議紀錄、文件或 Google 連結可以一併附上。', '送出後，Zero 先讀你的原話和附件，擬好確認題；經你確認才會更新紀錄。', '每件事都有回饋卡，看到 Zero 收到了甚麼、讀了哪些內容、改了甚麼，沒有影響時會寫明原因。', '想先傾一傾？在 AI 對話輸入 /crewzero:discuss，或直接說「和 Zero 討論」，傾完把結論交給 Zero。']],
     ['公司概覽', 'assets/feat-company.webp', ['告訴 Zero：只有第一題必填，可由文件預填再逐條確認。', '校對：第一屏三題、按一下改、拖動排序、整頁確認。', '確認後固定下來；暫定的內容附限期，到期再問你。']],
     ['公司現況', 'assets/overview-1440.webp', ['一眼看到目前在第幾站、下一個對外動作和待決事項。', '運作環只在 Zero 真正工作時才亮起。', '即時事件流、各範疇狀態一覽、生意大腦摘要。']],
     ['生意大腦', 'assets/feat-brain.webp', ['六項：生意體檢、紅藍對打、情景演練、商機掃描、路線推演、對象推進追蹤。', '人物及機構名單：每個對象走到哪一步（未接觸、口頭表示、實際行動、付出成本、形成依賴）；名稱或類別不對，可按「更正」。新的人物或機構由 Zero 建議，你確認才加入。', '每張結果卡可回應「有用／沒有用／要修改」，Zero 下次工作會參考你的意見。']],
     ['業務路徑', 'assets/feat-path.webp', ['路線圖與時間線：已確認、試行中、Zero 建議路線、已撤四組。', '路線分岔時幾條路線並排比較，附「採用後會」改變甚麼。', '日程可切換清單或月曆：一覽 Zero 哪天真的開工、預計開工日、里程碑和要做的事。', '目標日和「你要做」的日期可以直接改。']],
-    ['團隊', 'assets/feat-team.webp', ['團隊成員：共同創辦人、全職、兼職和外判成員各自負責哪一站、哪些工作。', '成員離開後，他名下未完成的工作可以改派給其他成員或收回自己名下。', 'Zero 從你記下的事建議新成員，你確認才記入；狀態和分工隨時可以更正。']],
+    ['團隊', 'assets/feat-team.webp', ['Zero 團隊：最上面是 Zero 統籌，下面各崗位同級，每位有頭像、稱號、負責的站、做法、知識背景及出處。', '崗位分待啟用、已啟用和暫停；待啟用的崗位有驗收啟用任務的入口，每個崗位都可以暫停或恢復，也可以請 Zero 重新擬崗位。', '團隊成員：共同創辦人、全職、兼職和外判成員各自負責哪一站；成員離開後，他名下未完成的工作可以改派。']],
     ['紀錄', 'assets/feat-log.webp', ['決定、全部事件、全部工作三個篩選與搜尋。', '每個決定可展開 Zero 原建議與之後做了甚麼。']],
-    ['系統', 'assets/feat-system.webp', ['自動開工：自己開關，改頻率、時間和每週訪問日。', '最近 Zero 工作：每次開工的時間、由排程還是由你觸發、結果如何。', 'AI 工具設定、Zero 現況、健康提示。', '「立即開始 Zero 工作」與「出錯時怎樣處理」。']]
+    ['系統', 'assets/feat-system.webp', ['自動開工：自己開關，改頻率、時間和每週訪問日。', '每日做多少件：標準、加速、衝刺三檔，各附估計的每日 Zero 工作次數。', '今日用量：今日 Zero 工作次數，其中校對幾次；每日上限只作保險絲。', '最近 Zero 工作：每次開工的時間、由排程還是由你觸發、結果如何。', 'AI 工具設定、Zero 現況、健康提示，以及暫停或恢復 Zero。']]
   ];
   var cur = 3, tabs = [].slice.call(document.querySelectorAll('[role=tab]'));
   var img = document.getElementById('pd-img'), title = document.getElementById('pd-title'), pts = document.getElementById('pd-points');
