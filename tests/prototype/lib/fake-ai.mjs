@@ -186,6 +186,46 @@ if (type === 'work' && outputMode === 'agy') {
   if (M === 'auto-grade') { fs.writeFileSync('state.json', JSON.stringify({ company: { assumptions: [{ id: a && a.id, grade: 'did' }] } })); }
   fs.writeFileSync('out/event.json', JSON.stringify(ev));
   done();
+} else if (type === 'minutes-speakers') {
+  const input = JSON.parse(fs.readFileSync('speakers-input.json', 'utf8'));
+  const actors = Array.isArray(input.actors) ? input.actors : [];
+  const labels = Object.entries(input.labels || {});
+  const items = labels.map(([label, turns], index) => {
+    const quote = String((turns || [])[0] || '').slice(0, 10);
+    if (index === 0) return { label, kind: 'founder', why: '第一位講者以創辦人身分說明安排。', quote };
+    if (index === 1 && actors[0]) return { label, kind: 'actor', actorId: actors[0].id, name: actors[0].name, why: '原話內容與名單內的職責相符。', quote };
+    return { label, kind: 'unknown', why: '原話不足以可靠判斷身分。', quote };
+  });
+  if (M === 'bad' && items.length) {
+    items[0] = { ...items[0], kind: 'actor', actorId: 'not-in-list', quote: '這句不在原文' };
+    if (items[1]) items[1] = { ...items[1], quote: '這句也不在原文' };
+  }
+  fs.writeFileSync('out/speakers.json', JSON.stringify(items, null, 2));
+  done();
+} else if (type === 'minutes-draft' || type === 'minutes-draft-repair') {
+  const input = fs.readFileSync('minutes-input.md', 'utf8');
+  const date = (/會議日期：(\d{4})-(\d{2})-(\d{2})/.exec(input) || []).slice(1);
+  const shownDate = date.length ? `${date[0]} 年 ${Number(date[1])} 月 ${Number(date[2])} 日` : '日期待定';
+  const people = [...new Set([...input.matchAll(/^\d{1,2}:\d{2}(?::\d{2})?\s+([^\r\n]+)/gm)].map(m => m[1].trim()))].slice(0, 3);
+  const who = people.join('、') || '創辦人及與會者';
+  const bad = M === 'bad' || fs.existsSync('minutes-draft-bad');
+  if (M === 'bad') fs.writeFileSync('minutes-draft-bad', '1');
+  const sections = [
+    `# 會議紀錄：測試會議（${shownDate}）`,
+    '',
+    '> ⚠️ 不肯定，請核對（共 1 處）　✏️ 待你補充（共 1 處）',
+    '',
+    '## 參加者', '', who + '。', '',
+    '## 已發生的事實', '', '雙方已進行會議並交換現況。', '',
+    '## 對方的說法及承諾', '', '⚠️（數字不確定）對方口頭表示首批約二百件，尚待核對。', '',
+    '## 雙方決定', '', '先整理需要核對的資料後再確認安排。', '',
+    '## 待辦', '', '- 對方：補交首批數量資料；✏️（請補負責人）。', '',
+    '## 未定事項', '', '首批數量及負責人仍待確認。', '',
+    '## 改動清單', '', '沒有。', ''
+  ];
+  if (bad) sections.splice(sections.indexOf('## 未定事項'), 4);
+  fs.writeFileSync('out/minutes.md', sections.join('\n'));
+  done();
 } else if (type === 'event' || type === 'event-repair') {
   // 真實事件：揀第一條仲係「假設」嘅假設升一級到實際行動、第一個未完成嘅站標完成。模式：event-bad 第一次交錯格式（修正一次後改好）、event-none 冇影響、event-pick-<站 id> 指定標完成嘅站
   const L = JSON.parse(fs.readFileSync('ledger.json', 'utf8'));
@@ -207,6 +247,98 @@ if (type === 'work' && outputMode === 'agy') {
     const base = { kind: 'newActor', name: '黃小姐', org: '乙餐廳', role: '負責人', actorKind: 'customer', why: '原話提到她是乙餐廳負責人，之後可能成為試單對象。' };
     const byMode = { 'event-actor': {}, 'event-actor-similar': { name: first, org: '' }, 'event-actor-contact': { name: '吳小姐', org: type === 'event' ? 'a@b.com' : '乙餐廳' }, 'event-actor-ghost': { name: '周先生' }, 'event-actor-dup': { name: known.name || '陳經理' }, 'event-actor-team': { name: '林師傅', org: '', role: '送貨', actorKind: 'team', teamType: 'parttime' } }[M] || {};
     items.push({ ...base, ...byMode });
+  }
+  // 會議紀錄定稿：交四項，當中一項引用 ⚠️ 行，另一項引用 ✏️ 的待補負責人，供外殼核對標示及分批。
+  if (fs.existsSync(path.join('files', '會議紀錄.md'))) {
+    for (const item of items) item.sourceQuote = '對方口頭表示首批約二百件';
+    const next = L.milestones.find(x => !x.done && x.id !== (m && m.id));
+    if (next) items.push({ kind: 'nextAction', text: '確認首批數量後回覆對方', milestoneId: next.id, sourceQuote: '對方口頭表示首批約二百件', why: '⚠️（數字不確定）對方口頭表示首批約二百件，尚待核對。' });
+    items.push({ kind: 'followUp', date: plus(14), action: '確認首批數量及負責人', station: next && next.id, sourceQuote: '請補負責人', why: '✏️（請補負責人）後才可安排跟進。' });
+    // 第四項一般事項（下一個對外動作另有一包）：令一般事項多於三項，核對排隊不丟失
+    items.push({ kind: 'followUp', date: plus(21), action: '寄出首批樣本', station: next && next.id, sourceQuote: '寄出首批樣本', why: '會議紀錄寫明三星期內寄出樣本。' });
+  }
+  // 會議紀錄外殼反例：每個模式只造必要項目，避免其他一般建議掩蓋守門結果。
+  if (M === 'event-next-only') {
+    items.length = 0;
+    items.push({ kind: 'nextAction', text: '測試：先寄出樣本給對方', milestoneId: (L.milestones.find(x => !x.done) || {}).id, why: '測試理由：會議已定下下一步是寄出樣本。' });
+  }
+  if (M === 'event-minute-unknown-date') {
+    items.length = 0;
+    items.push({ kind: 'followUp', date: '2026-11-30', action: '寄出樣本', sourceQuote: '寄出樣本', why: '寄出樣本；✏️（請補實際日子）日期待定。' });
+  }
+  if (M === 'event-minute-known-date') {
+    items.length = 0;
+    items.push({ kind: 'followUp', date: '2026-11-30', action: '寄出樣本', sourceQuote: '供應商負責在 2026 年 11 月 30 日寄出樣本。', why: '會議紀錄已寫明供應商在該日寄出樣本。' });
+  }
+  if (M === 'event-unmapped-item') {
+    items.length = 0;
+    if (a) items.push({ kind: 'assumption', id: a.id, grade: 'did', why: 'Speaker 9 已支付訂金。' });
+  }
+  if (M === 'event-revision') {
+    items.length = 0;
+    const first = L.assumptions[0], other = L.assumptions[1], revised = fs.readFileSync('event.md', 'utf8').includes('修訂內容');
+    if (first) items.push({ kind: 'assumption', id: first.id, grade: revised ? 'said' : 'did', sourceQuote: revised ? '修訂內容：對方改為只作口頭表示。' : '首版內容：對方已作出實際行動。', why: revised ? '修訂內容：對方改為只作口頭表示。' : '首版內容：對方已作出實際行動。' });
+    if (revised && other) items.push({ kind: 'assumption', id: other.id, grade: 'did', sourceQuote: '修訂內容：另一項建議不屬舊版已寫入事項。', why: '修訂內容：另一項建議不屬舊版已寫入事項。' });
+  }
+  if (/^event-revision-followup-(date|text)$/.test(M)) {
+    items.length = 0;
+    const revised = fs.readFileSync('event.md', 'utf8').includes('修訂版');
+    const dateMode = M.endsWith('-date'), action = dateMode ? '寄出樣本' : revised ? '預約試用' : '寄出樣本';
+    const date = dateMode ? (revised ? '2026-11-27' : '2026-11-20') : '2026-11-20';
+    const sourceQuote = dateMode ? `供應商負責在 ${revised ? '2026 年 11 月 27 日' : '2026 年 11 月 20 日'}寄出樣本。` : `供應商負責${action}。`;
+    items.push({ kind: 'followUp', date, action, station: (L.milestones.find(x => !x.done) || {}).id, sourceQuote, why: `會議紀錄已寫明供應商${action}。` });
+  }
+  if (M === 'event-revision-followup-unrelated') {
+    items.length = 0;
+    items.push({ kind: 'followUp', date: '2026-11-20', action: '寄出樣本', station: (L.milestones.find(x => !x.done) || {}).id, sourceQuote: '供應商負責在 2026 年 11 月 20 日寄出樣本。', why: '會議紀錄已寫明供應商在該日寄出樣本。' });
+  }
+  if (M === 'event-revision-followup-shift') {
+    items.length = 0;
+    const revised = fs.readFileSync('event.md', 'utf8').includes('修訂版'), station = (L.milestones.find(x => !x.done) || {}).id;
+    items.push({ kind: 'followUp', date: revised ? '2026-11-27' : '2026-11-20', action: '寄出樣本', station, sourceQuote: `供應商負責在 ${revised ? '2026 年 11 月 27 日' : '2026 年 11 月 20 日'}寄出樣本。`, why: '會議紀錄已寫明寄出樣本日期。' });
+    items.push({ kind: 'followUp', date: '2026-11-21', action: '回覆報價', station, sourceQuote: '供應商負責在 2026 年 11 月 21 日回覆報價。', why: '會議紀錄已寫明回覆報價日期。' });
+  }
+  // 下一個對外動作的修訂：首版「寄出樣本」，修訂版改為「預約試用」
+  if (M === 'event-revision-next') {
+    items.length = 0;
+    const revised = fs.readFileSync('event.md', 'utf8').includes('修訂版'), station = (L.milestones.find(x => !x.done) || {}).id;
+    const text = revised ? '先為對方預約試用' : '先寄出樣本給對方';
+    items.push({ kind: 'nextAction', text, milestoneId: station, sourceQuote: `下一步：${text}。`, why: '會議紀錄寫明下一步。' });
+  }
+  if (M === 'event-revision-followup-no-station') {
+    items.length = 0;
+    const revised = fs.readFileSync('event.md', 'utf8').includes('修訂版');
+    items.push({ kind: 'followUp', date: revised ? '2026-11-27' : '2026-11-20', action: '寄出樣本', sourceQuote: `供應商負責在 ${revised ? '2026 年 11 月 27 日' : '2026 年 11 月 20 日'}寄出樣本。`, why: '會議紀錄已寫明寄出樣本日期。' });
+  }
+  if (M === 'event-revision-followup-multi') {
+    items.length = 0;
+    const revised = fs.readFileSync('event.md', 'utf8').includes('修訂版'), station = (L.milestones.find(x => !x.done) || {}).id;
+    items.push({ kind: 'followUp', date: revised ? '2026-11-27' : '2026-11-20', action: '寄出樣本', station, sourceQuote: `供應商負責在 ${revised ? '2026 年 11 月 27 日' : '2026 年 11 月 20 日'}寄出樣本。`, why: '會議紀錄已寫明寄出樣本日期。' });
+    items.push({ kind: 'followUp', date: revised ? '2026-11-28' : '2026-11-21', action: '回覆報價', station, sourceQuote: `供應商負責在 ${revised ? '2026 年 11 月 28 日' : '2026 年 11 月 21 日'}回覆報價。`, why: '會議紀錄已寫明回覆報價日期。' });
+  }
+  // 修訂題保底：首版有寄樣待辦及下一步（同一行）；修訂版 AI 不交回任何事項（silent），
+  // 或沿用舊日期並引用未改動的「雙方決定」行（stale，重現真實 AI 走查）；chain 第二版正常交回新日期、第三版不交回
+  if (/^event-revision-(silent|stale|chain)$/.test(M)) {
+    items.length = 0;
+    const md = fs.readFileSync('event.md', 'utf8'), station = (L.milestones.find(x => !x.done) || {}).id;
+    const third = md.includes('第三版'), revised = md.includes('修訂版') || third;
+    if (!revised) {
+      items.push({ kind: 'followUp', date: '2026-11-20', action: '寄出樣本', station, sourceQuote: '供應商負責在 2026 年 11 月 20 日寄出樣本。', why: '會議紀錄已寫明寄出樣本日期。' });
+      items.push({ kind: 'nextAction', text: '先寄出樣本給對方', milestoneId: station, sourceQuote: '供應商負責在 2026 年 11 月 20 日寄出樣本。', why: '會議紀錄寫明下一步。' });
+    } else if (M === 'event-revision-stale') {
+      items.push({ kind: 'followUp', date: '2026-11-20', action: '寄出樣本', station, sourceQuote: '雙方決定：供應商在 2026 年 11 月 20 日前寄出樣本。', why: '雙方決定寫 20 日，與待辦不一致，請核對。' });
+    } else if (M === 'event-revision-chain' && !third) {
+      items.push({ kind: 'followUp', date: '2026-11-27', action: '寄出樣本', station, sourceQuote: '供應商負責在 2026 年 11 月 27 日寄出樣本。', why: '會議紀錄已寫明寄出樣本日期。' });
+    }
+  }
+  // 同一行兩項待辦（寄樣及回覆報價同日）：首版兩項都交回；修訂版不交回事項
+  if (M === 'event-revision-shared') {
+    items.length = 0;
+    const md = fs.readFileSync('event.md', 'utf8'), station = (L.milestones.find(x => !x.done) || {}).id;
+    if (!md.includes('修訂版')) {
+      items.push({ kind: 'followUp', date: '2026-11-20', action: '寄出樣本', station, sourceQuote: '2026 年 11 月 20 日寄出樣本', why: '會議紀錄已寫明寄出樣本日期。' });
+      items.push({ kind: 'followUp', date: '2026-11-20', action: '回覆報價', station, sourceQuote: '寄出樣本及回覆報價', why: '會議紀錄已寫明回覆報價日期。' });
+    }
   }
   const OFFICE_EV = /\.(docx?|pptx?|xlsx?)$/i;
   const looseName = f => 'files/' + f.replace(/\.[^.]+$/, e => e.toUpperCase()), loose = /-loose$/.test(M);

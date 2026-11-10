@@ -6,6 +6,7 @@
 //       node ask.mjs <問題包.json>      放上去並打開頁面
 //       node ask.mjs <問題包.json> --no-open
 //       node ask.mjs --list              列出等緊答嘅問題包
+//       node ask.mjs --read <檔案>        只讀附件，辨認逐字稿、講者例句、字數及已確認公司概覽的名稱及用詞
 //       node ask.mjs --dashboard --sim <實例資料夾>   模擬實例（資料喺 <實例>/data，預設 4650；假 AI 喺 <實例>/../tools）
 // 格式同出題規則：ask-format.md。超過 12 條會按優先自動拆包；答過嘅題目會自動拎走。
 import fs from 'node:fs';
@@ -19,11 +20,16 @@ import { peopleView, resolveActorId } from './people-ops.mjs';
 import { seedDemo, DEMO_DIR } from './demo-seed.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { dashboardState, guideCard } from './dash-lib.mjs';
+import { officeKind, officeToText } from './office-text.mjs';
+import { isPdf, pdfToText } from './pdf-text.mjs';
+import { detect, samples } from './transcript-lib.mjs';
+import { overviewLines } from './minutes-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const STATUS_ONLY = args.includes('--status');
 const BRIEF = args.includes('--brief');
+const READ_AT = args.indexOf('--read');
 // 模擬實例（設計稿第 8 節）：獨立資料夾、模擬時鐘、預設 4650；唔係生意證據
 const si = args.indexOf('--sim');
 const PORT0 = si >= 0 ? 4650 : BASE_PORT;
@@ -34,7 +40,7 @@ if (si >= 0) {
 }
 // 示範（虛構公司「月月鮮烘」）：用另一個資料夾，唔會郁真實資料；未有就建
 if (args.includes('--demo')) process.env.SOS_DATA = DEMO_DIR;
-const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF });
+const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF && READ_AT < 0 });
 if (STATUS_ONLY) {
   if (!fs.existsSync(DIR.data)) {
     console.log('未能讀取目前安排：尚未找到 CrewZero 資料。');
@@ -54,6 +60,48 @@ if (STATUS_ONLY) {
   console.log('目前：' + card.today);
   console.log('下一步：' + card.button + '（在 CrewZero 按此按鈕）');
   console.log('重新打開：在 AI 對話輸入 /crewzero:dashboard（或說「打開 CrewZero」）');
+  process.exit(0);
+}
+// --read：只讀一份附件，讓「和 Zero 討論」先辨認會議逐字稿及講者，並附已確認公司概覽的名稱及用詞；不建立資料夾、不寫旁檔。
+if (READ_AT >= 0) {
+  const file = args[READ_AT + 1] || '';
+  if (!file) { console.log(NAMES.ui.minReadMissing); process.exit(1); }
+  let buf;
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile()) throw new Error('not-file');
+    buf = fs.readFileSync(file);
+  } catch {
+    console.log(NAMES.ui.minReadMissing);
+    process.exit(1);
+  }
+  const name = path.basename(file);
+  let text = '', converted;
+  if (isPdf(name)) converted = pdfToText(buf, name);
+  else if (officeKind(name)) converted = officeToText(buf, name);
+  else if (/\.(?:txt|md)$/i.test(name)) converted = { ok: true, text: buf.toString('utf8') };
+  else {
+    console.log(NAMES.ui.minReadUnsupported);
+    process.exit(1);
+  }
+  if (!converted || !converted.ok || typeof converted.text !== 'string') {
+    console.log(NAMES.ui.minReadFailed);
+    process.exit(1);
+  }
+  text = converted.text;
+  const found = detect(text), labels = found.generic.concat(found.named);
+  console.log(NAMES.t('minReadTranscript', { v: found.transcript ? NAMES.ui.minReadYes : NAMES.ui.minReadNo }));
+  console.log(NAMES.t('minReadLabels', { v: labels.length ? labels.join('、') : NAMES.ui.minReadNone }));
+  labels.forEach(function (label) {
+    console.log(NAMES.t('minReadSample', { label }));
+    samples(text, label, 3).forEach(function (line) { console.log('- ' + line); });
+  });
+  console.log(NAMES.t('minReadWords', { n: [...text.replace(/\s/g, '')].length }));
+  const companyNames = overviewLines(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null));
+  if (companyNames.length) {
+    console.log(NAMES.ui.minReadOverview);
+    companyNames.forEach(line => console.log(line));
+  }
   process.exit(0);
 }
 // --brief：只讀，印一段白話背景給 AI 對話討論前閱讀。不印檔案路徑、編號、秘密、通行證；沒有資料就印一句中文並以非零結束。

@@ -186,7 +186,8 @@ try {
   const firstHome = await cdp.ev('(()=>{const row=document.querySelector("[data-help-reply]"),a=row&&row.querySelector("a"),intake=document.querySelector("a[href=\'#/intake\']");return row?{text:row.innerText,href:a&&a.getAttribute("href"),button:a&&a.textContent,intake:!!intake,hero:!!document.querySelector(".hero"),legacy:!!document.querySelector("#help-replies")}:null})()');
   ok('未有公司概覽而只有求助回覆：首頁保留交資料入口，回覆成為「接下來」一列', firstHome && firstHome.text.includes(N.ui.helpReplyLine) && firstHome.href === '#/ask/' + first.id && firstHome.button === N.ui.helpView && firstHome.intake && !firstHome.hero && !firstHome.legacy, firstHome);
   fs.writeFileSync(path.join(DATA, 'asks', 'p-1.json'), JSON.stringify({ id: 'p-1', title: '待解釋的原題', askedBy: 'AI', askedAt: lib.localIso(new Date(Date.now() - 4 * 86400000)), questions: [{ id: 'p1', ask: '原題怎樣處理？', kind: 'choice', options: [{ text: '照建議', rec: true }, { text: '暫緩' }], value: '照建議', priority: 1 }] }));
-  await cdp.go(BASE + '/#/', 1280, 1800);
+  // 頁面已在 #/：再打開同一網址不會重新載入，要等下一次定時更新；改為真正重新載入，即時讀到新題
+  await cdp.send('Page.reload'); await sleep(1800);
   const pairedHelp = await waitFor(() => cdp.ev('(()=>{const row=document.querySelector("[data-todo=\\\"p-1\\\"]"),a=row&&row.querySelector("a[data-help-reply]");return row&&a?{text:row.innerText,href:a.getAttribute("href"),button:a.textContent,legacy:!!document.querySelector("#help-replies")}:null})()'), 5000);
   ok('求助回覆配回原題：原題列寫明已解釋，並連去回覆題包', pairedHelp && pairedHelp.text.includes(N.ui.helpReadyLine) && pairedHelp.href === '#/ask/' + first.id && pairedHelp.button === N.ui.helpView && !pairedHelp.legacy, pairedHelp);
   await cdp.click('[data-todo="p-1"] a[data-help-reply]');

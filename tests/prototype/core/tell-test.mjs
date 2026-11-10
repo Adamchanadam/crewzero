@@ -34,6 +34,7 @@ const seenIds = async () => new Set((await runs()).map(r => r.id));
 const newRun = (seen, pred) => waitFor(async () => (await runs()).find(r => !seen.has(r.id) && pred(r) && (r.state === 'done' || r.state === 'failed')));
 const inbox = () => fs.readdirSync(path.join(DATA, 'founder', 'inbox'));
 const ask = (...args) => spawnSync(process.execPath, [path.join(INSTALL, 'ask.mjs'), ...args], { cwd: PROJ, env: ENV, encoding: 'utf8', timeout: 60000 });
+  const askRead = (data, ...args) => spawnSync(process.execPath, [path.join(INSTALL, 'ask.mjs'), ...args], { cwd: PROJ, env: { ...ENV, SOS_DATA: data }, encoding: 'utf8', timeout: 60000 });
 const draftFile = (name, obj) => { const p = path.join(OUT, name + '.json'); fs.writeFileSync(p, typeof obj === 'string' ? obj : JSON.stringify(obj)); return p; };
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 const sh = (name, ...a) => name;
@@ -48,6 +49,35 @@ try {
   /* ---- --brief：沒有帳本時印一句中文並以非零結束 ---- */
   { const b0 = ask('--brief');
     ok('B1 --brief 沒有資料：印一句中文、非零結束、不建立資料夾', b0.status !== 0 && /[一-鿿]/.test(b0.stdout) && b0.stdout.trim().split('\n').length === 1 && b0.stdout.trim() === N.ui.briefNone, { status: b0.status, out: b0.stdout }); }
+
+  /* ---- --read：只讀逐字稿，不建立旁檔 ---- */
+  { const transcript = path.join(PROJ, '會議逐字稿.txt');
+    fs.writeFileSync(transcript, ['00:00 Speaker 1', '今日想確認下星期的供貨安排。', '', '00:12 Speaker 2', '我們可以提供報價及最早交貨日期。', '', '00:25 Speaker 1', '月結付款條件需要再確認。', '', '00:38 Speaker 2', '我會在會後把資料整理好。', '', '00:51 Speaker 1', '請同時確認負責人及實際日期。'].join('\n'));
+    const r = ask('--read', '會議逐字稿.txt');
+    ok('R1 --read：印出逐字稿判斷、講者標籤、每人例句及字數', r.status === 0 && r.stdout.includes(N.t('minReadTranscript', { v: N.ui.minReadYes })) && r.stdout.includes('Speaker 1') && r.stdout.includes('Speaker 2') && r.stdout.includes(N.t('minReadWords', { n: 0 }).split('：')[0]), r.stdout);
+    ok('R2 --read：只讀，不建立文字旁檔', !fs.existsSync(transcript + '.md'), fs.existsSync(transcript + '.md'));
+    const badRead = ask('--read', '不存在.txt');
+    ok('R3 --read：找不到檔案時印白話原因', badRead.status !== 0 && badRead.stdout.trim() === N.ui.minReadMissing, badRead.stdout); }
+  { const transcript = path.join(PROJ, '會議逐字稿.txt'), r4Data = path.join(OUT, 'read-overview');
+    fs.mkdirSync(path.join(r4Data, 'company'), { recursive: true }); fs.mkdirSync(path.join(r4Data, 'ledger'), { recursive: true });
+    const page = JSON.parse(fs.readFileSync(path.join(INSTALL, 'fixtures', 'example-company-page.json'), 'utf8'));
+    const fields = [...page.detail.reading, ...page.glance.rows, ...page.path.milestones.map(station => station.event).filter(Boolean)];
+    const confirmed = { pageId: page.page.id, values: Object.fromEntries(fields.filter(field => field && field.id).map(field => [field.id, field.value])) };
+    confirmed.values['canvas-value'] = '星塵慢烘禮盒 demo@example.invalid'; delete confirmed.values['canvas-partners'];
+    page.detail.reading.find(field => field.id === 'canvas-partners').value = '銀杏速遞行';
+    fs.writeFileSync(path.join(r4Data, 'company', 'page.json'), JSON.stringify(page, null, 2));
+    fs.writeFileSync(path.join(r4Data, 'ledger', 'confirmed.json'), JSON.stringify(confirmed, null, 2));
+    const r4 = askRead(r4Data, '--read', transcript);
+    ok('R4 --read：附已確認名稱清單，只印確認值、清走電郵，且不印路徑或欄位編號', r4.status === 0 && r4.stdout.includes(N.ui.minReadOverview) && r4.stdout.includes('月月鮮烘') && r4.stdout.includes('星塵慢烘禮盒') && !r4.stdout.includes('demo@example.invalid') && !r4.stdout.includes('銀杏速遞行') && !/[A-Za-z]:[\\/]/.test(r4.stdout) && !/canvas-value/.test(r4.stdout), r4.stdout);
+    const r6Data = path.join(OUT, 'read-page-mismatch');
+    fs.mkdirSync(path.join(r6Data, 'company'), { recursive: true }); fs.mkdirSync(path.join(r6Data, 'ledger'), { recursive: true });
+    fs.writeFileSync(path.join(r6Data, 'company', 'page.json'), JSON.stringify(page, null, 2));
+    fs.writeFileSync(path.join(r6Data, 'ledger', 'confirmed.json'), JSON.stringify({ ...confirmed, pageId: 'not-the-current-page' }, null, 2));
+    const r6 = askRead(r6Data, '--read', transcript);
+    ok('R6 --read：已確認頁面編號不符時不印名稱清單', r6.status === 0 && !r6.stdout.includes(N.ui.minReadOverview) && !r6.stdout.includes('月月鮮烘') && !r6.stdout.includes('星塵慢烘禮盒'), r6.stdout);
+    const r5Data = path.join(OUT, 'read-no-overview'); fs.mkdirSync(r5Data, { recursive: true });
+    const before = fs.readdirSync(r5Data), r5 = askRead(r5Data, '--read', transcript), after = fs.readdirSync(r5Data);
+    ok('R5 --read：沒有概覽時正常讀逐字稿、不印名稱清單且不建立資料', r5.status === 0 && !r5.stdout.includes(N.ui.minReadOverview) && r5.stdout.includes(N.t('minReadTranscript', { v: N.ui.minReadYes })) && r5.stdout.includes(N.t('minReadLabels', { v: 'Speaker 1、Speaker 2' })) && r5.stdout.includes(N.t('minReadWords', { n: 0 }).split('：')[0]) && before.length === 0 && after.length === 0, { out: r5.stdout, after }); }
 
   /* ---- T1–T3 三類成功，並出現在帳本（source: chat） ---- */
   const tellOk = async (draft, runPred) => { const seen = await seenIds(); const r = ask('--tell', draftFile('d' + Date.now(), draft)); const run = r.status === 0 ? await newRun(seen, runPred) : null; return { r, run }; };

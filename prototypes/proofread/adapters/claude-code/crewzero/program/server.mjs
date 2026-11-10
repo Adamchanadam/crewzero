@@ -12,7 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { receiveAttachments, collectLinks, rereadLink, rehomeInterruptedUploads } from './inbound-lib.mjs';
+import { receiveAttachments, collectLinks, convertInboundText, rereadLink, rehomeInterruptedUploads } from './inbound-lib.mjs';
 import { ROLES_OPS, ROLES_OP_NAMES, checkRolesOp } from './ledger-ops.mjs';
 import { PACE_KEYS, timeoutOf } from './pace-lib.mjs';
 import { applyActorOp, ACTOR_OPS, ownerKind } from './people-ops.mjs';
@@ -26,6 +26,8 @@ import { listScenarios, loadScenario, listSessions, loadSession, startSession, s
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
+import { cleanTitle, createMinutes, fileNameFor, listOpen, minutesFilePath, minutesShown, patchMinutes, readMinutes, reserveMinutesId, sha256, sourceDir } from './minutes-lib.mjs';
+import { detect, formatMap, gate, marks, samples, unmappedIn } from './transcript-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // 模擬／測試資料夾一定要同預設 data/ 係兩個實體位置。path.resolve() 睇唔到 Windows
@@ -373,6 +375,8 @@ function openDemo() {
   if (Date.now() - demoOpeningAt < 10000) return [429, { error: 'busy', message: NAMES.ui.openTooSoon }];
   const env = cleanEnv();
   delete env.SOS_DATA; delete env.SOS_SIM; delete env.SOS_PORT;
+  // 只供測試：SOS_DEMO_PORT 指定示範伺服器的起始埠，令測試不會在創辦人日常用的 4380–4389 開關伺服器
+  if (/^\d{2,5}$/.test(String(process.env.SOS_DEMO_PORT || ''))) env.SOS_PORT = String(process.env.SOS_DEMO_PORT);
   try {
     demoOpeningAt = Date.now();
     const c = spawn(process.execPath, [path.join(ROOT, 'ask.mjs'), '--dashboard', '--demo'], { cwd: ROOT, env, detached: true, stdio: 'ignore', windowsHide: true });
@@ -691,13 +695,316 @@ async function receiveWork(body, opts = {}) {
   const created = [];
   try {
     const { records, meta } = await receiveAttachments({ id, type, attachments: got.files, text, links, inboxDir: DIR.inbox, fetchImpl: FETCH_IMPL, created, source: opts.source });
+    // 逐字稿必須先在同一頁確認講者；附件的 .txt／.md 直接核對，其他格式只用已成功轉出的文字版。
+    if (MINUTES_GATE_TYPES.has(type)) {
+      const transcriptTexts = got.files.filter(f => ['.md', '.txt'].includes(path.extname(f.name).toLowerCase())).map(f => f.bytes.toString('utf8'));
+      for (const item of meta.fileInfo) {
+        if (!item || typeof item.text !== 'string' || item.text !== path.basename(item.text)) continue;
+        try { transcriptTexts.push(fs.readFileSync(path.join(DIR.inbox, item.text), 'utf8')); } catch { }
+      }
+      // 先只看每份開頭兩萬字判斷是否逐字稿（逐字稿由開頭起已有時間戳及講者標籤）；像逐字稿的才做全文核對。
+      // 大型文件不會令伺服器停頓；中間才夾有逐字稿的少見情況，外殼 checkEvent 仍會拒絕未對照的講者標籤
+      const likely = transcriptTexts.filter(t => detect(t.slice(0, 20000)).transcript);
+      if (likely.length && !gate(text, likely).ok) {
+        for (const p of created) try { fs.unlinkSync(p); } catch { }
+        return fail(NAMES.ui.minUseFlow);
+      }
+    }
     // 只貼連結、沒有寫字也沒有附件，而連結全部讀不到：沒有東西可交給 Zero，清掉說明檔並告訴創辦人怎樣做
     if (!text && !records.length) { for (const p of created) try { fs.unlinkSync(p); } catch { } return fail(NAMES.ui.linkNotShared); }
-    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records })}\n\`\`\`\n` : `${text}\n`;
+    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records, ...(opts.minutes ? { minutes: opts.minutes } : {}) })}\n\`\`\`\n` : `${text}\n`;
     const p = path.join(DIR.inbox, `${id}-note-${type}.md`);
     fs.writeFileSync(p, `kind: note\ntype: ${type}\nat: ${localIso()}\n\n${body2}`, { flag: 'wx' }); created.push(p);
     return { ok: true, id, receivedAt: localIso(), ...(meta.linkErrors.length ? { linkErrors: meta.linkErrors } : {}) };
   } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch { } throw e; }
+}
+
+/* ---------- 會議紀錄：逐字稿預檢、講者確認、草稿及正式交出 ---------- */
+const MINUTES_GATE_TYPES = new Set(['event', 'doc', 'adhoc', 'order']);
+const minutesDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) && !Number.isNaN(new Date(String(value) + 'T00:00:00').getTime());
+const minutesNames = speakers => Object.fromEntries(Object.entries(speakers || {}).map(([label, value]) => [label, typeof value?.name === 'string' ? value.name : '']).filter(([, name]) => !!name));
+const minutesMarkInfo = text => {
+  const items = marks(text).map(({ kind, line, section, reason }) => ({ kind, line, section, reason }));
+  return { warn: items.filter(item => item.kind === 'unsure').length, fill: items.filter(item => item.kind === 'fill').length, items };
+};
+const minutesNote = (id, type) => {
+  const file = path.join(DIR.inbox, id + '-note-' + type + '.md');
+  fs.writeFileSync(file, 'kind: note\ntype: ' + type + '\nat: ' + localIso() + '\n\n', { flag: 'wx' });
+  return file;
+};
+const removeMinuteFiles = files => { for (const file of files) try { fs.unlinkSync(file); } catch { } };
+
+function completeMinutesSpeakers(rec) {
+  const labels = Array.isArray(rec?.labels) ? rec.labels.map(item => item?.label).filter(Boolean) : [];
+  return labels.length > 0 && labels.every(label => {
+    const person = rec.speakers && rec.speakers[label];
+    return person && typeof person.name === 'string' && person.name.trim() && ['founder', 'actor', 'other'].includes(person.kind);
+  });
+}
+
+function checkedMinutesMap(rec, value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const labels = Array.isArray(rec.labels) ? rec.labels.map(item => item?.label).filter(Boolean) : [];
+  if (!labels.length || Object.keys(value).length !== labels.length || Object.keys(value).some(label => !labels.includes(label))) return null;
+  const actors = ((readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}).company || {}).actors || [];
+  const actorIds = new Set(actors.filter(actor => actor && typeof actor.id === 'string').map(actor => actor.id));
+  const speakers = {};
+  for (const label of labels) {
+    const person = value[label];
+    if (!person || typeof person !== 'object' || Array.isArray(person) || !['founder', 'actor', 'other'].includes(person.kind) || typeof person.name !== 'string' || !person.name.trim()) return null;
+    const name = person.name.trim();
+    const actorId = typeof person.actorId === 'string' ? person.actorId : '';
+    if (person.kind === 'founder' && (name !== '我' || actorId)) return null;
+    if (person.kind === 'actor' && (!actorIds.has(actorId))) return null;
+    if (person.kind === 'other' && actorId) return null;
+    speakers[label] = { kind: person.kind, name, actorId };
+  }
+  return speakers;
+}
+
+async function minuteSources(files) {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-minutes-'));
+  try {
+    const sources = [];
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index], tempFile = path.join(temp, String(index + 1).padStart(2, '0') + '-' + file.name);
+      fs.writeFileSync(tempFile, file.bytes, { flag: 'wx' });
+      const ext = path.extname(file.name).toLowerCase();
+      let text = '';
+      if (['.pdf', '.docx', '.pptx', '.xlsx'].includes(ext)) {
+        const result = await convertInboundText(tempFile);
+        if (!result.ok) throw new Error('minutes conversion failed');
+        text = fs.readFileSync(result.sidecar, 'utf8');
+      } else text = file.bytes.toString('utf8');
+      sources.push({ name: file.name, bytes: file.bytes, text });
+    }
+    return sources;
+  } finally {
+    try { fs.rmSync(temp, { recursive: true, force: true }); } catch { }
+  }
+}
+
+function writeMinuteSources(id, sources) {
+  const dir = sourceDir(DIR, id), records = [];
+  fs.mkdirSync(dir, { recursive: true });
+  for (let index = 0; index < sources.length; index++) {
+    const source = sources[index], storedName = String(index + 1).padStart(2, '0') + '-' + source.name;
+    fs.writeFileSync(path.join(dir, storedName), source.bytes, { flag: 'wx' });
+    fs.writeFileSync(path.join(dir, storedName + '.md'), source.text, { encoding: 'utf8', flag: 'wx' });
+    records.push({ name: source.name, stored: path.posix.join('ledger', 'minutes', id, storedName), text: path.posix.join('ledger', 'minutes', id, storedName + '.md'), chars: source.text.length });
+  }
+  return records;
+}
+
+async function preflightMinutes(body) {
+  if (!Array.isArray(body.files) || !body.files.length) return [400, { error: 'invalid', message: '請先加入逐字稿。' }];
+  const checked = takeFiles(body.files);
+  if (checked.error) return [400, { error: 'invalid', message: checked.error }];
+  const sources = await minuteSources(checked.files);
+  const text = sources.map(source => source.text).filter(Boolean).join('\n\n');
+  const transcript = detect(text);
+  if (!transcript.transcript) return [200, { ok: true, transcript: false }];
+  const id = reserveMinutesId(DIR);
+  let recordCreated = false, note = '', labels = [];
+  try {
+    labels = [...transcript.generic, ...transcript.named].map(label => ({ label, samples: samples(text, label, 3) }));
+    const records = writeMinuteSources(id, sources);
+    createMinutes(DIR, { id, state: 'speakers', title: '', meetingDate: '', sources: records, labels, suggest: { state: 'running', items: {} }, speakers: {}, file: '', hash: '', version: 1, versions: [], inputId: '', error: '' });
+    recordCreated = true;
+    note = minutesNote(id, 'minutes-speakers');
+  } catch (error) {
+    if (note) removeMinuteFiles([note]);
+    try { fs.rmSync(sourceDir(DIR, id), { recursive: true, force: true }); } catch { }
+    if (recordCreated) try { fs.rmSync(path.join(DIR.ledger, 'minutes', id + '.json'), { force: true }); } catch { }
+    throw error;
+  }
+  return [200, { ok: true, transcript: true, id, labels }, true];
+}
+
+const minutesFolderBad = () => [400, { error: 'folder', message: NAMES.ui.minFolderBad }];
+function readMinutesText(rec) {
+  const file = minutesFilePath(ROOT, DIR, rec && rec.file);
+  try { return fs.readFileSync(file, 'utf8'); }
+  catch (error) { if (error && error.code === 'ENOENT') return null; throw error; }
+}
+function minutesFileMissing(rec) {
+  const file = minutesFilePath(ROOT, DIR, rec && rec.file);
+  try { fs.lstatSync(file); return false; }
+  catch (error) { if (error && error.code === 'ENOENT') return true; throw error; }
+}
+
+function minutesView(id) {
+  const rec = readMinutes(DIR, id);
+  if (!rec) return [404, { error: 'not found' }];
+  let text, hash, markInfo;
+  if (rec.state === 'ready' || rec.state === 'submitted') {
+    try { text = readMinutesText(rec); }
+    catch { return minutesFolderBad(); }
+    if (text === null) return [200, { ok: true, id: rec.id, state: rec.state, title: rec.title || '', meetingDate: rec.meetingDate || '', labels: rec.labels || [], suggest: rec.suggest || {}, speakers: rec.speakers || {}, shown: minutesShown(ROOT, DIR, rec.file), error: 'missing', message: NAMES.ui.minMissing }];
+    hash = sha256(text);
+    if (hash !== rec.hash) patchMinutes(DIR, rec.id, { hash }, { who: 'server', from: rec.state });
+    markInfo = minutesMarkInfo(text);
+  }
+  return [200, { ok: true, id: rec.id, state: rec.state, title: rec.title || '', meetingDate: rec.meetingDate || '', labels: rec.labels || [], suggest: rec.suggest || {}, speakers: rec.speakers || {}, shown: minutesShown(ROOT, DIR, rec.file), ...(text !== undefined ? { text, hash, marks: markInfo } : {}), error: rec.error || '', ...minutesVersions(rec) }];
+}
+// 版本資料（頁面用）：已交出的各版及其「交給 Zero 的事」；上一版連到該件回饋卡（附件內有當時的會議紀錄）。forInput：只看這件事本身是第幾版
+function minutesVersions(rec, forInput = '') {
+  const versions = (Array.isArray(rec.versions) ? rec.versions : []).filter(x => x && Number.isInteger(x.v) && /^[\w-]{1,80}$/.test(String(x.inputId || ''))).map(x => ({ v: x.v, at: x.at || '', inputId: x.inputId }));
+  const mine = forInput ? versions.find(x => x.inputId === forInput) : null;
+  const version = mine ? mine.v : rec.version || 1;
+  const prev = versions.filter(x => x.v < version).sort((a, b) => b.v - a.v)[0];
+  return { version, versions, inputId: rec.inputId || '', previous: prev ? { v: prev.v, href: '#/feedback/' + prev.inputId } : null };
+}
+// 回饋卡用：這件「交給 Zero 的事」屬於哪次會議紀錄（找登記檔各版的 inputId）；沒有就回 null
+function minutesForInput(inputId) {
+  const dir = path.join(DIR.ledger, 'minutes');
+  let names = []; try { names = fs.readdirSync(dir).filter(f => f.endsWith('.json')); } catch { return null; }
+  for (const f of names) {
+    const rec = readMinutes(DIR, f.slice(0, -5));
+    if (rec && (rec.inputId === inputId || (rec.versions || []).some(x => x && x.inputId === inputId))) { const v = minutesVersions(rec, inputId); return { id: rec.id, version: v.version, previous: v.previous }; }
+  }
+  return null;
+}
+
+// 同一份會議紀錄正在交出時（交出要等收件寫好），儲存、整理、修改一律暫不接受，免得交出的是舊稿而新內容被刪
+const minutesBusy = new Set();
+async function receiveMinutes(body) {
+  const id = body && typeof body.id === 'string' ? body.id : '';
+  if (id && ['save', 'submit', 'draft', 'revise'].includes(body.action)) {
+    if (minutesBusy.has(id)) return [409, { error: 'busy', message: NAMES.ui.minBusy }];
+    if (body.action === 'submit') { minutesBusy.add(id); try { return await receiveMinutesOnce(body); } finally { minutesBusy.delete(id); } }
+  }
+  return receiveMinutesOnce(body);
+}
+async function receiveMinutesOnce(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [400, { error: 'invalid' }];
+  if (body.action === 'preflight') return preflightMinutes(body);
+  const id = typeof body.id === 'string' ? body.id : '', rec = readMinutes(DIR, id);
+  if (!rec) return [404, { error: 'not found' }];
+  if (body.action === 'speakers') {
+    if (rec.state !== 'speakers') return [409, { error: 'state' }];
+    const speakers = checkedMinutesMap(rec, body.map);
+    if (!speakers) return [400, { error: 'speakers', message: NAMES.ui.minSpeakersMissing }];
+    patchMinutes(DIR, rec.id, { speakers }, { who: 'server', from: 'speakers' });
+    return [200, { ok: true }];
+  }
+  if (body.action === 'draft') {
+    let from = rec.state;
+    if (rec.state === 'speakers' || rec.state === 'failed') {
+      // 整理失敗後按「重試」：講者已齊就可再整理（failed → drafting）
+      if (!completeMinutesSpeakers(rec)) return [400, { error: 'speakers', message: NAMES.ui.minSpeakersMissing }];
+    } else if (rec.state === 'ready') {
+      if (!completeMinutesSpeakers(rec)) return [400, { error: 'speakers', message: NAMES.ui.minSpeakersMissing }];
+      try { if (!minutesFileMissing(rec)) return [409, { error: 'state' }]; }
+      catch { return minutesFolderBad(); }
+    } else return [409, { error: 'state' }];
+    if (body.meetingDate != null && body.meetingDate !== '' && !minutesDate(body.meetingDate)) return [400, { error: 'invalid' }];
+    const title = cleanTitle(body.title == null ? rec.title : body.title);
+    const meetingDate = body.meetingDate == null ? rec.meetingDate || '' : String(body.meetingDate);
+    let note = '';
+    try {
+      note = minutesNote(rec.id, 'minutes-draft');
+      patchMinutes(DIR, rec.id, { state: 'drafting', title, meetingDate, error: '' }, { who: 'server', from });
+    } catch (error) {
+      if (note) removeMinuteFiles([note]);
+      throw error;
+    }
+    return [202, { ok: true }, true];
+  }
+  if (body.action === 'save') {
+    if (rec.state !== 'ready' || typeof body.text !== 'string') return [409, { error: 'state' }];
+    if (body.text.length > 60000) return [400, { error: 'too-long', message: NAMES.ui.minTooLong }];
+    let before, file;
+    try { file = minutesFilePath(ROOT, DIR, rec.file); before = fs.readFileSync(file, 'utf8'); }
+    catch (error) { return error && error.code === 'ENOENT' ? [409, { error: 'missing' }] : minutesFolderBad(); }
+    if (before === null) return [409, { error: 'missing' }];
+    if (sha256(before) !== body.hash) return [409, { error: 'changed', message: NAMES.ui.minChangedLocally }];
+    fs.writeFileSync(file, body.text, 'utf8');
+    const hash = sha256(body.text);
+    patchMinutes(DIR, rec.id, { hash }, { who: 'server', from: 'ready' });
+    return [200, { ok: true, hash, marks: minutesMarkInfo(body.text) }];
+  }
+  if (body.action === 'open') {
+    let file;
+    try { file = minutesFilePath(ROOT, DIR, rec.file); fs.accessSync(file, fs.constants.R_OK); }
+    catch (error) { return error && error.code === 'ENOENT' ? [404, { error: 'not found' }] : minutesFolderBad(); }
+    if (process.env.SOS_NO_OPEN) return [200, { ok: true, opened: false }];
+    const cmd = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+    try { spawn(cmd, [file], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); }
+    catch { return [500, { error: 'open' }]; }
+    return [200, { ok: true, opened: true }];
+  }
+  if (body.action === 'submit') {
+    if (rec.state !== 'ready') return [409, { error: 'state' }];
+    let text;
+    try { text = readMinutesText(rec); }
+    catch { return minutesFolderBad(); }
+    if (text === null) return [409, { error: 'missing' }];
+    if (sha256(text) !== body.hash) return [409, { error: 'changed', message: NAMES.ui.minChangedLocally }];
+    const labels = unmappedIn(text, minutesNames(rec.speakers));
+    if (labels.length) return [400, { error: 'unmapped', message: NAMES.ui.minUnmapped.replace('{labels}', labels.join('、')), labels }];
+    if (text.length > 60000) return [400, { error: 'too-long', message: NAMES.ui.minTooLong }];
+    const markInfo = minutesMarkInfo(text);
+    if ((markInfo.warn || markInfo.fill) && body.acceptMarks !== true) return [409, { error: 'marks', warn: markInfo.warn, fill: markInfo.fill }];
+    const files = [];
+    try {
+      for (const source of rec.sources || []) {
+        const stored = path.basename(String(source && source.stored || ''));
+        if (!stored || stored !== String(source && source.stored || '').split('/').pop()) throw new Error('missing source');
+        files.push({ name: String(source.name || stored), data: fs.readFileSync(path.join(sourceDir(DIR, rec.id), stored)).toString('base64') });
+      }
+    } catch { return [409, { error: 'missing' }]; }
+    const version = Number.isInteger(rec.version) && rec.version > 0 ? rec.version : 1;
+    const wasDraft = /（草稿）\.md$/u.test(rec.file || '');
+    let final, finalFile, draftFile;
+    try {
+      final = wasDraft ? fileNameFor({ date: rec.meetingDate, title: rec.title, draft: false }, name => fs.existsSync(minutesFilePath(ROOT, DIR, name, { create: true }))) : rec.file;
+      if (!final || final !== path.basename(final)) return [409, { error: 'missing' }];
+      finalFile = minutesFilePath(ROOT, DIR, final, { create: wasDraft });
+      if (wasDraft) draftFile = minutesFilePath(ROOT, DIR, rec.file);
+    } catch { return minutesFolderBad(); }
+    const created = [];
+    try {
+      if (wasDraft) {
+        fs.writeFileSync(finalFile, text, { encoding: 'utf8', flag: 'wx' });
+        created.push(finalFile);
+      }
+      const versionFile = path.join(sourceDir(DIR, rec.id), 'v' + version + '.md');
+      fs.writeFileSync(versionFile, text, { encoding: 'utf8', flag: 'wx' });
+      created.push(versionFile);
+      files.push({ name: '會議紀錄.md', data: Buffer.from(text, 'utf8').toString('base64') });
+      const date = rec.meetingDate || localIso().slice(0, 10);
+      const summary = '會議紀錄：' + (rec.title || '會議紀錄') + '\n' + formatMap(minutesNames(rec.speakers)) + (rec.meetingDate ? '' : '\n日期待定');
+      const result = await receiveWork({ type: 'event', text: summary, date, files }, { minutes: { id: rec.id, version, revisionOf: wasDraft ? '' : rec.inputId || '' } });
+      if (!result.ok) { removeMinuteFiles(created); return [400, result]; }
+      // 刪草稿前再核對一次：交出期間如有人在本機改過草稿，保留草稿檔，不刪走新內容
+      if (wasDraft) { let now = null; try { now = fs.readFileSync(draftFile, 'utf8'); } catch { } if (now === text) fs.unlinkSync(draftFile); }
+      const inputId = 'in-' + result.id;
+      const versions = [...(Array.isArray(rec.versions) ? rec.versions : []), { v: version, file: path.posix.join('ledger', 'minutes', rec.id, 'v' + version + '.md'), at: localIso(), inputId }];
+      patchMinutes(DIR, rec.id, { state: 'submitted', file: final, hash: sha256(text), inputId, versions }, { who: 'server', from: 'ready' });
+      return [202, { ok: true, inputId }, true];
+    } catch (error) {
+      removeMinuteFiles(created);
+      throw error;
+    }
+  }
+  if (body.action === 'revise') {
+    if (rec.state !== 'submitted') return [409, { error: 'state' }];
+    // 定稿檔已被移走或刪除：先由最後交出的版本（ledger/minutes/<mid>/vN.md）還原，再開始修改，保留你之前改好的內容
+    let finalFile;
+    try { finalFile = minutesFilePath(ROOT, DIR, rec.file, { create: true }); } catch { return minutesFolderBad(); }
+    if (!fs.existsSync(finalFile)) {
+      const last = (Array.isArray(rec.versions) ? rec.versions : []).filter(x => x && Number.isInteger(x.v)).sort((a, b) => b.v - a.v)[0];
+      const saved = last ? path.join(sourceDir(DIR, rec.id), 'v' + last.v + '.md') : '';
+      if (!saved || !fs.existsSync(saved)) return [409, { error: 'missing', message: NAMES.ui.minMissing }];
+      const text = fs.readFileSync(saved, 'utf8');
+      fs.writeFileSync(finalFile, text, { encoding: 'utf8', flag: 'wx' });
+      patchMinutes(DIR, rec.id, { hash: sha256(text) }, { who: 'server', from: 'submitted' });
+    }
+    patchMinutes(DIR, rec.id, { state: 'ready', version: (Number.isInteger(rec.version) ? rec.version : 1) + 1 }, { who: 'server', from: 'submitted' });
+    return [200, { ok: true }];
+  }
+  return [400, { error: 'invalid' }];
 }
 // 重新讀取一件已收輸入中的 Google 連結：取回新快照存進同一封存資料夾（舊快照保留），再把「換用新快照」交給外殼寫入帳本（伺服器不直接寫帳本）。
 // 只限已配對頁面（呼叫處已驗通行證）；每條連結每分鐘一次；失敗時不留任何新檔、不排任何帳本改動（舊快照與讀取日期不變）；不自動重做 AI 工作。
@@ -1337,6 +1644,12 @@ const handler = async (req, res) => {
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-logo') { const l = companyLogo(DIR); return l ? send(res, 200, fs.readFileSync(l.file), TYPES['.' + l.ext]) : send(res, 404, { error: 'not found' }); }
     if ((req.method === 'GET' || req.method === 'HEAD') && p === '/company-page.js') { const page = readJSON(path.join(DIR.company, 'page.json'), null); return page ? send(res, 200, 'window.STARTUP_OS_PAGE = ' + JSON.stringify(page).replace(/</g, '\\u003c') + ';', TYPES['.js']) : send(res, 404, { error: 'not found' }); }
     if (req.method === 'GET') {
+      if (p === '/api/minutes') {
+        if (isDemoInstance()) return send(res, 409, { error: 'demo', message: NAMES.ui.minDemo });
+        const id = url.searchParams.get('id');
+        if (id) return send(res, ...minutesView(id));
+        return send(res, 200, { ok: true, items: listOpen(DIR) });
+      }
       if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, questionsByBizType: Object.fromEntries(Object.keys(BIZ_TYPES).map(type => [type, intakeQuestions(type)])), bizTypes: Object.entries(BIZ_TYPES).map(([id, x]) => ({ id, label: x.label, example: x.example })), limits, ideate: ideateStatus() });
       if (p === '/api/prefill') { const r = prefillStatus(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, ...r }) : send(res, 404, { error: 'not found' }); }
        if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), aiStale: certStale(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
@@ -1370,7 +1683,8 @@ const handler = async (req, res) => {
         const id = String(url.searchParams.get('id') || '');
         const st = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, input = (st.inputs || []).find(i => i && i.id === id);
         if (!input || !/^[\w-]{1,80}$/.test(id)) return send(res, 404, { error: 'not found' });
-        return send(res, 200, { ok: true, input: inputView(DIR, input, { packs: listPacks(DIR), runs: (readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }) || {}).runs || [], loadPack, loadAnswers }, { detail: true }) });
+        const minutesOf = minutesForInput(id);
+        return send(res, 200, { ok: true, input: { ...inputView(DIR, input, { packs: listPacks(DIR), runs: (readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }) || {}).runs || [], loadPack, loadAnswers }, { detail: true }), ...(minutesOf ? { minutes: minutesOf } : {}) } });
       }
       // 讀附件：只讀該筆輸入登記的檔（輸入編號＋序號，不收路徑）；解析後必須仍在 data 內且不是連結。PDF、圖片在瀏覽器開啟，其他類型下載
       if (p === '/api/input-file' || p === '/api/source-file') {
@@ -1426,6 +1740,19 @@ const handler = async (req, res) => {
       if (p === '/api/practice/scenario') { const s = loadScenario(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, scenario: s }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/practice/session') { const s = loadSession(DIR, url.searchParams.get('id')); return s ? send(res, 200, { ok: true, session: s, scenario: loadScenario(DIR, s.scenarioId) }) : send(res, 404, { error: 'not found' }); }
       if (p === '/api/run') { const r = runResult(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, run: r }) : send(res, 404, { error: 'not found' }); }
+    }
+    if (req.method === 'POST' && p === '/api/minutes') {
+      const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
+      const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
+      if (!loopback && !phone) return refuse(req, res, url, 'origin');
+      if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
+      const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
+      if (isDemoInstance()) return send(res, 409, { error: 'demo', message: NAMES.ui.minDemo });
+      const body = JSON.parse(await readBody(req, 75 * 1024 * 1024) || '{}');
+      if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
+      const [code, result, kickMinutes] = await receiveMinutes(body);
+      if (kickMinutes) schedule();
+      return send(res, code, result);
     }
     if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/input-reread' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/source-url' || p === '/api/celebrations/seen' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。

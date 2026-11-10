@@ -25,6 +25,8 @@ import { registerInput, recordReading, addEffect, applyFollowUp, refreshSnapshot
 import * as PACE from './pace-lib.mjs';
 import * as ROLES from './roles-ops.mjs';
 import { buildBrief, buildProofreadBrief, checkBrief, briefFailStreak } from './brief-lib.mjs';
+import { readMinutes, patchMinutes, minutesFilePath, fileNameFor, cleanTitle, sha256, sourceDir, overviewLines } from './minutes-lib.mjs';
+import { parseTurns, applyMap, unmappedIn, marks, markLegend } from './transcript-lib.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
 
@@ -863,9 +865,163 @@ async function finishIntake(run, sb, label) {
   step(run, 'ready', U.stepIntakeReady, 'done', chk.warnings.length ? `有 ${chk.warnings.length} 項已自動修正` : '');
   finish(run, 'done');
 }
+/* ---------- 會議紀錄：講者建議及草稿只經 minutes-lib 合併寫入，不登記輸入或出題 ---------- */
+const minuteDataPath = rel => {
+  const base = path.resolve(DIR.data), target = path.resolve(base, String(rel || ''));
+  return target === base || target.startsWith(base + path.sep) ? target : '';
+};
+const minutesSpeakerMap = rec => Object.fromEntries(Object.entries((rec && rec.speakers) || {}).map(([label, value]) => [label, typeof value === 'string' ? value : String((value || {}).name || '')]));
+const minutesActorRows = () => (((loadState().company || {}).actors) || []).filter(a => a && !a.mergedInto && a.id && a.name)
+  .map(a => ({ id: a.id, name: a.name, kind: a.kind || '', role: a.role || '', aliases: (Array.isArray(a.aliases) ? a.aliases : []).filter(alias => typeof alias === 'string').map(alias => alias.trim()).filter(alias => alias && pnorm(alias) !== pnorm(a.name)).slice(0, 5) }));
+function minutesText(rec) {
+  const texts = [];
+  for (const source of Array.isArray(rec && rec.sources) ? rec.sources : []) {
+    const file = minuteDataPath(source && source.text);
+    if (!file || !fs.existsSync(file)) continue;
+    try { texts.push(fs.readFileSync(file, 'utf8')); } catch { }
+  }
+  return texts.join('\n\n');
+}
+function minuteAICost(run, result) {
+  if (!result || !result.meta) return;
+  run.aiCost = { usd: ((run.aiCost && run.aiCost.usd) || 0) + (result.meta.total_cost_usd || 0), ms: ((run.aiCost && run.aiCost.ms) || 0) + (result.meta.duration_ms || 0) };
+}
+function minuteError(key, reason) {
+  // 原因末尾的句號由模板加，這裏先去掉，免得出現「。。」
+  return NAMES.t(key, { r: clip(String(reason || '').trim().replace(/[。．.]+$/, ''), 120) || '未能完成' });
+}
+function unknownSpeaker(item = {}) {
+  return { kind: 'unknown', actorId: '', name: '', why: clip(String(item.why || ''), 200), quote: '' };
+}
+function checkedSpeakerSuggestions(rec, rawItems, actors) {
+  const knownActors = new Map(actors.map(actor => [actor.id, actor]));
+  const allTurns = parseTurns(minutesText(rec));
+  const labels = (Array.isArray(rec.labels) ? rec.labels.map(x => x && x.label).filter(Boolean) : Object.keys((rec && rec.speakers) || {}));
+  const byLabel = new Map((Array.isArray(rawItems) ? rawItems : []).filter(x => x && typeof x === 'object' && typeof x.label === 'string').map(x => [x.label, x]));
+  const items = {};
+  for (const label of labels) {
+    const item = byLabel.get(label) || {};
+    const quote = typeof item.quote === 'string' ? item.quote.trim() : '';
+    const quoteMatches = !!quote && allTurns.some(turn => turn.speaker === label && turn.text.includes(quote));
+    if (!quoteMatches) { items[label] = unknownSpeaker(item); continue; }
+    if (item.kind === 'founder') items[label] = { kind: 'founder', actorId: '', name: '我', why: clip(String(item.why || ''), 200), quote };
+    else if (item.kind === 'actor' && knownActors.has(item.actorId)) {
+      const actor = knownActors.get(item.actorId);
+      items[label] = { kind: 'actor', actorId: actor.id, name: actor.name, why: clip(String(item.why || ''), 200), quote };
+    } else items[label] = unknownSpeaker(item);
+  }
+  return items;
+}
+async function handleMinutesSpeakers(run) {
+  const rec = readMinutes(DIR, run.ref), label = U.reqMinSpeakers;
+  if (!rec) { const why = minuteError('minSuggestFailed', '找不到這次會議'); step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
+  const sb = newSandbox(run), actors = minutesActorRows();
+  const samples = {};
+  for (const entry of Array.isArray(rec.labels) ? rec.labels : []) {
+    if (!entry || !entry.label) continue;
+    samples[entry.label] = parseTurns(minutesText(rec)).filter(turn => turn.speaker === entry.label).slice(0, 10).map(turn => turn.text);
+  }
+  writeJSON(path.join(sb, 'speakers-input.json'), { id: rec.id, labels: samples, actors: actors.map(({ id, name, kind, role }) => ({ id, name, kind, role })) });
+  fs.copyFileSync(path.join(ROOT, 'ai-minutes-speakers.md'), path.join(sb, 'task.md'));
+  writeJSON(path.join(sb, 'job.json'), { type: 'minutes-speakers', mid: rec.id });
+  step(run, 'ai', label, 'running', '');
+  const result = await runAI(sb); minuteAICost(run, result);
+  if (!result.ok) {
+    if (result.waiting) { step(run, 'ai', label, 'waiting', result.reason || '等待 Zero 設定'); return finish(run, 'waiting', result.reason); }
+    const why = minuteError('minSuggestFailed', result.reason || 'Zero 未能交回建議');
+    try { patchMinutes(DIR, rec.id, { suggest: { state: 'failed', items: {} }, error: why }, { who: 'shell', from: 'speakers' }); } catch { }
+    step(run, 'ai', label, 'failed', why); return finish(run, result.waiting ? 'waiting' : 'failed', why);
+  }
+  const out = readJSON(path.join(sb, 'out', 'speakers.json'), null);
+  if (!Array.isArray(out)) {
+    const why = minuteError('minSuggestFailed', '建議格式不正確');
+    patchMinutes(DIR, rec.id, { suggest: { state: 'failed', items: {} }, error: why }, { who: 'shell', from: 'speakers' });
+    step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why);
+  }
+  const items = checkedSpeakerSuggestions(rec, out, actors);
+  patchMinutes(DIR, rec.id, { suggest: { state: 'done', items }, error: '' }, { who: 'shell', from: 'speakers' });
+  run.result = { summary: label, artifacts: [], founderNext: [] };
+  step(run, 'ai', label, 'done', '');
+  finish(run, 'done');
+}
+const MINUTES_HEADINGS = ['參加者', '已發生的事實', '對方的說法及承諾', '雙方決定', '待辦', '未定事項', '改動清單'];
+function rewriteMinutesLegend(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
+    .filter(line => !/^>\s*⚠️?\s*不肯定/.test(line) && line.trim() !== '逐字稿聲音不清的地方較多，建議先核對講者及數字。');
+  const titleAt = lines.findIndex(line => /^#\s+\S/.test(line));
+  if (titleAt < 0) return String(text || '');
+  const body = lines.join('\n'), count = marks(body).length, extra = count > 20 ? ['逐字稿聲音不清的地方較多，建議先核對講者及數字。'] : [];
+  lines.splice(titleAt + 1, 0, markLegend(body), ...extra);
+  return lines.join('\n').replace(/\n+$/g, '') + '\n';
+}
+function checkMinutesDraft(text, map) {
+  const errors = [];
+  if (!text || text.length > 60000) errors.push('草稿內容不完整或過長');
+  const lines = String(text || '').split(/\r?\n/);
+  for (const heading of MINUTES_HEADINGS) if (!lines.some(line => new RegExp('^##\\s+' + heading + '\\s*$').test(line))) errors.push('缺少「' + heading + '」');
+  const changeAt = lines.findIndex(line => /^##\s+改動清單\s*$/.test(line));
+  if (changeAt >= 0 && !lines.slice(changeAt + 1).some(line => line.trim() && !/^##\s+/.test(line))) errors.push('改動清單沒有內容');
+  const missing = unmappedIn(text, map);
+  if (missing.length) errors.push('仍有未對照講者：' + missing.join('、'));
+  return { ok: !errors.length, errors };
+}
+function minutesDraftTitle(text, fallback) {
+  const found = /^#\s*會議紀錄\s*[:：]\s*([^（(\r\n]+)/m.exec(String(text || ''));
+  return cleanTitle(found ? found[1] : fallback);
+}
+function minutesDraftFailed(run, rec, reason) {
+  const why = minuteError('minDraftFailed', reason);
+  patchMinutes(DIR, rec.id, { state: 'failed', error: why }, { who: 'shell', from: 'drafting' });
+  step(run, 'ai', U.reqMinDraft, 'failed', why);
+  return finish(run, 'failed', why);
+}
+async function handleMinutesDraft(run) {
+  const rec = readMinutes(DIR, run.ref), label = U.reqMinDraft;
+  if (!rec) { const why = minuteError('minDraftFailed', '找不到這次會議'); step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
+  const map = minutesSpeakerMap(rec), source = minutesText(rec);
+  if (!source) return minutesDraftFailed(run, rec, '找不到逐字稿文字版');
+  const sb = newSandbox(run), actors = minutesActorRows();
+  fs.writeFileSync(path.join(sb, 'minutes-input.md'), ['# 已確認的會議資料', '', '- 會議日期：' + (rec.meetingDate || '日期待定'), '- 名單：' + (actors.map(a => {
+    const notes = [a.role, a.aliases.length ? '別名：' + a.aliases.join('、') : ''].filter(Boolean);
+    return a.name + (notes.length ? '（' + notes.join('；') + '）' : '');
+  }).join('、') || '沒有'), '', '## 已換名逐字稿', '', applyMap(source, map)].join('\n') + '\n');
+  fs.copyFileSync(path.join(ROOT, 'meeting-minutes-format.md'), path.join(sb, 'meeting-minutes-format.md'));
+  const companyNames = overviewLines(loadPage(), readJSON(CONFIRMED, null));
+  if (companyNames.length) fs.writeFileSync(path.join(sb, 'company-names.md'), ['# ' + U.minReadOverview, '', ...companyNames].join('\n') + '\n');
+  fs.copyFileSync(path.join(ROOT, 'ai-minutes-draft.md'), path.join(sb, 'task.md'));
+  writeJSON(path.join(sb, 'job.json'), { type: 'minutes-draft', mid: rec.id, meetingDate: rec.meetingDate || '' });
+  step(run, 'ai', label, 'running', '');
+  let result = await runAI(sb); minuteAICost(run, result);
+  if (!result.ok && result.waiting) { step(run, 'ai', label, 'waiting', result.reason || '等待 Zero 設定'); return finish(run, 'waiting', result.reason); }
+  let text = result.ok ? fs.existsSync(path.join(sb, 'out', 'minutes.md')) ? fs.readFileSync(path.join(sb, 'out', 'minutes.md'), 'utf8') : '' : '';
+  let normalized = rewriteMinutesLegend(text), checked = result.ok ? checkMinutesDraft(normalized, map) : { ok: false, errors: [result.reason || 'Zero 未能交回草稿'] };
+  if (!checked.ok && result.ok) {
+    log(`${run.id} 會議草稿核對不通過：${checked.errors.join('；')}；叫 AI 修正一次`);
+    writeJSON(path.join(sb, 'job.json'), { type: 'minutes-draft-repair', mid: rec.id, errors: checked.errors });
+    fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-minutes-draft.md'), 'utf8') + '\n\n## 修正一次\n\n請只修正以下問題，覆寫 `out/minutes.md`：\n\n' + checked.errors.map((error, index) => `${index + 1}. ${error}`).join('\n') + '\n');
+    result = await runAI(sb); minuteAICost(run, result);
+    if (!result.ok && result.waiting) { step(run, 'ai', label, 'waiting', result.reason || '等待 Zero 設定'); return finish(run, 'waiting', result.reason); }
+    text = result.ok && fs.existsSync(path.join(sb, 'out', 'minutes.md')) ? fs.readFileSync(path.join(sb, 'out', 'minutes.md'), 'utf8') : '';
+    normalized = rewriteMinutesLegend(text); checked = result.ok ? checkMinutesDraft(normalized, map) : { ok: false, errors: [result.reason || 'Zero 未能完成修正'] };
+  }
+  if (!checked.ok) return minutesDraftFailed(run, rec, checked.errors.join('；'));
+  const title = minutesDraftTitle(normalized, rec.title || '會議紀錄');
+  let file;
+  try {
+    file = fileNameFor({ date: rec.meetingDate, title, draft: true }, name => fs.existsSync(minutesFilePath(ROOT, DIR, name, { create: true })));
+    fs.writeFileSync(minutesFilePath(ROOT, DIR, file, { create: true }), normalized, 'utf8');
+  } catch {
+    return minutesDraftFailed(run, rec, '草稿檔案位置未能安全使用');
+  }
+  patchMinutes(DIR, rec.id, { state: 'ready', file, hash: sha256(normalized), error: '' }, { who: 'shell', from: 'drafting' });
+  run.result = { summary: label, artifacts: [], founderNext: [] };
+  step(run, 'ai', label, 'done', '');
+  finish(run, 'done');
+}
+
 /* ---------- 創辦人交要求：登記後叫 AI 擬成問題包（未答之前乜都唔改） ---------- */
 async function handleNote(run, file) {
-  const m = /^(.*)-note-(order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate)\.md$/.exec(file) || /^(.*)-(feedback)-[a-z]+\.md$/.exec(file);
+  const m = /^(.*)-note-(order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate|minutes-speakers|minutes-draft)\.md$/.exec(file) || /^(.*)-(feedback)-[a-z]+\.md$/.exec(file);
   run.kind = 'note'; run.ref = m[1]; run.noteType = m[2]; run.replyFiles = [file];
   if (run.noteType === 'ideate') run.ideateId = (readJSON(IDEATE, null) || {}).id;
   const raw = fs.readFileSync(path.join(DIR.inbox, file), 'utf8');
@@ -874,7 +1030,7 @@ async function handleNote(run, file) {
   run.helpRetries = retry ? Number(retry[1]) : 0;
   run.helpForPackId = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).packId || '')) ? String(machine.context.packId) : '';
   run.helpForRunRef = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).runRef || '')) ? String(machine.context.runRef) : '';
-  step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc, ideate: U.zeroThink }[run.noteType]);
+  step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc, ideate: U.zeroThink, 'minutes-speakers': U.reqMinSpeakers, 'minutes-draft': U.reqMinDraft }[run.noteType]);
   const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
   const said = text.replace(/\x60\x60\x60json[\s\S]*$/, '').replace(/\s+/g, ' ').trim();
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
@@ -888,6 +1044,8 @@ async function handleNote(run, file) {
     fs.renameSync(path.join(DIR.inbox, metaName), path.join(dest, metaName));
   }
   if (run.noteType === 'ideate') return handleIdeate(run);
+  if (run.noteType === 'minutes-speakers') return handleMinutesSpeakers(run);
+  if (run.noteType === 'minutes-draft') return handleMinutesDraft(run);
   if (run.noteType === 'event' || run.noteType === 'doc') return handleEvent(run, raw, text.replace(/```json[\s\S]*$/, '').trim(), dest, meta);
   if (run.noteType === 'feedback') return handleFeedback(run, parseReply(raw).machine || {});
   if (run.noteType === 'brain-decide') return handleBrainDecide(run, parseReply(raw).machine || {});
@@ -1154,6 +1312,247 @@ function finishCelebration(s, batch) {
   s.celebrations.entries.push({ id: 'cele-' + stamp() + '-' + randomUUID(), level: winner.level, kind: winner.kind, title: winner.title, grade, gradeName: NAMES.evName(grade), nextGradeName: NAMES.EV_KEYS[rank + 1] ? NAMES.evName(NAMES.EV_KEYS[rank + 1]) : '', stage: m ? m.short : '', nextStage: next ? next.short : '', at: localIso(), ...(also.length ? { also } : {}) });
   s.celebrations.entries = s.celebrations.entries.slice(-50);
 }
+// CrewZero 整理的會議紀錄定稿：附件名為「會議紀錄.md」，而且（網頁路徑）事件帶會議資料，或（對話路徑）內容有格式規定的標示說明行
+// 「> ⚠️ 不肯定，請核對（共 N 處）」。創辦人自己同名的筆記檔沒有這行，照一般附件處理，不套用會議紀錄的引句及標示規則
+const MINUTE_LEGEND = /^>\s*⚠️?\s*不肯定，請核對（共\s*\d+\s*處）/m;
+function minuteAttachment(input) {
+  const hasInfo = !!(input && input.minutes && typeof input.minutes === 'object' && input.minutes.id);
+  for (const rel of (input && input.files) || []) {
+    if (attachName(rel) !== '會議紀錄.md') continue;
+    const file = minuteDataPath(rel);
+    if (file && fs.existsSync(file)) {
+      try { const text = fs.readFileSync(file, 'utf8'); if (hasInfo || MINUTE_LEGEND.test(text)) return { rel, text }; } catch { }
+    }
+  }
+  return { rel: '', text: '' };
+}
+function minuteContext(input) {
+  const attachment = minuteAttachment(input), info = input && input.minutes && typeof input.minutes === 'object' ? input.minutes : null;
+  const rec = info && info.id ? readMinutes(DIR, info.id) : null;
+  const lines = attachment.text ? attachment.text.split(/\r?\n/).map((text, i) => ({ number: i + 1, text: text.trim() })).filter(line => line.text) : [];
+  return { ...attachment, info, rec, map: rec ? minutesSpeakerMap(rec) : {}, entries: attachment.text ? marks(attachment.text) : [], lines };
+}
+function minuteLines(text) {
+  return String(text || '').split(/\r?\n/).map((line, index) => ({ number: index + 1, text: line.trim() }));
+}
+function minuteLineChanges(info, current) {
+  if (!info || !info.id || !Number.isInteger(info.version) || info.version < 2) return new Map();
+  const prior = path.join(sourceDir(DIR, info.id), `v${info.version - 1}.md`);
+  if (!fs.existsSync(prior)) return new Map();
+  let before = '';
+  try { before = fs.readFileSync(prior, 'utf8'); } catch { return new Map(); }
+  // 只用有內容的行對齊（空行不作錨點）：增刪空行不會把同一處修改拆成「刪一行、加一行」；行號仍是原檔行號。
+  // 比對用 key：大標題（「# 會議紀錄：…」）及頂部標示說明行每版都可能改字，但不含事項，一律當作相同的錨點
+  const keyOf = text => /^#\s/.test(text) ? '#title' : /^>\s*⚠️?\s*不肯定/.test(text) ? '>legend' : text;
+  const oldLines = minuteLines(before).filter(line => line.text).map(line => ({ ...line, key: keyOf(line.text) }));
+  const newLines = minuteLines(current).filter(line => line.text).map(line => ({ ...line, key: keyOf(line.text) }));
+  // LCS 保留不變行（包括空行）作錨點；只把同一差異區塊內一對一的非空行視為可安全修訂。
+  const score = Array.from({ length: oldLines.length + 1 }, () => new Uint32Array(newLines.length + 1));
+  for (let oldAt = oldLines.length - 1; oldAt >= 0; oldAt--) for (let newAt = newLines.length - 1; newAt >= 0; newAt--) {
+    score[oldAt][newAt] = oldLines[oldAt].key === newLines[newAt].key
+      ? score[oldAt + 1][newAt + 1] + 1 : Math.max(score[oldAt + 1][newAt], score[oldAt][newAt + 1]);
+  }
+  const anchors = [];
+  for (let oldAt = 0, newAt = 0; oldAt < oldLines.length && newAt < newLines.length;) {
+    if (oldLines[oldAt].key === newLines[newAt].key) { anchors.push({ oldAt, newAt }); oldAt++; newAt++; }
+    else if (score[oldAt + 1][newAt] >= score[oldAt][newAt + 1]) oldAt++;
+    else newAt++;
+  }
+  const changes = new Map(), deleted = [];
+  let oldFrom = 0, newFrom = 0;
+  for (const anchor of anchors.concat([{ oldAt: oldLines.length, newAt: newLines.length }])) {
+    const oldBlock = oldLines.slice(oldFrom, anchor.oldAt).filter(line => line.text);
+    const newBlock = newLines.slice(newFrom, anchor.newAt).filter(line => line.text);
+    if (oldBlock.length === 1 && newBlock.length === 1 && oldBlock[0].text !== newBlock[0].text) {
+      changes.set(newBlock[0].number, { before: oldBlock[0].text, after: newBlock[0].text, ambiguous: false });
+    } else if (oldBlock.length && !newBlock.length) {
+      // 純粹刪除的行（修改版沒有對應行）：另記在 deleted，由 revisionBackstop 為受影響的已寫入事項寫明未有更新
+      deleted.push(...oldBlock.map(old => old.text));
+    } else if (oldBlock.length) for (const line of newBlock) {
+      // 多行對多行：不可猜配；記下舊行原文，由 revisionItems 找出受影響的上一版事項後出一般修訂題
+      changes.set(line.number, { before: oldBlock.map(old => old.text).join('／'), beforeLines: oldBlock.map(old => old.text), after: line.text, ambiguous: true });
+    }
+    // 純粹新增的行（上一版沒有對應行）：屬新內容，不是修改已寫入事項，不出修訂題
+    oldFrom = anchor.oldAt + 1; newFrom = anchor.newAt + 1;
+  }
+  changes.deleted = deleted;
+  return changes;
+}
+function minuteSourceForItem(item, minute) {
+  const quote = typeof (item && item.sourceQuote) === 'string' ? item.sourceQuote.trim() : '';
+  if (!quote || quote.length > 160) return { ok: false, error: '缺少可定位的 sourceQuote（逐字引句最多 160 字）' };
+  const found = (minute && minute.lines || []).filter(line => line.text.includes(quote));
+  if (!found.length) return { ok: false, error: 'sourceQuote 找不到會議紀錄來源行，請重新核對' };
+  if (found.length > 1) return { ok: false, error: 'sourceQuote 對應多於一行，請改為可唯一定位的引句' };
+  return { ok: true, value: { sourceQuote: quote, sourceLine: found[0].text, sourceLineNo: found[0].number } };
+}
+function priorMinute(input) {
+  const info = input && input.minutes;
+  // 伺服器交出修改版時已把登記檔的 inputId 換成新版；機讀區的 revisionOf 才是上一件輸入。
+  return info && info.revisionOf ? (loadState().inputs || []).find(x => x.id === info.revisionOf) : null;
+}
+function minuteItemRecord(item) {
+  const keep = ['kind', 'id', 'itemId', 'station', 'milestoneId', 'date', 'action', 'text', 'sourceQuote', 'sourceLine', 'sourceLineNo'];
+  return Object.fromEntries(keep.filter(key => item && item[key] != null && item[key] !== '').map(key => [key, item[key]]));
+}
+// 上一版這一項當時建立的日程：只按精確編號找（跟進題題號 = ev- + fnv(輸入編號 + 事項編號)，日程編號 = fu-<輸入>-<題號>）。
+// 找不到（例如上一版這項被拒絕、未有日程）就回 null，不可用「同站只剩一項」之類後備規則猜，免得改到另一項日程
+function priorFollowUpTask(prior, record) {
+  if (!prior || !record || !record.itemId) return null;
+  const id = followUpTaskId(prior.id, 'ev-' + fnv(String(prior.id) + '\u0000' + String(record.itemId)));
+  return (loadState().tasks || []).find(task => task && task.id === id && task.fromInput === prior.id) || null;
+}
+// 第二次或以後的修改：日程沿用最初建立時的編號，上一件輸入算不出；改按日程記下的會議紀錄來源行精確找（唯一一項才算）
+function taskFromSource(info, line) {
+  if (!info || !info.id || !line) return null;
+  const found = (loadState().tasks || []).filter(task => task && task.status !== 'done' && task.status !== 'cancelled' && task.minutesSource && task.minutesSource.id === info.id && task.minutesSource.line === String(line).trim());
+  return found.length === 1 ? found[0] : null;
+}
+function priorMinuteMatch(item, prior, previousLine) {
+  const records = Array.isArray(prior && prior.minuteItems) ? prior.minuteItems.filter(record => record && record.kind === item.kind) : [];
+  const matches = records.filter(record => {
+    const sourceLine = String(record.sourceLine || '').trim(), sourceQuote = String(record.sourceQuote || '').trim();
+    return sourceLine === previousLine || (!!sourceQuote && previousLine.includes(sourceQuote));
+  });
+  return matches.length === 1 ? { record: matches[0], candidates: matches } : { record: null, candidates: matches };
+}
+// 多行對多行的區塊：找出上一版落在這些舊行、而且同類的事項（可能多於一項，不猜配）
+function ambiguousMinuteMatch(item, prior, beforeLines = []) {
+  const records = Array.isArray(prior && prior.minuteItems) ? prior.minuteItems.filter(record => record && record.kind === item.kind) : [];
+  const candidates = records.filter(record => {
+    const sourceLine = String(record.sourceLine || '').trim(), sourceQuote = String(record.sourceQuote || '').trim();
+    return beforeLines.some(line => line === sourceLine || (!!sourceQuote && line.includes(sourceQuote)));
+  });
+  // 假設、站點有固定編號（不會隨日期或文字改變），是可靠身份：同編號唯一一項就直接對應；其他編號的不算受影響
+  if ((item.kind === 'assumption' || item.kind === 'milestone') && item.id) {
+    const same = candidates.filter(record => record.id === item.id);
+    return same.length === 1 ? { record: same[0], candidates: same } : { record: null, candidates: same };
+  }
+  return { record: null, candidates };
+}
+function revisionItems(input, items) {
+  const context = minuteContext(input), changed = minuteLineChanges(context.info, context.text), prior = priorMinute(input);
+  if (!changed.size) return [];
+  return items.flatMap(item => {
+    const change = changed.get(item.sourceLineNo);
+    if (!change) return [];
+    // 下一個對外動作只有一個（新的取代舊的）：照用一般的「下一個對外動作」題，題目已顯示現值及新值，可直接更新
+    if (item.kind === 'nextAction') return [item];
+    const match = change.ambiguous ? ambiguousMinuteMatch(item, prior, change.beforeLines) : priorMinuteMatch(item, prior, change.before);
+    // 上一版該處沒有同類已寫入事項：這項是新內容，修改版不出題（只為牽動已寫入或待答事項出題）
+    if (!match.record && !match.candidates.length) return [];
+    if (!match.record) {
+      const choices = item.kind === 'followUp' ? match.candidates.map(record => {
+        const task = priorFollowUpTask(prior, record) || taskFromSource(context.info, record.sourceLine);
+        return task ? { date: record.date || '', action: record.action || '', revisionOfTaskId: task.id } : null;
+      }).filter(Boolean) : [];
+      return [{ ...item, revisionAmbiguity: { sourceLineNo: item.sourceLineNo || 0, before: change.before, after: change.after, choices } }];
+    }
+    const revisionFrom = Object.fromEntries(['date', 'action', 'text'].filter(key => match.record[key]).map(key => [key, match.record[key]]));
+    const priorTask = item.kind === 'followUp' ? priorFollowUpTask(prior, match.record) || taskFromSource(context.info, change.before) : null;
+    return [{ ...item, ...(Object.keys(revisionFrom).length ? { revisionFrom } : {}), ...(priorTask ? { revisionOfTaskId: priorTask.id } : {}) }];
+  });
+}
+// 修訂題保底（不靠 AI）：創辦人改動的行若是已加入日程的待辦或下一個對外動作的來源行（按 minutesSource 精確對應），
+// 而 AI 交回的事項沒有對應這項日程，就由外殼出修訂題；讀不出唯一新日期、一行對應多於一項、改動有歧義或來源行被刪，
+// 就在回饋寫明未有自動更新。不可沉默，亦不可猜。
+// 一行只可有一個日期寫法（中文完整日期、ISO、只寫月日都計），而且要是真實日子（例如 2 月 30 日不算）
+function minuteLineDate(text) {
+  const t = String(text || '');
+  const full = [...t.matchAll(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/g)];
+  const iso = t.match(/\d{4}-\d{1,2}-\d{1,2}/g) || [];
+  const monthDay = t.match(/\d{1,2}\s*月\s*\d{1,2}\s*日/g) || [];
+  if (full.length !== 1 || iso.length || monthDay.length !== 1) return '';
+  const y = Number(full[0][1]), m = Number(full[0][2]), d = Number(full[0][3]), day = new Date(Date.UTC(y, m - 1, d));
+  if (day.getUTCFullYear() !== y || day.getUTCMonth() !== m - 1 || day.getUTCDate() !== d) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function revisionBackstop(input, items, s) {
+  const info = input && input.minutes, notes = [];
+  if (!info || !info.id) return { items, notes };
+  const changed = minuteLineChanges(info, minuteContext(input).text), deleted = changed.deleted || [];
+  if (!changed.size && !deleted.length) return { items, notes };
+  // 同一項日程只留一條修訂題（AI 用不同字眼交回兩項都指向同一日程時）
+  const seenTask = new Set();
+  const out = items.filter(item => !item.revisionOfTaskId || (seenTask.has(item.revisionOfTaskId) ? false : (seenTask.add(item.revisionOfTaskId), true)));
+  const covered = new Set(out.flatMap(item => [item.revisionOfTaskId, ...((item.revisionAmbiguity || {}).choices || []).map(choice => choice.revisionOfTaskId)]).filter(Boolean));
+  const live = (s.tasks || []).filter(t => t && t.minutesSource && t.minutesSource.id === info.id && t.status !== 'done' && t.status !== 'cancelled');
+  const nea = (s.company || {}).nextExternalAction, neaHere = nea && nea.minutesSource && nea.minutesSource.id === info.id;
+  const note = text => { if (!notes.includes(text)) notes.push(text); };
+  const nextNote = () => { if (neaHere && !out.some(item => item.kind === 'nextAction')) note(NAMES.t('minRevNextNotUpdated', { a: clip(nea.text, 40) })); };
+  for (const [lineNo, change] of changed) {
+    const befores = change.ambiguous ? change.beforeLines || [] : [change.before];
+    const hit = live.filter(t => befores.includes(t.minutesSource.line));
+    // 一行對應多於一項日程：不知道新日期屬哪一項，不出題，只寫明未有更新
+    const shared = !change.ambiguous && hit.length > 1;
+    for (const task of hit) {
+      // 來源行跟住每一版前移（無論有沒有出題、答不答更新），下一版仍可對應；有歧義的改動無法前移
+      if (!change.ambiguous) task.minutesSource = { ...task.minutesSource, line: change.after };
+      if (covered.has(task.id)) continue;
+      covered.add(task.id);
+      const date = change.ambiguous || shared ? '' : minuteLineDate(change.after);
+      if (date && date !== task.dueAt) out.push({ kind: 'followUp', itemId: 'followUp:revision:' + task.id + ':' + date, date, action: task.title, station: task.milestoneId || '', sourceLine: change.after, sourceLineNo: lineNo, revisionFrom: { date: task.dueAt, action: task.title }, revisionOfTaskId: task.id, why: U.minRevBackstopWhy });
+      else note(NAMES.t('minRevNotUpdated', { a: clip(task.title, 40) }));
+    }
+    if (neaHere && befores.includes(nea.minutesSource.line)) {
+      if (!change.ambiguous) nea.minutesSource = { ...nea.minutesSource, line: change.after };
+      nextNote();
+    }
+  }
+  // 來源行被刪：日程及下一步都不自動改，寫明未有更新
+  for (const line of deleted) {
+    for (const task of live.filter(t => t.minutesSource.line === line)) if (!covered.has(task.id)) { covered.add(task.id); note(NAMES.t('minRevSourceDeleted', { a: clip(task.title, 40) })); }
+    if (neaHere && nea.minutesSource.line === line) nextNote();
+  }
+  return { items: out, notes };
+}
+function minuteMarksForItem(item, entries) {
+  const sourceLine = String(item && item.sourceLine || '').trim();
+  if (sourceLine) return (entries || []).filter(mark => sourceLine === mark.text || sourceLine.includes(mark.text));
+  const hay = JSON.stringify(item || {});
+  return (entries || []).filter(mark => {
+    const words = String(mark.text || '').replace(/[⚠️✏️（）()]/g, ' ').match(/[\p{L}\p{N}]{2,}/gu) || [];
+    return words.some(word => hay.includes(word));
+  });
+}
+function minuteLineHasDate(line, date) {
+  const day = String(date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  if (String(line || '').includes(day)) return true;
+  const [year, month, datePart] = day.split('-').map(Number);
+  return new RegExp(`${year}\\s*年\\s*0?${month}\\s*月\\s*0?${datePart}\\s*日`).test(String(line || ''));
+}
+function minuteFillMakesDateUnknown(mark, item) {
+  const line = String(mark && mark.text || ''), field = String(mark && mark.reason || '') + ' ' + line;
+  return mark && mark.kind === 'fill'
+    && (/(?:日期待定|請補(?:實際)?(?:日子|日期)|(?:日子|日期).*(?:待定|待補))/u.test(field))
+    && !minuteLineHasDate(line, item && item.date);
+}
+function minuteFillMakesNameUnknown(mark, item) {
+  const field = String(mark && mark.reason || '') + ' ' + String(mark && mark.text || '');
+  return mark && mark.kind === 'fill'
+    && /(?:負責人|姓名|名字|對方資料)/u.test(field)
+    && !String(mark.text || '').includes(String(item && item.name || ''));
+}
+function guardMinuteItems(items, entries) {
+  return (items || []).flatMap(item => {
+    const marks = minuteMarksForItem(item, entries);
+    if (!marks.length) return [item];
+    // 對應到 ✏️ 行時，由草稿原句核實日期／姓名，不能只看 AI 寫入的 why；未補資料不可變成日程或名單事實。
+    if (item.kind === 'followUp' && marks.some(mark => minuteFillMakesDateUnknown(mark, item))) return [];
+    if (item.kind === 'newActor' && marks.some(mark => minuteFillMakesNameUnknown(mark, item))) return [];
+    return [{ ...item, minuteMark: marks[0].kind }];
+  });
+}
+function rememberPreviousMinute(input) {
+  const info = input && input.minutes;
+  if (!info || !info.revisionOf || !info.id || !Number.isInteger(info.version) || info.version < 2) return;
+  const old = path.join(sourceDir(DIR, info.id), `v${info.version - 1}.md`);
+  if (!fs.existsSync(old)) return;
+  const rel = path.relative(DIR.data, old).replace(/\\/g, '/');
+  input.previous = Array.isArray(input.previous) ? input.previous : [];
+  if (!input.previous.some(entry => entry && entry.file === rel)) input.previous.push({ file: rel, name: `會議紀錄（第 ${info.version - 1} 版）.md` });
+}
 async function handleEvent(run, raw, text, dest, meta = null) {
   const mac = parseReply(raw).machine || {};
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(mac.date || '')) ? mac.date : localIso().slice(0, 10);
@@ -1171,6 +1570,16 @@ async function handleEvent(run, raw, text, dest, meta = null) {
   const said0 = text.replace(/\s+/g, ' '), label = said0 && said0 !== '（沒有補充）' ? said0 : names;
   const title = clip(isDoc ? '文件（' + dayText(date) + '）：' + names : U.reqEvent + '（' + dayText(date) + '）：' + label, 50);
   const s = registerInput(loadState(), { id: inputId, via: isDoc ? 'doc' : 'event', title, file: rel(run.replyFiles[0]), dir: path.relative(DIR.data, dest).replace(/\\/g, '/'), names: allNames, eventDate: date, receivedAt: localIso(), meta });
+  const input = (s.inputs || []).find(x => x.id === inputId);
+  const rawMinutes = mac.minutes && typeof mac.minutes === 'object' ? mac.minutes : null;
+  if (input && (rawMinutes || (input.files || []).some(file => attachName(file) === '會議紀錄.md'))) {
+    input.minutes = rawMinutes ? {
+      ...(typeof rawMinutes.id === 'string' ? { id: rawMinutes.id } : {}),
+      ...(Number.isInteger(rawMinutes.version) ? { version: rawMinutes.version } : {}),
+      ...(rawMinutes.revisionOf ? { revisionOf: rawMinutes.revisionOf } : {})
+    } : {};
+    rememberPreviousMinute(input);
+  }
   s.events = s.events || [];
   s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type: 'input', title: isDoc ? '放入文件：' + clip(names, 30) : '記錄真實事件（' + dayText(date) + '）：' + clip(label, 30), relatedIds: [inputId], moduleIds: ['inputs', 'evidence'] });
   saveState(s);
@@ -1178,7 +1587,7 @@ async function handleEvent(run, raw, text, dest, meta = null) {
   if (!(s.milestones || []).length && !((s.company || {}).assumptions || []).length) { step(run, 'ai', U.stepEventAI, 'failed', U.eventNeedOverview); return finish(run, 'failed', U.eventNeedOverview); }
   const sb = newSandbox(run);
   const rows = attachmentRows(s.inputs.find(i => i.id === inputId));
-  eventTask(sb, s, { text: text || '（沒有補充）', date, files: rows.map(r => r.abs), rows, ref: run.ref, pre, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
+  eventTask(sb, s, { text: text || '（沒有補充）', date, files: rows.map(r => r.abs), rows, ref: run.ref, pre, minutes: input && input.minutes || null, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
   await runAIStep(run, sb, U.stepEventAI, true);
 }
 // 附件檔名清單：逐份列出（不能列資料夾的 AI 工具，例如 Antigravity，不用再猜檔名）
@@ -1206,10 +1615,22 @@ function writeAttachments(sb, rows) {
   }
   return lines;
 }
+// 修改版會議紀錄：告訴 AI 這是第幾版、創辦人改了哪幾行，改動行以修改後內容為準（外殼另有 revisionBackstop 保底）
+function minuteRevisionLines(ev, rows) {
+  const info = ev && ev.minutes, row = (rows || []).find(r => r.name === '會議紀錄.md');
+  if (!info || !Number.isInteger(info.version) || info.version < 2 || !row) return [];
+  let text = '';
+  try { text = fs.readFileSync(row.abs, 'utf8'); } catch { return []; }
+  const changed = minuteLineChanges(info, text);
+  const pairs = [...new Set([...changed.values()].map(c => '  - 「' + clip(c.before, 160) + '」改為「' + clip(c.after, 160) + '」').concat((changed.deleted || []).map(line => '  - 刪除了「' + clip(line, 160) + '」')))];
+  if (!pairs.length) return [];
+  return ['- 這是創辦人修改後的第 ' + info.version + ' 版會議紀錄。創辦人今次改動了以下各行；這些行以修改後內容為準，即使與逐字稿或紀錄其他段落不一致（不一致時在 `why` 提醒創辦人核對，`sourceQuote` 引用修改後的行）：', ...pairs.slice(0, 20)];
+}
 function eventTask(sb, s, ev) {
   const rows = ev.rows || ev.files.map(f => ({ name: path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''), abs: f }));
   const listing = writeAttachments(sb, rows);
-  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${rows.length ? rows.length + ' 份（在 files/）' : '沒有'}`, ...listing, '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
+  const hasMinutes = rows.some(row => row.name === '會議紀錄.md');
+  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${rows.length ? rows.length + ' 份（在 files/）' : '沒有'}`, ...(hasMinutes ? ['- 會議紀錄：`files/會議紀錄.md` 是主要來源；其中 ⚠️ 內容只可成為確認題，✏️ 欄位必須當作未知。'] : []), ...minuteRevisionLines(ev, rows), ...listing, '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
   writeJSON(path.join(sb, 'ledger.json'), {
     milestones: (s.milestones || []).filter(m => m.pathStatus !== 'retired').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short, event: m.event || '', witness: m.witness || '', proof: m.evidence || '', deliveryCondition: m.deliveryCondition || '', done: m.state === 'done' })),
     assumptions: ((s.company || {}).assumptions || []).map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '' })),
@@ -1219,7 +1640,7 @@ function eventTask(sb, s, ev) {
   });
   writeConfirmedPage(sb);
   fs.copyFileSync(path.join(ROOT, 'ai-event.md'), path.join(sb, 'task.md'));
-  writeJSON(path.join(sb, 'job.json'), { type: 'event' });
+  writeJSON(path.join(sb, 'job.json'), { type: 'event', ...(ev.minutes ? { minutes: ev.minutes } : {}) });
 }
 // out/event.json 核對：每項只可指向帳本已有嘅假設（級別要變）或者未完成嘅站；最多三項（即時生效題每包最多三條）
 function checkEvent(out, input = null, lenient = false) {
@@ -1228,16 +1649,28 @@ function checkEvent(out, input = null, lenient = false) {
   const sbDir = path.join(out, '..');
   let said0 = ''; try { said0 = fs.readFileSync(path.join(sbDir, 'event.md'), 'utf8').split('## 創辦人原話').pop(); } catch { }
   const fileTexts = []; try { for (const f of fs.readdirSync(path.join(sbDir, 'files'))) if (/\.(md|txt|csv)$/i.test(f)) fileTexts.push(fs.readFileSync(path.join(sbDir, 'files', f), 'utf8')); } catch { }
+  const minute = minuteContext(input), missingSpeakers = minute.text ? unmappedIn(minute.text, minute.map) : [];
+  if (missingSpeakers.length) errors.push(NAMES.t('minUnmapped', { labels: missingSpeakers.join('、') }));
   if (!ev || typeof ev !== 'object') return { ok: false, errors: ['未有交出 out/event.json，或內容無法讀取'] };
   const txt = (x, n) => typeof x === 'string' && x.trim() && x.length <= n;
-  if (!txt(ev.summary, 300)) errors.push('summary 必須是一句（最多 300 字）');
+  const checkMappedText = (value, at) => {
+    const labels = unmappedIn(String(value || ''), minute.map);
+    if (labels.length) errors.push(`${at}有未對照講者：${labels.join('、')}`);
+  };
+  if (!txt(ev.summary, 300)) errors.push('summary 必須是一句（最多 300 字）'); else checkMappedText(ev.summary, 'summary ');
   if (ev.grade != null && !NAMES.EV_KEYS.includes(ev.grade)) errors.push('grade 必須是 guess、said、did、paid、stuck 之一');
   if (!Array.isArray(ev.items)) errors.push('items 必須是清單（沒有影響就寫空清單）');
   const items = [], seen = new Set();
   (Array.isArray(ev.items) ? ev.items : []).forEach((it, i) => {
     const at = `items 第 ${i + 1} 項`;
     if (!it || typeof it !== 'object') return errors.push(at + '格式不正確');
+    for (const [field, value] of [['why', it.why], ['sourceQuote', it.sourceQuote], ['text', it.text], ['action', it.action], ['name', it.name], ['org', it.org], ['role', it.role]]) {
+      if (typeof value === 'string') checkMappedText(value, `${at} 的 ${field} `);
+    }
     if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
+    const source = minute.text ? minuteSourceForItem(it, minute) : { ok: true, value: {} };
+    if (!source.ok) return errors.push(at + '：' + source.error);
+    const sourceData = source.value;
     if (it.kind === 'newActor') {
       if ((((s.peopleSync || {}).reasked) || {})[pnorm(it.name)] >= 2) { log(`真實事件建議的新對象已丟棄（已再問兩次）：${clip(it.name, 20)}`); return; }
       // 已答「不加入」兩次的名稱及創辦人本人（公司概覽「我自己（X）」）一律丟棄（設計狀態表第 5 行）
@@ -1245,37 +1678,44 @@ function checkEvent(out, input = null, lenient = false) {
       if (r.status === 'drop') { log(`真實事件建議的新對象已丟棄（${({ full: '名單已滿', declined: '創辦人已答不加入', founder: '創辦人本人' })[r.reason] || '名稱已在名單內'}）：${clip(it.name, 20)}`); return; }
       // 新對象退回修正一次後仍不合格：只丟棄這一項，不令整件事失敗（lenient＝修正後的第二次核對）
       if (r.status === 'error') { if (lenient) { log(`真實事件建議的新對象修正後仍不合格，已丟棄：${clip(it.name, 20)}（${r.errors[0]}）`); return; } return errors.push(...r.errors); }
-      const key = 'newActor:' + pnorm(r.item.name);
-      if (seen.has(key)) return;
-      seen.add(key); items.push({ ...r.item, id: key, ...(pnorm(said0).includes(pnorm(r.item.name)) ? {} : { fromDoc: true }) });
+      const itemId = 'newActor:' + pnorm(r.item.name);
+      if (seen.has(itemId)) return;
+      seen.add(itemId); items.push({ ...r.item, id: itemId, itemId, ...sourceData, ...(pnorm(said0).includes(pnorm(r.item.name)) ? {} : { fromDoc: true }) });
       return;
     }
     if (it.kind === 'followUp') {
-      const key = 'followUp:' + it.date + ':' + String(it.action || '').trim();
-      if (seen.has(key)) return;
+      const itemId = 'followUp:' + it.date + ':' + String(it.action || '').trim();
+      if (seen.has(itemId)) return;
       const bad = checkFollowUpItem(it, at, { eventDate: input && input.eventDate, milestones: s.milestones || [], styleIssues: NAMES.styleIssues });
       if (bad.length) return errors.push(...bad);
       if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
-      seen.add(key); items.push({ kind: 'followUp', id: key, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why });
+      seen.add(itemId); items.push({ kind: 'followUp', id: itemId, itemId, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why, ...sourceData });
       return;
     }
-    if (seen.has(it.kind + ':' + it.id)) return;
     if (it.kind === 'assumption') {
+      const itemId = 'assumption:' + it.id;
+      if (seen.has(itemId)) return;
       const a = ((s.company || {}).assumptions || []).find(x => x.id === it.id);
       if (!a) return errors.push(at + '：找不到假設 ' + it.id);
       if (!NAMES.EV_KEYS.includes(it.grade)) return errors.push(at + '：grade 必須是 guess、said、did、paid、stuck 之一');
       if ((a.grade || 'guess') === it.grade) return; // 級別冇變：唔使問
+      seen.add(itemId); items.push({ kind: 'assumption', id: it.id, itemId, grade: it.grade, why: it.why, ...sourceData });
     } else if (it.kind === 'milestone') {
+      const itemId = 'milestone:' + it.id;
+      if (seen.has(itemId)) return;
       const m = (s.milestones || []).find(x => x.id === it.id);
       if (!m) return errors.push(at + '：找不到站 ' + it.id);
       if (it.done !== true) return errors.push(at + '：站的建議只可以是 done: true');
       if (m.state === 'done') return;
+      seen.add(itemId); items.push({ kind: 'milestone', id: it.id, itemId, done: true, why: it.why, ...sourceData });
     } else if (it.kind === 'nextAction') {
       if (!txt(it.text, 120)) return errors.push(at + '：下一個對外動作 text 必須是一句（最多 120 字）');
+      const text = it.text.trim(), itemId = 'nextAction:' + sha256(text + '\u0000' + String(it.milestoneId || ''));
+      if (seen.has(itemId)) return;
       if (it.milestoneId && !(s.milestones || []).some(x => x.id === it.milestoneId)) return errors.push(at + '：找不到站 ' + it.milestoneId);
-      if (((s.company || {}).nextExternalAction || {}).text === it.text.trim()) return;
+      if (((s.company || {}).nextExternalAction || {}).text === text) return;
+      seen.add(itemId); items.push({ kind: 'nextAction', itemId, text, ...(it.milestoneId ? { milestoneId: it.milestoneId } : {}), why: it.why, ...sourceData });
     } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp 或 newActor');
-    seen.add(it.kind + ':' + it.id); items.push(it);
   });
   // 未能讀取的附件：結構化清單（檔名必須是這次附件的檔名），摘要不再兼顧逐份列出
   let unreadable = [];
@@ -1300,16 +1740,20 @@ function checkEvent(out, input = null, lenient = false) {
   errors.push(...rd.errors);
   const rs = checkReason(ev.reason, { styleIssues: NAMES.styleIssues });
   errors.push(...rs.errors);
+  if (rd.read) {
+    checkMappedText(rd.read.summary, 'read.summary ');
+    for (const [i, highlight] of rd.read.highlights.entries()) checkMappedText(highlight.text, `read.highlights 第 ${i + 1} 項 `);
+  }
+  if (rs.reason) checkMappedText(rs.reason, 'reason ');
   if (!items.length && !rs.reason && !rs.errors.length && !lenient) errors.push('沒有任何確認項目時，reason 必須填寫：一句講清楚為甚麼這件事沒有影響（最多 120 字）');
   if (errors.length) return { ok: false, errors };
-  // 次序：假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作；每件事最多一個新對象；先排序再截三項
-  const kept = orderEventItems(items);
-  if (items.length > kept.length) log(`真實事件建議多過三項（或多於一個新對象），不問：${items.filter(x => !kept.includes(x)).map(x => x.kind + ':' + x.id).join('、')}`);
+  // 次序：假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作；每包由 finishEvent 分成最多三題，不能因為第四項而丟失。
+  const kept = orderEventItems(items, Number.MAX_SAFE_INTEGER);
 
-  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason };
+  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason, minute };
 }
 // 新對象確認題（真實事件及 Zero 整理名單共用）：二選項，或疑似變體時三選項；askKey 決定問句（這件事提到／公司概覽提到）
-function newActorQuestion(s, it, i, askKey) {
+function newActorQuestion(s, it, i, askKey, qid = 'q' + (i + 1)) {
   const kn = NAMES.dash['ppl_kind_' + it.actorKind], who = (it.org || '') + it.name + (it.role ? '（' + it.role + '）' : ''), me = pnorm(it.name);
   const sim = it.similarTo ? (((s.company || {}).actors) || []).find(a => a.id === it.similarTo) : null;
   const item = { name: it.name, ...(it.org ? { org: it.org } : {}), ...(it.role ? { role: it.role } : {}), actorKind: it.actorKind, ...(it.teamType ? { teamType: it.teamType } : {}), ...(it.fromDoc ? { fromDoc: true } : {}) };
@@ -1320,7 +1764,7 @@ function newActorQuestion(s, it, i, askKey) {
     (nameKeys(sim).some(x => x !== me && (x.includes(me) || me.includes(x))) ? alias : other).rec = true;
     options = [alias, other, no];
   } else { add.rec = true; options = [add, no]; }
-  return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.name, 30), ask: mixSpace(NAMES.t(askKey, { who })), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
+  return { id: qid, priority: i + 1, about: clip(it.name, 30), ask: mixSpace(NAMES.t(askKey, { who })), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
 }
 // 名單類別名稱表（套用時寫入效果及事件用）
 const kindTexts = () => ({ kind: Object.fromEntries(['customer', 'partner', 'investor', 'advisor', 'team'].map(k => [k, NAMES.dash['ppl_kind_' + k]])), added: U.peopleAdded, aliased: U.peopleAliased, skipped: U.peopleSkipped });
@@ -1498,31 +1942,52 @@ function handlePeopleSyncAnswer(run, pack, store) {
   return finish(run, 'done');
 }
 function eventPack(run, s, input, items) {
+  const usedQids = new Set();
+  const qidFor = (item, index) => {
+    const base = 'ev-' + fnv(String(input.id) + '\u0000' + String(item.itemId || item.id || item.kind || index));
+    let qid = base, n = 2;
+    while (usedQids.has(qid)) qid = base + '-' + n++;
+    usedQids.add(qid);
+    return qid;
+  };
   const qs = items.map((it, i) => {
+    const qid = qidFor(it, i);
+    if (it.revisionAmbiguity) {
+      const ambiguity = it.revisionAmbiguity;
+      const choices = it.kind === 'followUp' ? (ambiguity.choices || []).map(choice => ({ text: (choice.date ? dayText(choice.date) + '　' : '') + clip(choice.action || '', 40), apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), revisionOfTaskId: choice.revisionOfTaskId } })) : [];
+      return { id: qid, priority: i + 1, about: clip(it.action || it.text || it.sourceLine || '', 40), ask: NAMES.t('minRevGenericAsk', { n: ambiguity.sourceLineNo || '', a: clip(ambiguity.before || '', 80), b: clip(ambiguity.after || it.sourceLine || '', 80) }), ...(it.kind === 'followUp' ? { judge: U.followUpJudge } : {}), kind: 'choice', effect: 'now', revisionAmbiguity: true,
+        options: choices.concat([{ text: U.followUpNo, rec: true, apply: { op: 'keep' } }]), value: U.followUpNo, why: it.why };
+    }
     if (it.kind === 'assumption') {
       const a = s.company.assumptions.find(x => x.id === it.id), from = a.grade || 'guess';
       const yes = U.evChange + '「' + NAMES.evName(it.grade) + '」', keep = U.evKeep + '「' + NAMES.evName(from) + '」';
-      return { id: 'q' + (i + 1), priority: i + 1, about: a.text, ask: '「' + a.text + '」現在到了哪個程度？', judge: U.evJudge, kind: 'choice', effect: 'now',
+      return { id: qid, priority: i + 1, about: a.text, ask: '「' + a.text + '」現在到了哪個程度？', judge: U.evJudge, kind: 'choice', effect: 'now',
         options: [{ text: yes, rec: true, apply: { op: 'setAssumptionGrade', id: a.id, grade: it.grade } }, { text: keep, apply: { op: 'keep', id: a.id } }], value: yes, why: it.why };
     }
     if (it.kind === 'nextAction') {
       const cur = ((s.company || {}).nextExternalAction || {}).text || '';
-      return { id: 'q' + (i + 1), priority: i + 1, about: U.nextActionAsk, ask: U.nextActionAsk, kind: 'choice', effect: 'now',
-        options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '' } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why };
+      const revised = it.revisionFrom && it.revisionFrom.text && it.revisionFrom.text !== it.text;
+      const ask = revised ? `下一個對外動作由「${clip(it.revisionFrom.text, 60)}」改為「${clip(it.text, 60)}」，同步更新嗎？` : U.nextActionAsk;
+      return { id: qid, priority: i + 1, about: U.nextActionAsk, ask, kind: 'choice', effect: 'now',
+        options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why };
     }
-    if (it.kind === 'newActor') return newActorQuestion(s, it, i, 'newActorAsk');
+    if (it.kind === 'newActor') return newActorQuestion(s, it, i, 'newActorAsk', qid);
     if (it.kind === 'followUp') {
-      return { id: 'q' + (i + 1), priority: i + 1, about: clip(it.action, 40), ask: NAMES.t('followUpAsk', { d: dayText(it.date), a: it.action }), judge: U.followUpJudge, kind: 'choice', effect: 'now',
-        options: [{ text: U.followUpYes, rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '' } }, { text: U.followUpNo, apply: { op: 'keep' } }], value: U.followUpYes, why: it.why };
+      const revised = it.revisionFrom && (it.revisionFrom.date !== it.date || it.revisionFrom.action !== it.action);
+      const ask = revised && it.revisionFrom.date !== it.date
+        ? NAMES.t('minRevDateAsk', { a: dayText(it.revisionFrom.date), b: dayText(it.date) })
+        : revised ? NAMES.t('minRevTextAsk', { a: clip(it.revisionFrom.action, 40), b: clip(it.action, 40) }) : NAMES.t('followUpAsk', { d: dayText(it.date), a: it.action });
+      return { id: qid, priority: i + 1, about: clip(it.action, 40), ask, judge: U.followUpJudge, kind: 'choice', effect: 'now',
+        options: [{ text: U.followUpYes, rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), ...(it.revisionOfTaskId ? { revisionOfTaskId: it.revisionOfTaskId } : {}) } }, { text: U.followUpNo, apply: { op: 'keep' } }], value: U.followUpYes, why: it.why };
     }
     const m = s.milestones.find(x => x.id === it.id);
-    return { id: 'q' + (i + 1), priority: i + 1, about: m.short, ask: '「' + m.short + '」這一站是否已經完成？', judge: NAMES.t('msJudge', { c: String(m.deliveryCondition || m.event || m.short).trim().replace(/[。.]+$/, '') }), kind: 'choice', effect: 'now',
+    return { id: qid, priority: i + 1, about: m.short, ask: '「' + m.short + '」這一站是否已經完成？', judge: NAMES.t('msJudge', { c: String(m.deliveryCondition || m.event || m.short).trim().replace(/[。.]+$/, '') }), kind: 'choice', effect: 'now',
       options: [{ text: U.msDoneYes, rec: true, apply: { op: 'markDone', id: m.id } }, { text: U.msDoneNo, apply: { op: 'keep', id: m.id } }], value: U.msDoneYes, why: it.why };
   });
   const iv = input.kind === 'interview';
   return { format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-ev', title: (iv ? U.interviewConfirm : U.eventConfirm) + '（' + dayText(input.eventDate) + '）',
     context: iv ? NAMES.t('interviewSaid', { d: dayText(input.eventDate), t: clip(input.title.replace(/^[^：]*：/, ''), 80) }) : '你記錄了 ' + dayText(input.eventDate) + ' 發生的一件事：「' + clip(input.title.replace(/^(?:真實事件|發生了一件事)（[^）]*）：/, ''), 80) + '」。Zero 據此擬定以下更新，每項經你確認後才會生效。',
-    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate }, questions: qs };
+    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate, itemIds: items.map(item => item.itemId || item.id) }, questions: qs };
 }
 async function finishEvent(run, sb, label, styleWarnings) {
   const out = path.join(sb, 'out');
@@ -1550,18 +2015,33 @@ async function finishEvent(run, sb, label, styleWarnings) {
   const unread = chk.unreadable.length ? { unreadable: chk.unreadable } : {};
   // 會後紀錄的跟進日期走同一條路：創辦人寫了日期而 Zero 沒有同日的跟進建議，外殼補一條跟進題（仍要創辦人確認才入日程）
   const hint = input.followUpHint;
-  let items = chk.items;
+  let items = guardMinuteItems(chk.items, chk.minute.entries);
   if (hint && /^\d{4}-\d{2}-\d{2}$/.test(String(hint.date || '')) && (!input.eventDate || hint.date >= input.eventDate)) {
     const act = NAMES.t('followUpDebrief', { n: hint.who || '對方' });
-    items = orderEventItems(items.filter(x => x.kind !== 'followUp' || x.date !== hint.date).concat([{ kind: 'followUp', id: 'followUp:' + hint.date + ':' + act, date: hint.date, action: act, why: U.followUpDebriefWhy }]));
+    const itemId = 'followUp:' + hint.date + ':' + act;
+    items = orderEventItems(items.filter(x => x.kind !== 'followUp' || x.date !== hint.date).concat([{ kind: 'followUp', id: itemId, itemId, date: hint.date, action: act, why: U.followUpDebriefWhy }]), Number.MAX_SAFE_INTEGER);
   }
+  let revisionNotes = [];
+  if (input.minutes && input.minutes.revisionOf) {
+    items = revisionItems(input, items);
+    const back = revisionBackstop(input, items, s);
+    items = back.items; revisionNotes = back.notes;
+    if (revisionNotes.length) { input.effects = input.effects || []; for (const change of revisionNotes) input.effects.push({ targetKind: 'decision', targetId: input.id, change }); }
+  }
+  const asked = new Set(input.askedEventItemIds || []);
+  items = items.filter(item => item && item.itemId && !asked.has(item.itemId));
+  if (input.minutes && chk.minute.text) input.minuteItems = items.map(minuteItemRecord);
   if (!items.length) {
     input.status = 'processed'; input.processedAt = localIso(); saveState(s);
-    run.result = { summary: input.summary + ' ' + U.eventNoChange, artifacts: [], founderNext: [], styleWarnings, ...unread };
-    step(run, 'ai', label, 'done', U.eventNoChange); return finish(run, 'done');
+    const noChange = revisionNotes.length ? revisionNotes.join('；') : U.eventNoChange;
+    run.result = { summary: input.summary + ' ' + noChange, artifacts: [], founderNext: [], styleWarnings, ...unread };
+    step(run, 'ai', label, 'done', noChange); return finish(run, 'done');
   }
-  const pack = eventPack(run, s, input, items);
+  const first = items.slice(0, 3), queued = items.slice(3);
+  const pack = eventPack(run, s, input, first);
   const placed = placePacks(DIR, [pack]);
+  input.askedEventItemIds = [...asked, ...first.map(item => item.itemId)];
+  if (queued.length) input.pendingEventItems = queued; else delete input.pendingEventItems;
   input.status = 'awaitingFounder'; input.awaitingFounderText = U.eventAwaiting; input.packId = placed[0].id;
   saveState(s);
   run.result = { summary: input.summary, artifacts: [], founderNext: [], asks: placed, styleWarnings, ...unread };
@@ -1609,11 +2089,42 @@ function handleEventConfirm(run, pack, store) {
     const fuOpt = opts.find(o => o.apply && o.apply.op === 'addFollowUp');
     if (fuOpt) {
       // 跟進日期題：答「加入日程」才寫一項創辦人行動（日程清單及月曆自動顯示）；其他答案只記「沒有加入」。同一題做兩次不重複（任務編號固定）
-      const accepted = !!opt && opt === fuOpt;
-      sync(applyFollowUp(s, { inputId: input.id, qid: q.id, answer: accepted ? 'accept' : 'reject', item: { date: fuOpt.apply.date, action: fuOpt.apply.action, station: fuOpt.apply.station, why: q.why }, now: localIso() }));
-      if (accepted) { const t = '已加入日程：' + dayText(fuOpt.apply.date) + '　' + clip(fuOpt.apply.action, 40); ev('input', t, [followUpTaskId(input.id, q.id), input.id], ['now', 'inputs']); said.push(t); }
+      const selected = opt && opt.apply && opt.apply.op === 'addFollowUp' ? opt : null;
+      // 有多項可選的修訂題（未能確定是哪一項）而創辦人自行填寫：不知道要改哪一項，任何日程都不改，只記下未有改動
+      if (!opt && opts.filter(o => o.apply && o.apply.op === 'addFollowUp').length > 1) {
+        const t = NAMES.t('minRevUnclear', { a: clip(q.about || '', 40) });
+        sync(addEffect(s, input.id, { targetKind: 'decision', targetId: pack.id, change: t })); said.push(t);
+        continue;
+      }
+      const selectedApply = selected ? selected.apply : fuOpt.apply;
+      const chosenDate = /^\d{4}-\d{2}-\d{2}$/.test(String(a.value || '')) ? String(a.value) : selectedApply.date;
+      const accepted = !!selected || (!opt && /^\d{4}-\d{2}-\d{2}$/.test(String(a.value || '')));
+      sync(applyFollowUp(s, { inputId: input.id, qid: q.id, answer: accepted ? 'accept' : 'reject', item: { date: chosenDate, action: selectedApply.action, station: selectedApply.station, why: q.why }, now: localIso() }));
+      let revisedTaskId = '';
+      if (accepted && selectedApply.revisionOfTaskId) {
+        const newTaskId = followUpTaskId(input.id, q.id), oldTask = (s.tasks || []).find(task => task && task.id === selectedApply.revisionOfTaskId), newTask = (s.tasks || []).find(task => task && task.id === newTaskId);
+        if (oldTask && newTask) {
+          const beforeDue = oldTask.dueAt;
+          oldTask.title = newTask.title; oldTask.dueAt = newTask.dueAt; oldTask.next = newTask.next; oldTask.updatedAt = newTask.updatedAt;
+          if (newTask.milestoneId) oldTask.milestoneId = newTask.milestoneId; else delete oldTask.milestoneId;
+          s.tasks = s.tasks.filter(task => !task || task.id !== newTaskId);
+          const effect = (input.effects || []).find(entry => entry && entry.targetId === newTaskId);
+          // 回饋寫「已更新」而不是「已加入」：這是修改原有一項日程，沒有新增
+          if (effect) { effect.targetId = oldTask.id; effect.change = '已更新日程：' + dayText(oldTask.dueAt) + '　' + clip(oldTask.title, 40); effect.before = beforeDue ? dayText(beforeDue) : effect.before; }
+          revisedTaskId = oldTask.id;
+        }
+      }
+      // 由會議紀錄而來的日程記下來源行：之後修改會議紀錄時，外殼按改動行找回這項日程（修訂題保底，見 revisionBackstop）
+      if (accepted && input.minutes && input.minutes.id && selectedApply.sourceLine) {
+        const task = (s.tasks || []).find(x => x && x.id === (revisedTaskId || followUpTaskId(input.id, q.id)));
+        if (task) task.minutesSource = { id: input.minutes.id, line: selectedApply.sourceLine };
+      }
+      if (accepted) { const t = (revisedTaskId ? '已更新日程：' : '已加入日程：') + dayText(chosenDate) + '　' + clip(selectedApply.action, 40); ev('input', t, [revisedTaskId || followUpTaskId(input.id, q.id), input.id], ['now', 'inputs']); said.push(t); }
       continue;
     }
+    // 自訂答案：下一個對外動作題自行填寫了新內容，就以該內容作為下一個對外動作（之後照常經較新答案保護）
+    const nextOpt = opts.find(o => o.apply && o.apply.op === 'setNextExternalAction');
+    if (!opt && (nextOpt || q.id === 'nad') && typeof a.value === 'string' && a.value.trim()) ap = { op: 'setNextExternalAction', text: clip(a.value.trim(), 120), milestoneId: nextOpt ? nextOpt.apply.milestoneId || '' : '' };
     // 自訂答案：證據級題寫咗一個級別名稱就照套用；其餘只記錄
     if (!opt && opts[0] && opts[0].apply.op === 'setAssumptionGrade') { const k = NAMES.evKey(String(a.value).replace(/^(?:改為|維持)/, '').replace(/[「」\s]/g, '')); ap = k ? { op: 'setAssumptionGrade', id: opts[0].apply.id, grade: k } : null; }
     if (ap && ap.op === 'setAssumptionGrade') {
@@ -1639,7 +2150,7 @@ function handleEventConfirm(run, pack, store) {
       if (keepNewerFounderAction((s.company || {}).nextExternalAction)) { nextSet = true; continue; }
       s.company = s.company || {};
       const prevNext = (s.company.nextExternalAction || {}).text;
-      s.company.nextExternalAction = { text: ap.text, milestoneId: ap.milestoneId || '' }; nextSet = true;
+      s.company.nextExternalAction = { text: ap.text, milestoneId: ap.milestoneId || '', ...(input.minutes && input.minutes.id && ap.sourceLine ? { minutesSource: { id: input.minutes.id, line: ap.sourceLine } } : {}) }; nextSet = true;
       const t = '下一個對外動作改為：' + clip(ap.text, 40);
       sync(addEffect(s, input.id, { targetKind: 'decision', targetId: pack.id, change: t, before: prevNext ? clip(prevNext, 60) : U.fxNextNone, after: clip(ap.text, 60) }));
       ev('decision', t, [input.id].concat(ap.milestoneId ? [ap.milestoneId] : []), ['now', 'paths']); said.push(t);
@@ -1668,7 +2179,13 @@ function handleEventConfirm(run, pack, store) {
   input.status = left ? 'awaitingFounder' : 'processed';
   if (!left) {
     input.processedAt = localIso(); delete input.awaitingFounderText;
-    if (input.pendingNextQuestion) {
+    if (Array.isArray(input.pendingEventItems) && input.pendingEventItems.length) {
+      const nextItems = input.pendingEventItems.splice(0, 3), next = eventPack(run, s, input, nextItems);
+      if (!input.pendingEventItems.length) delete input.pendingEventItems;
+      const placed = placePacks(DIR, [next]);
+      input.askedEventItemIds = [...new Set([...(input.askedEventItemIds || []), ...nextItems.map(item => item.itemId)])];
+      input.status = 'awaitingFounder'; input.packId = placed[0].id; input.awaitingFounderText = U.eventAwaiting; delete input.processedAt;
+    } else if (input.pendingNextQuestion) {
       const next = eventPack(run, s, input, []);
       next.questions.push(input.pendingNextQuestion); delete input.pendingNextQuestion;
       const placed = placePacks(DIR, [next]);
@@ -4465,7 +4982,7 @@ async function main() {
           const old = path.join(DIR.sandbox, prev.id, 'event.md'), s = loadState(), input = (s.inputs || []).find(i => i.id === 'in-' + prev.ref);
           if (!input || !fs.existsSync(old)) { finish(run, 'failed', '找不到上次記錄的事件，請重新記錄'); return; }
           const sb = newSandbox(run);
-          eventTask(sb, s, { text: fs.readFileSync(old, 'utf8').split('## 創辦人原話').pop().trim(), date: input.eventDate, files: (input.files || []).map(f => path.join(DIR.data, f)), rows: attachmentRows(input), ref: prev.ref, pre: prev.ref + '-note-' + prev.noteType + '-file-', ...(prev.noteType === 'doc' ? { heading: fs.readFileSync(old, 'utf8').split(/\r?\n/)[0] } : {}) });
+          eventTask(sb, s, { text: fs.readFileSync(old, 'utf8').split('## 創辦人原話').pop().trim(), date: input.eventDate, files: (input.files || []).map(f => path.join(DIR.data, f)), rows: attachmentRows(input), ref: prev.ref, pre: prev.ref + '-note-' + prev.noteType + '-file-', minutes: input.minutes || null, ...(prev.noteType === 'doc' ? { heading: fs.readFileSync(old, 'utf8').split(/\r?\n/)[0] } : {}) });
           await runAIStep(run, sb, U.stepEventAI, true);
           return;
         }

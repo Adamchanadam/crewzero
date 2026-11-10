@@ -67,8 +67,10 @@ try {
     ok('練習清單：兩個對象、你要做行動、練習紀錄', await has('[data-scenario="roaster-c"]') && await has('[data-scenario="blogger-a"]') && await has('[data-new]'));
     await go('#/practice/roaster-c');
     ok('準備：人物卡七項、會議目標、問題、反對、難度', await ev(`document.querySelectorAll('#persona dt').length===7`) && (await text('main, #app')).includes('會議目標') && await has('[data-level="hard"]'));
-    await jsClick('[data-edit="stance"]'); await sleep(300);
-    await ev(`document.querySelector('#pe-stance').value='其實好想搵新買家，但唔想俾你知'`); await jsClick('[data-edit="stance"]'); await sleep(400);
+    // 按「修改」後頁面要重新讀取再畫出輸入框（實測約 0.35 秒），等輸入框出現才填；按「完成」後等人物卡顯示已修改
+    await jsClick('[data-edit="stance"]'); await waitFor(() => has('#pe-stance'), 5000);
+    await ev(`document.querySelector('#pe-stance').value='其實好想搵新買家，但唔想俾你知'`); await jsClick('[data-edit="stance"]');
+    await waitFor(async () => !(await has('#pe-stance')) && (await text('#persona')).includes('你已修改'), 5000);
     ok('撳改人物卡：標你改過', (await text('#persona')).includes('你已修改') && (await text('#persona')).includes('其實好想搵新買家'));
     await jsClick('[data-level="normal"]'); await sleep(300);
     await shot('p01-prep', true);

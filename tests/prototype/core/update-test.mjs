@@ -175,7 +175,8 @@ try {
   run(path.join(T, 'ask.mjs'), ['--dashboard', '--demo']);
   const both = await openHealth();
   const deskNow = both.find(j => j.root === lib.rootId(DATA)), demoNow = both.find(j => j.root === lib.rootId(path.join(T, 'demo-data')));
-  for (const j of both) pids.push(Number(j.pid));
+  // 只記下根目錄屬於本測試項目（公司資料或示範資料）的伺服器，收尾時才停；其他程式的伺服器一律不碰
+  for (const j of both) if (j.root === lib.rootId(DATA) || j.root === lib.rootId(path.join(T, 'demo-data'))) pids.push(Number(j.pid));
   ok('舊版公司伺服器和示範伺服器都開着', !!deskNow && !!demoNow && deskNow.pid !== demoNow.pid, both);
   const c3 = run(UPDATE, [PROJ]);
   ok('檢查時講明兩者都開着、更新後會關閉', c3.status === 3 && /CrewZero 及示範頁面目前開着/.test(c3.stdout), c3.stdout);

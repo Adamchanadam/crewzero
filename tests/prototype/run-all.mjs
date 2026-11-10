@@ -103,6 +103,13 @@ const TESTS = [
   ['Zero 團隊端到端', 'core/roles-chain-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['與 Zero 討論指令', 'core/tell-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['Office 轉文字', 'core/office-text-test.mjs', []],
+  // 0.42.0 會議紀錄
+  ['PDF 轉文字', 'core/pdf-text-test.mjs', []],
+  ['逐字稿純函數', 'core/transcript-lib-test.mjs', []],
+  ['會議紀錄共用模組', 'core/minutes-lib-test.mjs', ['{proto}', '{out}']],
+  ['會議紀錄外殼', 'core/minutes-run-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['會議紀錄伺服器', 'core/minutes-server-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['會議紀錄頁面', 'core/cdp-minutes.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['Google 連結取回', 'core/link-fetch-test.mjs', []],
   ['試開外部連結', 'core/link-check-test.mjs', []],
   ['輸入狀態純函數', 'core/input-status-test.mjs', ['{proto}', '{out}', '{port}']],

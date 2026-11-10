@@ -7,6 +7,7 @@ import path from 'node:path';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { officeKind, writeTextSidecar } from './office-text.mjs';
+import { isPdf, writePdfSidecar } from './pdf-text.mjs';
 import { parseGoogleLink, findGoogleLinks, fetchGoogleLink } from './link-fetch.mjs';
 
 const KIND_OF = { doc: 'google-doc', sheet: 'google-sheet', slides: 'google-slides' };
@@ -16,8 +17,9 @@ const pad = n => String(n).padStart(2, '0');
 // 同一個檔案（本模組）既是主程式用的函式庫，也是工作緒的入口：工作緒只做一件事——轉一個檔、把結果（不含全文）傳回。
 // 失敗（工作緒出錯、逾時）一律當「未能轉換」（corrupt），並刪掉可能寫了一半的文字版，不讓 AI 讀到半個檔。
 const MAX_CONVERT = 2, CONVERT_TIMEOUT_MS = 60000;
+const writeSidecar = file => isPdf(file) ? writePdfSidecar(file) : writeTextSidecar(file);
 if (!isMainThread && workerData && workerData.crewzeroOfficeJob) {
-  const r = writeTextSidecar(workerData.file);
+  const r = writeSidecar(workerData.file);
   parentPort.postMessage(r.ok ? { ok: true, kind: r.kind, sidecar: r.sidecar } : { ok: false, kind: r.kind, reason: r.reason });
 }
 export const convertStats = { max: 0, total: 0 };   // 測試用：同時轉換的最高份數、累計份數
@@ -38,9 +40,7 @@ function runConvertJob(file, timeoutMs) {
     try {
       w = new Worker(fileURLToPath(import.meta.url), { workerData: { crewzeroOfficeJob: true, file }, resourceLimits: { maxOldGenerationSizeMb: 768 } });
     } catch {
-      // 開不到工作緒（極少見）：退回同步轉換，結果相同
-      let r; try { r = writeTextSidecar(file); } catch { r = { ok: false, reason: 'corrupt' }; }
-      return finish(r.ok ? { ok: true, kind: r.kind, sidecar: r.sidecar } : { ok: false, kind: r.kind, reason: r.reason || 'corrupt' });
+      return finish({ ok: false, reason: 'corrupt' });
     }
     timer = setTimeout(() => finish({ ok: false, reason: 'corrupt' }), timeoutMs);
     w.once('message', m => finish(m && m.ok ? m : { ok: false, kind: m && m.kind, reason: (m && m.reason) || 'corrupt' }));
@@ -55,10 +55,12 @@ function pumpConvert() {
     runConvertJob(job.file, job.timeoutMs).then(r => { converting--; job.resolve(r); pumpConvert(); });
   }
 }
-// 轉換一個 Office 檔：回傳 { ok: true, sidecar } 或 { ok: false, reason }（與 writeTextSidecar 同一組 reason）。永不丟例外。
+// 轉換一個可讀附件：回傳 { ok: true, sidecar } 或 { ok: false, reason }（與文字轉換器同一組 reason）。永不丟例外。
 export function convertOffice(file, { timeoutMs = CONVERT_TIMEOUT_MS } = {}) {
   return new Promise(resolve => { convertQueue.push({ file, timeoutMs, resolve }); pumpConvert(); });
 }
+// 供會議紀錄預檢使用：PDF 及 Office 一律沿用同一工作緒佇列、並發上限及逾時。
+export function convertInboundText(file, options = {}) { return convertOffice(file, options); }
 
 // 表單的連結欄（links）加文字內的 Google 連結，去重，最多 5 條；一般網頁連結不取回
 export function collectLinks(text, extra) {
@@ -107,7 +109,7 @@ export async function receiveAttachments({ id, type, base, metaName, attachments
     fs.writeFileSync(full, f.bytes, { flag: 'wx' }); created.push(full);
     total += f.bytes.length;
     records.push({ name: f.name, stored, bytes: f.bytes.length });
-    if (['docx', 'pptx', 'xlsx'].includes(officeKind(f.name))) jobs.push({ stored, full });
+    if (['docx', 'pptx', 'xlsx'].includes(officeKind(f.name)) || isPdf(f.name)) jobs.push({ stored, full });
   }
   // 全部排隊轉換（同時最多 MAX_CONVERT 份，不阻塞伺服器）；等全部完成才繼續，所以呼叫者寫筆記檔時文字版一定已完整或已記為未能轉換
   const settled = await Promise.all(jobs.map(j => convertOffice(j.full)));

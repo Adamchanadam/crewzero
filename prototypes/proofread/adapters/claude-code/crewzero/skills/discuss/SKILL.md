@@ -1,6 +1,6 @@
 ---
 name: discuss
-description: "和 Zero 討論（創辦人想先傾一傾、想一個問題、問意見或研究一下，傾完把結論交給 Zero 跟進）。Use when the founder asks to discuss with Zero (e.g. /crewzero:discuss in Claude Code, $crewzero:discuss in Codex, /discuss in Antigravity; may carry a topic, e.g. /crewzero:discuss 第一個客先搵邊類), or says 「和 Zero 討論」「想和 Zero 討論」「想和 Zero 傾下」「同 Zero 傾一傾」「同 Zero 商量」. Zero first reads CrewZero's current situation as background, discusses freely (web research allowed), and only hands a conclusion to Zero after the founder says yes."
+description: "和 Zero 討論（創辦人想先傾一傾、想一個問題、問意見或研究一下，傾完把結論交給 Zero 跟進；也可把會議逐字稿轉成會議紀錄）。Use when the founder asks to discuss with Zero (e.g. /crewzero:discuss in Claude Code, $crewzero:discuss in Codex, /discuss in Antigravity; may carry a topic, e.g. /crewzero:discuss 第一個客先搵邊類), or says 「和 Zero 討論」「想和 Zero 討論」「想和 Zero 傾下」「同 Zero 傾一傾」「同 Zero 商量」「會議逐字稿」「轉會議紀錄」「整理會議紀錄」「逐字稿」. Zero first reads CrewZero's current situation as background, discusses freely (web research allowed), and only hands a conclusion to Zero after the founder says yes."
 ---
 
 <!--
@@ -33,10 +33,29 @@ CrewZero 插件入面嘅「和 Zero 討論」指令（只係轉接層，核心�
 - 分清兩樣嘢：「你說的」（創辦人講過嘅事實同決定）同「Zero 的估計」（你嘅推測、建議、研究所得）。估計唔好講成事實；冇依據嘅唔好作。
 - 唔替創辦人拍板：比較同建議可以，但最後點揀由創辦人講。對外發送、花錢、承諾、改路線都係創辦人決定。
 - 唔手改 `<安裝>/data/` 入面任何檔。
-- 唔自行開其他 CrewZero 命令：只用 `--brief`、`--tell`，同埋打開頁面（`node "<安裝>/ask.mjs" --dashboard`，創辦人要睇時先開）。唔好為咗討論去放問題包、跑工作或者改設定。
+- 唔自行開其他 CrewZero 命令：只用 `--brief`、`--read`、`--tell`，同埋打開頁面（`node "<安裝>/ask.mjs" --dashboard`，創辦人要睇時先開）。唔好為咗討論去放問題包、跑工作或者改設定。
 - 可以上網研究、核對資料；查詢嘅字句唔好夾帶公司嘅私人資料（客戶名、價錢、未公開計劃、聯絡方法）。
 - 可以用創辦人已經裝咗嘅其他技能同工具（例如做試算表、簡報、文件）幫手；產出放喺創辦人嘅項目資料夾，唔好放入 `<安裝>/data/`。
 - 用創辦人用嘅語言回覆；語氣直接、簡單，唔堆術語。
+
+## 會議逐字稿 → 會議紀錄
+
+創辦人提到「會議逐字稿」「轉會議紀錄」「整理會議紀錄」或「逐字稿」時，改走以下流程；仍先完成上面的版本門及 `--brief`，不可跳過。
+
+1. 執行：`node "<安裝>/ask.mjs" --read "<逐字稿檔案>"`。它只讀檔案，會印出是否逐字稿、講者標籤、每位講者三句原文例句及字數。若不是逐字稿、檔案找不到或無法讀取，照輸出的白話原因處理，不猜測身份。如公司已有確認的公司概覽，輸出最後會附「已確認公司概覽的名稱及用詞」一段。
+2. 逐位列出建議身份及一至三句原文線索，請創辦人確認或改正。可建議「我自己」、名單中的人，或請創辦人寫出不在名單的人；每位都確認前，不可整理草稿。
+3. 讀 `<安裝>/meeting-minutes-format.md`，按其固定結構寫草稿。所有講者用已確認姓名；依規格保留 `⚠️`、`✏️` 標示及頂部說明行。相對日期先以會議日期核實；未能核實就按規格標示，不可當作事實。步驟 1 如有印出「已確認公司概覽的名稱及用詞」，只可按規格的校正規則用來核對名稱寫法，每處校正列入「改動清單」；沒有印出就只按名單校正。`--brief` 的背景及步驟 1 的名稱清單只供理解及核對寫法，會議紀錄只可寫逐字稿的內容。
+4. 把草稿以 `會議紀錄.md` 存在創辦人項目資料夾，供創辦人全文檢查及修改。原逐字稿不改動。
+5. 草稿完成後，必須先問：
+
+> 要不要把以下內容交給 Zero？
+
+> 類型：發生了一件事
+> 內容：會議紀錄：<標題>，下一行為 `formatMap()` 的完整講者對照
+> 日期：會議日期；未能確定時說明待定
+> 附件：原逐字稿及 `會議紀錄.md`
+
+6. 創辦人明確同意後，沿用下面的 `--tell` 做法建立系統暫存草稿；`files` 必須同時列出原逐字稿及項目資料夾內名稱正確的 `會議紀錄.md`。成功後只刪系統暫存草稿，不刪創辦人的會議紀錄或逐字稿。
 
 ## 有結論就提議交給 Zero
 

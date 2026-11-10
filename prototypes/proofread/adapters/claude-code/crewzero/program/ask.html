@@ -194,6 +194,16 @@ dl.rc dd{margin:0}
   #next-action .foot>.btn{flex:1 1 auto;min-width:0}
   #quick-input input[type=file]{max-width:100%}
 }
+/* 0.42.0 會議紀錄：講者確認、草稿及全文編輯 */
+.min-speakers,.min-draft{margin-top:14px;padding:14px 16px;border:1px solid rgba(242,160,102,.45);border-radius:12px;background:rgba(242,160,102,.06)}
+.min-draft{border-color:rgba(153,215,188,.45);background:rgba(153,215,188,.05)}
+.min-speakers h3,.min-draft h3{margin:0 0 6px;font-size:var(--fs-title)}
+.min-speaker{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(220px,300px);gap:12px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.min-speaker:first-of-type{border-top:0}.min-label{font-weight:600}.min-samples{font-size:var(--fs-sub);color:var(--muted);line-height:1.6}.min-pick select,.min-pick input{width:100%;min-height:36px}.min-pick input{margin-top:8px}
+.min-progress{margin:8px 0;color:var(--muted);font-size:var(--fs-sub)}.min-count{display:flex;flex-wrap:wrap;gap:14px;margin:8px 0;font-size:var(--fs-sub)}.min-path{font:var(--fs-min)/1.6 var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.min-editor{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:10px}.min-text{width:100%;min-height:520px;font:var(--fs-sub)/1.75 var(--mono);padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:inherit;resize:vertical}.min-side{border:1px solid var(--line);border-radius:10px;padding:12px 14px;align-self:start}.min-side h3{margin:0 0 8px;font-size:var(--fs-sub)}
+.min-mark{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:var(--fs-sub);line-height:1.6}.min-mark:first-of-type{border-top:0}.min-mark .btn{margin-left:auto;flex:none}.min-preview{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere}.min-local{margin-top:12px}.min-submitted{border-left:3px solid var(--mint)}
+@media (max-width:600px){.min-speaker,.min-editor{grid-template-columns:1fr}.min-side{order:-1}.min-text{min-height:420px}.desktop-only{display:none!important}}
 </style>
 <script src="names.js"></script>
 <script src="pair.js"></script>
@@ -288,11 +298,14 @@ dl.rc dd{margin:0}
   var V = { status: null, pollTimer: null };
   function route() {
     clearTimeout(V.pollTimer);
+    clearTimeout(V.minutesTimer);
     clearTimeout(V.ideateTimer);
     // 離開回饋卡：清除它的重讀定時器，否則換到 #/request/ 之類同樣符合的頁面時，舊卡會蓋回來
     if (typeof FB !== 'undefined' && FB) clearTimeout(FB.timer);
     $('#cbar').hidden = true;
     closeModal();
+    var mm = /^#\/minutes\/([\w-]{1,80})$/.exec(location.hash);
+    if (mm) return showMinutes(mm[1]);
     var cm = /^#\/change\/(target|task)\/([\w-]{1,80})$/.exec(location.hash);
     if (cm) return showChangeDate(cm[1], cm[2]);
     var m = /^#\/ask\/([\w-]{1,80})$/.exec(location.hash);
@@ -529,6 +542,7 @@ dl.rc dd{margin:0}
   // 由首頁以外的地方（例如「已完成」）打開盒並選好類型、預填內容
   function openTell(kind, preset) {
     V.quickKind = kind; V.tellFiles = []; V.tellLinks = [];
+    V.minutesTell = null; clearTimeout(V.minutesTimer);
     V.quickText = preset && preset.text || ''; V.quickDate = preset && preset.date || '';
     V.hubDirty = !!V.quickText;
     if (location.hash === '#/' || location.hash === '') showHub(); else location.hash = '#/';
@@ -547,20 +561,97 @@ dl.rc dd{margin:0}
     var picker = h('input', { type: 'file', id: 'quick-files', multiple: true, 'aria-label': U.tellFiles }), fileList = h('ul', { class: 'attach-list', id: 'tell-file-list' });
     var linkIn = h('input', { class: 'in', type: 'url', id: 'quick-link', placeholder: U.tellLinkPlaceholder, 'aria-label': U.tellLinkLabel, maxlength: '300' }), linkList = h('ul', { class: 'attach-list', id: 'tell-link-list' });
     var note = h('p', { class: 'small muted', id: 'quick-note', 'aria-live': 'polite' }), after = h('p', { class: 'after-line', id: 'tell-after' });
+    var minutesSlot = h('div', { id: 'minutes-speakers' });
     text.value = V.quickText || ''; linkIn.value = V.tellLinkDraft || '';
     function dirty() { V.hubDirty = !!text.value.trim() || files.length > 0 || links.length > 0 || !!linkIn.value.trim(); }
     linkIn.addEventListener('input', function () { V.tellLinkDraft = linkIn.value; dirty(); });
     text.addEventListener('input', function () { V.quickText = text.value; dirty(); });
     date.addEventListener('input', function () { V.quickDate = date.value; });
+    function minutesLabels(list) {
+      return (Array.isArray(list) ? list : []).map(function (x) { return typeof x === 'string' ? { label: x, samples: [] } : { label: String(x && x.label || ''), samples: Array.isArray(x && x.samples) ? x.samples : [] }; }).filter(function (x) { return !!x.label; });
+    }
+    function minutesActors() { return ((c && c.actors) || []).filter(function (x) { return x && x.id && x.name; }); }
+    function minuteMapComplete(m) {
+      var labels = minutesLabels((m.record && m.record.labels) || m.labels);
+      return labels.length > 0 && labels.every(function (x) { var v = (m.map || {})[x.label]; return v && v.kind && String(v.name || '').trim() && (v.kind !== 'actor' || v.actorId); });
+    }
+    function minuteReadFiles(picked) {
+      return Promise.all(picked.map(function (file) { return new Promise(function (ok, no) { var reader = new FileReader(); reader.onload = function () { ok({ name: file.name, data: String(reader.result).replace(/^data:[^,]*,/, '') }); }; reader.onerror = no; reader.readAsDataURL(file); }); }));
+    }
+    function minuteStopPoll() { clearTimeout(V.minutesTimer); V.minutesTimer = null; }
+    function minuteApplySuggestions(m) {
+      var items = m.record && m.record.suggest && m.record.suggest.items || {}, actors = minutesActors();
+      minutesLabels((m.record && m.record.labels) || m.labels).forEach(function (x) {
+        if (m.map[x.label]) return;
+        var s = items[x.label]; if (!s || !s.kind || s.kind === 'unknown') return;
+        if (s.kind === 'founder') m.map[x.label] = { kind: 'founder', name: '我' };
+        else if (s.kind === 'actor' && s.actorId && actors.some(function (a) { return a.id === s.actorId; })) m.map[x.label] = { kind: 'actor', actorId: s.actorId, name: s.name || (actors.filter(function (a) { return a.id === s.actorId; })[0] || {}).name || '' };
+        else if (s.kind === 'other' && s.name) m.map[x.label] = { kind: 'other', name: s.name };
+      });
+    }
+    function drawMinutes() {
+      minuteStopPoll(); minutesSlot.replaceChildren();
+      var m = V.minutesTell;
+      if (!m || kind !== 'event') return;
+      var labels = minutesLabels((m.record && m.record.labels) || m.labels);
+      if (!labels.length) { minutesSlot.append(h('div', { class: 'track', 'aria-live': 'polite' }, h('p', { class: 'min-progress' }, N.t('minSuggesting')))); return; }
+      minuteApplySuggestions(m);
+      var suggest = m.record && m.record.suggest || {}, box = h('section', { class: 'min-speakers', 'aria-live': 'polite' }, h('h3', null, N.t('minSpeakerTitle')));
+      if (suggest.state === 'running' || m.pending) box.append(h('div', { class: 'track' }, h('p', { class: 'min-progress' }, N.t('minSuggesting'))));
+      else if (suggest.state === 'failed') box.append(h('p', { class: 'min-progress' }, N.t('minSuggestFailed')));
+      else if (suggest.state === 'done') box.append(h('p', { class: 'min-progress' }, N.t('minSuggested')));
+      labels.forEach(function (item) {
+        var current = m.map[item.label] || {}, select = h('select', { 'aria-label': item.label + N.t('minChooseSpeaker') }), selected = current.kind === 'founder' ? 'founder' : current.kind === 'actor' ? 'actor:' + current.actorId : current.kind === 'other' ? 'other' : '';
+        select.append(h('option', { value: '' }, N.t('minChooseSpeaker')), h('option', { value: 'founder' }, N.t('minFounder')));
+        minutesActors().forEach(function (actor) { select.append(h('option', { value: 'actor:' + actor.id }, actor.name)); });
+        select.append(h('option', { value: 'other' }, N.t('minOther'))); select.value = selected;
+        var pick = h('div', { class: 'min-pick' }, select);
+        function update() {
+          var value = select.value;
+          if (value === 'founder') m.map[item.label] = { kind: 'founder', name: '我' };
+          else if (value.indexOf('actor:') === 0) { var actor = minutesActors().filter(function (a) { return a.id === value.slice(6); })[0]; m.map[item.label] = actor ? { kind: 'actor', actorId: actor.id, name: actor.name } : {}; }
+          else if (value === 'other') m.map[item.label] = { kind: 'other', name: String((m.map[item.label] || {}).name || '') };
+          else delete m.map[item.label];
+          drawMinutes();
+        }
+        select.addEventListener('change', update);
+        if (current.kind === 'other') { var other = h('input', { class: 'in', maxlength: '100', placeholder: N.t('minOtherName'), 'aria-label': item.label + N.t('minOtherName') }); other.value = current.name || ''; other.addEventListener('input', function () { m.map[item.label] = { kind: 'other', name: other.value }; syncMinuteSend(); }); pick.append(other); }
+        box.append(h('div', { class: 'min-speaker' }, h('div', { class: 'min-label' }, item.label), h('div', { class: 'min-samples' }, h('span', { class: 'sr' }, N.t('minSpeakerOriginal')), (item.samples || []).map(function (line) { return h('div', null, '「' + line + '」'); })), pick));
+      });
+      minutesSlot.append(box); syncMinuteSend();
+      if (suggest.state === 'running' || m.pending) V.minutesTimer = setTimeout(function () { minutePoll(m.id); }, 1800);
+    }
+    function syncMinuteSend() {
+      if (typeof send === 'undefined' || !send) return;
+      var m = V.minutesTell, active = kind === 'event' && m && m.id;
+      send.disabled = !!(active && !minuteMapComplete(m));
+      if (active && !minuteMapComplete(m)) note.textContent = N.t('minConfirmFirst');
+      else if (note.textContent === N.t('minConfirmFirst')) note.textContent = '';
+      send.textContent = active ? N.t('minMakeDraft') : U.tellSend;
+    }
+    function minutePoll(id) {
+      var m = V.minutesTell; if (!m || m.id !== id || !document.documentElement.contains(minutesSlot)) return;
+      get('/api/minutes?id=' + encodeURIComponent(id)).then(function (record) { if (!V.minutesTell || V.minutesTell.id !== id) return; V.minutesTell.record = record; V.minutesTell.pending = false; drawMinutes(); }, function (e) { if (e.status === 409) { V.minutesTell = null; note.textContent = N.ui.minDemo; minutesSlot.replaceChildren(); return; } V.minutesTimer = setTimeout(function () { minutePoll(id); }, 3000); });
+    }
+    function minutePreflight() {
+      minuteStopPoll(); V.minutesTell = null; minutesSlot.replaceChildren();
+      if (kind !== 'event' || !files.length) return;
+      var token = V.minutesPreflight = (V.minutesPreflight || 0) + 1;
+      minutesSlot.append(h('div', { class: 'track', 'aria-live': 'polite' }, h('p', { class: 'min-progress' }, N.t('minSuggesting'))));
+      minuteReadFiles(files.slice()).then(function (attachments) { return post('/api/minutes', { action: 'preflight', files: attachments }); }).then(function (result) {
+        if (token !== V.minutesPreflight || !result.transcript) { if (token === V.minutesPreflight) minutesSlot.replaceChildren(); return; }
+        V.minutesTell = { id: result.id, labels: minutesLabels(result.labels), map: {}, pending: true, record: null }; drawMinutes(); minutePoll(result.id);
+      }).catch(function (e) { if (token !== V.minutesPreflight) return; minutesSlot.replaceChildren(); note.textContent = e.status === 409 ? N.ui.minDemo : why(e); });
+    }
     function drawFiles() {
       fileList.replaceChildren();
-      files.forEach(function (f, k) { fileList.append(h('li', null, h('span', { class: 'attach' }, f.name), ' ', h('button', { type: 'button', class: 'btn link', onclick: function () { files.splice(k, 1); drawFiles(); dirty(); } }, U.tellRemove), h('span', { class: 'att-note' }, N.fileJudge(f.name)))); });
+      files.forEach(function (f, k) { fileList.append(h('li', null, h('span', { class: 'attach' }, f.name), ' ', h('button', { type: 'button', class: 'btn link', onclick: function () { files.splice(k, 1); drawFiles(); dirty(); minutePreflight(); } }, U.tellRemove), h('span', { class: 'att-note' }, N.fileJudge(f.name)))); });
     }
     function drawLinks() {
       linkList.replaceChildren();
       links.forEach(function (u, k) { linkList.append(h('li', null, h('span', { class: 'attach g' }, clip(u, 60)), ' ', h('button', { type: 'button', class: 'btn link', onclick: function () { links.splice(k, 1); drawLinks(); dirty(); } }, U.tellRemove))); });
     }
-    picker.addEventListener('change', function () { Array.prototype.forEach.call(picker.files || [], function (f) { if (!files.some(function (x) { return x.name === f.name && x.size === f.size; })) files.push(f); }); picker.value = ''; drawFiles(); dirty(); });
+    picker.addEventListener('change', function () { Array.prototype.forEach.call(picker.files || [], function (f) { if (!files.some(function (x) { return x.name === f.name && x.size === f.size; })) files.push(f); }); picker.value = ''; drawFiles(); dirty(); minutePreflight(); });
     function addLink() {
       var u = linkIn.value.trim(); if (!u) return;
       if (!GOOGLE_LINK.test(u)) { note.textContent = U.tellLinkBad; linkIn.focus(); return; }
@@ -572,6 +663,7 @@ dl.rc dd{margin:0}
       Object.keys(buttons).forEach(function (k) { buttons[k].className = 'intent' + (k === kind ? ' cur' : ''); buttons[k].setAttribute('aria-pressed', k === kind ? 'true' : 'false'); });
       form.hidden = !kind; if (!kind) return;
       var t = TELL[kind]; label.textContent = U[t[3]]; text.placeholder = U[t[4]]; after.textContent = U[t[5]]; text.setAttribute('aria-label', U[t[3]]); dateRow.hidden = kind !== 'event';
+      drawMinutes();
     }
     Object.keys(TELL).forEach(function (k) {
       var t = TELL[k];
@@ -584,6 +676,15 @@ dl.rc dd{margin:0}
       if (!value && !files.length && !links.length) { toast(U.tellNeedEventText); text.focus(); return; }
       if (kind !== 'event' && !value) { toast(U.tellNeedEventText); text.focus(); return; }
       if (kind === 'event' && !parseDay(date.value)) { toast(U.eventDate); date.focus(); return; }
+      var minutes = kind === 'event' && V.minutesTell;
+      if (minutes && minutes.id) {
+        if (!minuteMapComplete(minutes)) { note.textContent = N.t('minConfirmFirst'); return; }
+        send.disabled = true; note.textContent = U.sending;
+        post('/api/minutes', { action: 'speakers', id: minutes.id, map: minutes.map }).then(function () {
+          return post('/api/minutes', { action: 'draft', id: minutes.id, title: value, meetingDate: date.value });
+        }).then(function () { location.hash = '#/minutes/' + minutes.id; }, function (e) { send.disabled = false; note.textContent = why(e); syncMinuteSend(); });
+        return;
+      }
       send.disabled = true; note.textContent = U.sending;
       var sentKind = kind, picked = files.slice(), body = value, linkLines = links.map(function (u) { return T('tellLinkLine', { u: u }); });
       if (linkLines.length) body = (body ? body + '\n\n' : '') + linkLines.join('\n');
@@ -599,11 +700,11 @@ dl.rc dd{margin:0}
         note.replaceChildren(U.tellReceived, ' ', h('a', { class: 'btn link', id: 'quick-track', href: '#/feedback/' + 'in-' + result.id }, U.inFeedback));
       }).catch(function (e) { send.disabled = false; note.textContent = why(e); });
     } }, U.tellSend);
-    var cancel = h('button', { type: 'button', class: 'btn', id: 'quick-cancel', onclick: function () { text.value = ''; V.quickText = ''; linkIn.value = ''; V.tellLinkDraft = ''; files.length = 0; links.length = 0; drawFiles(); drawLinks(); dirty(); choose(''); } }, U.tellCancel);
-    form.append(label, text, dateRow, h('label', { for: 'quick-files' }, U.tellFiles), picker, fileList,
+    var cancel = h('button', { type: 'button', class: 'btn', id: 'quick-cancel', onclick: function () { text.value = ''; V.quickText = ''; linkIn.value = ''; V.tellLinkDraft = ''; files.length = 0; links.length = 0; V.minutesTell = null; minuteStopPoll(); minutesSlot.replaceChildren(); drawFiles(); drawLinks(); dirty(); choose(''); } }, U.tellCancel);
+    form.append(label, text, dateRow, h('label', { for: 'quick-files' }, U.tellFiles), picker, fileList, minutesSlot,
       h('label', { for: 'quick-link' }, U.tellLinkLabel), h('div', { class: 'tell-links' }, linkIn, h('button', { type: 'button', class: 'btn', id: 'quick-link-add', onclick: addLink }, U.tellLinkAdd)), linkList, h('p', { class: 'link-hint', id: 'tell-link-hint' }, U.tellLinkHint),
       after, h('div', { class: 'foot' }, send, cancel));
-    choose(kind); drawFiles(); drawLinks();
+    choose(kind); drawFiles(); drawLinks(); drawMinutes();
     // 最近交給 Zero 的事：資料由伺服器提供（不靠頁面記憶）；狀態標籤、摘要、按鈕全部取自 inputStatus 的結果
     // 只列最近 3 件，不放作答按鈕（要你確認的已在上方「接下來」）
     var list = ((home && home.inputs) || []).slice(0, 3);
@@ -655,8 +756,8 @@ dl.rc dd{margin:0}
   function showHub() {
     // 只有頁面第一次載入待決事項先算「打開」（記低時間）；輪詢同返回唔算
     var seen = !V.homeSeen; V.homeSeen = true;
-    Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; }), get('/api/dashboard?lite=1').catch(function () { return null; })]).then(function (r) {
-      var st = r[0], asks = r[1], home = r[2] || V.home, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = (asks.todo || []).filter(function (t) { return t.kind !== 'overview'; }), snoozed = asks.snoozed || [], byId = {}, c = asks.company || st.company || {};
+    Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; }), get('/api/dashboard?lite=1').catch(function () { return null; }), get('/api/minutes').catch(function (e) { if (e.status === 409) return { items: [] }; throw e; })]).then(function (r) {
+      var st = r[0], asks = r[1], home = r[2] || V.home, minutes = r[4] || { items: [] }, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = (asks.todo || []).filter(function (t) { return t.kind !== 'overview'; }), snoozed = asks.snoozed || [], byId = {}, c = asks.company || st.company || {};
       open.forEach(function (p) { byId[p.id] = p; }); V.home = home; V.status = st; checkInstance(st);
       // 第一次打開（未有公司概覽）：直接去交資料
       if ((!st.company || !st.company.ready) && !open.length && !helpReplies.length) { location.replace('#/intake'); return; }
@@ -676,7 +777,8 @@ dl.rc dd{margin:0}
       var todayHref = quietToday && home.card.href || '';
       if (/^#\/ask\//.test(todayHref) && listed[todayHref.slice(6)]) { todayNote[todayHref.slice(6)] = home.card.today; quietToday = null; }
       var waitLine = c.confirmed && !todo.length && key === 'waitInterview' ? h('div', { class: 'row', id: 'today-card', 'data-key': key }, h('div', null, h('div', { class: 't', id: 'today-do' }, home.card.today), h('div', { class: 'small muted', id: 'today-not' }, N.ui.todayNotAuto + home.card.notAuto)), h('a', { class: 'btn', href: home.card.href, id: 'today-go' }, home.card.button)) : null;
-      var rows = orphan.map(function (p) { return { el: helpReplyRow(p), title: N.fix(p.title) }; })
+      var minuteRows = (minutes.items || []).map(function (m) { return { el: plainRow({ 'data-minutes': m.id, 'data-state': m.state }, '◆', minuteStateText(m), N.fix(m.title || ''), h('a', { class: 'btn primary', href: '#/minutes/' + m.id }, N.t('minOpen'))), title: minuteStateText(m) }; });
+      var rows = minuteRows.concat(orphan.map(function (p) { return { el: helpReplyRow(p), title: N.fix(p.title) }; }))
         .concat(todo.map(function (t) { return { el: todoRow(t, byId, false, help, todayNote[t.id]), title: N.fix(byId[t.id] ? byId[t.id].title : t.text), todo: t.id }; }))
         .concat(failedInputs.map(function (v) { return { el: failedRow(v), title: DESK.inputTitle(v) }; }))
         .concat(asks.brainPending ? [{ el: brainRow(asks.brainPending), title: T('brainRowN', { n: asks.brainPending }) }] : [])
@@ -714,6 +816,138 @@ dl.rc dd{margin:0}
     }).catch(function (e) { fail(e); });
   }
 
+  /* ---------- 0.42.0 會議紀錄草稿 ---------- */
+  function minuteLabels(list) {
+    return (Array.isArray(list) ? list : []).map(function (x) { return typeof x === 'string' ? { label: x, samples: [] } : { label: String(x && x.label || ''), samples: Array.isArray(x && x.samples) ? x.samples : [] }; }).filter(function (x) { return !!x.label; });
+  }
+  function minutesInfo(v) {
+    var m = v && ((v.machine && v.machine.minutes) || v.minutes);
+    return m && m.id ? m : null;
+  }
+  // 與 transcript-lib.mjs 的 marks() 同一規則：行內任何位置的 ⚠ 或 ✏（可帶「（原因）」）都算，項目符號開頭亦然；頂部說明行（「> ⚠️ 不肯定…」）不算
+  function minuteMarksForText(text) {
+    var lines = String(text || '').split(/\r?\n/), marks = [];
+    lines.forEach(function (line, index) {
+      if (/^#{1,6}\s/.test(line) || /^>\s*⚠️?\s*不肯定/.test(line)) return;
+      var p = 0;
+      while (p < line.length) {
+        var w = line.indexOf('⚠', p), f = line.indexOf('✏', p), hit = w < 0 ? f : f < 0 ? w : Math.min(w, f);
+        if (hit < 0) break;
+        var q = hit + 1, reason = '';
+        if (line.charCodeAt(q) === 0xFE0F) q++;
+        if (line[q] === '（') { var end = line.indexOf('）', q + 1); if (end > q) { reason = line.slice(q + 1, end).trim(); q = end + 1; } }
+        marks.push({ kind: line[hit] === '⚠' ? 'warn' : 'fill', reason: reason, line: index + 1 });
+        p = q;
+      }
+    });
+    return marks;
+  }
+  function minuteMarkCount(marks, kind) { return marks.filter(function (x) { return x.kind === kind || (kind === 'unsure' && x.kind === 'warn'); }).length; }
+  function minuteTextChanged(text, saved) { return String(text || '').replace(/\r\n?/g, '\n') !== String(saved || '').replace(/\r\n?/g, '\n'); }
+  function minuteStateText(m) { return m.state === 'speakers' ? N.t('minNextSpeakers') : m.state === 'ready' ? N.t('minNextReady') : m.state === 'drafting' ? N.t('minNextDrafting') : N.t('minNextFailed'); }
+  function minuteJump(textarea, mark) {
+    var lines = textarea.value.split(/\r?\n/), line = Math.max(1, Number(mark && mark.line) || 1), at = 0;
+    for (var i = 0; i < line - 1 && i < lines.length; i++) at += lines[i].length + 1;
+    textarea.focus(); textarea.setSelectionRange(at, Math.min(textarea.value.length, at + (lines[line - 1] || '').length));
+    textarea.scrollTop = Math.max(0, (line - 3) * 24);
+  }
+  function minuteConfirm(mid, m, textarea) {
+    var marks = minuteMarksForText(textarea.value), dialog = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'minutes-confirm-title' },
+      h('div', { class: 'm-head' }, h('h3', { id: 'minutes-confirm-title' }, T('minMarksTitle', { n: marks.length }))),
+      h('div', { class: 'm-body' }, marks.slice(0, 3).map(function (x) { return h('div', { class: 'min-mark' }, x.kind === 'unsure' || x.kind === 'warn' ? '⚠️' : '✏️', h('span', null, N.fix(x.reason || ''))); }), h('p', { class: 'small' }, N.t('minMarksBody'))),
+      h('div', { class: 'm-foot' }, h('button', { type: 'button', class: 'btn primary', onclick: closeModal }, N.t('minBackEdit')), h('button', { type: 'button', class: 'btn', onclick: function () { closeModal(); minuteSubmit(mid, m, textarea, true); } }, N.t('minAcceptMarks'))));
+    var back = h('div', { class: 'backdrop', onclick: function (ev) { if (ev.target === back) closeModal(); } }, dialog);
+    $('#modal-root').replaceChildren(back); document.addEventListener('keydown', modalKeys, true);
+  }
+  function minuteChangedNote(note, mid) {
+    note.textContent = N.ui.minChangedLocally;
+    note.append(' ', h('button', { type: 'button', class: 'btn link', id: 'minutes-reload', onclick: function () { showMinutes(mid); } }, N.t('minReload')));
+  }
+  function minuteFailureReason(error) {
+    if (error === 'missing') return N.t('minMissing');
+    // 外殼寫入的已是白話整句（含中文）：直接顯示；英文錯誤碼才轉為白話
+    if (/[一-鿿]/.test(String(error || ''))) return String(error);
+    var code = String(error || ''), reason = '';
+    if (code) try { reason = why({ code: code, message: code }); } catch (ignore) { }
+    return typeof reason === 'string' && reason !== code && reason.indexOf(code) < 0 ? reason : N.t('minDraftProblem');
+  }
+  function minuteSubmit(mid, m, textarea, acceptMarks) {
+    var note = $('#minutes-note'), button = $('#minutes-submit');
+    function stopped(e) {
+      if (button) button.disabled = false;
+      if (!note) return;
+      if (e.code === 'changed') minuteChangedNote(note, mid);
+      else note.textContent = why(e);
+    }
+    function submit(current) {
+      if (button) button.disabled = true;
+      if (note) note.textContent = N.ui.sending;
+      post('/api/minutes', { action: 'submit', id: mid, hash: current.hash, acceptMarks: !!acceptMarks }).then(function (r) {
+        V.minutesSubmitted = r.inputId || '';
+        // 與其他「告訴 Zero」送出一樣：外殼登記前，回饋卡先顯示處理中，不會出現「找不到」
+        if (r.inputId) V.sent = { id: r.inputId, type: 'event', text: T('minSentText', { t: current.title || m.title || N.t('minEditorTitle') }), files: [], at: localIso(new Date()) };
+        showMinutes(mid);
+      }, function (e) {
+        if (e.code === 'marks' && !acceptMarks) return minuteConfirm(mid, current, textarea);
+        stopped(e);
+      });
+    }
+    if (!minuteTextChanged(textarea.value, m.text)) return submit(m);
+    if (button) button.disabled = true;
+    if (note) note.textContent = N.ui.sending;
+    post('/api/minutes', { action: 'save', id: mid, text: textarea.value, hash: m.hash })
+      .then(function () { return get('/api/minutes?id=' + encodeURIComponent(mid)); })
+      .then(function (current) { if (minuteTextChanged(textarea.value, current.text)) return stopped({ code: 'changed' }); submit(current); }, stopped);
+  }
+  function showMinutes(mid) {
+    Promise.all([get('/api/status'), get('/api/minutes?id=' + encodeURIComponent(mid))]).then(function (pair) {
+      var st = pair[0], m = pair[1]; V.status = st; checkInstance(st); clearTimeout(V.minutesTimer);
+      var title = m.title || N.t('minEditorTitle'), marks = [];
+      if (m.state === 'speakers') {
+        V.quickKind = 'event'; V.minutesTell = { id: mid, labels: minuteLabels(m.labels), map: m.speakers || {}, pending: false, record: m };
+        location.hash = '#/'; return;
+      }
+      if (m.state === 'drafting') {
+        setApp(head('pending', st), h('section', { class: 'layer', id: 'minutes-drafting' }, h('span', { class: 'eyebrow' }, N.t('minEditorTitle')), h('h2', { class: 'layer-title' }, title), h('div', { class: 'track', 'aria-live': 'polite' }, h('p', { class: 'min-progress' }, N.t('minDrafting')))));
+        V.minutesTimer = setTimeout(function () { if (location.hash === '#/minutes/' + mid) showMinutes(mid); }, 2200);
+        return;
+      }
+      // 整理失敗，或草稿檔已不見（伺服器回 ready 及 missing）：都顯示白話原因及重新整理入口
+      if (m.state === 'failed' || (m.state === 'ready' && m.error === 'missing')) {
+        var failedReason = minuteFailureReason(m.error), retry = h('button', { type: 'button', class: 'btn primary', id: 'minutes-retry', onclick: function () { retry.disabled = true; post('/api/minutes', { action: 'draft', id: mid, title: m.title || '', meetingDate: m.meetingDate || '' }).then(function () { showMinutes(mid); }, function (e) { retry.disabled = false; $('#minutes-note').textContent = why(e); }); } }, m.error === 'missing' ? N.t('minRefreshDraft') : N.t('minRetry'));
+        setApp(head('pending', st), h('section', { class: 'layer', id: 'minutes-failed' }, h('span', { class: 'eyebrow' }, N.t('minEditorTitle')), h('h2', { class: 'layer-title' }, title), h('p', null, failedReason), h('p', { class: 'small muted', id: 'minutes-note', 'aria-live': 'polite' }), h('div', { class: 'foot' }, retry)));
+        return;
+      }
+      if (m.state === 'submitted') {
+        var inputId = m.inputId || V.minutesSubmitted || '';
+        setApp(head('pending', st), h('section', { class: 'layer min-submitted', id: 'minutes-submitted' }, h('span', { class: 'eyebrow' }, N.t('minEditorTitle')), h('h2', { class: 'layer-title' }, title), h('p', null, N.t('minSubmitted')), h('div', { class: 'foot' }, inputId ? h('a', { class: 'btn primary', href: '#/feedback/' + inputId }, N.t('minGoFeedback')) : h('a', { class: 'btn primary', href: '#/' }, N.t('minGoFeedback')))));
+        return;
+      }
+      var textarea = h('textarea', { class: 'min-text', id: 'minutes-text', 'aria-label': N.t('minEditorTitle') }); textarea.value = m.text || '';
+      var warnCount = h('span', null), fillCount = h('span', null), side = h('aside', { class: 'min-side' });
+      var preview = h('div', { class: 'min-preview', id: 'minutes-preview', hidden: true });
+      function drawMarks() {
+        marks = minuteMarksForText(textarea.value);
+        warnCount.textContent = T('minWarnCount', { n: minuteMarkCount(marks, 'warn') });
+        fillCount.textContent = T('minFillCount', { n: minuteMarkCount(marks, 'fill') });
+        var rows = [h('h3', null, T('minPendingMarks', { n: marks.length }))];
+        marks.forEach(function (x) { rows.push(h('div', { class: 'min-mark' }, x.kind === 'unsure' || x.kind === 'warn' ? '⚠️' : '✏️', h('span', null, N.fix(x.reason || '')), h('button', { type: 'button', class: 'btn link', onclick: function () { minuteJump(textarea, x); } }, N.t('minNextMark')))); });
+        side.replaceChildren.apply(side, rows);
+      }
+      drawMarks();
+      function showPreview() { preview.hidden = !preview.hidden; if (!preview.hidden) preview.replaceChildren(window.SOS_MD ? SOS_MD(textarea.value) : h('pre', null, textarea.value)); }
+      textarea.addEventListener('input', function () { drawMarks(); if (!preview.hidden) preview.replaceChildren(window.SOS_MD ? SOS_MD(textarea.value) : h('pre', null, textarea.value)); });
+      var saved = h('span', { class: 'small muted', id: 'minutes-note', 'aria-live': 'polite' });
+      var save = h('button', { type: 'button', class: 'btn', id: 'minutes-save', onclick: function () {
+        save.disabled = true; saved.textContent = N.ui.sending;
+        post('/api/minutes', { action: 'save', id: mid, text: textarea.value, hash: m.hash }).then(function () { saved.textContent = N.t('minSaved'); showMinutes(mid); }, function (e) { save.disabled = false; if (e.code === 'changed') minuteChangedNote(saved, mid); else saved.textContent = why(e); });
+      } }, N.t('minSave'));
+      var local = h('button', { type: 'button', class: 'btn desktop-only', id: 'minutes-open-local', onclick: function () { local.disabled = true; post('/api/minutes', { action: 'open', id: mid }).then(function () { saved.textContent = N.t('minOpenedLocal'); local.disabled = false; }, function (e) { saved.textContent = why(e); local.disabled = false; }); } }, N.t('minOpenLocal'));
+      var submit = h('button', { type: 'button', class: 'btn primary big', id: 'minutes-submit', onclick: function () { marks.length ? minuteConfirm(mid, m, textarea) : minuteSubmit(mid, m, textarea, false); } }, N.t('minSubmit'));
+      setApp(head('pending', st), h('section', { class: 'layer', id: 'minutes-ready' }, h('span', { class: 'eyebrow' }, N.t('minEditorTitle')), h('h2', { class: 'layer-title' }, title), h('div', { class: 'min-count' }, warnCount, fillCount), m.shown ? h('p', { class: 'min-path' }, N.t('minLocation') + '：' + m.shown) : null, h('div', { class: 'min-editor' }, textarea, side), preview, h('div', { class: 'foot' }, save, h('button', { type: 'button', class: 'btn', onclick: showPreview }, N.t('minPreview')), local, submit, saved)));
+    }).catch(function (e) { fail(e); });
+  }
+
   /* ---------- 回饋卡（0.40.0）：每一件交給 Zero 的事一張卡，由上而下最多五步；資料來自伺服器，不靠頁面記憶。
      #/feedback/<編號> 是正式網址；舊網址 #/request/event、adhoc、order 照用：顯示該類最近一件的回饋卡，沒有就回首頁並選好該類型。
      顯示哪幾步由 inputStatus 的 steps 決定（見 docs/evidence/v0400-ui-2026-11-07/status-table.md），這裏不另行判斷狀態。 ---------- */
@@ -732,9 +966,12 @@ dl.rc dd{margin:0}
       var sent = V.sent && V.sent.id === id ? V.sent : null;
       if (!v && sent) v = pendingView(sent);
       if (!v) { setApp(head('request', st), h('section', { class: 'layer', id: 'fb-missing' }, h('span', { class: 'eyebrow' }, N.ui.fbEyebrow), h('p', null, N.ui.fbNotFound), h('div', { class: 'foot' }, h('a', { class: 'btn primary', href: '#/' }, N.ui.fbBack)))); return; }
-      setApp(head('request', st), aiBlock(st), feedbackCard(v, st));
-      var s = v.status;
-      if ((s.code === 'working' || s.code === 'awaiting')) FB.timer = setTimeout(function () { if (/^#\/(feedback|request)\//.test(location.hash)) showFeedback(id, legacyType); }, 3000);
+      var linked = minutesInfo(v), readMinutes = linked ? get('/api/minutes?id=' + encodeURIComponent(linked.id)).catch(function () { return null; }) : Promise.resolve(null);
+      readMinutes.then(function (minutes) {
+        setApp(head('request', st), aiBlock(st), feedbackCard(v, st, minutes));
+        var s = v.status;
+        if ((s.code === 'working' || s.code === 'awaiting')) FB.timer = setTimeout(function () { if (/^#\/(feedback|request)\//.test(location.hash)) showFeedback(id, legacyType); }, 3000);
+      });
     }).catch(function (e) { fail(e); });
   }
   // 剛送出、伺服器還沒登記：只顯示第 1 步
@@ -747,7 +984,18 @@ dl.rc dd{margin:0}
     return h('li', { 'data-step': title }, h('span', { class: 'fb-ic ' + state, 'aria-hidden': 'true' }, String(n)), h('div', { class: 'fb-body' }, h('h4', null, title), body));
   }
   function convertCode(f) { return f.convert === 'encrypted' ? 'encrypted' : f.convert === 'too-big' ? 'too-big' : f.convert === 'corrupt' ? 'corrupt' : ''; }
-  function feedbackCard(v, st) {
+  function minuteFeedback(v, minutes) {
+    // 由伺服器的會議資料判斷（/api/input 帶 minutes），不以附件檔名比對
+    if (!minutesInfo(v)) return null;
+    var linked = minutesInfo(v), previous = (linked && linked.previous) || (minutes && minutes.previous), previousHref = previous && (previous.href || previous.url || (typeof previous === 'string' && /^#?\//.test(previous) ? previous : ''));
+    var revise = h('button', { type: 'button', class: 'btn', onclick: function () {
+      revise.disabled = true;
+      post('/api/minutes', { action: 'revise', id: linked.id }).then(function () { location.hash = '#/minutes/' + linked.id; }, function (e) { revise.disabled = false; toast(why(e)); });
+    } }, N.t('minRevise'));
+    return h('div', { class: 'att-row', id: 'fb-minutes' }, h('span', { class: 'attach' }, T('minFeedbackVersion', { n: linked.version || minutes.version || 1 })),
+      h('a', { class: 'btn link', href: '#/minutes/' + linked.id }, N.t('minOpen')), previousHref ? h('a', { class: 'btn link quiet', href: previousHref }, N.t('minPrevious')) : null, revise);
+  }
+  function feedbackCard(v, st, minutes) {
     var U = N.ui, s = v.status, n = 0, rows = [], typeName = v.via === 'adhoc' ? U.reqAdhoc : v.via === 'order' ? U.reqOrder : v.via === 'debrief' ? U.inTyDebrief : U.reqEvent;
     var title = v.title ? DESK.inputTitle(v) : typeName + (v.date ? '（' + dayOf(v.date) + '）' : '') + (v.said ? '：' + clip(v.said, 50) : '');
     var head2 = h('p', { class: 'small muted', id: 'fb-meta' }, T('fbSentAt', { t: fmtWhen(v.receivedAt) }), ' · ', v.files.length ? T('inFilesN', { n: v.files.length }) : U.fbNoAttach, ' ', DESK.inputTag(v), v.source === 'chat' ? [' ', tag(U.inFromChat, 'mine')] : null);
@@ -755,7 +1003,8 @@ dl.rc dd{margin:0}
     // 原話：讀得到封存筆記就顯示原文；舊紀錄讀不到時用標題內的一句；只附文件才寫「沒有文字」
     var said = v.said || (v.via !== 'doc' && v.title ? DESK.inputTitle(v).replace(/^[^：]*：/, '') : '');
     var rec = [said ? h('p', { class: 'q', id: 'fb-said' }, '「' + said + '」') : s.textless && v.via === 'doc' ? h('p', { class: 'q', id: 'fb-said' }, U.inTextless) : null,
-      v.source === 'chat' ? h('p', { class: 'small', id: 'fb-from-chat' }, U.inFromChat) : null, v.files.length || v.linkErrors.length ? DESK.attachList(v, { reread: true }) : null];
+      v.source === 'chat' ? h('p', { class: 'small', id: 'fb-from-chat' }, U.inFromChat) : null, v.files.length || v.linkErrors.length ? DESK.attachList(v, { reread: true }) : null,
+      minutes ? minuteFeedback(v, minutes) : null];
     rows.push(fbStep(++n, 'done', U.fbS1, rec));
     // 2 Zero 讀了甚麼
     if (s.steps.indexOf('read') >= 0) {
@@ -791,7 +1040,7 @@ dl.rc dd{margin:0}
       var changed = v.effects.filter(function (e) { return e.targetKind !== 'followUp'; }), follow = v.effects.filter(function (e) { return e.targetKind === 'followUp'; });
       var items = changed.map(function (e) {
         return h('li', { class: e.before && e.after ? 'chg' : null }, N.fix(e.text), e.before && e.after ? [': ', h('s', null, e.before), ' → ', h('em', null, e.after)] : null, e.href ? [' ', h('a', { class: 'link', href: e.href }, U.fbOnPath)] : null);
-      }).concat(follow.map(function (e) { return h('li', { class: 'chg', 'data-followup': e.targetId }, T('fbFollowUp', { d: dayOf(e.dueAt), t: N.fix(e.text) })); }));
+      }).concat(follow.map(function (e) { return h('li', { class: 'chg', 'data-followup': e.targetId }, T('fbFollowUp', { d: dayOf(e.dueAt), t: N.fix(e.text) }), e.targetId ? [' ', h('a', { class: 'link', href: '#/change/task/' + e.targetId }, N.t('minCorrectSchedule'))] : null); }));
       rows.push(fbStep(++n, 'done', U.fbS4, [h('ul', { id: 'fb-changes' }, items), h('p', null, U.fbRecorded)]));
     }
     // 5 沒有影響的原因
@@ -1463,10 +1712,12 @@ dl.rc dd{margin:0}
       return;
     }
     var stopArt = P.rhythm && P.rhythm.kind === 'autoStop' ? scene('autoStop') : null;
+    var packMinutes = minutesInfo(P);
     var hero = h('section', { class: 'hero' + (stopArt ? ' with-scene' : '') }, stopArt,
       h('span', { class: 'eyebrow' }, ((P.askedBy === 'AI' || P.askedBy === 'Zero') ? N.ui.aiAsk : N.ui.yourAsk) + ' · ' + dayOf(P.askedAt)),
       h('h2', { class: 'hero-t' }, N.fix(P.title)),
       P.context ? h('p', { class: 'hero-p' }, N.fix(P.context)) : null,
+      packMinutes ? h('p', { class: 'small' }, h('a', { class: 'btn link', href: '#/minutes/' + packMinutes.id }, N.t('minView'))) : null,
       h('div', { class: 'hero-meta' }, st.total ? (S.rest.length ? T('batchHeroRest', { n: st.total, r: S.rest.length }) : T('batchHero', { n: st.total })) : N.ui.packDone,
         P.afterConfirm ? h('span', null, ' · ' + N.ui.afterConfirm + '：' + P.afterConfirm) : null),
       st.total ? h('div', { class: 'hero-act' },

@@ -45,6 +45,10 @@ try {
   j(path.join(sb, 'job.json'), { type: 'debrief' });
   // checkEvent 用到 run.mjs 模組層的 unreadList（再用到 U、matchDelivered、log、readJSON、loadState）：一併放入環境，否則會 ReferenceError
   Object.assign(ctx, ops, people, { pnorm: people.norm, markBrokenLinks: async e => e, attachmentRows: () => [], attachName: x => x });
+  // 0.42.0：checkEvent 會核對會議紀錄附件及講者標籤；本測試沒有會議紀錄，用「沒有附件」的替身，講者核對用真函數
+  const transcriptLib = await import(pathToFileURL(path.join(PROTO, 'transcript-lib.mjs')).href);
+  const askLib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+  Object.assign(ctx, { guardMinuteItems: items => items, revisionItems: (input, items) => items, fnv: askLib.fnv, minuteContext: () => ({ text: '', info: null, rec: null, map: {}, entries: [] }), unmappedIn: transcriptLib.unmappedIn });
   vm.runInContext(section('const unreadList =', '\n') + '\n' + section('function checkEvent(', 'function eventPack(') + '\nthis.checkEvent=checkEvent;', ctx);
   const before = fs.readFileSync(stateFile, 'utf8');
   fs.writeFileSync(path.join(data, 'fake-mode.txt'), 'debrief:auto-grade\n');

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { certifyDirect, seedCompany, usePass } from '../lib/testkit.mjs';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
 
@@ -20,8 +21,10 @@ const waitFor = async (fn, ms = 12000, step = 180) => {
 const health = async origin => {
   try { const r = await fetch(origin + '/api/health', { signal: AbortSignal.timeout(800) }); return r.ok ? await r.json() : null; } catch { return null; }
 };
+// 示範伺服器開在本測試自己的埠段（PORT+6 起），不碰創辦人日常用的 4380–4389；只認、只停根目錄是本測試示範資料夾的伺服器
+const DEMO_FROM = Number(PORT) + 6;
 function start(data, port) {
-  const env = { ...process.env, SOS_DATA: data, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' };
+  const env = { ...process.env, SOS_DATA: data, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1', SOS_DEMO_PORT: String(DEMO_FROM) };
   delete env.CZ_NO_WELCOME; delete env.SOS_SIM; delete env.SOS_PORT;
   const child = spawn(process.execPath, [path.join(TEST_PROTO, 'server.mjs'), '--port', String(port)], { cwd: TEST_PROTO, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   let log = ''; child.stdout.on('data', d => { log += d; }); child.stderr.on('data', d => { log += d; });
@@ -35,12 +38,14 @@ async function post(origin, body, headers = {}) {
 }
 async function portsBefore() {
   const map = new Map();
-  for (let port = 4380; port < 4390; port++) map.set(port, await health(`http://127.0.0.1:${port}`));
+  for (let port = DEMO_FROM; port < DEMO_FROM + 4; port++) map.set(port, await health(`http://127.0.0.1:${port}`));
   return map;
 }
 
 fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
 const TEST_PROTO = path.join(OUT, 'prototype'); fs.cpSync(PROTO, TEST_PROTO, { recursive: true });
+const { rootId } = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+const DEMO_ROOT = rootId(path.join(path.resolve(TEST_PROTO), 'demo-data'));
 let main = null, certified = null, company = null, cdp = null, demo = null, demoBefore = new Map();
 try {
   main = start(DATA, PORT);
@@ -120,9 +125,9 @@ try {
   const demoStart = await post(BASE, { action: 'openDemo' });
   const demoAgain = await post(BASE, { action: 'openDemo' });
   demo = await waitFor(async () => {
-    for (let port = 4380; port < 4390; port++) {
+    for (let port = DEMO_FROM; port < DEMO_FROM + 4; port++) {
       const current = await health(`http://127.0.0.1:${port}`), before = demoBefore.get(port);
-      if (current && current.root !== mainHealth.root && (!before || before.pid !== current.pid)) return { port, health: current };
+      if (current && current.root === DEMO_ROOT && current.root !== mainHealth.root && (!before || before.pid !== current.pid)) return { port, health: current };
     }
     return null;
   }, 12000, 300);
@@ -148,7 +153,7 @@ try {
   ok('測試程式出錯', false, String(error && error.stack || error));
 } finally {
   try { cdp && cdp.close(); } catch { }
-  if (demo && !demoBefore.get(demo.port)) { try { process.kill(demo.health.pid); } catch { } }
+  if (demo && demo.health.root === DEMO_ROOT && !demoBefore.get(demo.port)) { try { process.kill(demo.health.pid); } catch { } }
   for (const server of [main, certified, company]) { try { server && server.child.kill(); } catch { } }
   await sleep(350);
 }

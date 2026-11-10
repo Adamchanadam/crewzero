@@ -117,7 +117,7 @@ export function checkNewActorItem(it, { actors = [], texts = [], at = '項目', 
   if (duplicateActor(actors, name)) return { status: 'drop', reason: 'duplicate' };
   if (liveActors(actors).length >= MAX_ACTIVE) return { status: 'drop', reason: 'full' };
   const k = norm(name);
-  if (!texts.some(t => norm(t).includes(k))) return { status: 'error', errors: [at + '：「' + clip(name, 20) + '」沒有逐字出現在創辦人原話或附件文字版內（只在 PDF 或圖片內出現的名字不接受）；沒有出現就不要建議這個對象'] };
+  if (!texts.some(t => norm(t).includes(k))) return { status: 'error', errors: [at + '：「' + clip(name, 20) + '」沒有逐字出現在創辦人原話或附件文字版內（只在圖片內出現的名字不接受）；沒有出現就不要建議這個對象'] };
   const item = { kind: 'newActor', name, actorKind: it.actorKind, why: it.why.trim(), ...(str(it.org, ORG_MAX) ? { org: it.org.trim() } : {}), ...(str(it.role, ROLE_MAX) ? { role: it.role.trim() } : {}), ...(it.actorKind === 'team' ? { teamType: it.teamType } : {}) };
   const sim = similarActor(actors, item);
   if (sim) item.similarTo = sim.id;

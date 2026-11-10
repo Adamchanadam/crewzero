@@ -157,6 +157,7 @@ try {
   ok('真實進展頁「交給 Zero 的事」也列出文件類（按月摺疊）', (await has('#in-inbox details.mo-month')) && (await ev(`!!document.querySelector('#in-inbox [data-input="${inp.id}"]')`)), await text('#in-inbox'));
   await ev(`document.querySelector('#tool-more').open=true`);
   await click('#open-folder');
+  await waitFor(async () => (await text('#toast')).includes(N.ui.openFolderNoWin), 8000); // 頁面忙於輪詢時，提示要稍後才出現
   ok('「開啟資料夾」在頁頭「更多」：只開固定收件匣（測試環境唔開視窗）', (await text('#toast')).includes(N.ui.openFolderNoWin), await text('#toast'));
   ok('本機固定動作唔接受參數', (await api(PB, '/api/setup', { action: 'openFolder', path: 'C:/' })).code === 400 && (await api(PB, '/api/setup', { action: 'runNow', type: 'x' })).code === 400);
   await waitFor(async () => !(await api(PB, '/api/dashboard')).j.ai.busy, 30000);
@@ -172,6 +173,8 @@ try {
   const stop = await api(PB, '/api/setup', { action: 'runNow' });
   ok('持續暫停：「現在開工」只講原因、唔開 AI', stop.code === 409 && stop.j.message === N.ui.skip_pausedByFounder, stop);
   await go(B + '#/');
+  // 剛完成的工作收尾期間會先顯示「工作進行中」：等到顯示暫停原因才核對
+  await waitFor(async () => (await text('#run-now-note')) === N.ui.skip_pausedByFounder, 30000);
   ok('持續暫停：掣停用並顯示原因', (await ev(`document.querySelector('#run-now').disabled`)) && (await text('#run-now-note')) === N.ui.skip_pausedByFounder, await text('#run-now-note'));
   ok('首頁告訴 Zero、近期工作畫面文字：用字檢查零命中', !(await scanText(['#quick-input', '#run-preview'])).length, await scanText(['#quick-input', '#run-preview']));
   await go(B + 'dashboard/inputs');

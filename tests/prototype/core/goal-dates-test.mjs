@@ -371,7 +371,8 @@ let packSeq7 = 0;
 function pack7(questions = 2) {
   const id = 'ns' + (++packSeq7), f = path.join(OUT, id + '.json');
   fs.writeFileSync(f, JSON.stringify({ format: 'startup-os.ask/0.1', title: '虛構待決事項 ' + id, context: '測試用。', afterConfirm: '回答後，Zero 會繼續準備。', questions: Array.from({ length: questions }, (_, i) => ({ id: id + '-q' + (i + 1), priority: i + 1, ask: '虛構問題 ' + id + ' 第 ' + (i + 1) + ' 條？', kind: 'text', value: '先按建議', why: '測試用。' })) }));
-  const r = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), f, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA7 } });
+  // SOS_PORT 指向本測試的伺服器（PORT+5）：ask.mjs 找得到它，不會在創辦人日常用的 4380–4389 另開伺服器
+  const r = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), f, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA7, SOS_PORT: String(PORT + 5) } });
   return r.status === 0;
 }
 const until7 = async (fn, ms = 60000) => { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch { } await sleep(400); } return null; };
@@ -930,7 +931,7 @@ try {
     tooBig: '這份文件太大，未能轉成文字。請分拆後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
     corrupt: '這份文件可能已損壞，未能轉成文字。請重新另存後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
     password: '這份文件設有密碼，未能轉成文字。請移除密碼後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
-    pdf: '這份 PDF 未能讀取，常見原因是超過 100 頁或設有密碼。請分拆為每份 100 頁以內、移除密碼後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
+    pdf: '這份 PDF 未能讀取，常見原因是掃描圖片或設有密碼。請改交可選取文字的 PDF、移除密碼後再交，或在「' + PAGE + '」頁直接寫下文件重點。',
     other: 'Zero 目前無法讀取這種檔案。請改交 PDF，或在「' + PAGE + '」頁直接寫下文件重點。'
   };
   const FILES = { legacy: ['舊版.doc', '舊版.xls', '舊版.ppt'], modern: ['計劃書.docx', '簡報.PPTX', '數據.xlsx'], pdf: ['報告.pdf', '報告.PDF'], other: ['照片.png', 'x.HEIC', '無副檔名', '筆記.pages', '表.numbers', '簡報.key'] };
@@ -938,7 +939,7 @@ try {
   ok('十-2：整句範本是「未能讀取：{f}。{r}」（原因自帶句號，不再用破折號接完整句子）', N.ui.unreadFileLine === '未能讀取：{f}。{r}', N.ui.unreadFileLine);
   ok('十-2：舊版 Office（.doc、.xls、.ppt）整句是核准字句：請另存為新版格式或 PDF', FILES.legacy.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.legacy)), FILES.legacy.map(line));
   ok('十-2：新版 Office（.docx、.xlsx、.pptx）未能轉成文字：按原因代碼分五句（沒有代碼＝一般轉換失敗；太大、損壞、密碼各有一句）', FILES.modern.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.convert) && N.unreadReason(f, 'too-big') === WANT.tooBig && N.unreadReason(f, 'corrupt') === WANT.corrupt && N.unreadReason(f, 'encrypted') === WANT.password), FILES.modern.map(f => [line(f), N.unreadReason(f, 'too-big'), N.unreadReason(f, 'corrupt'), N.unreadReason(f, 'encrypted')]));
-  ok('十-2：PDF 整句是核准字句，不出現「另存為 PDF」及「文字版」', FILES.pdf.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.pdf) && !/另存為/.test(line(f)) && !/文字版/.test(line(f))), FILES.pdf.map(line));
+  ok('十-2：PDF 整句是核准字句，說明掃描圖片不會讀到，不再設頁數門檻', FILES.pdf.every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.pdf) && /掃描圖片/.test(line(f)) && !/100\s*頁/.test(line(f))), FILES.pdf.map(line));
   ok('十-2：其他（圖片、無副檔名）整句是核准字句', ['照片.png', 'x.HEIC', '無副檔名'].every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.other)), ['照片.png', 'x.HEIC', '無副檔名'].map(line));
   ok('十-2：Apple 格式（.pages、.numbers、.key）不歸入 Office，改用「其他」字句（字句只寫 Word、Excel、PowerPoint）', ['筆記.pages', '表.numbers', '簡報.key'].every(f => line(f) === plain('未能讀取：' + f + '。' + WANT.other) && !/Word/.test(line(f))), ['筆記.pages', '表.numbers', '簡報.key'].map(line));
   ok('十-2：沒有「。。」及「——」，每句以句號結尾', ALL.every(f => !line(f).includes('。。') && !line(f).includes('——') && line(f).endsWith('。')), ALL.map(line).filter(x => x.includes('。。') || x.includes('——') || !x.endsWith('。')));

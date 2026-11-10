@@ -28,6 +28,14 @@ for (const n of NAMES) {
 const d = text.discuss;
 ok('discuss：用 --brief 取背景、用 --tell 交結論', d.includes('--brief') && d.includes('--tell'));
 ok('discuss：交給 Zero 前先問「要不要把以下內容交給 Zero」', d.includes('要不要把以下內容交給 Zero'));
+ok('discuss：會議逐字稿觸發詞齊全', ['會議逐字稿', '轉會議紀錄', '整理會議紀錄', '逐字稿'].every(k => d.includes(k)));
+ok('discuss：會議紀錄先讀檔、逐位確認講者、依規格寫草稿及核實相對日期', d.includes('--read') && /每位都確認前，不可整理草稿/.test(d) && d.includes('meeting-minutes-format.md') && d.includes('相對日期先以會議日期核實'));
+ok('discuss：會議紀錄交出前詢問、正文帶講者對照，附件名稱正確', d.includes('要不要把以下內容交給 Zero') && d.includes('formatMap()') && d.includes('會議紀錄.md'));
+ok('S1 會議紀錄技能寫明公司概覽名稱清單、改動清單及逐字稿邊界', d.includes('已確認公司概覽的名稱及用詞') && d.includes('改動清單') && d.includes('會議紀錄只可寫逐字稿的內容'));
+const minutesFormat = read(path.join(PROTO, 'meeting-minutes-format.md'));
+ok('S2 會議紀錄規格列明名稱校正、別名改正式名字、逐字稿優先及沒有概覽時的規則', ['人名以名單為準', '包括名單列出的別名，改用正式名字', '不可改成公司概覽的說法', '不可寫入會議紀錄', '沒有已確認公司概覽時，只按名單校正'].every(k => minutesFormat.includes(k)), minutesFormat);
+const minutesTask = read(path.join(PROTO, 'ai-minutes-draft.md'));
+ok('S3 草稿工作說明提及名稱清單、明示不是會議內容，不誤列完整概覽或重抄人名規則', minutesTask.includes('company-names.md') && minutesTask.includes('不是會議內容') && !minutesTask.includes('confirmed-page.md') && !minutesTask.includes('人名以名單為準'), minutesTask);
 ok('discuss：三種工具打法齊全（含描述）', ['/crewzero:discuss', '$crewzero:discuss', '/discuss'].every(k => d.includes(k)) && /description:.*\/crewzero:discuss.*\$crewzero:discuss.*\/discuss/.test(d.replace(/\r\n/g, '\n')));
 ok('discuss：三類草稿類型、草稿存系統暫存資料夾並於成功後刪走', ['event', 'adhoc', 'order'].every(k => d.includes(k)) && /系統暫存資料夾/.test(d) && /唔好存喺項目資料夾/.test(d) && /刪走/.test(d) && /crewzero-tell-/.test(d));
 ok('discuss：守則（稱 Zero、不拍板、不手改 data、不自開其他命令、可上網但不夾帶私人資料）', /Zero/.test(d) && /唔替創辦人拍板/.test(d) && /唔手改 `<安裝>\/data\/`/.test(d) && /唔自行開其他 CrewZero 命令/.test(d) && /上網/.test(d) && /私人資料/.test(d));
