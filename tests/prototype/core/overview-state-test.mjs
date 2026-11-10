@@ -24,7 +24,7 @@ const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p,
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 const loadFixture = f => { const c = { window: {} }; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(PROTO, 'fixtures', f), 'utf8'), c); return c.window.STARTUP_OS_PAGE; };
-const KEY = 'sos-proofread:goal-dates-repro-structured-2026-11-06:1:33f1547a';
+const KEY = 'sos-proofread:goal-dates-repro-structured-2026-11-06:1:54829453';
 const plain = s => String(s || '').replaceAll('2026 年 ', '').replace(/\s+/g, ' ');
 const tfetch = (u, o = {}) => fetch(u, { signal: AbortSignal.timeout(20000), ...o });
 

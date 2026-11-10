@@ -8,9 +8,9 @@
 {
   "summary": "一句：建議加入幾個人、更正幾個類別",
   "items": [
-    { "kind": "newActor", "name": "陳小明", "role": "送貨及日常營運", "actorKind": "team", "teamType": "fulltime", "why": "已有人負責的事寫明他已答應加入，負責送貨及日常營運。" },
-    { "kind": "newActor", "name": "王伯", "role": "農務顧問", "actorKind": "advisor", "why": "已有人負責的事寫明他是顧問，負責農務意見，不負責營運。" },
-    { "kind": "actorKind", "name": "丙農場主", "actorKind": "partner", "why": "丙農場是供貨伙伴，不是客戶。" }
+    { "kind": "newActor", "name": "陳小明", "role": "寄貨及日常營運", "actorKind": "team", "teamType": "fulltime", "why": "已有人負責的事寫明他已答應加入，負責寄貨及日常營運。" },
+    { "kind": "newActor", "name": "王伯", "role": "電子商務顧問", "actorKind": "advisor", "why": "已有人負責的事寫明他是顧問，負責網店營運意見，不負責日常執行。" },
+    { "kind": "actorKind", "name": "丙烘焙工房主", "actorKind": "partner", "why": "丙烘焙工房是供貨伙伴，不是客戶。" }
   ]
 }
 ```

@@ -29,16 +29,16 @@ const quotedBullets = (arr, empty) => bullets((arr || []).map(quoted).filter(Boo
 export function buildBrief(p = {}) {
   const st = p.station || {}, task = p.task || {}, role = p.role || {}, prog = p.progress || {}, perm = p.permissions || {}, dl = p.deliver || {};
   const roleName = line(role.title) || 'Zero 統籌';
-  const out = [`# 工作說明：${line(task.title) || '今次的工作'}`, '', `負責崗位：${roleName}`, ''];
-  out.push(heading(0), '', `這次為站「${line(st.short)}」服務；要令「${line(st.event)}」發生。`, `完成條件（原文）：${line(st.doneWhen) || '（公司紀錄未填）'}`, `這件工作：${line(task.title)}${task.next ? '——' + line(task.next) : ''}`, '');
+  const out = [`# 工作說明：${quoted(task.title) || '今次的工作'}`, '', `負責崗位：${roleName}`, ''];
+  out.push(heading(0), '', `這次為站「${line(st.short)}」服務；要令「${quoted(st.event)}」發生。`, `完成條件（原文）：${quoted(st.doneWhen) || '（公司紀錄未填）'}`, `這件工作：${quoted(task.title)}${task.next ? '——' + quoted(task.next) : ''}`, '');
   out.push(heading(1), '', '只做上述這一項工作。', '不做：', bullets(p.exclude, '- 其他崗位負責的站的工作\n- 恆常任務（名單整理、商機掃描、生意體檢）\n- 已完成並交付的產出'), '');
   out.push(heading(2), '', '隔離資料夾內的檔（只可讀這些）：', bullets((p.files || []).map(f => `\`${line(f.name)}\`：${line(f.about)}`), '（只有本說明）'), '', (p.web && p.web.allowed) ? `可以上網：只可讀取，${line(p.web.note) || '每條引用附出處網址，先開頁讀全文'}。` : '不可上網；只對照資料夾內的資料。', '');
   out.push(heading(3), '', p.kind === 'proofread' ? `這是第 ${prog.round || 1} 次校對。` : '之前為這一站做過：', ...(p.kind === 'proofread' ? [] : [quotedBullets(prog.before)]), '', '創辦人答過：', quotedBullets(prog.answered), '', '仍未知、不要再問：', quotedBullets(prog.unknown), '');
   if (prog.todayDone && prog.todayDone.length) out.push('今日已做的件（不要重做）：', quotedBullets(prog.todayDone), '');
   if (prog.rewriteIssues && prog.rewriteIssues.length) out.push('上次校對發回的問題（逐條改正）：', quotedBullets(prog.rewriteIssues), '');
   out.push(heading(4), '', '自己做：', bullets(perm.self), '', '做完再通知創辦人：', bullets([...(perm.tellAfter || []), ...((role.bounds && role.bounds.tellAfter) || [])]), '', '必須先問創辦人：', bullets([...(perm.askFirst || []), ...((role.bounds && role.bounds.askFirst) || [])]), '');
-  out.push(heading(5), '', FIRST_STEP_PREFIX + (line(p.firstStep) || '按第一段的完成條件做這件工作。'), '');
-  out.push(heading(6), '', `交付類型：${bullets(dl.types, '').replace(/\n?- /g, '、').replace(/^、/, '') || '文件'}。`, `最多 ${dl.max || 2} 份；每份創辦人兩分鐘內讀完；每份末段固定「依據」一欄，逐條列明來自哪份文件或哪個網址。`, dl.proofread ? '本產出會對外，交出後由 Zero 統籌先校對：不承諾價錢、日期、條件；每條事實附依據。' : '本產出屬內部準備，交出後由程式核對格式及依據。', `收據格式：${line(dl.receiptFormat) || 'out/receipt.json（summary、artifacts、founderNext、for、blockedOn）'}。`, `創辦人怎樣驗收：${line(dl.acceptance) || '按完成條件核對產出'}`, '');
+  out.push(heading(5), '', FIRST_STEP_PREFIX + (quoted(p.firstStep) || '按第一段的完成條件做這件工作。'), '');
+  out.push(heading(6), '', `交付類型：${bullets(dl.types, '').replace(/\n?- /g, '、').replace(/^、/, '') || '文件'}。`, `最多 ${dl.max || 2} 份；每份創辦人兩分鐘內讀完；每份末段固定「依據」一欄，逐條列明來自哪份文件或哪個網址。`, dl.proofread ? '本產出會對外，交出後由 Zero 統籌先校對：不承諾價錢、日期、條件；每條事實附依據。' : '本產出屬內部準備，交出後由程式核對格式及依據。', `收據格式：${line(dl.receiptFormat) || 'out/receipt.json（summary、artifacts、founderNext、for、blockedOn）'}。`, `創辦人怎樣驗收：${quoted(dl.acceptance) || '按完成條件核對產出'}`, '');
   out.push(heading(7), '', bullets(p.kind === 'proofread' ? PROOFREAD_STOP : STOP_TEXT), '');
   out.push(`## ${GLOSSARY_HEAD}`, '', bullets((p.glossary || []).map(g => `${line(g.term)}：${line(g.meaning)}`), '（沒有）'), '');
   return out.join('\n');

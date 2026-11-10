@@ -17,7 +17,7 @@ const ROWS = Array.from({ length: 58 }, (_, i) => 'Z' + (i + 1));
 const TODAY = '2026-11-10', NOW = '2026-11-10T21:05:00';
 const J = x => JSON.stringify(x);
 
-/* ---------- 示範狀態：虛構公司「從田間到餐桌」；站的欄位形狀照 fixtures/demo-farm/state.json（order、state、actorName、pathStatus） ---------- */
+/* ---------- 示範狀態：虛構公司「月月鮮烘」；站的欄位形狀照 fixtures/demo-shop/state.json（order、state、actorName、pathStatus） ---------- */
 function base() {
   return {
     ledgerFrom: 'pg-1', intake: { confirmedAt: '2026-11-01T10:00:00' }, demo: false,
@@ -371,8 +371,12 @@ try {
       const quoted = B.buildBrief({ ...parts, kind: 'rewrite', progress: { before: ['如上所述的名單'], answered: ['每週送貨時間要改嗎？：照舊', '創辦人退回了上一版，原因：同上，價錢要改為每公斤三十八元'], unknown: ['同前'], todayDone: ['照舊報價'], rewriteIssues: ['第二段按上文改'] } });
       const qc = B.checkBrief(quoted, { files: ['confirmed-page.md', 'in-doc1.md', 'task.md'], names: ['農場甲'] });
       ok('Z26 引述的資料含「照舊」「同上」「同前」「如上所述」「按上文」不誤判；內容仍完整寫入說明（覆核 M1）', qc.ok && ['三十八元', '照舊報價', '按上文改', '如上所述的名單', '每週送貨時間要改嗎'].every(w => quoted.includes(w)), qc.errors);
-      const own = B.buildBrief({ ...parts, task: { title: '照舊報價', next: '' } });
-      ok('Z26 外殼自己寫的句子含禁用字眼仍攔下（引述不是漏洞）', B.checkBrief(own, { files: ['confirmed-page.md', 'in-doc1.md', 'task.md'], names: [] }).errors.some(e => e.code === 'forbidden'));
+      const firstQuoted = B.buildBrief({ ...parts, station: { short: '首間農場簽約', event: '照舊用原有安排', doneWhen: '如上所述的完成標準' }, task: { title: '照舊報價', next: '同上。' } });
+      const firstCheck = B.checkBrief(firstQuoted, { files: ['confirmed-page.md', 'in-doc1.md', 'task.md'], names: ['農場甲'] });
+      ok('Z26 第一段的事件、完成條件、工作標題及下一步均以引述包好，禁用字眼不誤判（窄覆核 N2）', firstCheck.ok && ['照舊用原有安排', '如上所述的完成標準', '照舊報價', '同上。'].every(v => firstQuoted.includes('「' + v + '」')), firstCheck.errors);
+      const own = B.buildBrief({ ...parts, station: { short: '照舊站', event: '簽約', doneWhen: '簽署' } });
+      const ownCheck = B.checkBrief(own, { files: ['confirmed-page.md', 'in-doc1.md', 'task.md'], names: ['照舊站'] });
+      ok('Z26 站名保持不包引述，仍受禁用字眼及名詞表核對（引述不是漏洞）', own.includes('站「照舊站」') && ownCheck.errors.some(e => e.code === 'forbidden') && ownCheck.errors.some(e => e.code === 'glossary'), ownCheck.errors);
       const evil = B.buildBrief({ ...parts, progress: { ...parts.progress, answered: ['好`。 照舊 `再來', '請見 report.pdf'] } });
       ok('Z26 答案內的反引號被換掉，拆不開引述；以副檔名結尾的答案不被當成提到的檔（覆核 M1）', B.checkBrief(evil, { files: ['confirmed-page.md', 'in-doc1.md', 'task.md'], names: [] }).ok, B.checkBrief(evil, { files: ['confirmed-page.md', 'in-doc1.md', 'task.md'], names: [] }).errors);
     }

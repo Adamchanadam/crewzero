@@ -59,13 +59,13 @@ await send('Page.enable'); await send('Runtime.enable');
 try {
   for (const w of SHOTS && REAL ? [1440, 390] : [1440]) {
     await go('', w);
-    ok('Founder Desk 首頁：你要做嘅現實行動有練習掣 (' + w + ')', await waitFor(() => ev(`(document.querySelector('[data-practice="f1"]')||{}).getAttribute&&document.querySelector('[data-practice="f1"]').getAttribute('href')==='#/practice/farm-c'`)));
+    ok('Founder Desk 首頁：你要做嘅現實行動有練習掣 (' + w + ')', await waitFor(() => ev(`(document.querySelector('[data-practice="f1"]')||{}).getAttribute&&document.querySelector('[data-practice="f1"]').getAttribute('href')==='#/practice/roaster-c'`)));
     // 等練習卡畫好先操作
     await waitFor(() => has('#practice-card'), 20000);
     await ev(`(document.querySelector('#practice-card')||document.body).scrollIntoView({block:'start'})`); await sleep(300); await shot('p00-desk-entry');
     await go('#/practice');
-    ok('練習清單：兩個對象、你要做行動、練習紀錄', await has('[data-scenario="farm-c"]') && await has('[data-scenario="chef-a"]') && await has('[data-new]'));
-    await go('#/practice/farm-c');
+    ok('練習清單：兩個對象、你要做行動、練習紀錄', await has('[data-scenario="roaster-c"]') && await has('[data-scenario="blogger-a"]') && await has('[data-new]'));
+    await go('#/practice/roaster-c');
     ok('準備：人物卡七項、會議目標、問題、反對、難度', await ev(`document.querySelectorAll('#persona dt').length===7`) && (await text('main, #app')).includes('會議目標') && await has('[data-level="hard"]'));
     await jsClick('[data-edit="stance"]'); await sleep(300);
     await ev(`document.querySelector('#pe-stance').value='其實好想搵新買家，但唔想俾你知'`); await jsClick('[data-edit="stance"]'); await sleep(400);
@@ -83,7 +83,7 @@ try {
     ok('對方回應（' + (REAL ? '真 AI' : '假對手') + '）', await waitFor(async () => (await lastThem()) > n && !(await has('#typing')), 40000));
     await settled();
     // 自己打一句
-    const mine = REAL ? '批發商通常幾耐先俾錢你？我哋可以設保底價，首兩個月半月結。' : '批發商幾耐俾錢？可以設保底價。';
+    const mine = REAL ? '咖啡店通常幾耐先俾錢你？我哋可以設保底價，首兩個月半月結。' : '咖啡店幾耐俾錢？可以設保底價。';
     await typeIn('#pl-text', mine); n = await lastThem();
     await jsClick('#pl-send');
     await waitFor(async () => (await lastThem()) > n && !(await has('#typing')), 40000); await settled();
@@ -117,17 +117,17 @@ try {
     ok('會後紀錄：完成後有確認入口或清楚顯示無需更新', await waitFor(async () => (await has('#debrief-answer')) || (await text('#debrief-track')).includes('這次沒有需要確認的更新'), REAL ? 240000 : 30000));
     await shot('p07-debrief-done');
     // 再練：清單見到紀錄
-    await go('#/practice/farm-c');
+    await go('#/practice/roaster-c');
     ok('可重跑：場景見到上次練習紀錄', (await text('main, #app')).includes('練習紀錄'));
   }
   // 監察台入口（新版：生意大腦第 3 項有自己分頁，人物卡牆每個對象一張名片）
   await go('dashboard/brain/scenario', 1440);
-  ok('監察台生意大腦第 3 項：每個對象一張練習卡', await ev(`document.querySelectorAll('#practice-cards .person').length===2 && [...document.querySelectorAll('#practice-cards .person a')].some(a=>a.getAttribute('href')==='/#/practice/farm-c')`));
+  ok('監察台生意大腦第 3 項：每個對象一張練習卡', await ev(`document.querySelectorAll('#practice-cards .person').length===2 && [...document.querySelectorAll('#practice-cards .person a')].some(a=>a.getAttribute('href')==='/#/practice/roaster-c')`));
   if (SHOTS) { await ev(`document.querySelector('#b-scenario').scrollIntoView({block:'start'})`); await sleep(300); await shot('p08-dashboard-entry'); }
   await go('dashboard/team', 1440);
-  ok('監察台看板：你要做卡有練習掣', await ev(`(document.querySelector('[data-practice="f1"]')||{}).getAttribute&&document.querySelector('[data-practice="f1"]').getAttribute('href')==='/#/practice/farm-c'`));
+  ok('監察台看板：你要做卡有練習掣', await ev(`(document.querySelector('[data-practice="f1"]')||{}).getAttribute&&document.querySelector('[data-practice="f1"]').getAttribute('href')==='/#/practice/roaster-c'`));
   // 手機闊度：對打畫面
-  await go('#/practice/chef-a', 390);
+  await go('#/practice/blogger-a', 390);
   await jsClick('#pr-start');
   await waitFor(async () => await has('#chat .bub.them'), 15000);
   const over = await ev(`(()=>{const o=[];document.querySelectorAll('body *').forEach(e=>{const r=e.getBoundingClientRect();if(r.right>391&&r.width>0&&!e.closest('.bg'))o.push(String(e.className).slice(0,20))});return o.slice(0,4)})()`);

@@ -10,9 +10,9 @@
     "minutes": 3
   },
   "company": {
-    "name": "從田間到餐桌",
-    "initials": "田桌",
-    "oneLiner": "把本地小農的當季蔬菜直送注重來源的中小型餐廳。"
+    "name": "月月鮮烘",
+    "initials": "鮮烘",
+    "oneLiner": "把本地小型烘焙工房的新鮮咖啡豆，每月配好寄到愛喝咖啡的上班族家中。"
   },
   "sources": [
     {
@@ -22,17 +22,17 @@
     }
   ],
   "glance": {
-    "guide": "虛構公司，只作格式例子。",
+    "guide": "Zero 按你提供的資料整理，請逐項核對。",
     "tip": {
-      "headline": "下一步：約第三位農場主（丙）見面",
-      "why": "供應未穩，先有農場先可以向餐廳試單。"
+      "headline": "下一步：約第三間工房（丙）見面",
+      "why": "供應未穩，先有工房先可以開放試訂。"
     },
     "rows": [
       {
         "id": "g1",
         "plan": "G1",
         "label": "本季要去到邊",
-        "value": "季末：三間餐廳連續四週每週下單，同時有三個農場簽約供貨",
+        "value": "季末：三十位訂戶連續兩個月付費訂閱，同時有三間工房簽約供貨",
         "origin": "doc",
         "src": [
           {
@@ -44,17 +44,17 @@
         "id": "g5",
         "plan": "G5",
         "label": "下一個對外動作",
-        "value": "約第三位農場主（丙）見面",
+        "value": "約第三間工房（丙）見面",
         "origin": "doc",
         "flagTo": "m1",
         "options": [
           {
-            "text": "約第三位農場主（丙）見面",
+            "text": "約第三間工房（丙）見面",
             "rec": true,
             "flagTo": "m1"
           },
           {
-            "text": "向第一間餐廳提試單",
+            "text": "向第一位博主提合作推介",
             "flagTo": "m2"
           }
         ],
@@ -65,13 +65,13 @@
     ],
     "status": {
       "title": "而家去到邊",
-      "prepared": "已準備好：商業計劃（10 月 1 日版）、農場訪問紀錄",
+      "prepared": "已準備好：商業計劃（10 月 1 日版）、工房訪問紀錄",
       "items": [
         {
           "id": "s1",
           "plan": "G4",
           "kind": "grade",
-          "label": "農場甲、乙有興趣",
+          "label": "工房甲、乙有興趣",
           "value": "none",
           "origin": "ai"
         },
@@ -79,7 +79,7 @@
           "id": "s2",
           "plan": "G4",
           "kind": "grade",
-          "label": "餐廳接觸過",
+          "label": "博主接觸過",
           "value": "none",
           "origin": "ai"
         }
@@ -87,29 +87,29 @@
     }
   },
   "path": {
-    "guide": "虛構公司，只作格式例子。",
+    "guide": "Zero 建議的路線次序，可按實際情況調整。",
     "milestones": [
       {
         "id": "m1",
-        "short": "農場簽約",
-        "why": "下一步係見農場主。",
+        "short": "工房簽約",
+        "why": "先有供貨才可以開放試訂。",
         "event": {
           "id": "m1-e",
           "label": "第 1 站：真事",
-          "value": "三個農場簽供應協議",
+          "value": "三間工房簽供貨協議",
           "origin": "ai"
         },
         "depth": [
           {
             "id": "m1-d1",
             "label": "1",
-            "value": "有穩定每週出貨同直接客戶",
+            "value": "有穩定烘焙安排及自己的熟客",
             "origin": "ai"
           },
           {
             "id": "m1-d2",
             "label": "2",
-            "value": "農場主本人決定，一次會面可簽",
+            "value": "烘焙師本人決定，一次會面可簽",
             "origin": "ai"
           },
           {
@@ -127,7 +127,7 @@
           {
             "id": "m1-d5",
             "label": "5",
-            "value": "三個農場來自目前目標",
+            "value": "三間工房來自目前目標",
             "origin": "doc",
             "src": [
               "bm"
@@ -137,19 +137,19 @@
       },
       {
         "id": "m2",
-        "short": "餐廳試單",
-        "why": "有農場先試單。",
+        "short": "訂戶試訂",
+        "why": "收款寄送到位後，才可以開始試訂。",
         "event": {
           "id": "m2-e",
           "label": "第 2 站：真事",
-          "value": "五間餐廳各完成一次試單並畀回饋",
+          "value": "五十位訂戶付首月並給回饋",
           "origin": "ai"
         },
         "depth": [
           {
             "id": "m2-d1",
             "label": "1",
-            "value": "來源可追溯同穩定供應",
+            "value": "新鮮烘焙與穩定供應",
             "origin": "doc",
             "src": [
               "bm"
@@ -170,13 +170,13 @@
           {
             "id": "m2-d4",
             "label": "4",
-            "value": "試食後唔落單",
+            "value": "試飲後唔落單",
             "origin": "ai"
           },
           {
             "id": "m2-d5",
             "label": "5",
-            "value": "五間試單以求三間續用",
+            "value": "五十位試訂以求三十位續訂",
             "origin": "doc",
             "src": [
               "bm"
@@ -186,34 +186,34 @@
       },
       {
         "id": "m3",
-        "short": "首條送貨路線",
-        "why": "試單後轉每週。",
+        "short": "首批續訂",
+        "why": "自動扣款才算形成每月續訂。",
         "event": {
           "id": "m3-e",
           "label": "第 3 站：真事",
-          "value": "至少一間餐廳轉每週固定送貨並開始按週收費",
+          "value": "至少十位試訂者轉為每月自動扣款",
           "origin": "ai"
         }
       },
       {
         "id": "m4",
-        "short": "牌照保險",
-        "why": "可同送貨並行。",
+        "short": "收款寄送",
+        "why": "開放訂閱前必須完成。",
         "event": {
           "id": "m4-e",
           "label": "第 4 站：真事",
-          "value": "所需牌照批出、保險生效",
+          "value": "網上收款服務審批通過、速遞月結帳戶開通",
           "origin": "ai"
         }
       },
       {
         "id": "m5",
-        "short": "連續四週",
+        "short": "連續兩個月",
         "why": "等於季末目標。",
         "event": {
           "id": "m5-e",
           "label": "第 5 站：真事",
-          "value": "三間餐廳連續四週每週下單",
+          "value": "三十位訂戶連續兩個月付費",
           "origin": "doc",
           "src": [
             {
@@ -261,7 +261,7 @@
         "plan": "canvas.customer",
         "label": "客戶",
         "kind": "text",
-        "value": "注重食材來源的中小型餐廳，由主廚判斷質素，餐廳付款。",
+        "value": "愛喝咖啡、重視新鮮的上班族，在網店訂閱，每月自動付款。",
         "origin": "ai"
       },
       {
@@ -269,7 +269,7 @@
         "plan": "canvas.problem",
         "label": "對方的問題",
         "kind": "text",
-        "value": "餐廳需要來源清楚、供應穩定的本地當季蔬菜。",
+        "value": "上班族想在家喝到新鮮烘焙的咖啡豆，但超市的豆多數烘焙已久。",
         "origin": "ai"
       },
       {
@@ -277,7 +277,7 @@
         "plan": "canvas.alternatives",
         "label": "現有替代方案",
         "kind": "text",
-        "value": "餐廳可繼續向批發市場或現有蔬菜供應商採購。",
+        "value": "可繼續在超市、咖啡店或大型網購平台買豆。",
         "origin": "ai"
       },
       {
@@ -285,7 +285,7 @@
         "plan": "canvas.value",
         "label": "價值",
         "kind": "text",
-        "value": "把本地小農的當季蔬菜直送餐廳，提供可追溯的農場來源。",
+        "value": "把本地小型烘焙工房的新鮮咖啡豆，烘焙後三日內寄出，附口味介紹。",
         "origin": "ai"
       },
       {
@@ -293,7 +293,7 @@
         "plan": "canvas.channel",
         "label": "渠道",
         "kind": "text",
-        "value": "直接接觸餐廳，先洽談及試送，再跟進訂單。",
+        "value": "網店加社交媒體及咖啡博主推介，先寄試飲裝，再請訂閱。",
         "origin": "ai"
       },
       {
@@ -301,7 +301,7 @@
         "plan": "canvas.relationship",
         "label": "客戶關係",
         "kind": "text",
-        "value": "透過見面、試送及每週供貨建立餐廳關係。",
+        "value": "透過試飲、每月口味介紹及訂戶回饋建立關係。",
         "origin": "ai"
       },
       {
@@ -309,7 +309,7 @@
         "plan": "canvas.revenue",
         "label": "收入",
         "kind": "text",
-        "value": "餐廳按每週蔬菜訂單付款。",
+        "value": "訂戶按月付訂閱費。",
         "origin": "ai"
       },
       {
@@ -317,7 +317,7 @@
         "plan": "canvas.resources",
         "label": "關鍵資源",
         "kind": "text",
-        "value": "本地農場的供貨關係及餐廳送貨安排。",
+        "value": "本地烘焙工房的供貨關係及包裝寄貨安排。",
         "origin": "ai"
       },
       {
@@ -325,7 +325,7 @@
         "plan": "canvas.activities",
         "label": "關鍵活動",
         "kind": "text",
-        "value": "與農場洽談供應、向餐廳試送及安排每週訂單送貨。",
+        "value": "與工房洽談供貨、寄試飲裝及每月包裝寄貨。",
         "origin": "ai"
       },
       {
@@ -333,7 +333,7 @@
         "plan": "canvas.partners",
         "label": "關鍵伙伴",
         "kind": "text",
-        "value": "本地供貨農場及參與送貨的合作方。",
+        "value": "本地供貨工房、咖啡博主及速遞公司。",
         "origin": "ai"
       },
       {
@@ -341,7 +341,7 @@
         "plan": "canvas.cost",
         "label": "成本",
         "kind": "text",
-        "value": "蔬菜採購、試送、包裝及送貨成本。",
+        "value": "咖啡豆採購、試飲裝、包裝、速遞及推廣成本。",
         "origin": "ai"
       }
     ]

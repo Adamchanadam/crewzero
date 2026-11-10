@@ -29,11 +29,12 @@ try {
   ok('首頁最頂是下一個對外動作，有已完成、改期、取消此動作', card && ['已完成', '改期', '取消此動作'].every(x => card.includes(x)), card);
   const top = await c.ev(`(()=>{const a=document.querySelector('#next-action').getBoundingClientRect().top,b=document.querySelector('#next-list').getBoundingClientRect().top;return a<b})()`);
   ok('下一個對外動作排在「接下來」之前', top, null);
-  ok('整頁可見的主按鈕只有主線卡的操作，加上「Zero 近期工作」卡的「現在開工」（展開前的送出鍵在隱藏表格內，不算）', await c.ev(`[...document.querySelectorAll('#app .btn.primary')].filter(b=>b.offsetParent).every(b=>b.closest('#next-action')||b.id==='run-now')`), await c.ev(`[...document.querySelectorAll('#app .btn.primary')].filter(b=>b.offsetParent).map(b=>b.textContent)`));
+  ok('主色按鈕只在主線卡、「接下來」每列各一個及「Zero 開工」的現在開工出現', await c.ev(`(()=>{const visible=[...document.querySelectorAll('#app .btn.primary')].filter(b=>b.offsetParent);const rows=[...document.querySelectorAll('#next-list .row')];return visible.every(b=>b.closest('#next-action')||b.id==='run-now'||b.closest('#next-list .row'))&&rows.every(r=>r.querySelectorAll('.btn.primary').length<=1)})()`), await c.ev(`[...document.querySelectorAll('#app .btn.primary')].filter(b=>b.offsetParent).map(b=>b.textContent)`));
   ok('隱藏中的新日期欄及確定按鈕不顯示', !(await text('#next-action')).includes('確定新日期'), await text('#next-action'));
   const rows = await c.ev(`[...document.querySelectorAll('#next-list [data-todo]')].map(r=>r.dataset.todo)`);
   ok('對打回應不在「接下來」，裁判決定題留在主線', !rows.includes('ask-brain') && rows.includes('ask-judge'), rows);
-  ok('生意大腦待處理有一行入口', /生意大腦/.test(await text('#brain-line')), await text('#brain-line'));
+  ok('生意大腦待處理有一行入口（可收入其他待決事項）', await c.ev(`(()=>{const r=document.querySelector('#brain-row'),a=r&&r.querySelector('a');return !!r&&/生意大腦/.test(r.textContent||'')&&a&&a.getAttribute('href')==='/dashboard/brain'})()`), await c.ev(`(document.querySelector('#brain-row')||{}).textContent||null`));
+  ok('頁腳保留情景演練、紅藍對打及系統設定，舊功能卡已移除', await c.ev(`(()=>{const p=document.querySelector('#foot-practice'),d=document.querySelector('#foot-debate'),setup=document.querySelector('.desk-foot a[href="#/setup"]');return !!p&&p.getAttribute('href')==='#/practice'&&!!d&&d.getAttribute('href')==='#/debate'&&!!setup&&!document.querySelector('#practice-card,#debate-card,#brain-line,#tell-help')})()`));
 
   // 輸入區：輪詢重畫不可清走正在輸入的字
   await c.click('#quick-event');
@@ -47,9 +48,25 @@ try {
   await c.click('#quick-send');
   const sent = await waitFor(() => fs.readdirSync(path.join(DATA, 'founder', 'inbox')).concat(fs.existsSync(path.join(DATA, 'archive')) ? fs.readdirSync(path.join(DATA, 'archive')) : []).find(f => /-note-event\.md$/.test(f)));
   ok('送出後產生事件輸入，並清空輸入', !!sent && (await c.ev(`document.querySelector('#quick-text').value`)) === '', sent);
+  ok('送出後有可見的即時下一步：#quick-track 連到查看回饋', !!(await waitFor(() => c.ev(`(()=>{const a=document.querySelector('#quick-track');return a&&a.offsetParent&&a.getAttribute('href').startsWith('#/feedback/in-')})()`), 5000)), await text('#quick-note'));
   await c.ev(`document.activeElement.blur()`);
   ok('送出後首頁會恢復更新，不會永遠停在等待提示', !!(await waitFor(async () => (await c.ev(`(document.querySelector('#quick-note')||{}).textContent`)) === '', 40000)), await c.ev(`(document.querySelector('#quick-note')||{}).textContent`));
-  ok('送出後有可見的下一步：「最近交給 Zero 的事」列出剛送出的事，並有「查看回饋」', !!(await waitFor(() => c.ev(`!![...document.querySelectorAll('#recent-list li')].find(li=>li.innerText.includes('客戶來電改期')&&li.querySelector('[data-feedback]'))`), 20000)), await c.ev(`(document.querySelector('#recent-inputs')||{}).innerText`));
+  ok('「最近交給 Zero 的事」列出剛送出的事，並只提供查看回饋', !!(await waitFor(() => c.ev(`!![...document.querySelectorAll('#recent-list li')].find(li=>li.textContent.includes('客戶來電改期')&&li.querySelector('[data-feedback]')&&!li.querySelector('[data-answer]'))`), 20000)), await c.ev(`(document.querySelector('#recent-inputs')||{}).innerText`));
+
+  fs.writeFileSync(path.join(DATA, 'fake-mode.txt'), 'note:fail\n');
+  const inputIds = new Set((JSON.parse(fs.readFileSync(path.join(DATA, 'ledger', 'state.json'), 'utf8')).inputs || []).map(x => x.id));
+  await c.click('#quick-adhoc');
+  await c.ev(`document.querySelector('#quick-text').focus()`); await c.send('Input.insertText', { text: '測試失敗交辦。' });
+  await c.click('#quick-send');
+  const failedInput = await waitFor(async () => {
+    const home = await (await fetch(BASE + '/api/home')).json();
+    return (home.inputs || []).find(x => !inputIds.has(x.id) && x.status && x.status.code === 'failed') || null;
+  }, 40000);
+  // 頁面在輸入欄有焦點時不重畫（免得清走正在輸入的字）；同一網址 go 不會重新載入，所以先移走焦點再真正重新載入
+  await c.ev('document.activeElement && document.activeElement.blur && document.activeElement.blur()');
+  await c.send('Page.reload', { ignoreCache: true }); await sleep(2000);
+  const failedRow = await waitFor(() => c.ev(`(()=>{const r=document.querySelector('[data-failed-input="${failedInput && failedInput.id}"]'),a=r&&r.querySelector('a');return r&&a?{id:r.dataset.failedInput,href:a.getAttribute('href'),text:a.textContent}:null})()`), 10000);
+  ok('有失敗交辦時顯示待決列，並連到該交辦的回饋卡', failedInput && failedRow && failedRow.id === failedInput.id && failedRow.href === '#/feedback/' + failedInput.id && failedRow.text === '查看及重試', { failedInput: failedInput && failedInput.id, failedRow });
 
   // 改期、暫緩、取消此動作：即時生效
   await c.send('Page.reload'); await waitFor(() => c.ev(`!!document.querySelector('#next-reschedule')`));
@@ -59,6 +76,8 @@ try {
   const moved = await waitFor(async () => (await text('#next-action')).includes('2 月 3 日'), 5000);
   ok('改期：5 秒內顯示新日期，不用等 AI', !!moved, { ms: Date.now() - t0, card: await text('#next-action') });
   const beforeSnooze = await c.ev(`document.querySelector('#next-list [data-todo]').dataset.todo`);
+  const snoozeClass = await c.ev(`[...document.querySelectorAll('#next-list [data-todo] button')].find(b=>/暫緩/.test(b.textContent)).className`);
+  ok('「暫緩 7 天」是淡色文字按鈕', snoozeClass === 'btn link quiet', snoozeClass);
   await c.ev(`[...document.querySelectorAll('#next-list [data-todo]')[0].querySelectorAll('button')].find(b=>/暫緩/.test(b.textContent)).click()`);
   ok('暫緩：項目移入「已暫緩」', !!(await waitFor(() => c.ev(`!!document.querySelector('#snoozed')&&document.querySelector('#next-list [data-todo]').dataset.todo!==${JSON.stringify(beforeSnooze)}`))), beforeSnooze);
   await c.click('#next-cancel');

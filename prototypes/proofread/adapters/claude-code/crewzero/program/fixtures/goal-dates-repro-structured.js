@@ -11,9 +11,9 @@ window.STARTUP_OS_PAGE = {
     "replyFolder": "founder/replies/"
   },
   "company": {
-    "name": "從田間到餐桌",
-    "initials": "田桌",
-    "oneLiner": "（虛構示範）把本地小農的當季蔬菜直送中小型餐廳，每箱註明農場來源。"
+    "name": "月月鮮烘",
+    "initials": "鮮烘",
+    "oneLiner": "把本地小型烘焙工房的新鮮咖啡豆，每月配好寄到愛喝咖啡的上班族家中。"
   },
   "sources": [
     {
@@ -26,14 +26,14 @@ window.STARTUP_OS_PAGE = {
       "id": "deck",
       "title": "合作建議簡報",
       "date": "2026-10",
-      "note": "綠野物流、食材周報標「擬議」；最後一頁寫「先試送一次，再商議合作條件」"
+      "note": "現況：工房甲已簽約；工房丙答應先試供兩批；工房乙已退出。"
     }
   ],
   "glance": {
     "guide": "Zero 已閱讀你的生意構思與合作建議簡報，擬定以下內容。如有不對，按一下修改；沒有問題，就到最底「成頁確認」。",
     "tip": {
-      "headline": "下一步：約綠野物流介紹合作建議簡報",
-      "why": "文件擬由綠野物流接觸餐廳並負責送貨，但對方未答應。對方是否參與，決定你之後是否要自己逐間餐廳洽談；簡報已準備好，是目前最快可以發生的真實事件。"
+      "headline": "下一步：四日後與工房丙會面，確認首份三個月供貨協議",
+      "why": "工房丙已答應先試供兩批，四日後會面確認首份三個月供貨協議；這是補足三間工房供貨的下一個真實事件。"
     },
     "rows": [
       {
@@ -42,21 +42,21 @@ window.STARTUP_OS_PAGE = {
         "label": "本季要去到哪裏",
         "ask": "本季要去到哪裏？",
         "judge": "要是看得見的真實事件：誰去做？用甚麼證明？",
-        "value": "綠野物流與食材周報都書面答覆是否參與（接受或拒絕都算），而且有一位主廚試用試送後書面回覆",
+        "value": "三十位訂戶連續兩個月付費訂閱，同時有三間工房簽約供貨",
         "origin": "ai",
-        "why": "你未有數字。以「對方書面答覆」作目標，答覆了就算數，毋須估計數字；伙伴與第一位主廚是收款之前必經的兩步。",
+        "why": "你未有數字。以「對方書面答覆」作目標，答覆了就算數，毋須估計數字；伙伴與第一位博主是收款之前必經的兩步。",
         "options": [
           {
-            "text": "綠野物流與食材周報都書面答覆是否參與（接受或拒絕都算），而且有一位主廚試用試送後書面回覆",
+            "text": "三十位訂戶連續兩個月付費訂閱，同時有三間工房簽約供貨",
             "rec": true
           },
           {
-            "text": "第一間餐廳付款訂購（每週最少 HK$1,500）",
-            "note": "較進取：兩個月內要處理好伙伴、試送與餐廳落單"
+            "text": "三十位訂戶連續訂閱兩個月",
+            "note": "較進取：兩個月內完成持續訂閱驗證"
           },
           {
-            "text": "見齊伙伴並收到答覆即可",
-            "note": "較保守：本季只處理伙伴"
+            "text": "完成網上收款及寄送設定",
+            "note": "較保守：先令訂閱流程可用"
           }
         ],
         "tentative": {
@@ -80,17 +80,17 @@ window.STARTUP_OS_PAGE = {
         "label": "短期要去到哪裏",
         "ask": "期限之前，要發生甚麼真實事件？",
         "judge": "誰去做？用甚麼證明？",
-        "value": "綠野物流書面答覆；何師傅確認擔任廚藝顧問，並與你選定一間試送餐廳",
+        "value": "工房丙完成兩批試供；網上收款及寄送流程可用",
         "origin": "ai",
-        "why": "這兩件事是安排試送之前必須具備的。",
+        "why": "工房丙試供及訂閱流程可用，才可安全開始收款。",
         "options": [
           {
-            "text": "綠野物流書面答覆；何師傅確認擔任廚藝顧問，並與你選定一間試送餐廳",
+            "text": "工房丙完成兩批試供；網上收款及寄送流程可用",
             "rec": true
           },
           {
-            "text": "綠野物流、食材周報、何師傅三方都見過並答覆",
-            "note": "伙伴先行，試送餐廳之後才選"
+            "text": "工房丙確認三個月供貨協議；收款及寄送設定完成",
+            "note": "先完成供貨及訂閱履約基礎"
           }
         ],
         "tentative": {
@@ -114,19 +114,19 @@ window.STARTUP_OS_PAGE = {
         "label": "怎樣才算有進展",
         "ask": "出現甚麼證據，你會認為有進展？",
         "judge": "要是公司以外的人做了的事，不計開會次數。",
-        "value": "有人書面答覆（伙伴或主廚；接受或拒絕都算）",
+        "value": "工房丙完成首批試供，或有訂戶完成首月付款",
         "origin": "ai",
-        "why": "本季仍未到收款階段，對方書面答覆是最早、最清楚的證據；拒絕也是有用的答案。",
+        "why": "供貨可行與實際付款是最早、最清楚的進展證據。",
         "options": [
           {
-            "text": "有人書面答覆（伙伴或主廚；接受或拒絕都算）",
+            "text": "工房丙完成首批試供，或有訂戶完成首月付款",
             "rec": true
           },
           {
-            "text": "有餐廳付款"
+            "text": "有五十位訂戶首月付款"
           },
           {
-            "text": "有主廚試用試送並提供意見"
+            "text": "有訂戶交回首月回饋"
           }
         ]
       },
@@ -136,23 +136,23 @@ window.STARTUP_OS_PAGE = {
         "label": "下一個對外動作",
         "ask": "下一步對外做甚麼？",
         "judge": "對誰？做甚麼？做完怎樣知道有沒有結果？",
-        "value": "用合作建議簡報約綠野物流介紹，請對方答覆是否參與、想承接哪部分",
+        "value": "四日後與工房丙會面，確認首份三個月供貨協議",
         "origin": "ai",
         "flagTo": "m1",
-        "why": "簡報已準備好；文件擬由綠野物流接觸餐廳並負責送貨，對方是否願意，決定你是否要自己逐間餐廳洽談。",
+        "why": "工房丙已答應先試供兩批；會面要確認三個月供貨協議，讓供貨安排可持續。",
         "options": [
           {
-            "text": "用合作建議簡報約綠野物流介紹，請對方答覆是否參與、想承接哪部分",
+            "text": "四日後與工房丙會面，確認首份三個月供貨協議",
             "rec": true,
             "flagTo": "m1"
           },
           {
-            "text": "先約何師傅，一起選試送餐廳、安排第一次試送",
-            "note": "簡報最後一頁：先試送，再見伙伴",
+            "text": "完成網上收款及寄送設定，再開放首月訂閱",
+            "note": "先令付款與寄送流程可用",
             "flagTo": "m2"
           },
           {
-            "text": "同時約綠野物流與食材周報，一次過介紹",
+            "text": "向訂戶收集首月回饋，修正咖啡豆組合",
             "flagTo": "m1"
           }
         ]
@@ -168,7 +168,7 @@ window.STARTUP_OS_PAGE = {
           "id": "st-partner",
           "plan": "G4",
           "kind": "grade",
-          "label": "已向綠野物流介紹合作建議簡報",
+          "label": "工房丙答應先試供兩批",
           "value": "none",
           "origin": "ai",
           "why": "文件寫明「尚未對外傳送」。",
@@ -183,7 +183,7 @@ window.STARTUP_OS_PAGE = {
           "id": "st-media",
           "plan": "G4",
           "kind": "grade",
-          "label": "已向食材周報介紹合作建議簡報",
+          "label": "已完成網上收款及寄送設定",
           "value": "none",
           "origin": "ai",
           "why": "文件寫明「尚未對外傳送」。",
@@ -198,7 +198,7 @@ window.STARTUP_OS_PAGE = {
           "id": "st-advisor",
           "plan": "G4",
           "kind": "grade",
-          "label": "何師傅答應擔任廚藝顧問",
+          "label": "工房甲已簽供貨協議",
           "value": "none",
           "origin": "ai",
           "why": "文件有寫他的角色，但沒有寫他已答應；Zero 不可以當他已答應。",
@@ -213,19 +213,19 @@ window.STARTUP_OS_PAGE = {
           "id": "st-trial",
           "plan": "G4",
           "kind": "grade",
-          "label": "已選定試送餐廳",
+          "label": "已收集首月訂戶回饋",
           "value": "none",
           "origin": "ai",
-          "why": "文件與簡報都未提及哪一間餐廳。"
+          "why": "文件與簡報都未提及哪一位試飲者。"
         },
         {
           "id": "st-customer",
           "plan": "G4",
           "kind": "grade",
-          "label": "有餐廳試用過試送、或者洽談過",
+          "label": "有訂戶完成首次自動扣款",
           "value": "none",
           "origin": "ai",
-          "why": "文件寫餐廳付款意願「有待實際接觸了解」。",
+          "why": "文件寫訂戶付款意願「有待實際接觸了解」。",
           "src": [
             {
               "from": "doc",
@@ -239,34 +239,34 @@ window.STARTUP_OS_PAGE = {
   "path": {
     "guide": "這五站是 Zero 建議的次序，未確認。次序不對，就按住左邊把手拖動重排；按「細節」查看每站為何這樣定。",
     "tip": {
-      "headline": "建議次序：綠野物流 → 何師傅 → 主廚試用 → 食材周報 → 第一間付款餐廳",
-      "why": "先問清楚擬負責送貨與接觸餐廳的伙伴是否願意，再安排試送給主廚；食材周報不影響第一間餐廳，所以排後；收款一站在目前目標之後。"
+      "headline": "建議次序：工房丙試供 → 收款及寄送設定 → 五十位首月付款 → 首次自動扣款 → 兩月續訂",
+      "why": "先完成工房丙試供與收款寄送設定，再以首月付款、首次自動扣款和兩月續訂逐步驗證。"
     },
     "alt": [
       {
-        "title": "另一個排法：先試送，再見伙伴",
-        "sequence": "何師傅 → 主廚試用 → 綠野物流 → 食材周報 → 第一間付款餐廳",
-        "why": "簡報最後一頁寫「先試送一次，再商議合作條件」；見伙伴時有真實試送結果，較有說服力。",
-        "cost": "大約遲 3–4 星期才知道綠野物流是否願意送貨；下一個對外動作會變成約何師傅。想這樣排，就把第 2、3 站拖到最前。"
+        "title": "另一個排法：先完成收款設定，再安排工房丙試供",
+        "sequence": "收款及寄送設定 → 工房丙試供 → 五十位首月付款 → 首次自動扣款 → 兩月續訂",
+        "why": "先完成收款及寄送設定，工房丙試供完成後即可承接首月訂閱。",
+        "cost": "供貨試做會稍後開始；下一個對外動作轉為完成收款及寄送設定。"
       }
     ],
     "milestones": [
       {
         "id": "m1",
-        "short": "綠野物流答覆",
-        "why": "你下一個對外動作就是見綠野物流，所以排第一；對方是否願意送貨與接觸餐廳，決定之後是否要你自己逐間餐廳洽談。",
+        "short": "工房丙試供",
+        "why": "工房丙已答應先試供兩批；四日後確認三個月協議，是補足穩定供貨的首要一步。",
         "event": {
           "id": "m1-event",
           "plan": "milestone.event",
           "label": "第 1 站：真實事件",
-          "value": "綠野物流看完合作建議簡報後，書面答覆是否參與、想承接哪部分（接受或拒絕都算）",
+          "value": "工房丙完成兩批試供，並於四日後確認首份三個月供貨協議",
           "origin": "ai"
         },
         "actor": {
           "id": "m1-actor",
           "plan": "milestone.actor",
           "label": "第 1 站：決策者",
-          "value": "綠野物流 —— 擬議送貨與銷售伙伴",
+          "value": "工房丙 —— 試供中的供貨工房",
           "origin": "doc",
           "src": [
             {
@@ -279,7 +279,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m1-witness",
           "plan": "milestone.witness",
           "label": "第 1 站：見證人",
-          "value": "綠野物流負責人",
+          "value": "工房丙負責人",
           "origin": "ai"
         },
         "proof": {
@@ -293,7 +293,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m1-deliver",
           "plan": "milestone.deliveryCondition",
           "label": "第 1 站：完成標準",
-          "value": "答覆寫明承接範圍（接觸餐廳、送貨、收款）與初步條件；或者明確拒絕",
+          "value": "完成兩批試供，並確認首份三個月供貨協議",
           "origin": "ai"
         },
         "owner": {
@@ -330,12 +330,12 @@ window.STARTUP_OS_PAGE = {
           "tentative": {
             "by": "ai",
             "until": "2026-12-04",
-            "test": "見完綠野物流後問對方何時可以答覆"
+            "test": "四日後會面確認三個月供貨協議"
           }
         },
         "watch": [
           {
-            "label": "綠野物流答覆",
+            "label": "工房丙試供",
             "value": "未有"
           }
         ],
@@ -344,7 +344,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m1-d1",
             "plan": "depth.1",
             "label": "第 1 站：對方為何會同意",
-            "value": "增加回程車的載貨量，開拓新的餐廳客戶",
+            "value": "增加回程車的載貨量，開拓新的訂戶客戶",
             "origin": "doc",
             "src": [
               {
@@ -359,7 +359,7 @@ window.STARTUP_OS_PAGE = {
             "label": "第 1 站：對方怎樣決定、需時多久",
             "value": "",
             "origin": "missing",
-            "why": "文件沒有寫綠野物流內部由誰拍板、要經多少層。知道了才可以準備合適的人與時間表。",
+            "why": "文件沒有寫工房丙內部由誰拍板、要經多少層。知道了才可以準備合適的人與時間表。",
             "hint": "例：營運經理拍板，大約一個月"
           },
           {
@@ -379,9 +379,9 @@ window.STARTUP_OS_PAGE = {
             "id": "m1-d4",
             "plan": "depth.4",
             "label": "第 1 站：最常見的失敗方式",
-            "value": "口頭有興趣，但不肯說明可以接觸多少間餐廳、怎樣分帳",
+            "value": "口頭有興趣，但不肯說明可以接觸多少間訂戶、怎樣分帳",
             "origin": "ai",
-            "test": "會後請對方書面列出可以接觸哪類餐廳、大約多少間"
+            "test": "會後請對方書面列出可以接觸哪類訂戶、大約多少間"
           },
           {
             "id": "m1-d5",
@@ -395,20 +395,20 @@ window.STARTUP_OS_PAGE = {
       },
       {
         "id": "m2",
-        "short": "何師傅確認",
-        "why": "試送要靠他判斷主廚關心甚麼；他確認後才可以選定試送餐廳。",
+        "short": "收款及寄送設定",
+        "why": "訂閱收款及寄送流程可用，才能安全開始接收首月訂戶。",
         "event": {
           "id": "m2-event",
           "plan": "milestone.event",
           "label": "第 2 站：真實事件",
-          "value": "何師傅書面確認擔任廚藝顧問、每月可以投入多少時間，並與你選定一間試送餐廳",
+          "value": "網上收款及寄送流程可用",
           "origin": "ai"
         },
         "actor": {
           "id": "m2-actor",
           "plan": "milestone.actor",
           "label": "第 2 站：決策者",
-          "value": "何師傅 —— 廚藝顧問",
+          "value": "付款及寄送服務提供者",
           "origin": "doc",
           "src": [
             {
@@ -421,21 +421,21 @@ window.STARTUP_OS_PAGE = {
           "id": "m2-witness",
           "plan": "milestone.witness",
           "label": "第 2 站：見證人",
-          "value": "何師傅本人",
+          "value": "流程負責人",
           "origin": "ai"
         },
         "proof": {
           "id": "m2-proof",
           "plan": "milestone.evidence",
           "label": "第 2 站：證明方式",
-          "value": "何師傅的書面確認（電郵或訊息）",
+          "value": "收款測試及寄送流程紀錄",
           "origin": "ai"
         },
         "deliver": {
           "id": "m2-deliver",
           "plan": "milestone.deliveryCondition",
           "label": "第 2 站：完成標準",
-          "value": "寫明顧問角色、可投入時間與報酬方式（或者寫明稍後再談），並選定試送餐廳",
+          "value": "完成一次付款測試及一次寄送流程演練",
           "origin": "ai"
         },
         "owner": {
@@ -471,16 +471,16 @@ window.STARTUP_OS_PAGE = {
           "tentative": {
             "by": "ai",
             "until": "2026-12-04",
-            "test": "直接約何師傅 30 分鐘"
+            "test": "完成一次付款測試及一次寄送流程演練"
           }
         },
         "watch": [
           {
-            "label": "何師傅確認",
+            "label": "收款及寄送設定",
             "value": "未有"
           },
           {
-            "label": "試送餐廳",
+            "label": "試飲訂戶",
             "value": "未選"
           }
         ],
@@ -489,7 +489,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m2-d1",
             "plan": "depth.1",
             "label": "第 2 站：對方為何會同意",
-            "value": "可以把多年廚房經驗延伸成顧問服務，令試送切合餐廳實況",
+            "value": "可以把多年家中經驗延伸成顧問服務，令試飲切合訂戶實況",
             "origin": "doc",
             "src": [
               {
@@ -538,20 +538,20 @@ window.STARTUP_OS_PAGE = {
       },
       {
         "id": "m3",
-        "short": "主廚試用",
-        "why": "第一個客戶方的真實事件：主廚試用過真實試送，才知道他會否想長期落單。",
+        "short": "首月五十位訂戶",
+        "why": "第一個客戶方的真實事件：首月五十位訂戶過真實試飲，才知道他會否想長期落單。",
         "event": {
           "id": "m3-event",
           "plan": "milestone.event",
           "label": "第 3 站：真實事件",
-          "value": "一位主廚試用試送後，書面回覆是否想深入洽談（想或者暫時不需要都算）",
+          "value": "五十位訂戶完成首月付款，並交回回饋",
           "origin": "ai"
         },
         "actor": {
           "id": "m3-actor",
           "plan": "milestone.actor",
           "label": "第 3 站：決策者",
-          "value": "試送餐廳的主廚 —— 付款客戶的決策人",
+          "value": "首月訂戶 —— 付款客戶",
           "origin": "doc",
           "src": [
             {
@@ -564,21 +564,21 @@ window.STARTUP_OS_PAGE = {
           "id": "m3-witness",
           "plan": "milestone.witness",
           "label": "第 3 站：見證人",
-          "value": "該餐廳主廚",
+          "value": "該訂戶博主",
           "origin": "ai"
         },
         "proof": {
           "id": "m3-proof",
           "plan": "milestone.evidence",
           "label": "第 3 站：證明方式",
-          "value": "主廚書面回覆，或者經他確認的會議紀錄",
+          "value": "博主書面回覆，或者經他確認的會議紀錄",
           "origin": "ai"
         },
         "deliver": {
           "id": "m3-deliver",
           "plan": "milestone.deliveryCondition",
           "label": "第 3 站：完成標準",
-          "value": "試送一箱當季蔬菜（附農場來源與收成日期）交到主廚手上，主廚書面回覆",
+          "value": "五十位訂戶完成首月付款，並交回回饋",
           "origin": "doc",
           "src": [
             {
@@ -591,7 +591,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m3-owner",
           "plan": "G6",
           "label": "第 3 站：負責人",
-          "value": "我自己約主廚；擬由何師傅判斷菜式配搭（等他確認）",
+          "value": "我自己跟進訂戶；擬由電子商務顧問協助咖啡豆配搭（等他確認）",
           "origin": "doc",
           "src": [
             {
@@ -601,7 +601,7 @@ window.STARTUP_OS_PAGE = {
           ],
           "options": [
             {
-              "text": "我自己約主廚；擬由何師傅判斷菜式配搭（等他確認）",
+              "text": "我自己跟進訂戶；擬由電子商務顧問協助咖啡豆配搭（等他確認）",
               "rec": true
             },
             {
@@ -620,16 +620,16 @@ window.STARTUP_OS_PAGE = {
           "suffix": "前",
           "value": "2026-12-18",
           "origin": "ai",
-          "why": "選定餐廳後，大約三星期安排試送、約主廚。",
+          "why": "選定訂戶後，大約三星期安排試飲、約博主。",
           "tentative": {
             "by": "ai",
             "until": "2026-12-04",
-            "test": "試送時記錄實際用了多少時間"
+            "test": "試飲時記錄實際用了多少時間"
           }
         },
         "watch": [
           {
-            "label": "試用過試送的主廚",
+            "label": "試用過試飲的博主",
             "value": "0／1"
           }
         ],
@@ -638,7 +638,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m3-d1",
             "plan": "depth.1",
             "label": "第 3 站：對方為何會同意",
-            "value": "正準備換季菜單、或者標榜本地食材的餐廳，較容易把服務連到具體需要",
+            "value": "正準備換季內容、或者標榜本地咖啡豆的訂戶，較容易把服務連到具體需要",
             "origin": "doc",
             "src": [
               {
@@ -651,15 +651,15 @@ window.STARTUP_OS_PAGE = {
             "id": "m3-d2",
             "plan": "depth.2",
             "label": "第 3 站：對方怎樣決定、需時多久",
-            "value": "Zero 估計：試用由主廚自己決定；之後落單要經餐廳老闆同意",
+            "value": "Zero 估計：試用由博主自己決定；之後落單要經訂戶同意",
             "origin": "ai",
-            "test": "問何師傅：餐廳一般怎樣批核每週 HK$1,500 的訂單"
+            "test": "問電子商務顧問：訂戶一般怎樣批核首月訂閱費 的訂單"
           },
           {
             "id": "m3-d3",
             "plan": "depth.3",
             "label": "第 3 站：要先具備甚麼",
-            "value": "試送安排，與何師傅的菜式建議",
+            "value": "試訂跟進安排，與電子商務顧問的咖啡豆配搭建議",
             "origin": "doc",
             "src": [
               {
@@ -672,7 +672,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m3-d4",
             "plan": "depth.4",
             "label": "第 3 站：最常見的失敗方式",
-            "value": "餐廳認為現有供應商已經足夠，或者價錢比批發市場貴",
+            "value": "訂戶認為現有供應商已經足夠，或者價錢比大型網購平台貴",
             "origin": "doc",
             "src": [
               {
@@ -685,27 +685,27 @@ window.STARTUP_OS_PAGE = {
             "id": "m3-d5",
             "plan": "depth.5",
             "label": "第 3 站：為何是這個日子",
-            "value": "Zero 估計：選定餐廳後大約三星期",
+            "value": "Zero 估計：選定訂戶後大約三星期",
             "origin": "ai"
           }
         ]
       },
       {
         "id": "m4",
-        "short": "食材周報答覆",
-        "why": "文件擬由食材周報協助推廣（未答應），但第一間餐廳不靠它，所以可以同時進行，排後也不影響。",
+        "short": "首次自動扣款",
+        "why": "首月試訂者完成自動扣款，才可驗證收款流程是否可持續。",
         "event": {
           "id": "m4-event",
           "plan": "milestone.event",
           "label": "第 4 站：真實事件",
-          "value": "食材周報看完合作建議簡報後，書面答覆是否以品牌與渠道參與（接受或拒絕都算）",
+          "value": "至少十位試訂者完成首次自動扣款",
           "origin": "ai"
         },
         "actor": {
           "id": "m4-actor",
           "plan": "milestone.actor",
           "label": "第 4 站：決策者",
-          "value": "食材周報 —— 擬議推廣渠道伙伴",
+          "value": "完成試訂的訂戶",
           "origin": "doc",
           "src": [
             {
@@ -718,7 +718,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m4-witness",
           "plan": "milestone.witness",
           "label": "第 4 站：見證人",
-          "value": "食材周報負責人",
+          "value": "完成扣款的訂戶",
           "origin": "ai"
         },
         "proof": {
@@ -732,7 +732,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m4-deliver",
           "plan": "milestone.deliveryCondition",
           "label": "第 4 站：完成標準",
-          "value": "答覆寫明合作範圍（品牌、推廣、讀者優惠）；或者明確拒絕",
+          "value": "至少十位試訂者完成首次自動扣款",
           "origin": "ai"
         },
         "owner": {
@@ -773,7 +773,7 @@ window.STARTUP_OS_PAGE = {
         },
         "watch": [
           {
-            "label": "食材周報答覆",
+            "label": "首次自動扣款",
             "value": "未有"
           }
         ],
@@ -782,7 +782,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m4-d1",
             "plan": "depth.1",
             "label": "第 4 站：對方為何會同意",
-            "value": "以本地農場故事充實內容，吸引關心食材來源的讀者",
+            "value": "以本地工房故事充實內容，吸引關心咖啡豆來源的讀者",
             "origin": "doc",
             "src": [
               {
@@ -795,7 +795,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m4-d2",
             "plan": "depth.2",
             "label": "第 4 站：對方怎樣決定、需時多久",
-            "value": "Zero 估計：要經對方內部審批，可能比綠野物流久",
+            "value": "Zero 估計：要經對方內部審批，可能比工房丙久",
             "origin": "ai",
             "test": "見面時問由誰拍板、需時多久"
           },
@@ -831,14 +831,14 @@ window.STARTUP_OS_PAGE = {
       },
       {
         "id": "m5",
-        "short": "首間付款",
+        "short": "兩月續訂",
         "beyondGoal": true,
-        "why": "真正開始收款的一站。放在這裏是讓你看到之後怎樣去到收款；它在目前目標之後。",
+        "why": "持續訂閱的驗收站：三十位訂戶連續訂閱兩個月。",
         "event": {
           "id": "m5-event",
           "plan": "milestone.event",
           "label": "第 5 站：真實事件",
-          "value": "第一間餐廳確認報價、付款訂購每週當季蔬菜（每週最少 HK$1,500）",
+          "value": "三十位訂戶連續訂閱兩個月",
           "origin": "doc",
           "src": [
             {
@@ -851,7 +851,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m5-actor",
           "plan": "milestone.actor",
           "label": "第 5 站：決策者",
-          "value": "餐廳老闆 —— 付款客戶",
+          "value": "訂戶 —— 付款客戶",
           "origin": "doc",
           "src": [
             {
@@ -864,7 +864,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m5-witness",
           "plan": "milestone.witness",
           "label": "第 5 站：見證人",
-          "value": "主廚或者餐廳老闆",
+          "value": "博主或者訂戶",
           "origin": "ai"
         },
         "proof": {
@@ -878,7 +878,7 @@ window.STARTUP_OS_PAGE = {
           "id": "m5-deliver",
           "plan": "milestone.deliveryCondition",
           "label": "第 5 站：完成標準",
-          "value": "收到餐廳第一筆款項或確認報價",
+          "value": "三十位訂戶連續訂閱兩個月",
           "origin": "ai"
         },
         "owner": {
@@ -887,7 +887,7 @@ window.STARTUP_OS_PAGE = {
           "label": "第 5 站：負責人",
           "value": "未有",
           "origin": "ai",
-          "why": "文件寫擬由綠野物流跟進落單，但綠野物流未答應，所以 Zero 不可以當作有人負責。",
+          "why": "創辦人負責跟進訂戶續訂；工房丙只負責供貨。",
           "src": [
             {
               "from": "doc",
@@ -903,7 +903,7 @@ window.STARTUP_OS_PAGE = {
               "text": "我自己"
             },
             {
-              "text": "綠野物流（等對方答應才算）"
+              "text": "我自己"
             }
           ]
         },
@@ -918,12 +918,12 @@ window.STARTUP_OS_PAGE = {
           "tentative": {
             "by": "ai",
             "until": "2026-12-04",
-            "test": "問何師傅餐廳一般何時調整供應商"
+            "test": "問電子商務顧問訂戶一般何時調整供應商"
           }
         },
         "watch": [
           {
-            "label": "付款餐廳",
+            "label": "連續訂閱兩月的訂戶",
             "value": "0／1"
           }
         ],
@@ -932,7 +932,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m5-d1",
             "plan": "depth.1",
             "label": "第 5 站：對方為何會同意",
-            "value": "試送令主廚看到當季蔬菜的新鮮度與來源，認同值得付較高價錢",
+            "value": "試飲令博主看到新鮮咖啡豆的新鮮度與來源，認同值得付較高價錢",
             "origin": "doc",
             "src": [
               {
@@ -945,9 +945,9 @@ window.STARTUP_OS_PAGE = {
             "id": "m5-d2",
             "plan": "depth.2",
             "label": "第 5 站：對方怎樣決定、需時多久",
-            "value": "Zero 估計：主廚同意後由老闆批核，大約 2–4 星期",
+            "value": "Zero 估計：訂戶試訂後自行決定續訂，大約 2–4 星期",
             "origin": "ai",
-            "test": "問何師傅餐廳怎樣批核新供應商、何時調整"
+            "test": "問電子商務顧問訂戶怎樣批核新供應商、何時調整"
           },
           {
             "id": "m5-d3",
@@ -979,7 +979,7 @@ window.STARTUP_OS_PAGE = {
             "id": "m5-d5",
             "plan": "depth.5",
             "label": "第 5 站：為何是這個日子",
-            "value": "Zero 估計：主廚回覆後加上批核時間",
+            "value": "Zero 估計：博主回覆後加上批核時間",
             "origin": "ai"
           }
         ]
@@ -989,23 +989,23 @@ window.STARTUP_OS_PAGE = {
   "detail": {
     "guide": "這裏是 Zero 的根據、估計與未知。「出自你的文件」是你自己寫過的；「Zero 建議」是 Zero 估計的，最值得你看一眼。",
     "tip": {
-      "headline": "最值得你補一句：綠野物流內部由誰拍板、需時多久",
+      "headline": "最值得你補一句：工房丙內部由誰拍板、需時多久",
       "why": "補了這句，第 1 站就不再「待深化」，Zero 可以替你準備合適的人與時間表。"
     },
     "missing": [
       {
         "ref": "m1-d2",
-        "title": "綠野物流內部由誰拍板、需時多久",
-        "how": "第一次見綠野物流時問；問到就按一下補上"
+        "title": "工房丙內部由誰拍板、需時多久",
+        "how": "第一次見工房丙時問；問到就按一下補上"
       },
       {
-        "title": "季末目標要有多少伙伴、多少間餐廳",
+        "title": "季末目標要有多少伙伴、多少間訂戶",
         "how": "12 月 4 日再問你；照用、修改，或者定下來",
         "edit": {
           "id": "md-goal-number",
           "plan": "goals.quarter.number",
           "label": "季末目標的數字",
-          "value": "兩個伙伴答覆，加一位主廚回覆",
+          "value": "兩個伙伴答覆，加一位博主回覆",
           "origin": "ai",
           "tentative": {
             "by": "ai",
@@ -1032,34 +1032,34 @@ window.STARTUP_OS_PAGE = {
         }
       },
       {
-        "title": "每次免費試送要用多少工時",
-        "how": "試送時記錄實際用了多少時間",
+        "title": "每次免費試飲要用多少工時",
+        "how": "試飲時記錄實際用了多少時間",
         "edit": {
           "id": "md-hours",
           "plan": "cost.trialHours",
-          "label": "每次免費試送工時",
+          "label": "每次免費試飲工時",
           "value": "每間大約 3 小時",
           "origin": "ai",
           "tentative": {
             "by": "ai",
             "until": "2026-12-04",
-            "test": "試送時記錄實際工時"
+            "test": "試飲時記錄實際工時"
           }
         }
       },
       {
         "ref": "m5-d2",
-        "title": "餐廳怎樣批核新供應商、何時調整",
-        "how": "問何師傅"
+        "title": "訂戶怎樣批核新供應商、何時調整",
+        "how": "問電子商務顧問"
       },
       {
-        "title": "試送餐廳選哪一間",
-        "how": "與何師傅一起選",
+        "title": "試飲訂戶選哪一間",
+        "how": "與電子商務顧問一起選",
         "edit": {
           "id": "md-trial",
           "plan": "sample.trial",
-          "label": "試送餐廳",
-          "value": "未選；Zero 建議選正準備換季菜單、或者標榜本地食材的餐廳",
+          "label": "試飲訂戶",
+          "value": "未選；Zero 建議選正準備換季內容、或者標榜本地咖啡豆的訂戶",
           "origin": "ai",
           "src": [
             {
@@ -1105,7 +1105,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-customer",
         "plan": "canvas.customer",
         "label": "客戶",
-        "value": "中小型餐廳付款；主廚判斷質素，老闆批核訂單",
+        "value": "愛喝咖啡、重視新鮮的上班族在網店訂閱，每月自動付款",
         "origin": "doc",
         "src": [
           {
@@ -1119,7 +1119,7 @@ window.STARTUP_OS_PAGE = {
         "plan": "canvas.problem",
         "label": "對方的問題",
         "kind": "text",
-        "value": "餐廳需要來源清楚、供應穩定的本地當季蔬菜。",
+        "value": "訂戶需要來源清楚、供應穩定的本地新鮮咖啡豆。",
         "origin": "ai"
       },
       {
@@ -1127,14 +1127,14 @@ window.STARTUP_OS_PAGE = {
         "plan": "canvas.alternatives",
         "label": "現有替代方案",
         "kind": "text",
-        "value": "餐廳可繼續向批發市場或現有蔬菜供應商採購。",
+        "value": "訂戶可繼續向大型網購平台或現有咖啡豆供應商採購。",
         "origin": "ai"
       },
       {
         "id": "bm-value",
         "plan": "canvas.value",
         "label": "價值",
-        "value": "當季本地蔬菜直送，每箱註明農場來源與收成日期",
+        "value": "本地小型烘焙工房的新鮮咖啡豆，烘焙後三日內寄出並附口味介紹",
         "origin": "doc",
         "src": [
           {
@@ -1147,7 +1147,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-channel",
         "plan": "canvas.channel",
         "label": "渠道",
-        "value": "直接接觸餐廳；擬由綠野物流接觸餐廳、食材周報推廣",
+        "value": "網店訂閱頁面及咖啡博主推介",
         "origin": "doc",
         "src": [
           {
@@ -1160,7 +1160,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-relation",
         "plan": "canvas.relationship",
         "label": "客戶關係",
-        "value": "免費試送了解需要 → 按報價每週落單 → 換季更新菜單建議",
+        "value": "試飲裝了解口味 → 首月訂閱 → 自動扣款及兩月續訂",
         "origin": "doc",
         "src": [
           {
@@ -1173,7 +1173,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-revenue",
         "plan": "canvas.revenue",
         "label": "收入",
-        "value": "每週訂單最少 HK$1,500；節日加購另計、未定價",
+        "value": "訂戶按月付訂閱費；首月定價待試訂回饋確認",
         "origin": "doc",
         "src": [
           {
@@ -1186,7 +1186,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-resource",
         "plan": "canvas.resources",
         "label": "關鍵資源",
-        "value": "農場關係、廚藝顧問、冷藏送貨安排",
+        "value": "本地烘焙工房的供貨關係、咖啡博主推介及包裝寄貨安排",
         "origin": "doc",
         "src": [
           {
@@ -1199,7 +1199,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-activity",
         "plan": "canvas.activities",
         "label": "關鍵活動",
-        "value": "按批採購與分揀、安排送貨、與主廚確認菜式配搭",
+        "value": "與工房洽談供貨、寄試飲裝及每月包裝寄貨",
         "origin": "doc",
         "src": [
           {
@@ -1212,7 +1212,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-partner",
         "plan": "canvas.partners",
         "label": "關鍵伙伴",
-        "value": "農場甲、農場乙、何師傅（廚藝顧問）；擬議綠野物流、食材周報",
+        "value": "工房甲（已簽約）、工房丙（先試供兩批）；創辦人正物色兼職包裝人手作後備",
         "origin": "doc",
         "src": [
           {
@@ -1225,7 +1225,7 @@ window.STARTUP_OS_PAGE = {
         "id": "bm-cost",
         "plan": "canvas.cost",
         "label": "成本",
-        "value": "免費試送與未成交跟進、採購、送貨、冷藏、包裝、伙伴費用",
+        "value": "咖啡豆採購、試飲裝、包裝、速遞及推廣成本",
         "origin": "doc",
         "src": [
           {
@@ -1243,7 +1243,7 @@ window.STARTUP_OS_PAGE = {
           "id": "ac-partner",
           "plan": "externalActors",
           "kind": "choice",
-          "label": "綠野物流 · 送貨與銷售伙伴",
+          "label": "工房丙 · 試供中的供貨工房",
           "value": "建議（對方未知）",
           "origin": "doc",
           "src": [
@@ -1270,7 +1270,7 @@ window.STARTUP_OS_PAGE = {
           "id": "ac-media",
           "plan": "externalActors",
           "kind": "choice",
-          "label": "食材周報 · 推廣渠道伙伴",
+          "label": "訂戶 · 首月回饋來源",
           "value": "建議（對方未知）",
           "origin": "doc",
           "src": [
@@ -1297,7 +1297,7 @@ window.STARTUP_OS_PAGE = {
           "id": "ac-advisor",
           "plan": "externalActors",
           "kind": "choice",
-          "label": "何師傅 · 廚藝顧問",
+          "label": "創辦人 · 訂閱及供貨協調",
           "value": "商討中",
           "origin": "ai",
           "why": "文件沒有標明他的狀態，只寫「伙伴參與仍屬擬議」，所以 Zero 當作仍在商討。",
@@ -1325,7 +1325,7 @@ window.STARTUP_OS_PAGE = {
           "id": "ac-customer",
           "plan": "externalActors",
           "kind": "choice",
-          "label": "中小型餐廳 · 付款客戶",
+          "label": "網上訂閱的個人訂戶 · 付款客戶",
           "value": "建議（對方未知）",
           "origin": "doc",
           "src": [
@@ -1352,7 +1352,7 @@ window.STARTUP_OS_PAGE = {
           "id": "ac-farms",
           "plan": "externalActors",
           "kind": "choice",
-          "label": "農場甲、農場乙 · 供應農場",
+          "label": "工房甲、工房丙 · 供應工房",
           "value": "建議（對方未知）",
           "origin": "doc",
           "src": [
@@ -1381,21 +1381,21 @@ window.STARTUP_OS_PAGE = {
       "id": "lens",
       "plan": "company.lensIds",
       "label": "Zero 用哪幾類生意的問題清單查漏",
-      "value": "食品供應 ＋ 批發分銷 ＋ 本地服務",
+      "value": "網上零售",
       "origin": "ai",
-      "why": "付款的是餐廳，主廚判斷質素（食品供應）；收入是每週訂單，要處理採購、分揀、送貨（批發分銷）；客戶集中在同一區，靠見面與試送建立關係（本地服務）。網上零售是願景，本季未做，所以不用「網上零售」清單。",
+      "why": "客戶是網上訂閱的上班族；收入按月訂閱；要處理工房供貨、試飲裝及包裝寄貨。網店正準備開放訂閱，所以採用「網上零售」清單。",
       "options": [
         {
-          "text": "食品供應 ＋ 批發分銷 ＋ 本地服務",
+          "text": "網上零售",
           "rec": true
         },
         {
-          "text": "食品供應 ＋ 批發分銷",
-          "note": "不理會本地關係的風險"
+          "text": "網上零售 ＋ 咖啡博主推介",
+          "note": "推介安排仍待確認"
         },
         {
-          "text": "食品供應 ＋ 批發分銷 ＋ 網上零售",
-          "note": "如果本季就做網上零售"
+          "text": "網上零售 ＋ 工房直送",
+          "note": "供貨仍在試做"
         }
       ]
     },
@@ -1403,50 +1403,50 @@ window.STARTUP_OS_PAGE = {
       {
         "id": "as-need",
         "plan": "assumptions",
-        "label": "假設：主廚認同要處理",
-        "value": "主廚認同「食材來源不清楚」是要處理的問題",
+        "label": "假設：上班族在超市買不到新鮮烘焙的咖啡豆",
+        "value": "上班族在超市買不到新鮮烘焙的咖啡豆",
         "origin": "ai",
-        "test": "試送後與一位主廚談 20 分鐘，看他會否主動問每週供應"
+        "test": "向試飲者了解超市咖啡豆的烘焙日期是否足夠新鮮"
       },
       {
         "id": "as-price",
         "plan": "assumptions",
-        "label": "假設：餐廳肯付較高價錢",
-        "value": "餐廳願意為來源清楚的當季蔬菜比批發市場多付一成",
+        "label": "假設：咖啡愛好者願意為新鮮烘焙付較高月費",
+        "value": "咖啡愛好者願意為新鮮烘焙付較高月費",
         "origin": "ai",
-        "test": "試送之後直接報價，記錄主廚反應"
+        "test": "就同一款豆向預訂者報兩個月費，記錄選擇"
       },
       {
         "id": "as-partner",
         "plan": "assumptions",
-        "label": "假設：綠野物流有能力送貨",
-        "value": "綠野物流有能力與意願接觸餐廳、負責送貨",
+        "label": "假設：兩間工房可以每月穩定供貨",
+        "value": "兩間工房可以每月穩定供貨",
         "origin": "ai",
-        "test": "會後請綠野物流書面列出可以服務哪些地區、大約多少間餐廳"
+        "test": "記錄兩間工房連續兩批交貨是否準時及缺貨比例"
       },
       {
         "id": "as-media",
         "plan": "assumptions",
-        "label": "假設：食材周報肯長期合作",
-        "value": "食材周報願意以品牌與渠道長期參與，不只做一次性推廣",
+        "label": "假設：創辦人親自包裝寄貨足以應付首五十位訂戶",
+        "value": "創辦人親自包裝寄貨足以應付首五十位訂戶",
         "origin": "ai",
-        "test": "請對方書面寫明合作範圍"
+        "test": "試行一晚包裝五十包，並記錄時間"
       },
       {
         "id": "as-cost",
         "plan": "assumptions",
-        "label": "假設：試送成本可以承受",
-        "value": "每次免費試送大約 3 小時，成本可以承受",
+        "label": "假設：試飲成本可以承受",
+        "value": "試飲裝成本與包裝時間可由創辦人處理",
         "origin": "ai",
-        "test": "試送時記錄實際工時"
+        "test": "試飲時記錄實際工時"
       },
       {
         "id": "as-procure",
         "plan": "assumptions",
-        "label": "假設：餐廳轉供應商有固定程序",
-        "value": "餐廳轉用新供應商有固定程序與時間",
+        "label": "假設：訂戶轉供應商有固定程序",
+        "value": "訂戶願意由超市咖啡豆轉為每月訂閱",
         "origin": "ai",
-        "test": "問何師傅餐廳怎樣批核、何時調整"
+        "test": "向首月訂戶收集續訂意向與口味回饋"
       }
     ],
     "rules": [
@@ -1517,7 +1517,7 @@ window.STARTUP_OS_PAGE = {
         "plan": "G9",
         "label": "一定要做到的要求",
         "ask": "產品或服務有甚麼非做不可、或者特別之處？",
-        "value": "每箱註明農場來源與收成日期；全程冷藏送貨；不承諾指定品種，按當季供應；試送免費",
+        "value": "標示烘焙日期；烘焙後三日內寄出；附口味介紹；試飲裝可供體驗",
         "origin": "doc",
         "src": [
           {
@@ -1531,16 +1531,16 @@ window.STARTUP_OS_PAGE = {
         "plan": "G10",
         "label": "業務線數目",
         "ask": "有沒有兩條互不相干的業務（不同客戶、不同收入）？",
-        "value": "一條：餐廳供應",
+        "value": "一條：訂戶供應",
         "origin": "ai",
-        "why": "網上零售文件寫是發展願景，本季未做，所以先當作一條。",
+        "why": "網店正準備開放訂閱，所以用「網上零售」清單。",
         "options": [
           {
-            "text": "一條：餐廳供應",
+            "text": "一條：訂戶供應",
             "rec": true
           },
           {
-            "text": "兩條：餐廳供應 ＋ 網上零售"
+            "text": "一條：網上零售"
           }
         ]
       }

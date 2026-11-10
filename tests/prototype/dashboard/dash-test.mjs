@@ -50,7 +50,7 @@ try {
   }
   ok('唔存在嘅分頁回 404', (await fetch(B + '/dashboard/bogus')).status === 404);
   const d0 = await A.get('/api/dashboard');
-  ok('示範資料標明係示範', d0.sample === true && d0.company.name === '從田間到餐桌');
+  ok('示範資料標明係示範', d0.sample === true && d0.company.name === '月月鮮烘');
   ok('指引：AI 已設定、公司已確認 → 日常', d0.guide === 'daily', d0.guide);
   ok('待決事項 8 項（含 0.41.0 示範的崗位確認及啟用驗收兩包；採用轉強留在生意大腦），逾期排第一', d0.todo.length === 8 && d0.brainTodo.length >= 1 && d0.todo[0].state === 'overdue' && d0.todo[0].overdueDays === 2, d0.todo.map(t => t.type + ':' + t.overdueDays));
   ok('待決事項入口全部深連答題頁', d0.todo.every(t => /^\/#\/ask\/ask-demo-/.test(t.href)), d0.todo.map(t => t.href));
@@ -72,7 +72,7 @@ try {
   const T0 = Object.fromEntries(d0.tasks.map(t => [t.id, t]));
   ok('優先原因四條規則都有', [1, 2, 3, 4].every(r => d0.tasks.some(t => t.why && t.why.rule === r)), d0.tasks.map(t => t.id + ':' + (t.why && t.why.rule)));
   ok('看板按優先排（規則由上至下）', d0.tasks.filter(t => t.why).every((t, i, a) => !i || a[i - 1].why.rule <= t.why.rule));
-  ok('規則一：你嘅行動之前要準備好（日期迫近）', T0.t3.why.rule === 1 && /4 日後你需要「見農場丙簽供應協議」/.test(T0.t3.why.text), T0.t3.why);
+  ok('規則一：你嘅行動之前要準備好（日期迫近）', T0.t3.why.rule === 1 && /4 日後你需要「見工房丙簽供貨協議」/.test(T0.t3.why.text), T0.t3.why);
   ok('規則二：對方要幾個星期先決定', T0.t5.why.rule === 1 && T0.t13.why.rule === 2 && /3|2 星期/.test(T0.t13.why.text), [T0.t5.why, T0.t13.why]);
   ok('規則三：測試關鍵假設', T0.t7.why.rule === 3 && T0.t7.why.text.includes('假設不成立則整個生意模式不成立'), T0.t7.why);
   ok('規則四：其餘照次序', T0.t4.why.rule === 4 && T0.t4.why.text.includes('按路線次序'), T0.t4.why);
@@ -80,9 +80,9 @@ try {
   ok('可進行同等候中分開', T0.t3.ready === true && T0.f1.ready === false && T0.t6.ready === false);
   // 示範名單加入後：由人處理的工作共八件——五件歸你、兩件歸在職成員、一件負責人已離開而歸你名下顯示（owner 不改寫）
   ok('你要做：現實行動，負責人係你或在職成員；成員離開的工作歸你名下', d0.tasks.filter(t => t.owner === 'founder').length === 8 && d0.tasks.filter(t => t.owner === 'founder' && !t.assigneeId && !t.ownerLeft).length === 5 && d0.tasks.filter(t => t.assigneeId).map(t => t.assignee).sort().join() === '李家欣,陳小明' && d0.tasks.filter(t => t.ownerLeft).length === 1 && T0.f1.teammate === '你');
-  ok('你嘅行動有日子就入兩星期日程', d0.schedule.filter(s => s.kind === 'action').map(s => s.text).join().includes('見農場丙簽供應協議') && d0.schedule.some(s => s.kind === 'action' && s.text.includes('致電發牌機關')));
+  ok('你嘅行動有日子就入兩星期日程', d0.schedule.filter(s => s.kind === 'action').map(s => s.text).join().includes('見工房丙簽供貨協議') && d0.schedule.some(s => s.kind === 'action' && s.text.includes('致電收款服務商')));
   ok('AI 唔可以標完成：未經你確認嘅完成當待你確認', T0.f3.column === 'review' && T0.f3.packId === 'ask-demo-confirm-f3');
-  ok('兩站並行：農場簽約＋牌照保險，第二站經你確認', d0.parallel.count === 2 && d0.parallel.confirmed && d0.parallel.ids.join() === 'm1,m4' && !d0.parallel.over, d0.parallel);
+  ok('兩站並行：工房簽約與收款寄送，第二站經你確認', d0.parallel.count === 2 && d0.parallel.confirmed && d0.parallel.ids.join() === 'm1,m4' && !d0.parallel.over, d0.parallel);
   // 沒有作答時，本人行動不得視為完成
   const noAction = JSON.parse(fs.readFileSync(path.join(DEMO, 'asks', 'ask-demo-confirm-f3.json'), 'utf8'));
   noAction.id = 'ask-no-answer-action'; noAction.askedAt = new Date().toISOString();
@@ -95,7 +95,7 @@ try {
   await answer(A, 'ask-demo-confirm-f3', { done: '已完成' });
   await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === 'ask-demo-confirm-f3'); return r && r.state === 'done'; });
   dv = await A.get('/api/dashboard');
-  ok('你確認咗先轉已完成', dv.tasks.find(t => t.id === 'f3').column === 'done' && dv.events.some(e => e.title === '你已完成：點收農場甲第二週貨'));
+  ok('你確認咗先轉已完成', dv.tasks.find(t => t.id === 'f3').column === 'done' && dv.events.some(e => e.title === '你已完成：點收工房甲第二批貨'));
   // 你答咗決定 → 等緊嗰張卡轉可進行
   await answer(A, 'ask-demo-licence', {});
   await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === 'ask-demo-licence'); return r && r.state === 'done'; });
@@ -118,7 +118,7 @@ try {
   ok('本機以外來源唔收', (await A.post('/api/intake', { kind: 'note', type: 'adhoc', text: 'x' }, 'http://evil.example')).code === 403);
 
   /* ---------- C. 臨時工作全程：擬範圍 → 確認 → AI 做 → 驗收 → 退回 → 再驗收 → 接受 ---------- */
-  const s1 = await A.post('/api/intake', { kind: 'note', type: 'adhoc', text: '幫我擬一張聖誕節推廣單張，下星期五前要。' });
+  const s1 = await A.post('/api/intake', { kind: 'note', type: 'adhoc', text: '幫我擬一張聖誕咖啡禮盒推廣頁，下星期五前要。' });
   ok('交臨時工作：收到', s1.code === 202 && s1.j.id, s1);
   ok('即刻寫入收件匣（只新增）', fs.readdirSync(path.join(DEMO, 'founder', 'inbox')).some(f => f.endsWith('-note-adhoc.md')) || true);
   const r1 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === s1.j.id); return r && r.state === 'done' ? r : null; });
@@ -137,31 +137,19 @@ try {
   ok('看板：轉做待你驗收', t && t.column === 'review' && t.packId && t.packId !== packId, t);
   const accPack = t && t.packId;
   ok('驗收包由系統出（接受／退回）', accPack && d2.todo.some(x => x.id === accPack && x.type === 'acceptance'), d2.todo.map(x => x.id + ':' + x.type));
+  // 0.41.1：示範實例的驗收只記錄答案，不改工作、不開後續 AI；「退回 → 按原因重做 → 再驗收 → 接受」整段改在 F2 以非示範資料核對
+  const idsBeforeReturn = new Set((await A.get('/api/status')).runs.map(x => x.id));
   await answer(A, accPack, { accept: '退回，要改', reason: '要加英文版' });
   const r3 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === accPack); return r && r.state === 'done' ? r : null; });
-  ok('退回：AI 按原因再做', !!r3, r3);
-  // 外殼之後叫 AI 改寫用字會覆寫 task.md，所以讀假 AI 留低嘅 task-seen.md（AI 原本收到嘅工作說明）
-  const seenF = path.join(DEMO, 'sandbox', r3 ? r3.id : 'x', 'task-seen.md');
-  const redoTask = fs.existsSync(seenF) && fs.readFileSync(seenF, 'utf8');
-  ok('退回原因交到 AI', redoTask && redoTask.includes('要加英文版'), redoTask && redoTask.slice(-200));
+  await sleep(1500);
+  const newRuns = (await A.get('/api/status')).runs.filter(x => !idsBeforeReturn.has(x.id));
   d2 = await A.get('/api/dashboard'); t = d2.tasks.find(x => x.id === tid);
-  ok('再交貨又轉待你驗收（新驗收包）', t && t.column === 'review' && t.packId !== accPack, t);
-  const noAcceptance = JSON.parse(fs.readFileSync(path.join(DEMO, 'asks', t.packId + '.json'), 'utf8'));
-  noAcceptance.id = 'ask-no-answer-acceptance'; noAcceptance.askedAt = new Date().toISOString();
-  fs.writeFileSync(path.join(DEMO, 'asks', noAcceptance.id + '.json'), JSON.stringify(noAcceptance));
-  const noAcceptanceReply = await answer(A, noAcceptance.id, {}, false);
-  await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === noAcceptance.id); return r && r.state === 'done' ? r : null; });
-  d2 = await A.get('/api/dashboard'); t = d2.tasks.find(x => x.id === tid);
-  ok('沒有作答：驗收工作不轉已完成', noAcceptanceReply.code === 200 && t && t.column !== 'done', { reply: noAcceptanceReply, task: t });
-  await answer(A, t.packId, { accept: '接受' });
-  await waitFor(async () => { const r = await runOf(A, x => x.kind === 'ask' && x.ref === t.packId); return r && r.state === 'done'; });
-  d2 = await A.get('/api/dashboard'); const t2 = d2.tasks.find(x => x.id === tid);
-  ok('接受後轉已完成', t2 && t2.column === 'done', t2);
-  ok('業務事件有交臨時工作同接受', d2.events.some(e => e.title.startsWith('提交臨時工作')) && d2.events.some(e => e.title.startsWith('接受：測試推廣單張')), d2.events.slice(0, 6).map(e => e.title));
+  ok('示範實例退回：只記錄答案，不開後續 AI，工作不轉已完成', r3 && r3.result && r3.result.summary === '已記錄驗收結果。' && newRuns.length >= 1 && newRuns.every(x => x.kind === 'ask' && x.ref === accPack) && t && t.column !== 'done', { r3: r3 && r3.result, newRuns: newRuns.map(x => x.kind + ':' + x.ref), task: t });
+  ok('業務事件有交臨時工作', d2.events.some(e => e.title.startsWith('提交臨時工作')), d2.events.slice(0, 6).map(e => e.title));
   ok('臨時工作冇改本季目標進度', d2.metrics.quarter.done === 0 && d2.metrics.quarter.total === 6);
 
   /* ---------- D. 改次序／加一站（帳本）：擬選項 → 採用 → 外殼機械套用 ---------- */
-  const s2 = await A.post('/api/intake', { kind: 'note', type: 'order', text: '想喺農場簽約之後加一站廚師試食會。' });
+  const s2 = await A.post('/api/intake', { kind: 'note', type: 'order', text: '想喺工房簽約之後加一站廚師試食會。' });
   const r4 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === s2.j.id); return r && r.state === 'done' ? r : null; });
   const op = r4 && r4.result.asks[0].id;
   let d3 = await A.get('/api/dashboard');
@@ -176,7 +164,7 @@ try {
   ok('已撤嘅站留喺原位附近', d3.milestones.find(m => m.id === 'm6').order > 1 && d3.milestones.find(m => m.id === 'm6').order < 3, d3.milestones.find(m => m.id === 'm6').order);
   ok('決定紀錄有套用一行', (await A.get('/api/log')).entries.some(e => e.qid === 'apply' && e.answer.includes('廚師試食會')));
   // 維持現有次序：乜都唔變
-  const s3 = await A.post('/api/intake', { kind: 'note', type: 'order', text: '牌照可唔可以押後？' });
+  const s3 = await A.post('/api/intake', { kind: 'note', type: 'order', text: '收款及寄送可唔可以押後？' });
   const r5 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === s3.j.id); return r && r.state === 'done' ? r : null; });
   const orderBefore = JSON.stringify(conf.map(m => m.id));
   await answer(A, r5.result.asks[0].id, { route: '維持現有次序' });
@@ -230,6 +218,38 @@ try {
   ok('舊公司概覽入歷史', fs.readdirSync(path.join(REAL, 'company', 'history')).some(f => f.startsWith('page-')));
   const e3 = await A2.get('/api/dashboard');
   ok('監察台即時見到新站', e3.milestones.some(m => m.short === '廚師試食會'), e3.milestones.map(m => m.short));
+
+  /* ---------- F2. 非示範資料：臨時工作 退回 → 按原因重做 → 再驗收 → 接受（原 C 部分的嚴格核對） ---------- */
+  const s1r = await A2.post('/api/intake', { kind: 'note', type: 'adhoc', text: '幫我擬一張聖誕咖啡禮盒推廣頁，下星期五前要。' });
+  const r1r = await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'note' && x.ref === (s1r.j && s1r.j.id)); return r && r.state === 'done' ? r : null; });
+  const tidR = 'a-' + (s1r.j && s1r.j.id), packR = r1r && r1r.result.asks[0] && r1r.result.asks[0].id;
+  ok('非示範：交臨時工作，AI 擬好範圍問題包', s1r.code === 202 && !!packR, { s1r, r1r });
+  await answer(A2, packR, {});
+  const r2r = await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'ask' && x.ref === packR); return r && r.state === 'done' ? r : null; });
+  let dR = await A2.get('/api/dashboard'), tR = dR.tasks.find(x => x.id === tidR);
+  ok('非示範：AI 交貨後轉待你驗收（驗收包由系統出）', r2r && r2r.result.artifacts.length >= 1 && tR && tR.column === 'review' && tR.packId && tR.packId !== packR && dR.todo.some(x => x.id === tR.packId && x.type === 'acceptance'), tR);
+  const accR = tR && tR.packId;
+  await answer(A2, accR, { accept: '退回，要改', reason: '要加英文版' });
+  const r3r = await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'ask' && x.ref === accR); return r && r.state === 'done' ? r : null; });
+  ok('退回：AI 按原因再做', !!r3r, r3r);
+  // 外殼之後叫 AI 改寫用字會覆寫 task.md，所以讀假 AI 留低嘅 task-seen.md（AI 原本收到嘅工作說明）
+  const seenF = path.join(REAL, 'sandbox', r3r ? r3r.id : 'x', 'task-seen.md');
+  const redoTask = fs.existsSync(seenF) && fs.readFileSync(seenF, 'utf8');
+  ok('退回原因交到 AI', redoTask && redoTask.includes('要加英文版'), redoTask && redoTask.slice(-200));
+  dR = await A2.get('/api/dashboard'); tR = dR.tasks.find(x => x.id === tidR);
+  ok('再交貨又轉待你驗收（新驗收包）', tR && tR.column === 'review' && tR.packId !== accR, tR);
+  const noAcceptance = JSON.parse(fs.readFileSync(path.join(REAL, 'asks', tR.packId + '.json'), 'utf8'));
+  noAcceptance.id = 'ask-no-answer-acceptance'; noAcceptance.askedAt = new Date().toISOString();
+  fs.writeFileSync(path.join(REAL, 'asks', noAcceptance.id + '.json'), JSON.stringify(noAcceptance));
+  const noAcceptanceReply = await answer(A2, noAcceptance.id, {}, false);
+  await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'ask' && x.ref === noAcceptance.id); return r && r.state === 'done' ? r : null; });
+  dR = await A2.get('/api/dashboard'); tR = dR.tasks.find(x => x.id === tidR);
+  ok('沒有作答：驗收工作不轉已完成', noAcceptanceReply.code === 200 && tR && tR.column !== 'done', { reply: noAcceptanceReply, task: tR });
+  await answer(A2, tR.packId, { accept: '接受' });
+  await waitFor(async () => { const r = await runOf(A2, x => x.kind === 'ask' && x.ref === tR.packId); return r && r.state === 'done'; });
+  dR = await A2.get('/api/dashboard'); const tR2 = dR.tasks.find(x => x.id === tidR);
+  ok('接受後轉已完成', tR2 && tR2.column === 'done', tR2);
+  ok('業務事件有交臨時工作同接受', dR.events.some(e => e.title.startsWith('提交臨時工作')) && dR.events.some(e => e.title.startsWith('接受：測試推廣單張')), dR.events.slice(0, 6).map(e => e.title));
 
   /* ---------- G. AI 未設定時交要求：照記錄、等設定；認證後自動續做 ---------- */
   const NOAI = path.join(OUT, 'noai');

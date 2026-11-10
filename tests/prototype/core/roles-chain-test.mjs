@@ -22,7 +22,11 @@ const lib = await imp('ask-lib.mjs'), R = await imp('roles-ops.mjs'), PACE = awa
 const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p, info: p ? undefined : i }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '\n      ' + String(JSON.stringify(i ?? '')).slice(0, 700))); };
 const skip = (n, why) => ok(n, false, '略過：' + why);
 const STOP = Number(process.env.CHAIN_STOP || 99);   // 除錯用：只跑到第 N 步
-const attempt = async (name, fn) => { const n = parseInt(name, 10); if (n > STOP) return; try { await fn(); } catch (e) { ok(name + '（執行出錯）', false, String(e && e.stack || e).slice(0, 700)); } };
+const attempt = async (name, fn) => { const n = parseInt(name, 10); if (n > STOP) return; try { await fn(); } catch (e) {
+  // 出錯時附上錯誤原因及主伺服器狀態（是否仍在運行、最後輸出），方便查明連線失敗
+  const srv = typeof S !== 'undefined' && S.srv, cause = e && e.cause ? '\n原因：' + String(e.cause.code || e.cause.message || e.cause) : '';
+  ok(name + '（執行出錯）', false, String(e && e.stack || e).slice(0, 700) + cause + (srv ? '\n伺服器：' + (srv.p.exitCode === null ? '仍在運行' : '已結束，代碼 ' + srv.p.exitCode) + '\n' + srv.log.text.slice(-800) : ''));
+} };
 const waitFor = async (fn, ms = 10000, step = 200) => { const until = Date.now() + ms; while (Date.now() < until) { try { const v = await fn(); if (v) return v; } catch { } await sleep(step); } return null; };
 const jr = f => JSON.parse(fs.readFileSync(f, 'utf8'));
 fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
@@ -143,7 +147,9 @@ async function quiet(base, firstMs = 2300) {
   return true;
 }
 const post = async (base, p, body) => { const r = await fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify(body) }); let j = null; try { j = await r.json(); } catch { } return { status: r.status, body: j }; };
-const getJ = async (base, p) => (await fetch(base + p)).json();
+// 外殼以 spawnSync 執行時測試程序被阻塞；閒置的連線若剛好在伺服器 5 秒保持連線逾時那一刻被重用，會被重設（ECONNRESET，2026-11-09 實測閒置 5.2–6.9 秒）。
+// 讀取請求可以安全地重試一次（瀏覽器遇到同樣情況亦會自動重試）；其他錯誤照常拋出
+const getJ = async (base, p) => { try { return await (await fetch(base + p)).json(); } catch (e) { if (!(e && e.cause && e.cause.code === 'ECONNRESET')) throw e; return (await fetch(base + p)).json(); } };
 
 const S = { c: null, W: null, srv: null };   // 共用：Chrome、主世界、主伺服器
 const B = {};                                  // 步驟之間傳遞的事實
@@ -193,7 +199,7 @@ try {
     ok('2 擬崗位日常工作：AI 啟動次序為 roles 先於 rhythm', W.callTypes()[0] === 'roles', W.callTypes());
     ok('2 確認包：一包兩題、followAll: true、todoType decision、rolesSync 有 key', ps.length === 1 && ps[0].questions.length === 2 && ps[0].followAll === true && ps[0].todoType === 'decision' && !!(ps[0].rolesSync || {}).key, ps[0] && { n: ps[0].questions.length, followAll: ps[0].followAll, todo: ps[0].todoType, rs: ps[0].rolesSync });
     const q1 = ps[0] && ps[0].questions[0], rc = q1 && q1.roleCard;
-    ok('2 q.roleCard 欄位齊全且都是可顯示字串（id、title、avatarKind、mission、stations、supports、askFirst、activation）；站名、支援對象依名單', rc && ['id', 'title', 'avatarKind', 'mission', 'stations', 'supports', 'askFirst', 'activation'].every(k => k in rc) && rc.title === '農場採購專員' && rc.avatarKind === 'procurement' && rc.stations.join() === '農場簽約' && rc.supports.some(x => /陳小明/.test(x)) && Array.isArray(rc.askFirst) && /跟進訊息/.test(rc.activation), rc);
+    ok('2 q.roleCard 欄位齊全且都是可顯示字串（id、title、avatarKind、mission、stations、supports、askFirst、activation）；站名、支援對象依名單', rc && ['id', 'title', 'avatarKind', 'mission', 'stations', 'supports', 'askFirst', 'activation'].every(k => k in rc) && rc.title === '農場採購專員' && rc.avatarKind === 'procurement' && rc.stations.join() === '工房簽約' && rc.supports.some(x => /陳小明/.test(x)) && Array.isArray(rc.askFirst) && /跟進訊息/.test(rc.activation), rc);
     ok('2 選項字句與 names.js 完全一致：接受（rec）／改名（input）／不要；apply.op 依次為 roleAccept／roleRename／roleDecline', q1 && q1.options.map(o => o.text).join('|') === [N.t('role_optAccept'), N.t('role_optRename'), N.t('role_optDecline')].join('|') && q1.options[0].rec === true && q1.options[1].input === true && !q1.options[2].rec && q1.options.map(o => o.apply && o.apply.op).join() === 'roleAccept,roleRename,roleDecline' && q1.value === q1.options[0].text && !!q1.inputHint, q1 && q1.options);
     ok('2 確認前不寫卡；崗位頭像檔存在於 assets', !(s.teammates || []).length && fs.existsSync(path.join(PROTO, 'assets', 'crew-role-procurement.webp')) && fs.existsSync(path.join(PROTO, 'assets', 'crew-role-outreach.webp')) && fs.existsSync(path.join(PROTO, 'assets', 'crew-role-lead.webp')), s.teammates);
   });
@@ -218,7 +224,7 @@ try {
     ok('3 兩張崗位卡，稱號依序為「農場採購專員」「餐廳拓展經理」', (await texts(S.c, '.dq .rolecard .rc-name')).join('|') === '農場採購專員|餐廳拓展經理', await texts(S.c, '.dq .rolecard .rc-name'));
     const rows = await S.c.ev(`[...document.querySelectorAll('.dq')].map(q=>({opts:[...q.querySelectorAll('.opt')].map(o=>o.innerText.replace(/\\s+/g,' ').trim()),cur:[...q.querySelectorAll('.opt.cur')].map(o=>o.innerText.replace(/\\s+/g,' ').trim()),dd:[...q.querySelectorAll('.rolecard dd')].map(d=>d.innerText)}))`);
     ok('3 每題三個選項、預選且只預選「由 Zero 承擔」（建議）', rows.length === 2 && rows.every(r => r.opts.length === 3 && r.cur.length === 1 && r.cur[0].startsWith(N.t('role_optAccept'))), rows);
-    ok('3 卡內欄位來自 q.roleCard：站、支援（陳小明）、必須先問、啟用任務', rows[0].dd.join(' ').includes('農場簽約') && rows[0].dd.join(' ').includes('陳小明') && rows[0].dd.join(' ').includes(qa.roleCard.activation), rows[0].dd);
+    ok('3 卡內欄位來自 q.roleCard：站、支援（陳小明）、必須先問、啟用任務', rows[0].dd.join(' ').includes('工房簽約') && rows[0].dd.join(' ').includes('陳小明') && rows[0].dd.join(' ').includes(qa.roleCard.activation), rows[0].dd);
     await waitFor(() => S.c.ev(`[...document.querySelectorAll('.dq .rc-av')].every(i=>i.complete)`), 5000);
     const av = await S.c.ev(`[...document.querySelectorAll('.dq .rc-av')].map(i=>i.getAttribute('src')+':'+(i.naturalWidth>0))`);
     ok('3 頭像 URL 為 /assets/crew-role-<類別>.webp 且載入成功', av.join('|') === '/assets/crew-role-procurement.webp:true|/assets/crew-role-outreach.webp:true', av);

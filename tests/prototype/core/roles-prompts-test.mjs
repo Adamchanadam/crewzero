@@ -1,4 +1,4 @@
-// Zero 團隊分工（0.41.0）第 5 線測試：AI 指示檔（ai-roles.md、ai-rhythm.md、ai-proofread.md）與示範資料（fixtures/demo-farm）。
+// Zero 團隊分工（0.41.0）第 5 線測試：AI 指示檔（ai-roles.md、ai-rhythm.md、ai-proofread.md）與示範資料（fixtures/demo-shop）。
 // 只讀檔、只用純函數模組；不開伺服器、不開 AI、不寫任何資料夾。
 // 用法：node tests/prototype/core/roles-prompts-test.mjs [原型資料夾] [輸出資料夾]（結束碼 0 ＝ 全過）
 import fs from 'node:fs';
@@ -89,15 +89,15 @@ ok('C4 校對說明（buildProofreadBrief）列出 ai-proofread.md 後通過 che
 ok('C5 校對說明本身只提「checks 六項」而不列名稱：沒有 ai-proofread.md 時 AI 無從知道六項（所以需要本檔）', !P.CHECK_ITEMS.some(i => brief.includes(i)) && brief.includes('checks 六項'));
 
 /* ---------- D. 示範資料 state.json ---------- */
-const S = readJ('fixtures/demo-farm/state.json');
+const S = readJ('fixtures/demo-shop/state.json');
 const tm = S.teammates, msById = Object.fromEntries(S.milestones.map(m => [m.id, m])), liveMs = S.milestones.filter(m => m.pathStatus !== 'retired');
 const actors = S.company.actors;
 ok('D1 示範三張卡：稱號合規（checkTitle、職級、4 至 10 字）且 name 鏡射 title', tm.length === 3 && tm.every(t => t.title === t.name && R.checkTitle(t.title, { actors, styleIssues }).ok && R.RANKS.some(r => t.title.endsWith(r))), tm.map(t => [t.title, R.checkTitle(t.title, { actors, styleIssues }).errors]));
-ok('D2 示範三卡改名：農場採購專員、牌照及保險主任、餐廳拓展經理；舊名不再出現', J(tm.map(t => t.title)) === J(['農場採購專員', '牌照及保險主任', '餐廳拓展經理']) && !JSON.stringify(S).match(/採購伙伴|合規助理|"餐廳拓展"/));
+ok('D2 示範三卡改名：工房採購專員、收款及物流主任、訂戶拓展經理；舊名不再出現', J(tm.map(t => t.title)) === J(['工房採購專員', '收款及物流主任', '訂戶拓展經理']) && !JSON.stringify(S).match(/採購伙伴|合規助理|"訂戶拓展"/));
 ok('D3 站上的 ownerName 跟隨新稱號', S.milestones.filter(m => m.ownerKind === 'teammate').every(m => m.ownerName === tm.find(t => t.id === m.ownerId).title));
 const owners = new Map(); let dup = false; for (const t of tm) for (const id of t.milestoneIds) { if (owners.has(id)) dup = true; owners.set(id, t.id); }
 ok('D4 每站最多一張卡；每個已確認／試行的站都有負責崗位；卡只指向未撤回的站', !dup && liveMs.filter(m => ['confirmed', 'trial'].includes(m.pathStatus)).every(m => owners.has(m.id)) && tm.every(t => t.milestoneIds.length && t.milestoneIds.every(id => msById[id] && msById[id].pathStatus !== 'retired')));
-ok('D5 supports 只指向名單內仍在的團隊成員／顧問（黃師傅暫停中仍算在名單）', tm.every(t => t.supports.every(id => { const a = actors.find(x => x.id === id); return a && R.isLive?.(a) !== false && ['team', 'advisor'].includes(a.kind); })), tm.map(t => t.supports));
+ok('D5 supports 只指向名單內仍在的團隊成員／顧問（黃先生暫停中仍算在名單）', tm.every(t => t.supports.every(id => { const a = actors.find(x => x.id === id); return a && R.isLive?.(a) !== false && ['team', 'advisor'].includes(a.kind); })), tm.map(t => t.supports));
 ok('D6 欄位值合規：targets、deliverables、sources、knowledge 來源、how 條數與字數、mission／strategy 字數',
   tm.every(t => t.targets.every(k => R.TARGET_KINDS.includes(k)) && t.deliverables.length && t.deliverables.every(x => P.DELIVERABLE_TYPES.includes(x)) && t.sources[0] === 'confirmedPage' && t.knowledge.length <= 6 && t.knowledge.every(k => k.text && ['confirmedPage'].includes(k.source)) &&
     t.how.length >= 1 && t.how.length <= 3 && t.how.every(x => x.length <= 40) && t.mission.length <= 60 && t.strategy.length <= 80));
@@ -118,19 +118,19 @@ ok('D13 示範三卡改寫成 roles.json 形狀後通過 checkRoleCards（首次
 ok('D14 示範卡的文字欄位通過 names.js 檢查', tm.every(t => [t.title, t.mission, t.strategy, t.pausedReason || '', ...t.how, ...t.knowledge.map(k => k.text), ...t.bounds.askFirst.filter(x => !R.PERMISSIONS_DEFAULT.askFirst.includes(x))].every(x => !styleIssues(x).length)), tm.map(t => [t.mission, t.strategy, ...t.how].filter(x => styleIssues(x).length)));
 
 /* ---------- E. 示範題目包（R1 確認崗位、R3 驗收啟用任務）及相關紀錄 ---------- */
-const asks = readJ('fixtures/demo-farm/asks.json'), pk = id => asks.find(p => p.id === id);
+const asks = readJ('fixtures/demo-shop/asks.json'), pk = id => asks.find(p => p.id === id);
 const rp = pk('ask-demo-roles'), ap = pk('ask-demo-activation');
 ok('E1 R1 確認崗位包：decision、rolesSync.key、followAll、三題；選項文字與 apply 照約定', rp && rp.todoType === 'decision' && rp.rolesSync && rp.rolesSync.key && rp.followAll === true && rp.questions.length === 3 &&
   rp.questions.every(q => q.kind === 'choice' && q.effect === 'now' && J(q.options.map(o => o.text)) === J(['由 Zero 承擔', '改名', '不要這個崗位']) && J(q.options.map(o => o.apply.op)) === J(['roleAccept', 'roleRename', 'roleDecline']) && q.options[0].rec && q.options[1].input === true && q.inputHint && q.value === '由 Zero 承擔' && q.why));
 ok('E2 R1 每題 roleCard：稱號對應示範卡、站名取自該卡負責的站、支援寫「姓名（職責）」、askFirst 為加條、啟用任務有文字',
   rp && rp.questions.every((q, i) => { const c = q.roleCard, t = tm.find(x => x.title === c.title); return t && c.avatarKind === t.avatarKind && J(c.stations.sort()) === J(t.milestoneIds.map(id => msById[id].title || msById[id].short).sort()) && c.supports.every(s => /^.+（.+）$/.test(s)) && c.askFirst.length && c.activation; }), rp && rp.questions.map(q => q.roleCard.stations));
 const aq = ap && ap.questions[0].acceptance;
-ok('E3 R3 驗收包：pack.acceptance 帶任務編號及草稿全文，題目帶 acceptance 欄位；三個選項字句', ap && ap.todoType === 'acceptance' && ap.fromRun === 'R-demo-e' && ap.acceptance && ap.acceptance.taskId === 't14' && ap.acceptance.artifact && ap.acceptance.artifact.title && ap.acceptance.artifact.text.startsWith('草稿，未發送') && aq && aq.taskId === 't14' && aq.teammateId === 'tm-rest' && aq.roleTitle === '餐廳拓展經理' && aq.avatarKind === 'outreach' && aq.activation === true && aq.qaVerdict === 'pass' && aq.qaLine.length <= 40 && aq.artifactTitle === ap.acceptance.artifact.title &&
-  ap.questions[0].id === 'accept' && ap.questions[0].ask === '接受即啟用「餐廳拓展經理」' && J(ap.questions[0].options.map(o => o.text)) === J(['接受', '退回重做', '接受，但我想改方向']));
-const art = readJ('fixtures/demo-farm/roles-artifact.json');
+ok('E3 R3 驗收包：pack.acceptance 帶任務編號及草稿全文，題目帶 acceptance 欄位；三個選項字句', ap && ap.todoType === 'acceptance' && ap.fromRun === 'R-demo-e' && ap.acceptance && ap.acceptance.taskId === 't14' && ap.acceptance.artifact && ap.acceptance.artifact.title && ap.acceptance.artifact.text.startsWith('草稿，未發送') && aq && aq.taskId === 't14' && aq.teammateId === 'tm-rest' && aq.roleTitle === '訂戶拓展經理' && aq.avatarKind === 'outreach' && aq.activation === true && aq.qaVerdict === 'pass' && aq.qaLine.length <= 40 && aq.artifactTitle === ap.acceptance.artifact.title &&
+  ap.questions[0].id === 'accept' && ap.questions[0].ask === '接受即啟用「訂戶拓展經理」' && J(ap.questions[0].options.map(o => o.text)) === J(['接受', '退回重做', '接受，但我想改方向']));
+const art = readJ('fixtures/demo-shop/roles-artifact.json');
 const run = S.runs.find(r => r.id === 'R-demo-e');
 ok('E4 R3 草稿檔（roles-artifact.json）與驗收包、執行紀錄、產出清單一致；草稿以「草稿，未發送」開頭且判為對外', art.runId === ap.fromRun && art.title === ap.acceptance.artifact.title && art.text === ap.acceptance.artifact.text && run && run.teammateId === 'tm-rest' && run.qa && run.qa.verdict === 'pass' && run.qa.line === aq.qaLine && S.artifacts.some(a => a.runId === 'R-demo-e' && a.title === art.title) && art.text.startsWith('草稿，未發送') && P.isExternal({ type: 'message', text: art.text }).external === true);
-ok('E5 草稿沒有金額、日期承諾、聯絡方式；每條依據可在示範資料找到（陳經理在名單、創辦人行動「向陳經理跟進試單」的下一步）', !/(\$|HK|元|每週\s*\d)/.test(art.text) && !/\d{4}[- ]?\d{4}|@/.test(art.text) && actors.some(a => a.name === '陳經理' && a.org === '餐廳乙') && S.tasks.some(t => t.id === 'f5' && t.next === '問清楚試單日期及數量'));
+ok('E5 草稿沒有金額、日期承諾、聯絡方式；每條依據可在示範資料找到（陳經理在名單、創辦人行動「向陳經理跟進合作推介」的下一步）', !/(\$|HK|元|每週\s*\d)/.test(art.text) && !/\d{4}[- ]?\d{4}|@/.test(art.text) && actors.some(a => a.name === '陳經理' && a.org === '博主乙') && S.tasks.some(t => t.id === 'f5' && t.next === '問清楚合作推介日期及形式'));
 ok('E6 decisions 與 tasks 指向存在的題目包；要主線接入的 demo-seed 產出條目見進度檔', ['d-roles', 'd-activation'].every(id => { const d = S.decisions.find(x => x.id === id); return d && pk(d.packId) && d.status === 'pending'; }) && S.tasks.filter(t => t.packId && String(t.packId).startsWith('ask-demo-')).every(t => pk(t.packId)));
 const walk = (o, out = []) => { if (typeof o === 'string') out.push(o); else if (Array.isArray(o)) o.forEach(x => walk(x, out)); else if (o && typeof o === 'object') for (const k of Object.keys(o)) if (!['id', 'op', 'avatarKind', 'format', 'key', 'kind', 'effect', 'todoType', 'artifactFile', 'qaVerdict', 'teammateId', 'taskId', 'fromRun', 'milestoneId', 'askedAt', 'askedBy', 'apply'].includes(k)) walk(o[k], out); return out; };
 const bad = walk([rp, ap]).filter(s => styleIssues(s).length);

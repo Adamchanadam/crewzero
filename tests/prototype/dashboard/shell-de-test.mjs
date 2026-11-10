@@ -62,7 +62,7 @@ try {
     const nv = await c.ev(navOf);
     const good = nv && nv.groups.length === 3 && nv.groups.map(g => g.name).join('|') === [D.navDo, D.navRun, D.navRef].join('|') && nv.dividers === 2 && !nv.more
       && nv.groups.flatMap(g => g.tabs.map(t => t[0])).join(',') === TABS.join(',') && nv.groups.flatMap(g => g.tabs.map(t => t[1])).join(',') === TABS.map(NAME).join(',')
-      && nv.cur.length === 1 && nv.cur[0] === want && nv.metrics.join(',') === 'quarter,pending,inputs' && nv.mark === '田桌';
+      && nv.cur.length === 1 && nv.cur[0] === want && nv.metrics.join(',') === 'quarter,pending,inputs' && nv.mark === '鮮烘';
     if (!good) navBad.push({ p, want, nv });
   }
   ok('一個殼：十四個畫面（三個頁面檔）都係同一列導航——九個分頁三組（你要做／公司運作／參考）、兩條分隔線、冇「更多」選單、名稱由名稱表、只標一個所屬分頁；頁頭同一個標誌同三個業務指標', !navBad.length, navBad.slice(0, 2));

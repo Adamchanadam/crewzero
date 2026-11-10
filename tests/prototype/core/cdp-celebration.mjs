@@ -50,7 +50,7 @@ try {
   await home(); ok('第一面旗意見提示', await waitFor(() => ev("document.querySelector('#feedback-prompt')?.dataset.prompt")) === 'firstFlag'); await ev("document.querySelector('#feedback-prompt button:last-child').click()"); await home(); ok('意見提示每裝置一次', await ev("!document.querySelector('[data-prompt=firstFlag]')"));
   a = entry(3); seed([a]); await chrome.go(BASE + '/dashboard', 1440, 500); ok('監察台播放', !!await waitFor(stage)); await skip(); await close(); await chrome.go(BASE + '/#/', 1440, 500); ok('已在監察台看過不重播', !await stage() && !await card());
   a = entry(3); seed([a]); await home(); await waitFor(stage); await skip(); await close(); await chrome.go(BASE + '/dashboard', 1440, 500); ok('首頁已看過監察台不重播', !await stage() && !await card());
-  a = entry(2); seed([a]); await home(); await waitFor(card); const body = await ev("document.body.innerText"); ok('頁面文字沒有禁用詞和金額符號', !/勝利|贏|擊敗|經驗值|連擊|[$£€¥￥]/.test(body), body);
+  a = entry(2); seed([a]); await home(); await waitFor(card); const body = await ev("document.body.innerText"); ok('頁面文字沒有禁用詞和金額符號', !/勝利|贏|擊敗|經驗值|連擊|[$£€¥￥]/.test(body.replace(/\$crewzero:[a-z-]+/g, '')), body); /* Codex 指令寫法 $crewzero:discuss 不是金額 */
   // 舊伺服器不提供新檔案：讀不到慶祝程式時，頁面照常顯示、不播慶祝，也不可以當成斷線
   await chrome.send('Network.enable'); await chrome.send('Network.setBlockedURLs', { urls: ['*/celebration.js'] });
   a = entry(3); seed([a]); await home();

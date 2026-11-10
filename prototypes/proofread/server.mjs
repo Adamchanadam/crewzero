@@ -21,7 +21,7 @@ import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolve
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
 import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, pendingFounderOps, readFounderOpsSnapshot, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, readFounderOpsSnapshot, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource, counterpartsOf } from './brain-lib.mjs';
@@ -424,7 +424,7 @@ function rhythmTick() {
   maybeRecertify();
   if (certChild) return;
   if (child || pendingFiles().length || fs.existsSync(path.join(DIR.ledger, 'retry-requested')) || pendingMatches(DIR).length) return;
-  const s = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {};
+  const { state: s, pending } = readFounderOpsSnapshot(DIR);
   if (s.demo === true) return;
   const mark = readJSON(path.join(DIR.ledger, 'schedule.json'), null);
   // 模擬實例沿用原本嘅 5 秒試走；真實資料先必須有創辦人嘅 server 授權。
@@ -432,7 +432,7 @@ function rhythmTick() {
   // 節奏剛由系統頁提交時，先叫外殼合併；唔可以用舊設定喺中間開工。
   // 0.41.0：改節奏檔（setPace）同樣先合併；已套用的檔令排程器逾時跟着改（只更新登記標記，不碰作業系統排程）
   syncMarkLimit(s, mark);
-  if (pendingFounderOps(DIR, s).some(op => op && (op.op === 'setRhythm' || op.op === 'setPace'))) { kick(); return; }
+  if (pending.some(op => op && (op.op === 'setRhythm' || op.op === 'setPace'))) { kick(); return; }
   const rhythm = rhythmOf(s), slot = scheduleEligibility(rhythm, clockNow(), { approvedAt: !SIM ? mark?.approvedAt : '', updatedAt: !SIM ? rhythm.updatedAt : '' }).slot;
   if (!slot) return;
   const day = ymd(slot), recorded = (s.runs || []).some(r => r.trigger === 'schedule' && r.slot === day);
@@ -1342,7 +1342,12 @@ const handler = async (req, res) => {
        if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), aiStale: certStale(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
       if (p === '/api/status') return send(res, 200, statusPayload());
       if (p === '/api/sim' && SIM) return send(res, 200, { ok: true, sim: simInfo() });
-      if (p === '/api/dashboard') { const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), localOnly: pass.kind === 'phone', version: SERVER_VERSION, instance: INSTANCE }); }
+      if (p === '/api/dashboard') {
+        // 待決事項頁輪詢只用交付卡：不觀測、不回其他資料；計法與完整監察台相同
+        if (url.searchParams.get('lite') === '1') return send(res, 200, { ok: true, deliveries: dashboardState(DIR, { cert: certInfo(), sim: simInfo() }).deliveries });
+        const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() });
+        return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), localOnly: pass.kind === 'phone', version: SERVER_VERSION, instance: INSTANCE });
+      }
       // Founder Desk 待決事項頁：「今日要做的事」卡同「上次離開之後」；頁面第一次載入（seen=1）先記低今次時間，輪詢唔算
       // 一個殼嘅頁頭（決定二十五）：公司、三個業務指標、生意大腦等你處理數目；唔觀測、唔寫檔（Founder Desk 畫面每 5 秒讀一次）
       if (p === '/api/shell') { const ds = dashboardState(DIR, { cert: certInfo(), sim: simInfo() }), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() }); return send(res, 200, { ok: true, company: ds.company, metrics: ds.metrics, brain: { items: ((ds.brain || {}).items || []).map(x => ({ id: x.id, status: x.status })) }, tele: ds.tele, freshness: ds.deck && ds.deck.freshness, sample: ds.sample, work, version: SERVER_VERSION, instance: INSTANCE }); }

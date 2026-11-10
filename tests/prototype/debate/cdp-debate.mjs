@@ -49,7 +49,7 @@ try {
       ok('記分牌：站得住腳 1 · 被找到弱點 4 · 被推翻 1，並保留計分規則、攻擊高中特計和既有比率與核實', (await text('#scoreboard')).replace(/\s+/g, '').includes('1站得住腳4被找到弱點1被推翻') && (await text('#scoreboard')).includes('計分：站得住腳計 2 分、被找到弱點計 1 分、被推翻計 0 分。') && /攻擊：高 \d+ · 中 \d+ · 低 \d+/.test(await text('#scoreboard')) && (await text('#scoreboard')).includes('50%') && (await text('#scoreboard')).includes('67%') && (await count('#scoreboard .evbar i')) === 2 && (await text('#scoreboard')).includes('✓ 1'), await text('#scoreboard'));
       ok('裁判總評', (await text('#scoreboard')).includes('裁判總評'));
       ok('四個關鍵時刻（一擊倒下、最傷、反轉、遺漏的路線）', (await ev(`[...document.querySelectorAll('#key-moments .km .km-k')].map(x=>x.innerText).join()`)) === '一擊倒下,最傷,反轉,遺漏的路線');
-      ok('盲攻有顯示：舞台逐條列出', (await count('#blind-attacks li')) === 2 && (await text('#blind-attacks')).includes('藍方沒提的事') && (await text('#blind-attacks')).includes('如果雨天兩個農場同時減產') && (await text('#blind-attacks')).includes('小量訂單的採購及送貨成本'));
+      ok('盲攻有顯示：舞台逐條列出', (await count('#blind-attacks li')) === 2 && (await text('#blind-attacks')).includes('藍方沒提的事') && (await text('#blind-attacks')).includes('如果兩間工房同時生豆缺貨') && (await text('#blind-attacks')).includes('小批次烘焙、包裝及寄貨成本'));
       // 論點預設一次展開一條；撳「全部展開」先數得齊攻擊、反駁
       await click('#wg-all');
       ok('對攻列：六條論點、九條攻擊、三條反駁、六個印章', (await count('#wargame .claim')) === 6 && (await count('#wargame .wc.blue')) === 6 && (await count('#wargame .atk')) === 9 && (await count('#wargame .reb')) === 3 && (await count('#wargame .c-sum .stamp')) === 6,
@@ -115,9 +115,11 @@ try {
       await ev(`[...document.querySelectorAll('#b-wargame details.aich')].forEach(d => d.open = true)`); await S('s03-strengthen', '#tcards', { height: 4600 });
     }
   }
-  /* ---------- Founder Desk：首頁卡、開一場 ---------- */
+  /* ---------- Founder Desk：頁腳入口、開一場 ---------- */
   await go(BASE + '/', 1440, 1800);
-  ok('首頁有紅藍對打卡（最新一場、開一場辯論）', await waitFor(() => ev(`!!document.querySelector('#debate-card #hub-debate-match')`), 5000) && await has('#hub-debate-new'));
+  ok('首頁頁腳有紅藍對打入口，舊首頁卡已移除', await waitFor(() => ev(`(()=>{const a=document.querySelector('#foot-debate');return !!a&&a.getAttribute('href')==='#/debate'&&!document.querySelector('#debate-card')})()`), 5000));
+  await go(BASE + '/#/debate', 1440, 1800);
+  ok('紅藍對打頁有「開一場辯論」入口', await has('#debate-new') && (await text('#debate-new')) === N.ui.debateNew, await text('#debate-list'));
   await go(BASE + '/#/debate/new', 1440, 1800);
   ok('開一場：六種題目、預設五席、力度三級、回合同預計', (await count('#dt-types .chip')) === 6 && (await count('#dt-seats [data-seat]')) === 5 && (await count('#dt-levels .chip')) === 3 && (await text('#debate-form')).includes('約 7 次 Zero 處理'));
   await S('f01-new', '#debate-form');

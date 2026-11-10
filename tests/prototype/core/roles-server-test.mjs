@@ -381,6 +381,37 @@ const tickC = attempt('2 計時器（舊資料沒有 pace、待套用 setRhythm�
 });
 
 /* =====================================================================
+   7 首頁輕量端點：只交付卡、不觀測，仍受同一通行證保護
+   ===================================================================== */
+await attempt('7 首頁輕量交付端點', async () => {
+  const data = mkData(path.join(OUT, 'lite'));
+  oldInstall(data, PROTO);
+  const page = J(path.join(data, 'company', 'page.json'));
+  const at = new Date().toISOString(), day = localDay(), observedInput = path.join(data, 'fake-observe-input.json');
+  W(path.join(data, 'ledger', 'state.json'), {
+    schemaVersion: 1, ledgerFrom: page.page.id, intake: { state: 'complete', confirmedAt: at },
+    company: { name: '輕量測試公司', rhythm: { runCadence: 'daily', runTime: '21:00', interviewWeekday: 1, pace: 'standard' } },
+    observe: { folders: [{ hash: 'a'.repeat(64), name: '測試觀測資料夾' }] },
+    milestones: [{ id: 'm-lite', short: '首輪合作' }], teammates: [{ id: 'tm-lite', title: '餐廳拓展經理', lifecycle: 'enabled' }],
+    tasks: [{ id: 'task-lite', title: '跟進餐廳', artifactTitle: '餐廳交付', status: 'done', milestoneId: 'm-lite', teammateId: 'tm-lite', packId: 'ask-lite' }],
+    runs: [{ id: 'R-lite', startedAt: at, endedAt: at, workDay: day, state: 'ended', ending: 'artifact', aiStarted: true, items: [{ taskId: 'task-lite', teammateId: 'tm-lite', ending: 'artifact', endedAt: at, qa: { audience: 'external', verdict: 'pass', line: '核對無誤' } }] }], events: []
+  });
+  W(path.join(data, 'asks', 'ask-lite.json'), { id: 'ask-lite', title: '驗收餐廳交付', askedAt: at, todoType: 'acceptance', questions: [{ id: 'q1', ask: '接受交付？', options: [{ text: '接受' }] }] });
+  W(path.join(data, 'fake-observe.json'), { sessions: [] });
+  const S = startServer(data, PORT + 4, { SOS_OBSERVER: path.join(HERE, '..', 'dashboard', 'fake-observe.mjs') });
+  ok('7 輕量端點測試伺服器起得來', await healthy(S.base), S.log.text.slice(0, 400));
+  await usePass(S.base);
+  const liteResponse = await fetch(S.base + '/api/dashboard?lite=1'), lite = await liteResponse.json();
+  ok('7 lite 只回 ok 與 deliveries，且不觸發觀測程序', liteResponse.status === 200 && JSON.stringify(Object.keys(lite).sort()) === JSON.stringify(['deliveries', 'ok']) && !fs.existsSync(observedInput), { status: liteResponse.status, keys: Object.keys(lite), observed: fs.existsSync(observedInput) });
+  const fullResponse = await fetch(S.base + '/api/dashboard'), full = await fullResponse.json();
+  ok('7 有崗位交付時 lite 與完整監察台的 deliveries 深度相同；完整端點仍會觀測', fullResponse.status === 200 && JSON.stringify(lite.deliveries) === JSON.stringify(full.deliveries) && fs.existsSync(observedInput), { same: JSON.stringify(lite.deliveries) === JSON.stringify(full.deliveries), observed: fs.existsSync(observedInput) });
+  forgetPass(S.base);
+  const denied = await fetch(S.base + '/api/dashboard?lite=1');
+  ok('7 未配對時 lite 與完整端點同樣拒絕', denied.status === 403);
+  await stop(S);
+});
+
+/* =====================================================================
    5b 伺服器開機：轉換途中重啟留下的附件
    ===================================================================== */
 await attempt('5 伺服器開機歸位', async () => {
@@ -462,6 +493,17 @@ await attempt('6 隊列讀取次序', async () => {
   // 批次檔與隊列檔內相同 id 只算一次；未知形狀的內容略過
   reset(); fs.writeFileSync(path.join(led, '.founder-ops-1-' + Date.now() + '.json'), JSON.stringify([pauseOp, 5, null]));
   ok('6 同一操作 id 在隊列檔與批次檔各出現一次只算一次', dl.readFounderOpsSnapshot(DIRX).pending.length === 1);
+  // 排程器也必須用同一快照：隊列先讀後外殼即完成合併時，新次序可見「已套用」；舊次序同時看不到舊 state 與隊列，會漏掉剛提交的節奏操作。
+  for (const op of [{ id: 'fo-pace', at: '2026-11-08T10:00:00+08:00', op: 'setPace', target: 'company', value: { pace: 'fast' } }, { id: 'fo-rhythm', at: '2026-11-08T10:00:00+08:00', op: 'setRhythm', target: 'company', value: { runCadence: 'daily', runTime: '21:00', interviewWeekday: 1 } }]) {
+    fs.rmSync(root, { recursive: true, force: true }); fs.mkdirSync(led, { recursive: true }); W(STATE, { founderOpsDone: [], health: {} }); W(Q, [op]);
+    let reads = 0;
+    const fresh = withHook(() => { if (!reads++) { const staged = shellRename(); shellApply(staged); shellDelete(staged); } }, () => dl.readFounderOpsSnapshot(DIRX));
+    fs.rmSync(root, { recursive: true, force: true }); fs.mkdirSync(led, { recursive: true }); W(STATE, { founderOpsDone: [], health: {} }); W(Q, [op]);
+    const staleState = J(STATE); { const staged = shellRename(); shellApply(staged); shellDelete(staged); }
+    const oldMisses = !staleState.founderOpsDone.includes(op.id) && !dl.pendingFounderOps(DIRX, staleState).some(item => item && item.id === op.id);
+    const freshSees = fresh.state.founderOpsDone.includes(op.id) || fresh.pending.some(item => item && item.id === op.id);
+    ok(`6 排程讀取次序：${op.op} 在確定性交錯下不會漏掉；舊次序會漏`, reads === 1 && freshSees && oldMisses, { reads, freshDone: fresh.state.founderOpsDone, freshPending: fresh.pending.map(item => item.id), oldMisses });
+  }
   fs.rmSync(root, { recursive: true, force: true });
 });
 

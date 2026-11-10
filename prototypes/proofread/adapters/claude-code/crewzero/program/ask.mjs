@@ -32,7 +32,7 @@ if (si >= 0) {
   process.env.SOS_SIM = '1'; process.env.SOS_DATA = path.join(inst, 'data');
   if (fs.existsSync(fake)) process.env.SOS_ADAPTER = fake;
 }
-// 示範（虛構公司「從田間到餐桌」）：用另一個資料夾，唔會郁真實資料；未有就建
+// 示範（虛構公司「月月鮮烘」）：用另一個資料夾，唔會郁真實資料；未有就建
 if (args.includes('--demo')) process.env.SOS_DATA = DEMO_DIR;
 const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF });
 if (STATUS_ONLY) {

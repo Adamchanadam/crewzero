@@ -44,7 +44,7 @@ try {
   ok('示範：六項都有', d.brain.source.kind === 'demo' && d.brain.items.length === 6 && d.brain.items.map(x => x.name).join() === '生意體檢,紅藍對打,情景演練,商機掃描,路線推演,對象推進追蹤');
   ok('四種狀態都出現：已完成、AI 進行中、等你處理、未開始', ['done', 'running', 'waiting', 'not_started'].every(s => d.brain.items.some(x => x.status === s)), d.brain.items.map(x => x.id + ':' + x.status));
   ok('紅藍對打：開頭只有藍隊（推進 6／19）', item(d, 'wargame').detail.stage === 1 && item(d, 'wargame').progress.done === 6 && item(d, 'wargame').progress.total === 19, item(d, 'wargame').progress);
-  ok('情景演練等你：深連 CrewZero 練習，兩個對象', item(d, 'scenario').waitHref === '/#/practice/farm-c' && item(d, 'scenario').practice.length === 2);
+  ok('情景演練等你：深連 CrewZero 練習，兩個對象', item(d, 'scenario').waitHref === '/#/practice/roaster-c' && item(d, 'scenario').practice.length === 2);
   ok('生意體檢：三個弱位都有證據級、最平測試、停止條件、來源', item(d, 'checkup').detail.weak.length === 3 && item(d, 'checkup').detail.weak.every(w => w.evidence >= 0 && w.cheapestTest && w.stop && w.source));
   ok('客戶推進：七個對象（名單）、演練另外標明', item(d, 'pipeline').detail.prospects.length === 7 && item(d, 'pipeline').detail.prospects.some(p => p.rehearsal));
   // 推進（真時間）：紅隊攻擊逐條出現
@@ -84,17 +84,17 @@ try {
   ok('卡名唔啱唔收', (await A.post('/api/intake', { kind: 'note', type: 'feedback', item: 'bogus', cardId: 'weak-2', verdict: 'useful' })).code === 400);
   ok('本機以外來源唔收', (await A.post('/api/intake', { kind: 'note', type: 'feedback', item: 'checkup', cardId: 'weak-2', verdict: 'useful' }, 'http://evil.example')).code === 403);
   // 要修改：AI 按意見改，卡上出「修改版」
-  const f2 = await A.post('/api/intake', { kind: 'note', type: 'feedback', item: 'checkup', cardId: 'weak-2', verdict: 'revise', text: '加埋請兼職司機嘅成本' });
+  const f2 = await A.post('/api/intake', { kind: 'note', type: 'feedback', item: 'checkup', cardId: 'weak-2', verdict: 'revise', text: '加埋請兼職包裝人手嘅成本' });
   const r2 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === f2.j.id); return r && (r.state === 'done' || r.state === 'failed') ? r : null; });
   const sbTask = r2 && fs.readFileSync(path.join(DEMO, 'sandbox', r2.id, 'card.md'), 'utf8');
-  ok('要修改：卡內容同意見交到 AI', sbTask && sbTask.includes('一人送貨能否應付') && fs.readFileSync(path.join(DEMO, 'sandbox', r2.id, 'note.md'), 'utf8').includes('兼職司機'));
+  ok('要修改：卡內容同意見交到 AI', sbTask && sbTask.includes('一人包裝寄貨能否應付') && fs.readFileSync(path.join(DEMO, 'sandbox', r2.id, 'note.md'), 'utf8').includes('兼職包裝人手'));
   d = await A.get('/api/dashboard');
   const rev = d.brain.feedback['weak-2'].revision;
   ok('要修改：AI 改好，卡上有修改版', r2 && r2.state === 'done' && rev && rev.state === 'done' && rev.runId, rev);
-  ok('修改版打得開', (await A.get('/api/run?id=' + rev.runId)).run.artifacts[0].text.includes('兼職司機'));
+  ok('修改版打得開', (await A.get('/api/run?id=' + rev.runId)).run.artifacts[0].text.includes('兼職包裝人手'));
   // 情景演練：練完有覆盤就算完成（詳細喺情景演練測試）
-  const ps = (await A.post('/api/practice', { action: 'start', scenarioId: 'farm-c', level: 'normal' })).j.session;
-  await A.post('/api/practice', { action: 'say', sessionId: ps.id, text: '丙生，批發商幾耐俾錢？' });
+  const ps = (await A.post('/api/practice', { action: 'start', scenarioId: 'roaster-c', level: 'normal' })).j.session;
+  await A.post('/api/practice', { action: 'say', sessionId: ps.id, text: '丙生，咖啡店幾耐俾錢？' });
   await A.post('/api/practice', { action: 'end', sessionId: ps.id });
   d = await A.get('/api/dashboard');
   ok('情景演練：練完有覆盤，狀態變已完成', item(d, 'scenario').status === 'done' && item(d, 'scenario').lastPractice, item(d, 'scenario'));

@@ -129,6 +129,12 @@ await attempt('A4', async () => {
   W.rhythm(); const run = W.lastRun();
   ok('A4 衝刺：可以做的做完 → nothingToDo，不為湊數多開 AI（Z40）', itemsOf(run).length === 3 && run.stopReason === 'nothingToDo' && W.callTypes().length === 3, { stop: run.stopReason, calls: W.callTypes() });
 });
+await attempt('A4b', async () => {
+  const W = await world('a4b-free-brief', { mutate: s => { s.tasks = []; } });
+  W.rhythm();
+  const call = W.calls().find(c => c.type === 'rhythm');
+  ok('A4b 沒有工作可做的第一件，同樣附八段工作說明（覆核建議 1）', !!call && ['一、目標', '二、範圍與排除', '三、必要來源位置', '四、輸入與進度', '五、權限', '六、第一步', '七、交付與驗收', '八、停止及回報條件'].every(h => call.task.includes('## ' + h)), call && call.task.slice(0, 500));
+});
 await attempt('A5', async () => {
   const W = await world('a5-waiting', { mutate: s => { s.tasks = msTasks(1).concat([aiTask('tw', '等你決定的工作', { status: 'waiting', waitingFor: '等你決定', milestoneId: 'm2' })]); setRhythm(s, SPRINT); } });
   plantPack(W, 'ask-test-open');
@@ -143,14 +149,34 @@ await attempt('A6', async () => {
   ok('A6 同日不重做卡住的件；第二件照做', s.tasks.find(t => t.id === 't2').status === 'done' && W.callTypes().length === 2, W.callTypes());
   W.rhythm();
   ok('A6 同日再開工：卡住的件不派、無事可做不開 AI', W.callTypes().length === 2 && W.lastRun().ending === 'checked', { calls: W.callTypes(), run: W.lastRun() });
-  plantPack(W, 'ask-test-rel'); W.answer({ id: 'ask-test-rel' }, q => q.value);
+  plantPack(W, 'ask-test-rel', { pack: { milestoneId: 'm1' } }); W.answer({ id: 'ask-test-rel' }, q => q.value);
   s = W.state();
-  ok('A6 創辦人輸入到達：blockedOn 解除（releaseBlocked）', !s.tasks.find(t => t.id === 't1').blockedOn, s.tasks.find(t => t.id === 't1'));
+  ok('A6 與該站有關的創辦人輸入到達：blockedOn 解除（releaseBlocked）', !s.tasks.find(t => t.id === 't1').blockedOn, s.tasks.find(t => t.id === 't1'));
   W.rhythm();
   ok('A6 解除後同日可再做那一件', W.callTypes().filter(t => t === 'rhythm').length === 3 && W.state().tasks.find(t => t.id === 't1').status === 'done', W.callTypes());
   const W2 = await world('a6b-nextday', { mutate: s2 => { s2.tasks = msTasks(1); s2.tasks[0].blockedOn = ymd(-1); s2.tasks[0].waitingFor = '舊事'; } });
   W2.rhythm();
   ok('A6 昨日卡住的件，今日自動可再做（Z53）', W2.state().tasks[0].status === 'done', W2.state().tasks[0]);
+});
+await attempt('A6b', async () => {
+  const blocked = s => { s.tasks = [aiTask('t1', '農場甲報價', { milestoneId: 'm1', blockedOn: TODAY }), aiTask('t2', '餐廳乙試單', { milestoneId: 'm2', blockedOn: TODAY })]; };
+  const W = await world('a6b-related-input', { mutate: blocked });
+  plantPack(W, 'ask-test-m1', { pack: { milestoneId: 'm1' } }); W.answer({ id: 'ask-test-m1' }, q => q.value);
+  let s = W.state();
+  ok('A6b 相關站的答案只解除該站卡住工作，不相關站維持卡住（覆核建議 2）', !s.tasks.find(t => t.id === 't1').blockedOn && s.tasks.find(t => t.id === 't2').blockedOn === TODAY, s.tasks);
+  const W2 = await world('a6b-fromrun-input', { mutate: s2 => { blocked(s2); s2.runs = [{ id: 'R-source', items: [{ taskId: 't1' }] }]; } });
+  plantPack(W2, 'ask-test-fromrun', { pack: { fromRun: 'R-source' } }); W2.answer({ id: 'ask-test-fromrun' }, q => q.value);
+  s = W2.state();
+  ok('A6b 問題包沒有站但可由來源工作得出時，只解除來源工作所在站', !s.tasks.find(t => t.id === 't1').blockedOn && s.tasks.find(t => t.id === 't2').blockedOn === TODAY, s.tasks);
+  const W3 = await world('a6b-no-station', { mutate: blocked });
+  plantPack(W3, 'ask-test-no-station'); W3.answer({ id: 'ask-test-no-station' }, q => q.value);
+  s = W3.state();
+  ok('A6b 只有題包答案而與任何站無關時，一件都不解除（覆核重現 r5）', ['t1', 't2'].every(id => s.tasks.find(t => t.id === id).blockedOn === TODAY), s.tasks.filter(t => ['t1', 't2'].includes(t.id)));
+  const W4 = await world('a6b-note-input', { mutate: blocked });
+  fs.mkdirSync(W4.DIR.inbox, { recursive: true });
+  fs.writeFileSync(path.join(W4.DIR.inbox, 'R20261109-100000-1-note-event.md'), 'kind: note\ntype: event\nref: R20261109-100000-1\n\n收到供應商回覆\n');
+  W4.shell(); s = W4.state();
+  ok('A6b 不經題包的輸入（筆記）可能與任何工作有關，解除全部卡住工作', ['t1', 't2'].every(id => !s.tasks.find(t => t.id === id).blockedOn), s.tasks.filter(t => ['t1', 't2'].includes(t.id)));
 });
 await attempt('A7', async () => {
   let W = await world('a7-fuse40', { mutate: s => { s.tasks = msTasks(2); } });
@@ -229,12 +255,12 @@ await attempt('B1', async () => {
   const s = W.state(), ps = rolePacks(W);
   ok('B1 概覽已確認、此版未擬過 → 日常工作先擬崗位（Z1；次序：擬崗位在日常工作之前）', W.callTypes()[0] === 'roles' && W.callTypes().includes('rhythm') && W.callTypes().indexOf('roles') < W.callTypes().indexOf('rhythm'), W.callTypes());
   const roleCall = W.calls().find(c => c.type === 'roles');
-  ok('B1 擬崗位工作說明沿用 ai-roles.md；材料 roles-input.json 由外殼備好', /擬 Zero 團隊的崗位卡/.test(roleCall.task) && fs.existsSync(path.join(W.DATA, 'sandbox', roleCall.sandbox, 'roles-input.json')), roleCall.sandbox);
+  ok('B1 擬崗位工作說明有八段，第三段列 ai-roles.md；材料 roles-input.json 由外殼備好', ['一、目標', '二、範圍與排除', '三、必要來源位置', '四、輸入與進度', '五、權限', '六、第一步', '七、交付與驗收', '八、停止及回報條件'].every(h => roleCall.task.includes('## ' + h)) && roleCall.task.includes('ai-roles.md') && fs.existsSync(path.join(W.DATA, 'sandbox', roleCall.sandbox, 'roles-input.json')) && fs.existsSync(path.join(W.DATA, 'sandbox', roleCall.sandbox, 'ai-roles.md')), roleCall.sandbox);
   ok('B1 出一包確認題：最多 3 題、第 4 張留擱置；followAll、rolesSync（Z3）', ps.length === 1 && ps[0].questions.length === 3 && ps[0].followAll === true && ps[0].todoType === 'decision' && (s.rolesSync.pending || []).length === 1 && s.rolesSync.packId === ps[0].id, { n: ps.length, qs: ps[0] && ps[0].questions.length, pending: (s.rolesSync || {}).pending });
   const q = ps[0].questions[0];
   ok('B1 每條角色題都有契約欄位的題層 q.roleCard（id、title、avatarKind、mission、stations、supports、askFirst、activation）', ps[0].questions.every(cardKeys), ps[0].questions.map(x => Object.keys(x.roleCard || {})));
   ok('B1 每題三個選項（由 Zero 承擔／改名／不要這個崗位），建議預選；改名帶 input、題帶 inputHint（Z3）', q.options.map(o => o.text).join('|') === [N.t('role_optAccept'), N.t('role_optRename'), N.t('role_optDecline')].join('|') && q.options[0].rec === true && q.options[1].input === true && !!q.inputHint && q.value === q.options[0].text && ['roleAccept', 'roleRename', 'roleDecline'].join() === q.options.map(o => o.apply.op).join() && q.options.every(o => o.apply.card && o.apply.card.title), q);
-  ok('B1 題的 roleCard：稱號、頭像類別、使命、站名、支援、先問、啟用任務（可直接顯示的字串）', q.roleCard && q.roleCard.title === '社區拓展經理' && q.roleCard.avatarKind && q.roleCard.mission && q.roleCard.stations.length === 1 && q.roleCard.stations[0] === '農場簽約' && Array.isArray(q.roleCard.supports) && q.roleCard.askFirst.length > 0 && /問題清單/.test(q.roleCard.activation), q.roleCard);
+  ok('B1 題的 roleCard：稱號、頭像類別、使命、站名、支援、先問、啟用任務（可直接顯示的字串）', q.roleCard && q.roleCard.title === '社區拓展經理' && q.roleCard.avatarKind && q.roleCard.mission && q.roleCard.stations.length === 1 && q.roleCard.stations[0] === '工房簽約' && Array.isArray(q.roleCard.supports) && q.roleCard.askFirst.length > 0 && /問題清單/.test(q.roleCard.activation), q.roleCard);
   ok('B1 確認題的題目是任務一句，不重複使命句（崗位卡已顯示使命）', ps[0].questions.every(x => x.ask === '這個崗位由 Zero 承擔？' && !x.ask.includes(x.roleCard.mission)), ps[0].questions.map(x => x.ask));
   ok('B1 畫面文字零內部術語、零編號', !styleHits(shownOf(ps[0])).length, styleHits(shownOf(ps[0])));
   ok('B1 狀態：for、at、unassigned（餘下站由統籌承擔）、stationsAt；確認前不寫 teammates（Z2）', s.rolesSync.for === R.rolesKey(s) && s.rolesSync.unassigned.length === 1 && s.rolesSync.unassigned[0].milestoneId === 'm5' && s.rolesSync.stationsAt.length === 5 && !(s.teammates || []).length, s.rolesSync);
@@ -249,7 +275,7 @@ await attempt('B2', async () => {
   ok('B2 核對不合格（稱號用了「伙伴」）→ 退回修正一次，修正後收卡（Z2）', W.callTypes().slice(0, 2).join() === 'roles,roles-repair' && (W.state().rolesSync.pending || []).length + (rolePacks(W)[0] ? rolePacks(W)[0].questions.length : 0) === 2, { calls: W.callTypes(), rs: W.state().rolesSync });
   const rep = W.calls().find(c => c.type === 'roles-repair');
   ok('B2 修正說明列出問題原因', /伙伴/.test(rep.task), rep.task.slice(0, 200));
-  ok('B2 修正說明是正式書面語（不含粵語助詞）', /今次的工作/.test(rep.task) && !/嘅|啱|唔|喺|嚟/.test(rep.task.slice(rep.task.indexOf('# 今次的工作'), rep.task.indexOf('只可以寫入'))), rep.task.slice(0, 300));
+  ok('B2 修正說明同樣有八段，並以正式書面語列出修正要求', ['一、目標', '二、範圍與排除', '三、必要來源位置', '四、輸入與進度', '五、權限', '六、第一步', '七、交付與驗收', '八、停止及回報條件'].every(h => rep.task.includes('## ' + h)) && !/嘅|啱|唔|喺|嚟/.test(rep.task.replace(/^> 本次[^\n]*\n/gm, '').split('## 寫給創辦人看的文字')[0]), rep.task.slice(0, 500));
   const W2 = await world('b2b-nofix', { roles: true });
   W2.plan({ roles: [{ raw: 'not json' }], 'roles-repair': [{ raw: 'still not json' }] });
   W2.rhythm();
@@ -304,7 +330,7 @@ await attempt('B6', async () => {
   const id1 = R.nextCardId(P1.id, 'q1'), id2 = R.nextCardId(P1.id, 'q2');
   W.rhythm();
   const rc = W.calls().filter(c => c.type === 'rhythm');
-  ok('B6 待啟用卡的啟用任務由該崗位做（派工 teammateId）；工作說明寫明崗位稱號（Z23、Z24）', rc.some(c => c.teammateId === id1 && c.taskId === 'act-' + id1 && /社區拓展經理/.test(c.task) && /準備農場簽約的問題清單/.test(c.task)), rc.map(c => [c.teammateId, c.taskId]));
+  ok('B6 待啟用卡的啟用任務由該崗位做（派工 teammateId）；工作說明寫明崗位稱號（Z23、Z24）', rc.some(c => c.teammateId === id1 && c.taskId === 'act-' + id1 && /社區拓展經理/.test(c.task) && /準備工房簽約的問題清單/.test(c.task)), rc.map(c => [c.teammateId, c.taskId]));
   let s = W.state();
   const accOf = id => W.packOf(p => p.acceptance && p.acceptance.teammateId === id)[0];
   const acc = accOf(id1);
@@ -386,10 +412,10 @@ await attempt('B10', async () => {
   let W = await world('b10-planned', { mutate: s => { s.teammates = [mkCard({ id: 'tm-p', lifecycle: 'planned', activation: undefined, activationTaskId: 'act-p' })]; s.tasks = [aiTask('t1', '一般工作', { milestoneId: 'm1' })]; } });
   W.rhythm();
   ok('B10 待啟用的崗位：非啟用任務改派統籌（J8、Z23）', W.calls().find(c => c.type === 'rhythm').teammateId === '', W.calls().filter(c => c.type === 'rhythm').map(c => c.teammateId));
-  W = await world('b10-brief', { mutate: s => { s.tasks = msTasks(3, 'm1'); setRhythm(s, { pace: 'fast' }); s.tasks.forEach(t => { t.next = '做法同上。'; }); } });
+  W = await world('b10-brief', { mutate: s => { s.teammates = [mkCard({ id: 'tm-b', title: '照舊推廣專員', name: '照舊推廣專員' })]; s.tasks = msTasks(3, 'm1'); setRhythm(s, { pace: 'fast' }); } });
   W.rhythm();
   const rc = W.calls().filter(c => c.type === 'rhythm');
-  ok('B10 工作說明核對不合格（含禁用字眼「同上」）→ 改用通用說明，不出八段（Z25、Z26）', rc.length >= 1 && !/## 一、目標/.test(rc[0].task) && /做外殼交給你的這一件日常工作/.test(rc[0].task), rc[0] && rc[0].task.slice(0, 100));
+  ok('B10 工作說明核對不合格（崗位名稱含禁用字眼「照舊」，崗位名稱不包引號）→ 改用通用說明，不出八段（Z25、Z26）', rc.length >= 1 && !/## 一、目標/.test(rc[0].task) && /做外殼交給你的這一件日常工作/.test(rc[0].task), rc[0] && rc[0].task.slice(0, 100));
   ok('B10 多件日連續兩件說明不合格 → 停當日（briefFailed）（Z26）', itemsOf(W.lastRun()).length === 2 && W.lastRun().stopReason === 'briefFailed', { n: itemsOf(W.lastRun()).length, stop: W.lastRun().stopReason });
 });
 
@@ -520,6 +546,25 @@ await attempt('D1', async () => {
   ok('D1 再讀回路線取新站編號，新卡指向該站、附啟用任務（待啟用）（Z16）', card && card.milestoneIds.join() === nm.id && card.lifecycle === 'planned' && s.tasks.some(t => t.id === card.activationTaskId && t.milestoneId === nm.id), card);
   ok('D1 回饋寫出已更新路線；加站事件', s.events.some(e => /送貨安排/.test(e.title)));
 });
+await attempt('D1b', async () => {
+  const W = await world('d1b-route-changed', { mutate: s => { s.teammates = [mkCard({ id: 'tm-x' })]; s.tasks = []; s.rolesSync = { for: R.rolesKey(s), requested: true, wantRole: { kind: 'add', text: '加一個崗位負責送貨' } }; } });
+  W.plan({ roles: [{ roles: stationRole() }] }); W.rhythm();
+  const pk = W.packOf(p => p.rolesSync && p.rolesSync.kind === 'addRole')[0];
+  // 模擬出題後路線已變：題包內記下的路線少了一站（與現時路線不一致）
+  const pf = path.join(W.DIR.asks, pk.id + '.json'), stale = JSON.parse(fs.readFileSync(pf, 'utf8'));
+  for (const q of stale.questions) for (const o of q.options || []) if (o.apply && Array.isArray(o.apply.order)) o.apply.order = o.apply.order.filter(x => x !== 'm1');
+  fs.writeFileSync(pf, JSON.stringify(stale, null, 2));
+  const routeBefore = W.state().milestones.filter(m => m.pathStatus === 'confirmed').length;
+  W.answer(pk, q => q.options[0].text);
+  W.rhythm();
+  const next = W.packOf(p => p.rolesSync && p.rolesSync.kind === 'addRole' && p.id !== pk.id);
+  const s = W.state();
+  // 獨立驗收必修 2：重問的題按目前路線重建次序，再答「接受」就能落實，不會反覆退回
+  if (next[0]) W.answer(next[0], q => q.options[0].text);
+  const s3 = W.state();
+  ok('D1b 重問後再答接受：加站及加崗位成功落實，路線多一站，沒有再次退回', !!next[0] && (s3.teammates || []).some(t => t.title === '物流配送專員') && s3.milestones.filter(m => m.pathStatus === 'confirmed').length === routeBefore + 1 && s3.events.filter(e => e.title === N.t('role_routeChangedAskAgain')).length === 1, { teammates: (s3.teammates || []).map(t => t.title), route: s3.milestones.filter(m => m.pathStatus === 'confirmed').length, routeBefore });
+  ok('D1b 出題後路線已有變動：崗位卡放回待處理、再出同類確認題，並記錄會再問一次（覆核建議 5）', next.length === 1 && s.events.some(e => e.title === N.t('role_routeChangedAskAgain')) && !(s.teammates || []).some(t => t.title === '物流配送專員'), { next: next.map(p => p.id), pending: (s.rolesSync || {}).pending, events: s.events.slice(-3) });
+});
 await attempt('D2', async () => {
   const W = await world('d2-stationno', { mutate: s => { s.teammates = [mkCard({ id: 'tm-x' })]; s.tasks = []; s.rolesSync = { for: R.rolesKey(s), requested: true, wantRole: { kind: 'add', text: '加一個崗位負責送貨' } }; } });
   W.plan({ roles: [{ roles: stationRole() }] }); W.rhythm();
@@ -572,7 +617,7 @@ await attempt('D6', async () => {
   ok('D6 前提：14 日內 3 件由統籌完成、站無崗位、對象相同 → 有訊號', R.suggestSignals(W.state(), { today: TODAY }).length === 1);
   W.plan({ roles: [{ roles: { summary: 'x', unassigned: [], cards: [{ title: '餐廳跟進主任', mission: '跟進餐廳。', milestoneIds: ['m2'], supports: [], targets: ['customer'], how: ['跟進'], strategy: '一直由統籌做，值得設崗位。', sources: [], deliverables: ['message'], knowledge: [], bounds: { tellAfter: [], askFirst: [] }, activation: { title: '餐廳跟進訊息', deliverable: '一份訊息草稿', milestoneId: 'm2' } }] } }] });
   W.rhythm(); const s = W.state(), pk = W.packOf(p => p.rolesSync)[0];
-  ok('D6 Zero 主動建議（Z18）：suggest 模式擬一張卡、suggestedFor 記今日、題目問句用「Zero 建議加一個崗位…」', W.calls().some(c => c.type === 'roles' && c.mode === 'suggest') && s.rolesSync.suggestedFor['kind:餐廳'] === TODAY && pk && pk.questions.length === 1 && pk.questions[0].ask === N.t('role_suggestAsk', { t: '餐廳跟進主任', s: '餐廳試單' }), { ask: pk && pk.questions[0].ask, sf: s.rolesSync.suggestedFor });
+  ok('D6 Zero 主動建議（Z18）：suggest 模式擬一張卡、suggestedFor 記今日、題目問句用「Zero 建議加一個崗位…」', W.calls().some(c => c.type === 'roles' && c.mode === 'suggest') && s.rolesSync.suggestedFor['kind:餐廳'] === TODAY && pk && pk.questions.length === 1 && pk.questions[0].ask === N.t('role_suggestAsk', { t: '餐廳跟進主任', s: '訂戶試訂' }), { ask: pk && pk.questions[0].ask, sf: s.rolesSync.suggestedFor });
   W.answer(pk, q => N.t('role_optDecline'));
   W.rhythm();
   ok('D6 答「不要」→ 記 declined，同一訊號不再建議（Z18）', W.callTypes().filter(t => t === 'roles').length === 1 && Object.keys(W.state().rolesSync.declined).some(k => k.startsWith('title:')), W.callTypes());
@@ -705,15 +750,15 @@ await attempt('G2', async () => {
   W.rhythm();
   const c = W.calls().find(x => x.type === 'rhythm'), ledger = fs.readFileSync(path.join(W.DATA, 'sandbox', c.sandbox, 'ledger.json'), 'utf8');
   ok('G2 退回原因含「同上」：八段說明仍用，原因在說明內（覆核 M1）', /## 一、目標/.test(c.task) && c.task.includes('三十八元') && !W.lastRun().warnings, { eight: /## 一、目標/.test(c.task), warnings: W.lastRun().warnings });
-  const W2 = await world('g2b-fallback-keeps-reason', { mutate: s => { s.tasks = [aiTask('t1', '照舊報價', { status: 'active', returnNote: '價錢要改為每公斤三十八元' })]; } });
+  const W2 = await world('g2b-fallback-keeps-reason', { mutate: s => { s.teammates = [mkCard({ id: 'tm-b', title: '照舊推廣專員', name: '照舊推廣專員' })]; s.tasks = [aiTask('t1', '照舊報價', { status: 'active', returnNote: '價錢要改為每公斤三十八元', teammateId: 'tm-b' })]; } });
   W2.rhythm();
   const c2 = W2.calls().find(x => x.type === 'rhythm');
   ok('G2 外殼自己的句子不合格 → 改用通用說明，但退回原因照樣交給 AI（覆核 M1）', !/## 一、目標/.test(c2.task) && c2.task.includes('三十八元') && c2.task.includes('必須處理的意見'), c2.task.slice(-300));
-  const W3 = await world('g2c-rewrite-fallback', { mutate: s => { s.teammates = [mkCard({ id: 'tm-x' })]; s.tasks = [aiTask('t1', '照舊跟進訊息', { teammateId: 'tm-x' })]; } });
+  const W3 = await world('g2c-rewrite-fallback', { mutate: s => { s.teammates = [mkCard({ id: 'tm-x', title: '照舊推廣專員', name: '照舊推廣專員' })]; s.tasks = [aiTask('t1', '照舊跟進訊息', { teammateId: 'tm-x' })]; } });
   W3.plan({ rhythm: [{ artifacts: [MSG] }], proofread: [{ verdict: 'return' }, { verdict: 'pass' }] });
   W3.rhythm();
   const rw = W3.calls().find(x => x.type === 'qa-rewrite');
-  ok('G2 校對發回重寫的說明不合格 → 通用說明仍附校對問題清單（覆核 M1）', rw && !/## 一、目標/.test(rw.task) && /價錢沒有來源/.test(rw.task), rw && rw.task.slice(-300));
+  ok('G2 校對發回重寫的說明不合格 → 通用說明仍附校對問題及上一版檔名，要求按問題改寫（窄覆核 N2）', rw && !/## 一、目標/.test(rw.task) && /價錢沒有來源/.test(rw.task) && /previous-1\.md/.test(rw.task) && /逐份改寫/.test(rw.task), rw && rw.task.slice(-500));
 });
 await attempt('G3', async () => {
   // M2：前一工作日的 run（23:50 開工）在午夜後的啟動，不再因日期前綴計入今日
@@ -778,10 +823,9 @@ await attempt('G6', async () => {
   ok('G6 之後恢復 → 崗位回到待啟用', B2.W.state().teammates[0].lifecycle === 'planned', B2.W.state().teammates[0]);
 });
 await attempt('G7', async () => {
-  // 示範實例：啟用驗收及一般驗收題只記錄答案，不改工作、不改崗位卡、不開 AI
+  // 示範實例：所有驗收題只記錄答案，不改工作、不改崗位卡、不開 AI
   const { seedDemo } = await imp('demo-seed.mjs');
-  // 臨時工作的示範驗收（ask-demo-accept）照 0.40.2 可試用接受／退回流程（由「監察台」組驗證），所以這裏只驗崗位啟用驗收
-  for (const [mode, packId] of [['accept', 'ask-demo-activation'], ['return', 'ask-demo-activation']]) {
+  for (const [mode, packId] of [['accept', 'ask-demo-activation'], ['return', 'ask-demo-activation'], ['return', 'ask-demo-accept']]) {
     const DATA = path.join(OUT, 'g7-demo-' + mode); fs.rmSync(DATA, { recursive: true, force: true });
     seedDemo(DATA, { reset: true });
     const pk = jr(path.join(DATA, 'asks', packId + '.json'));

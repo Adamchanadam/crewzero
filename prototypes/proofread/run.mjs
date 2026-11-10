@@ -1014,7 +1014,7 @@ async function handlePracticePrep(run, m, say) {
   }
   writeConfirmedPage(sb);
   if (!fs.existsSync(path.join(sb, 'confirmed-page.md')) && fs.existsSync(path.join(DIR.company, 'page.json'))) fs.copyFileSync(path.join(DIR.company, 'page.json'), path.join(sb, 'company-page.json'));
-  fs.copyFileSync(path.join(ROOT, 'fixtures', 'demo-farm', 'practice', 'farm-c.json'), path.join(sb, 'example-scenario.json'));
+  fs.copyFileSync(path.join(ROOT, 'fixtures', 'demo-shop', 'practice', 'roaster-c.json'), path.join(sb, 'example-scenario.json'));
   fs.copyFileSync(path.join(ROOT, 'ai-practice-prep.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'practice-prep' });
   await runAIStep(run, sb, U.practicePrepAI, true);
@@ -2362,10 +2362,8 @@ function handleActionConfirm(run, pack, store) {
 }
 async function handleAcceptance(run, pack, store) {
   const t = getTask(pack.acceptance.taskId);
-  // 示範實例：崗位啟用驗收只記錄答案（答案檔已由問題包存好），不改工作、不改崗位卡、不開 AI（資料約定第 12 節）；
-  // 臨時工作的驗收照 0.40.2 示範行為（接受／退回流程可在示範試用）
-  const roleActivation = !!(pack.acceptance.activation || (t && t.cadence === 'activation'));
-  if (loadState().demo === true && roleActivation) { run.result = { summary: '已記錄驗收結果。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
+  // 示範實例的所有驗收只記錄答案（答案檔已由問題包存好），不改工作或崗位卡，亦不開後續 AI。
+  if (loadState().demo === true) { run.result = { summary: '已記錄驗收結果。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
   const redirectText = NAMES.t('role_optAcceptRedirect');
   const a = store.answers.accept, ok = !!a && (a.value === '接受' || a.value === redirectText), redirect = !!a && a.value === redirectText;
   if (!t) { run.result = { summary: '已記錄驗收結果。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
@@ -2528,7 +2526,7 @@ function debateSandbox(run, m, pass) {
       '', '## 真實證據（創辦人原話，未確認前唔改證據級）', '', ...((f.evidence || []).length ? f.evidence.map(e => `- ${e.text}（${NAMES.evName(e.grade)}）`) : ['- 冇']), '', '## 挑戰裁判', '', ...((f.challenges || []).length ? f.challenges.map(c => `- ${c.claimId || '未指定'}：${c.note}${c.rejudged ? '（已重判）' : ''}`) : ['- 冇'])].join('\n') + '\n');
   }
   fs.copyFileSync(path.join(ROOT, 'debate-format.md'), path.join(sb, 'format.md'));
-  const ex = path.join(ROOT, 'fixtures', 'demo-farm', 'brain', 'wargame');
+  const ex = path.join(ROOT, 'fixtures', 'demo-shop', 'brain', 'wargame');
   fs.mkdirSync(path.join(sb, 'example'), { recursive: true });
   for (const n of ['blue.json', 'red.json', 'rebuttal.json', 'judge.json', 'strengthen.json']) fs.copyFileSync(path.join(ex, n), path.join(sb, 'example', n));
   const all = fs.readFileSync(path.join(ROOT, 'ai-debate.md'), 'utf8');
@@ -3022,6 +3020,37 @@ function noteFounderInput(milestoneIds = null) {
   if (was) { s.events = s.events || []; s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'shell', type: 'health', title: 'Zero 已恢復工作：收到你的輸入', relatedIds: [], moduleIds: ['system'] }); }
   // 當日卡住的工作（blockedOn）：創辦人輸入到達即解除，同日可再做（輸入關聯到站時只解除該站，否則全部；pace-lib.releaseBlocked）
   saveState(PACE.releaseBlocked(s, { milestoneIds }));
+}
+// 創辦人輸入解除當日卡住的工作（卡住只限當日，翌日自動再派）：
+// - 交資料、筆記、校對回覆等不經題包的輸入，可能與任何工作有關 → 解除全部（回傳 null）；
+// - 只有題包答案 → 只解除答案關聯的站；全部與站無關（例如網站顏色）→ 一件都不解除（回傳空清單）。
+function founderInputMilestoneIds(replies = [], otherInputs = 0) {
+  if (otherInputs) return null;
+  const s = loadState(), valid = new Set((s.milestones || []).filter(m => m && m.pathStatus !== 'retired').map(m => m.id)), ids = new Set();
+  const add = id => { if (valid.has(id)) ids.add(id); };
+  const addTask = id => { const t = (s.tasks || []).find(x => x && x.id === id); if (t) add(t.milestoneId); };
+  for (const file of replies) {
+    const parsed = parseReply(fs.readFileSync(path.join(DIR.replies, file), 'utf8'));
+    if (!parsed.ok || parsed.head.kind !== 'ask-answer' || !parsed.head.ref) return null;
+    const pack = loadPack(DIR, parsed.head.ref); if (!pack) continue;
+    add(pack.milestoneId); add((pack.depth || {}).milestoneId); add((pack.realEvent || {}).milestoneId);
+    if (pack.acceptance) addTask(pack.acceptance.taskId);
+    for (const q of pack.questions || []) {
+      add(q && q.milestoneId); add(q && (q.depth || {}).milestoneId);
+      for (const o of (q && q.options) || []) {
+        const ap = o && o.apply || {}; add(ap.milestoneId);
+        if (ap.op === 'markDone') add(ap.id);
+      }
+    }
+    const from = String(pack.fromRun || '');
+    if (from) {
+      for (const item of ((s.runs || []).find(r => r && r.id === from) || {}).items || []) addTask(item && item.taskId);
+      for (const task of s.tasks || []) if (task && task.lastWorkId === from) add(task.milestoneId);
+    }
+    // 已寫入的決定紀錄若有關聯這包問題，亦是可核對的站來源。
+    for (const event of s.events || []) if (event && (event.relatedIds || []).includes(pack.id)) for (const id of event.relatedIds || []) add(id);
+  }
+  return [...ids];
 }
 // 停機門檻（3.8）：唔係跳過嘅 run，冇你嘅輸入亦冇經核實進展就加一；達二即自動停，並出「要繼續嗎？」
 function countStreak(hadInput) {
@@ -3576,7 +3605,7 @@ async function qaRewrite(run, id, st, sel, card, task, arts, issues, ctx) {
   let text = fs.readFileSync(path.join(ROOT, 'ai-rhythm.md'), 'utf8');
   const briefFailed = !b.ok;   // 說明核對不合格：改用通用說明＋校對問題清單，並計入當日連續不合格（M1）
   if (b.ok) text += '\n\n---\n\n' + b.text;
-  else { text += fallbackNotes(task, issues.map(issueLine)); log(`${id} 重寫說明核對不合格，改用通用說明：${b.errors.map(e => e.text).join('；')}`); run.warnings = [...(run.warnings || []), NAMES.t('brief_fallback')]; }
+  else { text += fallbackNotes(task, issues.map(issueLine), prev); log(`${id} 重寫說明核對不合格，改用通用說明：${b.errors.map(e => e.text).join('；')}`); run.warnings = [...(run.warnings || []), NAMES.t('brief_fallback')]; }
   fs.writeFileSync(path.join(sb, 'task.md'), text);
   writeJSON(path.join(sb, 'job.json'), { type: 'qa-rewrite', ...(task ? { taskId: task.id } : {}) });
   const r = await runAI(sb);
@@ -3763,6 +3792,42 @@ const ROLES_MODE_NOTE = {
   split: '\n\n## 這次的特別要求\n\n某個崗位負責的事太多，創辦人需要把其中幾個站拆給新崗位（資料在 `roles-input.json` 的 `request`：`moveStations` 是要拆出的站）。這次只擬一張新卡，`milestoneIds` 就是 `moveStations` 的站，稱號要與原崗位不同。`unassigned` 寫空清單。\n',
   recard: '\n\n## 這次的特別要求\n\n某個崗位的啟用任務已被創辦人退回兩次。請為它重擬一張卡（資料在 `roles-input.json` 的 `request`，內有退回原因），負責同樣的站，稱號可以不同，啟用任務要換成更貼近創辦人期望的題目。這次只擬一張卡。`unassigned` 寫空清單。\n'
 };
+function rolesBrief(s, mode, { repairErrors = [] } = {}) {
+  const repairing = repairErrors.length > 0;
+  const files = [
+    { name: 'confirmed-page.md', about: '創辦人已確認的公司概覽與路線' },
+    { name: 'roles-input.json', about: '這次擬定崗位所需的資料與特別要求' },
+    { name: 'ai-roles.md', about: '崗位卡規格、輸出格式及核對要求' }
+  ].concat(repairing ? [{ name: 'out/roles.json', about: '剛才交出的崗位卡，須按問題修正' }] : []);
+  const glossary = [{ term: '公司團隊分工', meaning: '為公司路線安排由 Zero 承擔的崗位' }]
+    .concat((s.milestones || []).filter(m => m && m.pathStatus === 'confirmed' && m.short).map(m => ({ term: m.short, meaning: clip(m.event || '公司路線上的一站', 80) })));
+  const special = String(ROLES_MODE_NOTE[mode] || '').replace(/##\s*這次的特別要求/g, '').replace(/\s+/g, ' ').trim();
+  const taskTitle = repairing ? '修正崗位卡' : mode === 'recard' ? '重擬崗位卡' : '擬定崗位卡';
+  const taskNext = repairing ? '逐條修正已列出的問題，只覆寫 out/roles.json。' : special || '按資料為公司路線擬定可確認的崗位卡。';
+  const brief = buildBrief({
+    kind: 'work',
+    station: { short: '公司團隊分工', event: '每個需要負責的站都有合適崗位', doneWhen: '交出符合規格、可由創辦人確認的崗位卡' },
+    task: { title: taskTitle, next: taskNext },
+    exclude: ['不修改公司概覽或路線', '不處理日常工作或其他產出'],
+    files,
+    web: { allowed: false },
+    progress: { before: [], answered: repairErrors, unknown: [] },
+    permissions: { self: ['只可讀取第三段列出的資料', '只可寫入 out/roles.json'], tellAfter: [], askFirst: ['任何未列出的公司改動'] },
+    firstStep: repairing ? '先讀取 ai-roles.md、roles-input.json 及 out/roles.json，逐條修正第四段列出的問題。' : '先讀取 ai-roles.md 和 roles-input.json，再按這次資料擬定崗位卡。',
+    deliver: { types: ['崗位卡'], max: 1, proofread: false, receiptFormat: 'out/roles.json', acceptance: '每張卡都可按資料核對稱號、負責站與啟用任務' },
+    glossary
+  });
+  const chk = checkBrief(brief, { files: ['confirmed-page.md', 'roles-input.json', 'ai-roles.md', 'task.md'], names: glossary.map(g => g.term) });
+  return { text: brief, ok: chk.ok, errors: chk.errors };
+}
+function rolesTaskText(run, s, mode, repairErrors = []) {
+  const brief = rolesBrief(s, mode, { repairErrors });
+  if (brief.ok) return brief.text;
+  log(`${run.id} 崗位工作說明核對不合格，改用通用說明：${brief.errors.map(e => e.text).join('；')}`);
+  run.warnings = [...(run.warnings || []), NAMES.t('brief_fallback')];
+  const base = fs.readFileSync(path.join(ROOT, 'ai-roles.md'), 'utf8');
+  return base + (repairErrors.length ? '\n\n## 必須修正的問題\n\n' + repairErrors.map((e, i) => `${i + 1}. ${e}`).join('\n') + '\n' : '');
+}
 async function rolesStep(run, due, key = 'roles') {
   const label = NAMES.t('brainJob_roles');
   if (due.due === 'batch') {
@@ -3795,7 +3860,8 @@ async function rolesStep(run, due, key = 'roles') {
   if (mode === 'split') { const old = ROLES.cardById(s, rs.wantRole.teammateId); input.request = { title: ROLES.titleOf(old), keepStations: rs.wantRole.keepIds.map(id => ({ id, short: stationName(s, id) })), moveStations: rs.wantRole.moveIds.map(id => ({ id, short: stationName(s, id) })) }; }
   if (mode === 'recard') { const old = ROLES.cardById(s, recardId); const t = (s.tasks || []).find(x => x && old && x.id === old.activationTaskId); input.request = { title: ROLES.titleOf(old), milestoneIds: old.milestoneIds, returnedBecause: clip((t && t.returnNote) || '', 200) }; }
   writeJSON(path.join(sb, 'roles-input.json'), input);
-  fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-roles.md'), 'utf8') + (ROLES_MODE_NOTE[mode] || ''));
+  fs.copyFileSync(path.join(ROOT, 'ai-roles.md'), path.join(sb, 'ai-roles.md'));
+  fs.writeFileSync(path.join(sb, 'task.md'), rolesTaskText(run, ctxState, mode));
   writeJSON(path.join(sb, 'job.json'), { type: 'roles', mode });
   step(run, key, label, 'running', 'Zero 處理中');
   const r = await runAI(sb);
@@ -3805,8 +3871,7 @@ async function rolesStep(run, due, key = 'roles') {
   if (!chk.ok) {
     log(`${run.id} 崗位卡格式唔啱：${chk.errors.join('；')}；叫 AI 修正一次`);
     writeJSON(path.join(sb, 'job.json'), { type: 'roles-repair', mode, errors: chk.errors });
-    fs.writeFileSync(path.join(sb, 'task.md'), ['# 今次的工作：修正崗位卡', '', '你剛才寫的 `out/roles.json` 有以下問題，請按 `ai-roles.md` 的格式改好，其他內容不要更改：', '', ...chk.errors.map((e, i) => `${i + 1}. ${e}`), '', '改完後覆寫 `out/roles.json`。只可以寫入 `out/`。'].join('\n') + '\n');
-    fs.copyFileSync(path.join(ROOT, 'ai-roles.md'), path.join(sb, 'ai-roles.md'));
+    fs.writeFileSync(path.join(sb, 'task.md'), rolesTaskText(run, ctxState, mode, chk.errors));
     const r2 = await runAI(sb);
     if (r2.meta && run.aiCost) run.aiCost.usd = (run.aiCost.usd || 0) + (r2.meta.total_cost_usd || 0);
     chk = checkRolesOut(readJSON(path.join(sb, 'out', 'roles.json'), null), ctxState, mode, true);
@@ -3888,8 +3953,15 @@ function handleRolesAnswer(run, pack, store) {
         if (msg) said.push(msg);
         s = loadState(); s.rolesSync = s.rolesSync || {}; s.rolesSync.applied = s.rolesSync.applied || {}; s.events = s.events || [];
         newId = currentRoute().map(r => r.id).find(id => !before.includes(id)) || '';
+        if (!newId && msg.startsWith('路線已有變動')) {
+          const card = roleFrom(q2, a2);
+          // 舊次序會令重問的同一題再被判為「路線已有變動」：按目前路線重建次序
+          if (card && card.card) { const c = card.card; s.rolesSync.pending = [...(s.rolesSync.pending || []), c.stationReq ? { ...c, stationReq: { ...c.stationReq, order: [...currentRoute().map(r => r.id), 'new'] } } : c]; }
+          done.add(q2.id);
+          const text = NAMES.t('role_routeChangedAskAgain'); ev(text, [pack.id]); said.push(text);
+        }
       }
-      applyRole(q2, a2, { station: { answer: accepted ? 'accept' : 'decline', id: newId } });
+      if (!(accepted && !newId && said.includes(NAMES.t('role_routeChangedAskAgain')))) applyRole(q2, a2, { station: { answer: accepted ? 'accept' : 'decline', id: newId } });
       done.add(q1.id);
     }
   } else if (kind === 'split') {
@@ -4105,10 +4177,12 @@ function itemBrief(st, sel, sb, workDay, extraFiles = []) {
   return { text: brief, fileNames, ok: chk.ok, errors: chk.errors };
 }
 // 工作說明核對不合格而改用通用說明時，退回原因及校對發回的問題仍要交給 AI（M1：不可靜靜丟失）
-function fallbackNotes(task, issues = []) {
+function fallbackNotes(task, issues = [], files = []) {
   const l = [];
   if (task && task.returnNote) l.push('創辦人退回了上一版，原因：' + clip(task.returnNote, 200) + '（逐條改正，不要重複同樣的問題）');
   for (const i of issues || []) if (i) l.push('校對發回的問題：' + clip(i, 200));
+  const previous = (files || []).map(f => typeof f === 'string' ? f : f && f.name).filter(f => /^previous-\d+\.md$/.test(String(f)));
+  if (previous.length) l.push('資料夾內的 ' + previous.map(f => '`' + f + '`').join('、') + ' 是上一版；請按校對問題逐份改寫。');
   return l.length ? '\n\n---\n\n## 必須處理的意見\n\n' + l.map(x => '- ' + x).join('\n') + '\n' : '';
 }
 // 單件日常工作：開一次 AI → 用字改寫 → 核對收據 → 存收據 → 問題包／第二站／對象下一步 → 判定收尾。回 { ending, failKind, fresh, ... }
@@ -4123,11 +4197,9 @@ async function workItem(run, lr, st, sel, n, ctx) {
   writeJSON(path.join(sb, 'ledger.json'), rhythmLedger(type, task ? [task] : []));
   const rhythmMd = fs.readFileSync(path.join(ROOT, 'ai-rhythm.md'), 'utf8');
   let taskText = rhythmMd;
-  if (task) {
-    const b = itemBrief(st, sel, sb, workDay);
-    if (b.ok) taskText = rhythmMd + '\n\n---\n\n' + b.text;
-    else { taskText = rhythmMd + fallbackNotes(task); res.briefFailed = true; log(`${id} 工作說明核對不合格，改用通用說明：${b.errors.map(e => e.text).join('；')}`); run.warnings = [...(run.warnings || []), NAMES.t('brief_fallback')]; }
-  }
+  const b = itemBrief(st, sel, sb, workDay);
+  if (b.ok) taskText = rhythmMd + '\n\n---\n\n' + b.text;
+  else { taskText = rhythmMd + fallbackNotes(task, [], b.fileNames); res.briefFailed = true; log(`${id} 工作說明核對不合格，改用通用說明：${b.errors.map(e => e.text).join('；')}`); run.warnings = [...(run.warnings || []), NAMES.t('brief_fallback')]; }
   fs.writeFileSync(path.join(sb, 'task.md'), taskText);
   writeJSON(path.join(sb, 'job.json'), { type: 'rhythm', runType: type, ...(task ? { taskId: task.id } : {}), ...(card ? { teammateId: card.id } : {}) });
   step(run, key, label, 'running', 'Zero 處理中，一般需時 1–3 分鐘；你可繼續查看，或關閉此頁稍後再查看');
@@ -4318,7 +4390,7 @@ async function main() {
     { const sl = readJSON(STATE, null); if (sl && sl.ledgerFrom && sl.depthPackFor !== sl.ledgerFrom && !sl.demo) placeDepthPack(null); }
     placeInterviewIfDue();
     run = { id: 'R' + stamp() + '-' + String(process.pid).slice(-3), startedAt: localIso(), state: 'running', replyFiles: [], steps: [] };
-    if (founderFiles) { hadInput = true; noteFounderInput(); }
+    if (founderFiles) { hadInput = true; noteFounderInput(founderInputMilestoneIds(replies, intakes.length + notes.length)); }
     if (intakes.length) {
       // 公司概覽要先有，所以交資料排先
       await handleIntake(run, intakes[0]);

@@ -123,22 +123,22 @@ try {
 
   /* 真實事件確認之後：格位前移 */
   seen = await seenIds();
-  mode('event:event-next'); // 確認包另有「下一個對外動作」改去第 2 站（何師傅）：唔可以當何師傅有真事
-  const e1 = await post('/api/intake', { kind: 'note', type: 'event', text: '與綠野物流負責人會面，對方答應試送一次並以電郵確認。', date: lib.localIso().slice(0, 10) });
+  mode('event:event-next'); // 確認包另有「下一個對外動作」改去第 2 站（收款及寄送設定）：唔可以當該站已有真事
+  const e1 = await post('/api/intake', { kind: 'note', type: 'event', text: '與工房丙負責人會面，對方答應先試供兩批並以電郵確認。', date: lib.localIso().slice(0, 10) });
   ok('記錄真實事件：收到', e1.code === 202, e1);
   const er = await newRun(seen, r => r.kind === 'note' && r.noteType === 'event');
   ok('真實事件：AI 擬好確認題', er && er.state === 'done', er);
   const pm = (await get('/api/asks')).packs.filter(p => p.open).map(p => JSON.parse(fs.readFileSync(path.join(DATA, 'asks', p.id + '.json'), 'utf8'))).find(p => p.realEvent);
   ok('真實事件確認包已放上 CrewZero', !!pm, (await get('/api/asks')).packs.map(p => p.title));
-  const midPipe = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '綠野物流');
+  const midPipe = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '工房丙');
   ok('確認之前：格位未動、最近真事唔顯示淨係記錄咗嘅事（AI 建議唔算）', midPipe && midPipe.stage === 0 && !midPipe.lastReal, midPipe);
   seen = await seenIds();
   await answer(pm);
   await newRun(seen, r => r.kind === 'ask');
-  const gp = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '綠野物流');
-  ok('你確認真實事件之後：綠野物流格位前移，最近一件真事用你嘅原話', gp && gp.stage >= 2 && /與綠野物流負責人會面/.test(gp.lastReal), gp);
-  const hp = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '何師傅');
-  ok('下一個對外動作改去何師傅嗰站：唔當何師傅有真事、格位唔郁（試走揭出）', hp && hp.stage === 0 && !hp.lastReal, hp);
+  const gp = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '工房丙');
+  ok('你確認真實事件之後：工房丙格位前移，最近一件真事用你嘅原話', gp && gp.stage >= 2 && /與工房丙負責人會面/.test(gp.lastReal), gp);
+  const hp = (await get('/api/dashboard')).brain.items.find(x => x.id === 'pipeline').detail.prospects.find(p => p.name === '訂戶');
+  ok('下一個對外動作改去收款及寄送設定：名單沒有對應服務提供者，訂戶未有真事、格位不動（試走揭出）', hp && hp.stage === 0 && !hp.lastReal, hp);
   // 體檢側卡（你可能未想到）要修改：AI 按意見出修改版（試走揭出曾經搵唔到卡內容）
   seen = await seenIds();
   const rv = await post('/api/intake', { kind: 'note', type: 'feedback', item: 'checkup', cardId: 'unseen', verdict: 'revise', text: '測試：刪去第一句' });
@@ -238,7 +238,7 @@ try {
   ok('商機掃描頁：出處有網址就做連結，網址唔直接顯示', (await ev(`document.querySelectorAll('a.srclink').length`)) === 1 && !(await text('main')).includes('example.com'), await ev(`document.querySelectorAll('a.srclink').length`));
   ok('商機掃描頁：部分完成顯示在商機頁', (await text('#b-opportunities')).includes(N.dash.brainPartial), await text('#b-opportunities'));
   await go('/dashboard/brain/pipeline');
-  ok('客戶推進頁：五個對象，綠野物流已推進', (await ev(`document.querySelectorAll('#pipeline .pr').length`)) === 5 && (await text('#pipeline')).includes('綠野物流'), await text('#pipeline'));
+  ok('客戶推進頁：五個對象，工房丙已推進', (await ev(`document.querySelectorAll('#pipeline .pr').length`)) === 5 && (await text('#pipeline')).includes('工房丙'), await text('#pipeline'));
   await shot('brain-pipeline.png');
   const hits = N.styleIssues((await text('#pipeline')).replace(/（測試）[^\n]*/g, ''));
   ok('客戶推進頁文字：用字檢查零命中', !hits.length, hits);

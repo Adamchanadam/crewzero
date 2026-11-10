@@ -45,7 +45,7 @@ try {
   await c.go(B + '/dashboard/system', 1440, 2000);
   ok('系統頁：記錄型工作標「只記錄（未開 AI）」，唔標完成', await c.ev(`[...document.querySelectorAll('.row-item')].some(r=>r.textContent.includes(${JSON.stringify(N.dash.runRecordOnly)}))`), await c.ev(`document.querySelector('main').textContent.slice(0,600)`));
   const fb1 = d.brain.feedback['weak-1'];
-  ok('意見紀錄：附項目名同卡名、已處理', fb1 && fb1.itemName === '生意體檢' && fb1.title === '是否有餐廳願意為來源支付較高價錢' && !fb1.pending, fb1);
+  ok('意見紀錄：附項目名同卡名、已處理', fb1 && fb1.itemName === '生意體檢' && fb1.title === '是否有訂戶願意為新鮮烘焙付較高月費' && !fb1.pending, fb1);
 
   /* ---------- 4. 收件匣入面未處理嘅意見都計（外殼忙緊都見到） ---------- */
   process.env.SOS_DATA = DEMO;
@@ -57,7 +57,7 @@ try {
   fs.writeFileSync(nf, note('weak-3', 'useless', '2999-12-31T00:00:00+00:00'));
   fs.writeFileSync(of, note('weak-1', 'useless', '2000-01-01T00:00:00+00:00'));
   const b = loadBrain(DIR, {});
-  ok('收件匣未處理：顯示已送出（pending），有卡名', b.feedback['weak-3'] && b.feedback['weak-3'].pending === true && b.feedback['weak-3'].verdict === 'useless' && b.feedback['weak-3'].title === '牌照與保險尚未查清', b.feedback['weak-3']);
+  ok('收件匣未處理：顯示已送出（pending），有卡名', b.feedback['weak-3'] && b.feedback['weak-3'].pending === true && b.feedback['weak-3'].verdict === 'useless' && b.feedback['weak-3'].title === '網上收款及寄送尚未辦妥', b.feedback['weak-3']);
   ok('收件匣入面比帳本舊嘅意見：唔蓋過帳本', b.feedback['weak-1'].verdict === 'useful' && !b.feedback['weak-1'].pending, b.feedback['weak-1']);
   fs.rmSync(nf); fs.rmSync(of);
 
@@ -80,10 +80,10 @@ try {
   ok('撳完即刻：卡上見到沒有用 · 已記錄、按鈕保持高亮', instant, await c.ev(`document.querySelector('${card('weak-2')}').textContent`));
   await sleep(1500);
   await c.go(B + '/dashboard/brain', 1440, 2500);
-  ok('你的意見紀錄（總覽頁底部）：寫明屬生意體檢、卡名、意見、已記錄', await c.ev(`(()=>{const r=document.querySelector('${fbRow('weak-1')}');return !!r && /生意體檢/.test(r.textContent) && /是否有餐廳願意為來源支付較高價錢/.test(r.textContent) && /有用/.test(r.textContent) && /已記錄/.test(r.textContent);})()`), await c.ev(`(document.querySelector('#fblog')||{}).textContent`));
+  ok('你的意見紀錄（總覽頁底部）：寫明屬生意體檢、卡名、意見、已記錄', await c.ev(`(()=>{const r=document.querySelector('${fbRow('weak-1')}');return !!r && /生意體檢/.test(r.textContent) && /是否有訂戶願意為新鮮烘焙付較高月費/.test(r.textContent) && /有用/.test(r.textContent) && /已記錄/.test(r.textContent);})()`), await c.ev(`(document.querySelector('#fblog')||{}).textContent`));
   ok('你的意見紀錄喺總覽頁底部（六格之後）', await c.ev(`(()=>{const a=document.querySelector('#brain-head'),f=document.querySelector('#fblog');return !!f && a.compareDocumentPosition(f)&4;})()`));
   const rowsText = await c.ev(`[...document.querySelectorAll('#fblog li')].map(r=>r.textContent).join(' | ')`);
-  ok('紀錄兩條、最新排先', /一人送貨能否應付/.test(rowsText.split(' | ')[0]) && rowsText.split(' | ').length === 2, rowsText);
+  ok('紀錄兩條、最新排先', /一人包裝寄貨能否應付/.test(rowsText.split(' | ')[0]) && rowsText.split(' | ').length === 2, rowsText);
   await c.click(fbRow('weak-1') + ' .card a');
   await sleep(2600);
   ok('撳「查看這條」：去生意體檢分頁，跳去嗰張卡並短暫標示', await c.ev(`(()=>{const e=document.querySelector('${card('weak-1')}').closest('.weak');const r=e.getBoundingClientRect();return location.pathname==='/dashboard/brain/checkup' && e.classList.contains('fbhit') && r.top>=0 && r.bottom<=innerHeight;})()`));

@@ -58,10 +58,10 @@ try {
   fs.writeFileSync(path.join(DATA, 'asks', 'ask-novice-interview.json'), JSON.stringify({ id: 'ask-novice-interview', title: '首次每週訪問', askedBy: 'AI', askedAt: new Date().toISOString(), todoType: 'interview', due: '2099-01-05', rhythm: { kind: 'interview', on: '2099-01-05' }, questions: [{ id: 'progress', ask: '本週有甚麼真實進展？', kind: 'text', priority: 1 }] }));
   await chrome.go(BASE + '/#/');
   await chrome.send('Page.reload'); await sleep(1600);
-  const interviewCard = await waitFor(() => chrome.ev(`(()=>{const c=document.querySelector('#today-card');const a=c&&c.querySelector('#today-go');return c?{text:c.innerText,href:a&&a.getAttribute('href')}:null})()`));
-  ok('放入訪問問題包後改為開始訪問', !!interviewCard && interviewCard.text.includes('開始訪問') && interviewCard.href === '#/ask/ask-novice-interview', interviewCard);
-  await chrome.click('#today-go');
-  ok('開始訪問入口可打開問題頁', !!await waitFor(() => chrome.ev(`location.hash==='#/ask/ask-novice-interview'&&!!document.querySelector('#go-main')`)), null);
+  const interviewRow = await waitFor(() => chrome.ev(`(()=>{const r=document.querySelector('[data-todo="ask-novice-interview"]'),a=r&&r.querySelector('a[href="#/ask/ask-novice-interview"]');return r&&a?{text:r.innerText,href:a.getAttribute('href'),today:!!document.querySelector('#today-card')}:null})()`));
+  ok('放入訪問問題包後：首次訪問指引併入該列，並保留作答入口', !!interviewRow && interviewRow.text.includes('回答首次每週訪問') && interviewRow.href === '#/ask/ask-novice-interview' && !interviewRow.today, interviewRow);
+  await chrome.click('[data-todo="ask-novice-interview"] a[href="#/ask/ask-novice-interview"]');
+  ok('首次訪問列的作答入口可打開問題頁', !!await waitFor(() => chrome.ev(`location.hash==='#/ask/ask-novice-interview'&&!!document.querySelector('#go-main')`)), null);
 
   await chrome.go(BASE + '/dashboard');
   const mark = await waitFor(() => chrome.ev(`document.querySelector('#co-mark')?.textContent?.trim()`));

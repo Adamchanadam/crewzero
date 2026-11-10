@@ -193,7 +193,7 @@ try {
   await waitFor(async () => (await get('/api/status')).runs.find(r => r.kind === 'note' && r.ref === f1.j.id && r.state === 'done'), 30000);
   ok('結果卡意見經 /api/intake 寫入收件匣，檔名為時間前綴加 feedback-（規劃書 4.9）', (() => { const arch = path.join(DEMO, 'archive'); return fs.readdirSync(arch).filter(d => /^\d{4}-\d{2}$/.test(d)).some(d => fs.existsSync(path.join(arch, d, f1.j.id + '-feedback-checkup.md'))); })());
   await c.go(B + '/dashboard/brain', 1440, 2500);
-  ok('意見紀錄：寫明屬生意體檢、卡名、有用、已記錄', await c.ev(`(()=>{const r=document.querySelector('#fblog li[data-fb-card="weak-1"]');return !!r&&/生意體檢/.test(r.textContent)&&/是否有餐廳願意為來源支付較高價錢/.test(r.textContent)&&/有用/.test(r.textContent)&&/已記錄/.test(r.textContent)})()`), await c.ev(`(document.querySelector('#fblog')||{}).textContent`));
+  ok('意見紀錄：寫明屬生意體檢、卡名、有用、已記錄', await c.ev(`(()=>{const r=document.querySelector('#fblog li[data-fb-card="weak-1"]');return !!r&&/生意體檢/.test(r.textContent)&&/是否有訂戶願意為新鮮烘焙付較高月費/.test(r.textContent)&&/有用/.test(r.textContent)&&/已記錄/.test(r.textContent)})()`), await c.ev(`(document.querySelector('#fblog')||{}).textContent`));
   await c.click('#fblog li[data-fb-card="weak-1"] .card a');
   await sleep(2600);
   ok('撳「查看這條」：去生意體檢分頁並標示嗰張卡', await c.ev(`location.pathname==='/dashboard/brain/checkup' && (()=>{const e=document.querySelector('.fb[data-card="weak-1"]').closest('.weak');const r=e.getBoundingClientRect();return e.classList.contains('fbhit') && r.top>=0 && r.bottom<=innerHeight})()`), await c.ev(`location.href`));

@@ -183,10 +183,13 @@ try {
   ok('求助回覆不計入待決數目、待決清單或監察台待決指標', first && helpOnly.status.openAsks === 0 && !helpOnly.asks.todo.some(t => t.id === first.id) && helpOnly.dashboard.metrics.pending === 0, { openAsks: helpOnly.status.openAsks, todo: helpOnly.asks.todo, pending: helpOnly.dashboard.metrics.pending });
 
   await cdp.go(BASE + '/#/', 1280, 1800);
-  const firstHome = await cdp.ev('(()=>{const box=document.querySelector("#help-replies"),a=box&&box.querySelector("a"),intake=document.querySelector("a[href=\'#/intake\']");return box?{title:box.querySelector("summary").textContent,href:a&&a.getAttribute("href"),intake:!!intake,hero:!!document.querySelector(".hero")}:null})()');
-  ok('未有公司概覽而只有求助回覆：首頁保留交資料及回覆入口，不把回覆當主卡', firstHome && firstHome.title === N.ui.helpReplies.replace('{n}', '1') && firstHome.href === '#/ask/' + first.id && firstHome.intake && !firstHome.hero, firstHome);
-  await cdp.ev('document.querySelector("#help-replies").open=true');
-  await cdp.click('#help-replies a');
+  const firstHome = await cdp.ev('(()=>{const row=document.querySelector("[data-help-reply]"),a=row&&row.querySelector("a"),intake=document.querySelector("a[href=\'#/intake\']");return row?{text:row.innerText,href:a&&a.getAttribute("href"),button:a&&a.textContent,intake:!!intake,hero:!!document.querySelector(".hero"),legacy:!!document.querySelector("#help-replies")}:null})()');
+  ok('未有公司概覽而只有求助回覆：首頁保留交資料入口，回覆成為「接下來」一列', firstHome && firstHome.text.includes(N.ui.helpReplyLine) && firstHome.href === '#/ask/' + first.id && firstHome.button === N.ui.helpView && firstHome.intake && !firstHome.hero && !firstHome.legacy, firstHome);
+  fs.writeFileSync(path.join(DATA, 'asks', 'p-1.json'), JSON.stringify({ id: 'p-1', title: '待解釋的原題', askedBy: 'AI', askedAt: lib.localIso(new Date(Date.now() - 4 * 86400000)), questions: [{ id: 'p1', ask: '原題怎樣處理？', kind: 'choice', options: [{ text: '照建議', rec: true }, { text: '暫緩' }], value: '照建議', priority: 1 }] }));
+  await cdp.go(BASE + '/#/', 1280, 1800);
+  const pairedHelp = await waitFor(() => cdp.ev('(()=>{const row=document.querySelector("[data-todo=\\\"p-1\\\"]"),a=row&&row.querySelector("a[data-help-reply]");return row&&a?{text:row.innerText,href:a.getAttribute("href"),button:a.textContent,legacy:!!document.querySelector("#help-replies")}:null})()'), 5000);
+  ok('求助回覆配回原題：原題列寫明已解釋，並連去回覆題包', pairedHelp && pairedHelp.text.includes(N.ui.helpReadyLine) && pairedHelp.href === '#/ask/' + first.id && pairedHelp.button === N.ui.helpView && !pairedHelp.legacy, pairedHelp);
+  await cdp.click('[data-todo="p-1"] a[data-help-reply]');
   const qButton = await cdp.ev('(()=>{const b=document.querySelector(".q-help");return b?{text:b.textContent,disabled:b.disabled}:null})()');
   ok('每條問題有「不明白」入口', qButton && qButton.text === N.ui.helpNotClear && !qButton.disabled, qButton);
   mode('note:slow');
@@ -217,6 +220,22 @@ try {
   const contextualSandbox = contextual && path.join(DATA, 'sandbox', contextual.fromRun);
   const contextualNote = contextualSandbox && fs.readFileSync(path.join(contextualSandbox, 'note.md'), 'utf8');
   ok('題目求助的 note.md 只帶該題原因、風險和選項', contextualNote && contextualNote.includes('原因：先用最直接的方式處理。') && contextualNote.includes('風險：沒有。') && contextualNote.includes('選項：先按建議做') && contextualNote.includes('選項：' + helpStill), contextualNote);
+
+  const staleId = 'ask-stale-help';
+  fs.writeFileSync(path.join(DATA, 'asks', staleId + '.json'), JSON.stringify({ id: staleId, title: '等候多日的待決事項', askedBy: 'AI', askedAt: lib.localIso(new Date(Date.now() - 4 * 86400000)), questions: [{ id: 'stale-q', ask: '這一項怎樣處理？', kind: 'choice', options: [{ text: '照建議', rec: true }, { text: '暫緩' }], value: '照建議', priority: 1 }] }));
+  await cdp.go(BASE + '/#/', 1280, 1800);
+  const staleButton = await waitFor(() => cdp.ev(`(()=>{const row=document.querySelector('[data-todo="${staleId}"]'),b=row&&[...row.querySelectorAll('button')].find(x=>x.textContent===${JSON.stringify(N.ui.helpStale)});return b?{text:b.textContent,primary:b.classList.contains('primary')}:null})()`), 5000);
+  ok('等候 3 日以上的題有「不明白這項？」入口', staleButton && staleButton.text === N.ui.helpStale && !staleButton.primary, staleButton);
+  await cdp.ev(`(()=>{const r=document.querySelector('[data-todo="${staleId}"]'),d=r&&r.closest('details');if(d)d.open=true;})()`);
+  await cdp.click(`[data-todo="${staleId}"] .q-help-line button`);
+  const staleProgress = await waitFor(() => cdp.ev(`(()=>{const row=document.querySelector('[data-todo="${staleId}"]'),b=row&&row.querySelector('.q-help-line button'),s=row&&row.querySelector('.help-status');return row&&(!b||b.hidden)&&s&&s.textContent?{text:s.textContent}:null})()`), 5000);
+  ok('按「不明白這項？」後按鈕隱藏，該列即時顯示 Zero 的進度', staleProgress && (staleProgress.text === N.ui.helpStarting || staleProgress.text.includes(N.ui.helpWorking.split('，')[0])), staleProgress);
+  await cdp.send('Page.reload', { ignoreCache: true }); await sleep(1200);
+  const reloadedProgress = await waitFor(() => cdp.ev(`(()=>{const row=document.querySelector('[data-todo="${staleId}"]'),b=row&&[...row.querySelectorAll('button')].find(x=>x.textContent===${JSON.stringify(N.ui.helpStale)}),s=row&&row.querySelector('.help-status'),h=row&&row.querySelector('a[data-help-reply]');return row&&!b&&(h?{text:h.textContent}:s&&s.textContent?{text:s.textContent}:null)})()`), 5000);
+  ok('伺服器 helpInFlight 有該題時，重新載入仍顯示進度而不再顯示求助按鈕（假 AI 已回覆則顯示查看解釋）', reloadedProgress && (reloadedProgress.text === N.ui.helpStarting || reloadedProgress.text.includes(N.ui.helpWorking.split('，')[0]) || reloadedProgress.text === N.ui.helpView), reloadedProgress);
+  const staleReply = await waitFor(() => allPacks().find(p => p.help && p.help.packId === staleId), 45000);
+  const staleReady = await waitFor(() => cdp.ev(`(()=>{const row=document.querySelector('[data-todo="${staleId}"]'),a=row&&row.querySelector('a[data-help-reply]');return row&&a?{text:row.textContent,href:a.getAttribute('href'),button:a.textContent}:null})()`), 15000);
+  ok('假 AI 回覆後，原題列自動變成「查看解釋」', staleReply && staleReady && staleReady.text.includes(N.ui.helpReadyLine) && staleReady.href === '#/ask/' + staleReply.id && staleReady.button === N.ui.helpView, { staleReply: staleReply && staleReply.id, staleReady });
 
   const a1 = await answer(first, helpStill);
   ok('第一次要求換方式：答案可送出', a1.code === 200, a1);

@@ -30,27 +30,27 @@ try {
   seedDemo(DATA, { reset: true });
   // 未設定 AI：開始唔到並講原因
   const B0 = await startServer(DATA, Number(PORT) + 3), A0 = api(B0);
-  const n0 = await A0.post('/api/practice', { action: 'start', scenarioId: 'farm-c', level: 'normal' });
+  const n0 = await A0.post('/api/practice', { action: 'start', scenarioId: 'roaster-c', level: 'normal' });
   ok('未設定 AI：開始唔到並講原因', n0.code === 409 && n0.j.error === 'ai', n0);
   servers.pop().kill();
   await kit.certifyDirect(DATA, PROTO, ADAPTER);
   const B = await startServer(DATA, Number(PORT)), A = api(B);
   ok('情景演練畫面路由（Founder Desk）', (await fetch(B + '/')).status === 200);
   const pr = await A.get('/api/practice');
-  ok('兩個示範場景（換對象都用得）', pr.scenarios.length === 2 && pr.scenarios.some(s => s.id === 'farm-c') && pr.scenarios.some(s => s.id === 'chef-a'), pr.scenarios.map(s => s.id));
-  ok('你要做嘅行動：見農場丙已連場景', pr.actions.some(a => a.id === 'f1' && a.scenarioId === 'farm-c') && pr.actions.some(a => !a.scenarioId));
-  const sc = (await A.get('/api/practice/scenario?id=farm-c')).scenario;
+  ok('兩個示範場景（換對象都用得）', pr.scenarios.length === 2 && pr.scenarios.some(s => s.id === 'roaster-c') && pr.scenarios.some(s => s.id === 'blogger-a'), pr.scenarios.map(s => s.id));
+  ok('你要做嘅行動：見工房丙已連場景', pr.actions.some(a => a.id === 'f1' && a.scenarioId === 'roaster-c') && pr.actions.some(a => !a.scenarioId));
+  const sc = (await A.get('/api/practice/scenario?id=roaster-c')).scenario;
   ok('人物卡七項都有出處', ['identity', 'background', 'stance', 'interests', 'decision', 'concerns', 'style'].every(k => sc.persona[k] && sc.persona[k].text && sc.persona[k].source));
-  ok('外來請求唔收', (await A.post('/api/practice', { action: 'start', scenarioId: 'farm-c' }, 'http://evil.example')).code === 403);
+  ok('外來請求唔收', (await A.post('/api/practice', { action: 'start', scenarioId: 'roaster-c' }, 'http://evil.example')).code === 403);
   // 開始（改人物卡一項）
-  const st = await A.post('/api/practice', { action: 'start', scenarioId: 'farm-c', level: 'hard', edits: { stance: '其實好想搵新買家' } });
+  const st = await A.post('/api/practice', { action: 'start', scenarioId: 'roaster-c', level: 'hard', edits: { stance: '其實好想搵新買家' } });
   const s0 = st.j.session;
   ok('開始：對方先開口、有建議講法、標練習', st.code === 200 && s0.turns[0].who === 'them' && s0.suggestions.length === 3 && s0.label === '練習 · 不算證據' && s0.level === 'hard');
   ok('改咗人物卡：標你改過、交到對方', s0.persona.stance.text === '其實好想搵新買家' && /你原話/.test(s0.persona.stance.source) && fs.readFileSync(path.join(DATA, 'sandbox', 'practice', s0.id, 'system.txt'), 'utf8').includes('其實好想搵新買家'));
   ok('對方心底顧慮交咗畀對方、難度係難搞', /心底嘅顧慮[\s\S]*H1/.test(fs.readFileSync(path.join(DATA, 'sandbox', 'practice', s0.id, 'system.txt'), 'utf8')) && /難搞/.test(fs.readFileSync(path.join(DATA, 'sandbox', 'practice', s0.id, 'system.txt'), 'utf8')));
   // 逐句
   let s = s0;
-  for (const line of ['丙生，批發商幾耐俾錢？', '我哋可以設保底價。', '首兩個月半月結，點睇？']) {
+  for (const line of ['丙生，咖啡店通常幾耐俾錢？', '我哋可以設保底價。', '首兩個月半月結，點睇？']) {
     const r = await A.post('/api/practice', { action: 'say', sessionId: s.id, text: line });
     if (r.code !== 200) { ok('講一句：對方回應', false, r); break; }
     s = r.j.session;
@@ -76,17 +76,17 @@ try {
   ok('練習紀錄：可重跑、列出紀錄', (await A.get('/api/practice')).sessions.some(x => x.id === s.id && x.review));
   const d = await A.get('/api/dashboard');
   ok('生意大腦第 3 項：練過有覆盤就算完成，可以再練', d.brain.items.find(x => x.id === 'scenario').status === 'done' && d.brain.items.find(x => x.id === 'scenario').practice.length === 2);
-  ok('看板你要做：有練習連結', d.tasks.find(t => t.id === 'f1').scenarioId === 'farm-c');
+  ok('看板你要做：有練習連結', d.tasks.find(t => t.id === 'f1').scenarioId === 'roaster-c');
   // 第二個對象（換對象）
-  const s2 = (await A.post('/api/practice', { action: 'start', scenarioId: 'chef-a', level: 'easy' })).j.session;
-  const r6 = await A.post('/api/practice', { action: 'say', sessionId: s2.id, text: '明哥，可唔可以落張試單？' });
-  ok('換對象：餐廳甲主廚都練得', r6.code === 200 && r6.j.session.turns.length === 3);
+  const s2 = (await A.post('/api/practice', { action: 'start', scenarioId: 'blogger-a', level: 'easy' })).j.session;
+  const r6 = await A.post('/api/practice', { action: 'say', sessionId: s2.id, text: '明哥，可唔可以幫我哋做第一次合作推介？' });
+  ok('換對象：博主甲都練得', r6.code === 200 && r6.j.session.turns.length === 3);
   // 為一個你要做嘅行動準備場景
-  const p1 = await A.post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: 'f2', who: '發牌機關職員', text: '想問清楚只做配送使唔使牌照' });
+  const p1 = await A.post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: 'f2', who: '收款服務商職員', text: '想問清楚申請網上收款需要甚麼文件' });
   ok('準備練習：收到', p1.code === 202, p1);
   const pr1 = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === p1.j.id); return r && (r.state === 'done' || r.state === 'failed') ? r : null; });
   const nsc = pr1 && pr1.result && pr1.result.scenarioId ? (await A.get('/api/practice/scenario?id=' + pr1.result.scenarioId)).scenario : null;
-  ok('準備練習：AI 準備好場景，連返個行動', nsc && nsc.counterpart.name === '發牌機關職員' && nsc.forTaskId === 'f2' && (await A.get('/api/practice')).actions.find(a => a.id === 'f2').scenarioId === nsc.id, pr1);
+  ok('準備練習：AI 準備好場景，連返個行動', nsc && nsc.counterpart.name === '收款服務商職員' && nsc.forTaskId === 'f2' && (await A.get('/api/practice')).actions.find(a => a.id === 'f2').scenarioId === nsc.id, pr1);
   ok('準備練習：冇講明對象唔收', (await A.post('/api/intake', { kind: 'note', type: 'practice-prep', taskId: '', text: '' })).code === 400);
   // 正式入口：選名單對象時只交紀錄節錄；選其他，即使同名亦不交舊紀錄。
   const stateFile = path.join(DATA, 'ledger', 'state.json'), ticketState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
@@ -112,10 +112,10 @@ try {
   const otherTicket = await ticketRequest({ who: '測試名單對象' });
   ok('準備練習正式入口：選其他即使同名，只交輸入名字', otherTicket.result?.state === 'done' && otherTicket.request.includes('- 對方：測試名單對象') && !['ticket-person', '真事標記', '站點標記', '假設標記', '會後標記', '覆盤標記', '舊卡秘密標記'].some(x => otherTicket.request.includes(x)), otherTicket);
   // 會後紀錄
-  const db = await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'farm-c', sessionId: s.id, text: '丙答應試供一週，下週三開始', commitment: 'partly', followUp: '2026-11-04' });
+  const db = await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'roaster-c', sessionId: s.id, text: '工房丙答應試供一批，下週三開始', commitment: 'partly', followUp: '2026-11-04' });
   const dr = await waitFor(async () => { const r = await runOf(A, x => x.kind === 'note' && x.ref === db.j.id); return r && (r.state === 'done' || r.state === 'failed') ? r : null; });
-  ok('會後紀錄：記低，適用時提出確認問題', dr && dr.state === 'done' && (!dr.result.asks || dr.result.asks.length === 1) && (await A.get('/api/dashboard')).events.some(e => e.title.startsWith('會後紀錄：農場主丙')), dr);
-  ok('會後紀錄：冇寫內容唔收', (await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'farm-c', text: '' })).code === 400);
+  ok('會後紀錄：記低，適用時提出確認問題', dr && dr.state === 'done' && (!dr.result.asks || dr.result.asks.length === 1) && (await A.get('/api/dashboard')).events.some(e => e.title.startsWith('會後紀錄：工房丙烘焙師')), dr);
+  ok('會後紀錄：冇寫內容唔收', (await A.post('/api/intake', { kind: 'note', type: 'debrief', scenarioId: 'roaster-c', text: '' })).code === 400);
 
   // 舊場景的顯示、開始、會後確認與失敗重試，均經伺服器及外殼入口。
   const cardDir = path.join(DATA, 'practice', 'scenarios');

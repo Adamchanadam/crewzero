@@ -25,7 +25,7 @@ const tfetch = (u, o = {}) => fetch(u, { signal: AbortSignal.timeout(20000), ...
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 const PORT = Number(PORT0), SPAN = Number(SPAN0 || 20);
-const KEY_LEGACY = 'sos-proofread:goal-dates-repro-2026-11-06:1:89edc73c', KEY_STRUCT = 'sos-proofread:goal-dates-repro-structured-2026-11-06:1:33f1547a';
+const KEY_LEGACY = 'sos-proofread:goal-dates-repro-2026-11-06:1:b1024575', KEY_STRUCT = 'sos-proofread:goal-dates-repro-structured-2026-11-06:1:54829453';
 const loadFixture = f => { const c = { window: {} }; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(PROTO, 'fixtures', f), 'utf8'), c); return c.window.STARTUP_OS_PAGE; };
 const plain = s => String(s || '').replaceAll('2026 年 ', '').replace(/\s+/g, ' ');
 
@@ -52,7 +52,7 @@ const txt = async sel => { const t = await ev(`(()=>{const e=document.querySelec
 const G1D = 'g~goal-quarter-due', G2D = 'g~goal-4w-due';
 const G2DATE = '[data-row="goal-4w"] .row-date', G2HEAD = '[data-row="goal-4w"] .row-head', G1ROW = '[data-row="goal-quarter"]';
 async function answerG1AndOpen() {
-  await clickText('#dq-goal-quarter .opt', '綠野物流與食材周報都書面答覆');
+  await clickText('#dq-goal-quarter .opt', '三十位訂戶連續兩個月付費訂閱');
   await click('#rest-toggle'); await sleep(300);
 }
 async function draft() { return ev(`(()=>{const k=Object.keys(localStorage).filter(k=>k.startsWith('sos-proofread:'));return {keys:k,edits:k.length?JSON.parse(localStorage.getItem(k[0])).edits:null}})()`); }
@@ -85,7 +85,7 @@ try {
   ok('二：tentativeKept 為收窄後日子（全部 2026-11-27）', m1.tentativeKept.length >= 1 && m1.tentativeKept.every(x => x.until === '2026-11-27'), m1.tentativeKept.map(x => x.until));
   ok('二：自動調整的項目不在 keptAsAI', !m1.keptAsAI.includes('goal-4w-due'));
   ok('二：「你修改了 N 項」只算創辦人（1 項），自動調整另計', /結果：已確認（你修改了 1 項；另有 1 項隨目前目標期限調整）/.test(lastReply.t) && lastReply.sum.includes('你修改了 1 項') && lastReply.sum.includes('1 項隨目前目標期限調整'), lastReply.sum);
-  ok('二：回覆檔另列「隨目前目標期限調整的項目」一節，且不再有 nextAskOn 日子', lastReply.t.includes('## ' + N.t('autoReplyHead', { n: 1 })) && !lastReply.t.includes('11 月 9 日'));
+  ok('二：回覆檔另列「隨目前目標期限調整的項目」一節，且不再有 nextAskOn 日子', lastReply.t.includes('## ' + N.t('autoReplyHead', { n: 1 })) && !lastReply.t.includes('11 月 9 日前後') && !m1.tentativeKept.some(x => x.until === '2026-11-09'));
   // G1 改回 → 撤回
   await setDate(G1D, '2026-12-31');
   ok('一：G1 改回 12 月 31 日：自動調整撤回，G2 回 12 月 4 日', (await txt(G2DATE)).includes('12 月 4 日') && !(await txt(G2HEAD)).includes(N.ui.autoAdjusted), await txt(G2DATE));
@@ -196,7 +196,7 @@ try {
   const pnl = await txt('.panel');
   ok('六-5：非重問項目面板：核對安排只寫尚待核實，核實方法照列原文', pnl.includes(N.ui.tentPlanHead + '：' + N.ui.tentPending) && pnl.includes(N.ui.tentTestHead + '：') && !pnl.includes('每週訪問') && !pnl.includes('到期處理方式'), pnl);
   await openFull(STRUCT);
-  await clickText('#dq-goal-quarter .opt', '綠野物流與食材周報都書面答覆');
+  await clickText('#dq-goal-quarter .opt', '完成網上收款及寄送設定');
   await setDate(G1D, '2026-11-27');
   await click(`[data-k="g~goal-quarter"]`);
   const pnl2 = await txt('.panel');

@@ -1,0 +1,270 @@
+{
+  "checkup": {
+    "status": "done",
+    "updatedAt": "@-6d 21:30",
+    "summary": "最薄弱的三處、你可能未想到的事項、現階段不建議做的事",
+    "industryCheck": [
+      {
+        "text": "訂閱網店可先以試飲裝降低首次付款門檻。",
+        "source": "電子商務資訊站",
+          "url": "https://ecommerce-notes.example.org/buying/subscriptions",
+        "readOn": "@-6d"
+      },
+      {
+        "text": "小型烘焙工房可先以少量試供了解訂戶口味。",
+        "source": "咖啡業資訊站",
+          "url": "https://coffee-trade.example.org/guides/trial-orders",
+        "readOn": "@-6d"
+      }
+    ],
+    "weak": [
+      {
+        "id": "weak-1",
+        "title": "是否有訂戶願意為新鮮烘焙付較高月費",
+        "evidence": 1,
+        "source": "Zero 解讀",
+        "why": "只有一位博主口頭表示值得，尚未有訂戶付款",
+        "cheapestTest": "就同一款豆向預訂者報兩個月費",
+        "stop": "如兩星期內沒有人選較高月費，便改以方便寄到家作賣點"
+      },
+      {
+        "id": "weak-2",
+        "title": "一人包裝寄貨能否應付",
+        "evidence": 0,
+        "source": "Zero 建議 · 未確認",
+        "why": "每批須於烘焙後三日內寄出，訂戶增至五十位後未必趕得及",
+        "cheapestTest": "試行一晚包裝五十包，並記錄時間",
+        "stop": "如一晚包裝不完，便先物色兼職包裝人手"
+      },
+      {
+        "id": "weak-3",
+        "title": "網上收款及寄送尚未辦妥",
+        "evidence": 0,
+        "source": "你原話",
+        "why": "你曾表示「收款和速遞未搞」，開放訂閱前必須辦妥",
+        "cheapestTest": "向兩間收款服務商查詢審批需時",
+        "stop": "如審批需時超過四星期，便延後試訂日期"
+      }
+    ],
+    "unseen": [
+      {
+        "id": "unseen-1",
+        "text": "訂戶多在月初發薪後才付款，月中推廣效果較差",
+        "source": "你原話"
+      },
+      {
+        "id": "unseen-2",
+        "text": "工房甲有一批熟客，可能是最快的推介渠道",
+        "source": "Zero 解讀"
+      },
+      {
+        "id": "unseen-3",
+        "text": "颱風季速遞會延誤，須及早向訂戶說明寄貨安排",
+        "source": "Zero 建議 · 未確認"
+      }
+    ],
+    "notNow": [
+      {
+        "id": "notnow-1",
+        "text": "現階段不建議開設實體店或推出咖啡機",
+        "why": "會分散資金及時間，且與訂閱生意性質不同"
+      },
+      {
+        "id": "notnow-2",
+        "text": "現階段不建議聘請全職包裝員",
+        "why": "尚未有五十位訂戶，現在承擔此成本為時過早"
+      }
+    ]
+  },
+  "scenario": {
+    "status": "waiting",
+    "updatedAt": "@-1d 21:10",
+    "practice": [
+      "roaster-c",
+      "blogger-a"
+    ],
+    "waitText": "四日後與工房丙會面：請先在情景演練練習一次",
+    "summary": "Zero 扮演對方與你模擬會面，練習後提供覆盤及會面卡",
+    "doneSummary": "練習完成：已有覆盤及會面卡"
+  },
+  "opportunities": {
+    "status": "done",
+    "updatedAt": "@-3d 21:20",
+    "summary": "四個機會，按時間緊迫程度及成本排序",
+    "list": [
+      {
+        "id": "opp-1",
+        "kind": "時間窗",
+        "title": "聖誕送禮季",
+        "why": "上班族會買咖啡禮盒送人，錯過此時機便要待至農曆新年",
+        "firstTest": "本週推出聖誕禮盒預訂頁",
+        "window": "未來兩星期內",
+        "windowDate": "@+10d",
+        "counterpartId": "r-a",
+        "source": "外部事實 [1]"
+      },
+      {
+        "id": "opp-2",
+        "kind": "競爭空隙",
+        "title": "大型品牌不做小批次新鮮烘焙",
+        "why": "大型品牌的豆多數烘焙後數月才售出",
+        "firstTest": "向兩位咖啡愛好者查詢現時購豆的烘焙日期",
+        "window": "一個月內",
+        "windowDate": "@+30d",
+        "counterpartId": "r-b",
+        "source": "外部事實 [2]"
+      },
+      {
+        "id": "opp-3",
+        "kind": "資助",
+        "title": "政府或機構的網上推廣資助",
+        "why": "可減輕試飲裝及推廣費用的負擔",
+        "firstTest": "查閱現有資助的申請條件",
+        "window": "留意最新申請期",
+        "source": "業界資訊整理"
+      },
+      {
+        "id": "opp-4",
+        "kind": "政策",
+        "title": "食品標示相關指引",
+        "why": "如指引要求標示烘焙日期，新鮮的賣點會更清楚",
+        "firstTest": "查閱現有指引的內容",
+        "window": "留意有關公布",
+        "source": "業界資訊整理"
+      }
+    ]
+  },
+  "routes": {
+    "status": "done",
+    "updatedAt": "@-2d 21:24",
+    "summary": "三條路線，附紅隊評分，供你選擇",
+    "chosenRouteId": "S1",
+    "decisionsMade": true,
+    "routes": [
+      {
+        "id": "S1",
+        "name": "先寄試飲裝",
+        "recommended": true,
+        "summary": "一次寄一百份試飲裝，再逐位跟進訂閱",
+        "redScore": "中",
+        "firstTest": "一星期內有六十人登記",
+        "stop": "兩星期內少於三十人登記"
+      },
+      {
+        "id": "S4",
+        "name": "向寫字樓茶水間供應商提議團購訂閱",
+        "recommended": false,
+        "summary": "向一間茶水間供應商了解其辦公室客戶是否有團購興趣",
+        "redScore": "未評分",
+        "firstTest": "向一間茶水間供應商了解其辦公室客戶是否有團購興趣",
+        "stop": "如兩星期內未能約到供應商，便暫停此路線"
+      },
+      {
+        "id": "S2",
+        "name": "工房甲推介熟客",
+        "recommended": false,
+        "summary": "請工房甲向其熟客推介訂閱",
+        "redScore": "中",
+        "firstTest": "一星期內有二十位熟客登記試飲",
+        "stop": "兩星期內少於十位登記便停"
+      }
+    ]
+  },
+  "pipeline": {
+    "status": "done",
+    "updatedAt": "@-1d 21:05",
+    "summary": "五個對象，Zero 每週建議下一步並準備材料",
+    "prospects": [
+      {
+        "id": "f-a",
+        "name": "工房甲",
+        "kind": "供應",
+        "stage": 3,
+        "lastReal": "已簽協議，首批已準時交貨，第二批已到貨待點收",
+        "lastAt": "@-3d",
+        "next": "請工房甲向熟客推介訂閱",
+        "material": {
+          "title": "工房合作一頁簡介",
+          "runId": "R-demo-a"
+        },
+        "kindCode": "partner",
+        "org": "甲烘焙工房",
+        "role": "烘焙師",
+        "lastContact": {
+          "date": "@-19d",
+          "text": "與工房甲會面紀錄"
+        }
+      },
+      {
+        "id": "r-a",
+        "name": "博主甲",
+          "kind": "供應",
+        "stage": 2,
+        "lastReal": "已試飲兩款豆",
+        "lastAt": "@-5d",
+        "next": "邀約博主甲做第一次合作推介，並報兩個合作方案",
+        "material": {
+          "title": "工房合作一頁簡介",
+          "runId": "R-demo-a"
+        },
+        "practiceId": "blogger-a",
+        "kindCode": "partner",
+        "org": "博主甲",
+        "role": "咖啡博主",
+        "lastContact": {
+          "date": "@-5d",
+          "text": "博主甲已試飲兩款豆"
+        }
+      },
+      {
+        "id": "r-b",
+        "name": "博主乙",
+          "kind": "供應",
+        "stage": 1,
+        "lastReal": "陳經理在電話中表示博主乙有興趣",
+        "lastAt": "@-9d",
+        "next": "邀請參加試飲",
+        "kindCode": "partner",
+        "org": "博主乙",
+        "role": "咖啡博主（由陳經理代洽）",
+        "lastContact": {
+          "date": "@-9d",
+          "text": "陳經理在電話中表示博主乙有興趣"
+        }
+      },
+      {
+        "id": "f-c",
+        "name": "工房丙",
+        "kind": "供應",
+        "stage": 1,
+          "lastReal": "已答應先試供兩批",
+        "lastAt": "@-3d",
+        "next": "會面前準備問題清單及協議草稿",
+        "material": {
+          "title": "工房甲供貨協議草稿",
+          "runId": "R-demo-b"
+        },
+        "practiceId": "roaster-c",
+        "rehearsal": "目標部分達成",
+        "kindCode": "partner",
+        "org": "丙烘焙工房",
+        "role": "烘焙師",
+        "lastContact": {
+          "date": "@-1d",
+          "text": "與工房丙的通話紀錄"
+        }
+      },
+      {
+        "id": "r-c",
+        "name": "博主丙",
+          "kind": "供應",
+        "stage": 0,
+        "lastReal": "",
+        "next": "先請博主甲介紹",
+        "kindCode": "partner",
+        "org": "博主丙",
+        "role": "咖啡博主"
+      }
+    ]
+  }
+}

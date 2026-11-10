@@ -77,21 +77,21 @@ try {
   // 分類索引嘅格係掣：先開模組對話框，再撳入面第一份產出
   await click('.module[data-mod="artifacts"]');
   await click('#modal .mb a');
-  ok('產出物件：打開 AI 產出（Markdown 排版）', await waitFor(async () => (await text('#modal')).includes('農場合作簡介')));
+  ok('產出物件：打開 AI 產出（Markdown 排版）', await waitFor(async () => (await text('#modal')).includes('工房合作一頁簡介')));
   await click('#modal-close');
   await click('.stages .st-stage:nth-of-type(2)');
   ok('範圍（壓縮條）：揀一站後只顯示呢站', (await ev('location.hash')).length > 1 && await ev(`document.querySelector('.st-stage[aria-pressed="true"]').getAttribute('data-scope')!=='all'`));
   // 深連 #里程碑 預選範圍
   await go('dashboard#m4');
   await click('.module[data-mod="now"]');
-  ok('深連 #m4 預選牌照保險', await ev(`document.querySelector('.st-stage[aria-pressed="true"] b').textContent==='牌照保險'`) && (await text('#modal')).includes('牌照保險'), await text('#modal'));
+  ok('深連 #m4 預選收款寄送', await ev(`document.querySelector('.st-stage[aria-pressed="true"] b').textContent==='收款寄送'`) && (await text('#modal')).includes('收款寄送'), await text('#modal'));
   await click('#modal-close');
   // 業務路徑：時間線
   await go('dashboard/path');
   ok('業務路徑：只有一個入口「告訴 Zero 一件事」，去首頁的盒', await ev(`[...document.querySelectorAll('#reqbar a')].map(a=>a.getAttribute('href')+'|'+a.textContent.trim()).join()==='/#quick-input|告訴 Zero 一件事 →'`), await ev(`[...document.querySelectorAll('#reqbar a')].map(a=>a.getAttribute('href')+'|'+a.textContent.trim()).join()`));
   await click('#view-timeline');
   ok('時間線：有今日線、試行期、目標日、決定期限、訪問日', await ev(`!!document.querySelector('.tl-today') && !!document.querySelector('.tl-bar') && document.querySelectorAll('.tl-dia').length>=4 && !!document.querySelector('.tl-dl.od') && document.querySelectorAll('.tl-iv').length>=4`));
-  ok('時間線：冇日子嘅站放「未定日期」', (await text('#undated')).includes('首條送貨路線'));
+  ok('時間線：冇日子嘅站放「未定日期」', (await text('#undated')).includes('首批續訂'));
   // 團隊：看板
   await go('dashboard/team');
   ok('看板七欄（六個狀態＋里程碑以外）', await ev(`document.querySelectorAll('#kanban .kcol').length===7 && !!document.querySelector('#kanban .kcol[data-col="adhoc"]')`));
@@ -103,8 +103,8 @@ try {
   ok('里程碑以外唔受篩選影響', await ev(`document.querySelectorAll('#kanban .kcol[data-col="adhoc"] .kcard').length===3`));
   await ev(`(()=>{const s=document.querySelector('#kb-ms');s.value='all';s.dispatchEvent(new Event('change'))})()`); await sleep(500);
   const f1 = await text('.kcard[data-task="f1"]');
-  ok('工作卡：你要做、等候中、等候乜、優先原因、完成需你確認', ['你要做', '等候中', '等候：工作「農場丙簽約前資料包」完成', '優先：4 日後到期', '完成需你確認'].every(s => f1.includes(s)), f1);
-  ok('外部回覆附預計日期', (await text('.kcard[data-task="t4"]')).includes('農場丙回覆：可否增加供應量（預計'));
+  ok('工作卡：你要做、等候中、等候乜、優先原因、完成需你確認', ['你要做', '等候中', '等候：工作「工房丙簽約前資料包」完成', '優先：4 日後到期', '完成需你確認'].every(s => f1.includes(s)), f1);
+  ok('外部回覆附預計日期', (await text('.kcard[data-task="t4"]')).includes('工房丙回覆：可否增加供應量（預計'));
   ok('可進行嘅卡有標', (await text('.kcard[data-task="t3"]')).includes('可進行'));
   await ev(`(()=>{const s=document.querySelector('#kb-owner');s.value='founder';s.dispatchEvent(new Event('change'))})()`); await sleep(500);
   ok('篩「你要做」：只剩你嘅現實行動', await ev(`(()=>{const c=[...document.querySelectorAll('#kanban .kcard')];return c.length===8&&c.every(x=>x.classList.contains('mine'))})()`));
@@ -115,7 +115,7 @@ try {
   ok('目前工作：顯示你下一個行動', (await text('#modal')).includes('你下一個行動'), await text('#modal'));
   await click('#modal-close');
   await go('dashboard/path');
-  ok('日程（業務路徑頁）：你要做嘅行動有日子', (await text('#schedule')).includes('你要做') && (await text('#schedule')).includes('見農場丙簽供應協議'));
+  ok('日程（業務路徑頁）：你要做嘅行動有日子', (await text('#schedule')).includes('你要做') && (await text('#schedule')).includes('見工房丙簽供貨協議'));
   await go('dashboard/path'); await click('#view-timeline');
   ok('時間線：兩站進行期間重疊、你的行動有標', await ev(`document.querySelectorAll('.tl-act').length===2 && document.querySelectorAll('.tl-you').length>=2`));
   // 紀錄、系統
@@ -134,17 +134,25 @@ try {
   ok('重新載入唔重播', !(await has('#cz-cele-stage')));
   if (await has('#cz-cele-card button')) await ev(`document.querySelector('#cz-cele-card button').click()`);
   // 首頁「告訴 Zero 一件事」：頁頭導航有公司現況分頁；交一件臨時工作全程
-  await go('');
+  await go(''); await waitFor(() => has('nav.tabs a[data-tab="overview"]')); // 三份測試並行時首頁要多於 1.6 秒才畫好：等導航出現才核對
   ok('首頁同一列導航有公司現況分頁', await ev(`document.querySelector('nav.tabs a[data-tab="overview"]').getAttribute('href')==='/dashboard'`));
   ok('首頁「告訴 Zero 一件事」有三個選項：發生了一件事、請 Zero 做一件事、想改計劃', await has('#quick-event') && await has('#quick-adhoc') && await has('#quick-order') && (await ev(`document.querySelector('#tell-form').hidden`)), await text('#tell-intents'));
   await click('#quick-adhoc');
   ok('選「請 Zero 做一件事」後展開表格，說明先擬範圍', !(await ev(`document.querySelector('#tell-form').hidden`)) && (await text('#tell-after')).includes('先擬範圍'), await text('#tell-form'));
-  await ev(`document.querySelector('#quick-text').focus()`); await send('Input.insertText', { text: '幫我擬一張聖誕節餐廳推廣單張，下星期五前要。' });
+  await ev(`document.querySelector('#quick-text').focus()`); await send('Input.insertText', { text: '幫我擬一張聖誕咖啡禮盒推廣頁，下星期五前要。' });
   await click('#quick-send');
   ok('交咗：顯示已收到，並有「查看回饋」', await waitFor(async () => (await text('#quick-note')).includes('已收到') && await has('#quick-track'), 20000), await text('#quick-note'));
-  ok('交咗：「最近交給 Zero 的事」出現這一件，AI 擬好問題後有作答入口', await waitFor(() => ev(`!![...document.querySelectorAll('#recent-list li')].find(li=>li.innerText.includes('聖誕節餐廳推廣單張')&&li.querySelector('a[data-answer]'))`), 40000), await text('#recent-inputs'));
-  await ev(`document.querySelector('#recent-list a[data-answer]').click()`);
-  ok('一按就去作答該問題包', await waitFor(async () => (await ev('location.hash')).startsWith('#/ask/') && (await ev('document.body.innerText')).includes('測試單張')));
+  const recentInput = await waitFor(() => ev(`(()=>{const d=document.querySelector('#recent-inputs'),li=[...document.querySelectorAll('#recent-list li')].find(x=>x.textContent.includes('聖誕咖啡禮盒推廣頁'));return d&&li?{id:li.dataset.input,details:d.tagName==='DETAILS',open:d.open,rows:d.querySelectorAll('#recent-list li').length,feedback:!!li.querySelector('[data-feedback]'),answer:!!li.querySelector('[data-answer]')}:null})()`), 40000);
+  ok('交咗：「最近交給 Zero 的事」收起、最多三行，這一件只有「查看回饋」', recentInput && recentInput.details && !recentInput.open && recentInput.rows <= 3 && recentInput.feedback && !recentInput.answer, recentInput);
+  const answerPack = await waitFor(async () => {
+    const home = await (await fetch(BASE + 'api/home')).json();
+    const input = (home.inputs || []).find(x => x.id === (recentInput || {}).id);
+    return input && input.packId ? input.packId : null;
+  }, 40000);
+  const answerHref = answerPack && await waitFor(() => ev(`(()=>{const r=document.querySelector('[data-todo="${answerPack}"]'),a=r&&r.querySelector('a[href^="#/ask/"]');return a&&a.getAttribute('href')})()`), 40000);
+  ok('AI 擬好問題後，作答入口留在「接下來」或其他待決事項', typeof answerHref === 'string' && answerHref.startsWith('#/ask/'), answerHref);
+  await go(answerHref || '#/');
+  ok('由待決事項的入口可打開作答問題包', await waitFor(async () => (await ev('location.hash')).startsWith('#/ask/') && (await ev('document.body.innerText')).includes('測試單張')));
   // 監察台即時見到臨時工作
   await go('dashboard/team');
   ok('監察台看板：里程碑以外見到新臨時工作', (await text('#kanban .kcol[data-col="adhoc"]')).includes('測試推廣單張'));

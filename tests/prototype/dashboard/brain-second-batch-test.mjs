@@ -98,8 +98,8 @@ assert.equal(c.checkOpportunities({ list: [{ ...item, windowDate: '2026-11-07', 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-second-batch-'));
 try {
   fs.mkdirSync(path.join(tmp, 'out')); fs.mkdirSync(path.join(tmp, 'example'));
-  for (const name of ['blue.json', 'red.json', 'judge.json', 'rebuttal.json', 'strengthen.json']) fs.copyFileSync(path.join(root, 'fixtures/demo-farm/brain/wargame', name), path.join(tmp, 'example', name));
-  fs.copyFileSync(path.join(root, 'fixtures/demo-farm/practice/farm-c.json'), path.join(tmp, 'example-scenario.json'));
+  for (const name of ['blue.json', 'red.json', 'judge.json', 'rebuttal.json', 'strengthen.json']) fs.copyFileSync(path.join(root, 'fixtures/demo-shop/brain/wargame', name), path.join(tmp, 'example', name));
+  fs.copyFileSync(path.join(root, 'fixtures/demo-shop/practice/roaster-c.json'), path.join(tmp, 'example-scenario.json'));
   fs.writeFileSync(path.join(tmp, 'task.md'), '測試\n'); fs.writeFileSync(path.join(tmp, 'topic.md'), '題目：測試\n'); fs.writeFileSync(path.join(tmp, 'request.md'), '對方：測試\n');
   fs.writeFileSync(path.join(tmp, 'ledger.json'), JSON.stringify({ ...ledger, counterparts: [] }));
   const fake = fileURLToPath(new URL('../lib/fake-ai.mjs', import.meta.url));

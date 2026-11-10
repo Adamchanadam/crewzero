@@ -1,0 +1,115 @@
+{
+  "thesis": "愛喝咖啡的上班族，會為新鮮烘焙、方便寄到家的咖啡豆訂閱月月鮮烘。",
+  "whyNow": "聖誕送禮季是邀請博主推介的好時機。",
+  "claims": [
+    {
+      "id": "B1",
+      "topic": "付款",
+      "claim": "咖啡愛好者願意為新鮮烘焙付較高月費",
+      "evidence": 1,
+      "source": "你原話 商業模式第二節",
+      "assumptionIds": [
+        "H1"
+      ]
+    },
+    {
+      "id": "B2",
+      "topic": "交付",
+      "claim": "兩間工房可以每月穩定供貨",
+      "evidence": 0,
+      "source": "你原話 每週訪問",
+      "assumptionIds": [
+        "H2"
+      ]
+    },
+    {
+      "id": "B3",
+      "topic": "需要",
+      "claim": "上班族在超市買不到新鮮烘焙的咖啡豆",
+      "evidence": 0,
+      "source": "你原話 每週訪問",
+      "assumptionIds": [
+        "H3"
+      ]
+    },
+    {
+      "id": "B4",
+      "topic": "渠道",
+      "claim": "創辦人親自包裝寄貨足以應付首五十位訂戶",
+      "evidence": 0,
+      "source": "Zero 解讀",
+      "assumptionIds": [
+        "H4"
+      ]
+    },
+    {
+      "id": "B5",
+      "topic": "時間窗",
+      "claim": "聖誕送禮季是邀請博主推介的好時機",
+      "evidence": 0,
+      "source": "外部事實 [1]",
+      "assumptionIds": []
+    },
+    {
+      "id": "B6",
+      "topic": "競爭",
+      "claim": "大型品牌不做小批次新鮮烘焙",
+      "evidence": 0,
+      "source": "外部事實 [2]",
+      "assumptionIds": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "S1",
+      "name": "先寄試飲裝",
+      "summary": "一次寄一百份試飲裝，再逐位跟進訂閱",
+      "upside": "提早知道哪些登記者願意訂閱",
+      "firstTest": "一星期內有六十人登記",
+      "success": "六十人登記",
+      "stop": "兩星期內少於三十人登記"
+    },
+    {
+      "id": "S2",
+      "name": "工房甲推介熟客",
+      "summary": "請工房甲向熟客推介訂閱",
+      "upside": "可接觸工房甲已有熟客",
+      "firstTest": "一星期內有二十位熟客登記試飲",
+      "success": "一星期內有二十位熟客登記試飲",
+      "stop": "兩星期內少於十位登記便停"
+    },
+    {
+      "id": "S3",
+      "name": "直接投放廣告",
+      "summary": "在社交媒體投放廣告，直接開放訂閱",
+      "upside": "較快取得收入",
+      "firstTest": "兩星期內有二十人付款",
+      "success": "兩星期內有二十人付款",
+      "stop": "一個月內少於二十人付款"
+    }
+  ],
+  "admittedWeaknesses": [
+    {
+      "claimId": "B1",
+      "text": "尚未有任何訂戶實際付款"
+    },
+    {
+      "claimId": "B4",
+      "text": "包裝寄貨完全依賴創辦人一人"
+    }
+  ],
+  "sources": [
+    {
+      "n": 1,
+      "title": "咖啡業季節內容整理",
+      "url": "",
+      "readOn": "2026-10-27"
+    },
+    {
+      "n": 2,
+      "title": "大型咖啡品牌最低訂量資料整理",
+      "url": "",
+      "readOn": "2026-10-27"
+    }
+  ]
+}

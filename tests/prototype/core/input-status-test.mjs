@@ -39,7 +39,7 @@ const rows = [
   ['15 來源是與 Zero 的討論', { ...base, source: 'chat' }, {}, { code: 'working', source: 'chat' }],
   ['16 網頁送出（沒有 source）', base, {}, { source: 'web' }],
   ['17 只有文件、沒有文字', { ...base, via: 'doc', status: 'processed', effects: [{ change: 'x' }] }, { said: '' }, { code: 'updated', textless: true }],
-  ['18 有原話', base, { said: '農場甲確認供貨' }, { textless: false }],
+  ['18 有原話', base, { said: '工房甲確認供貨' }, { textless: false }],
   ['19 輸入紀錄缺欄位（沒有 effects、沒有 files）', { id: 'in-z', status: 'processed' }, {}, { code: 'noeffect', legacy: true }],
   ['20 空物件不當機', {}, {}, { code: 'working' }]
 ];
@@ -78,7 +78,7 @@ const evil = dash.dashboardState(DIR, {}).inputs.all.find(v => v.id === 'in-evil
 ok('附件路徑出界、不存在、資料夾都不可開', evil && evil.files.every(f => !f.openable), evil && evil.files.map(f => f.openable));
 // 詳細視圖：原話、問題及答案、確認時間
 const det = inputView(DIR, st0.inputs.find(i => i.id === idB), { packs: lib.listPacks(DIR), runs: [], loadPack: lib.loadPack, loadAnswers: lib.loadAnswers }, { detail: true });
-ok('詳細視圖有原話、兩題答案及確認時間', det.said.includes('餐廳乙') && det.qa.length === 2 && det.qa.every(q => q.answer) && det.confirmedAt, det.confirmedAt);
+ok('詳細視圖有原話、兩題答案及確認時間', det.said.includes('五十位訂戶') && det.qa.length === 2 && det.qa.every(q => q.answer) && det.confirmedAt, det.confirmedAt);
 const detA = inputView(DIR, st0.inputs.find(i => i.id === idA), { packs: lib.listPacks(DIR), runs: [], loadPack: lib.loadPack, loadAnswers: lib.loadAnswers }, { detail: true });
 ok('等你確認：兩題未答、有 Zero 建議', detA.status.open === 2 && detA.qa.every(q => !q.answer && q.suggest), detA.qa.map(q => q.suggest));
 // 名稱表：未能讀取、類型判定固定字句

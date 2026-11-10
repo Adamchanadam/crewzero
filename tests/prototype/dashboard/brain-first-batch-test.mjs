@@ -99,10 +99,10 @@ try {
   check('不同編號保留短名及完整顯示名稱', distinct.length === 2 && distinct[0].id === 'pr-A1' && distinct[1].id === 'pr-A2' && distinct[1].name === '陳' && distinct[1].label === '陳（乙公司）');
   const fixture = { window: {} }; vm.runInNewContext(fs.readFileSync(path.join(PROTO, 'fixtures', 'sample-company-page.js'), 'utf8'), fixture);
   j(path.join(data, 'company', 'page.json'), fixture.window.STARTUP_OS_PAGE);
-  state.company = { assumptions: [{ id: 'H1', text: '綠野物流願意試送', grade: 'did' }] };
-  state.milestones = [{ id: 'm1', actorName: '綠野物流 —— 擬議送貨與銷售伙伴', state: 'done', pathStatus: 'confirmed' }]; j(stateFile, state);
-  const sampleProspect = brain.pipelineOf(DIR).prospects.find(p => p.name === '綠野物流');
-  check('N1 真實樣本短名配對及完整標籤', sampleProspect?.stage === 2 && sampleProspect.label === '綠野物流 · 送貨與銷售伙伴');
+  state.company = { assumptions: [{ id: 'H1', text: '工房丙願意先試供兩批', grade: 'did' }] };
+  state.milestones = [{ id: 'm1', actorName: '工房丙 —— 試供中的供貨工房', state: 'done', pathStatus: 'confirmed' }]; j(stateFile, state);
+  const sampleProspect = brain.pipelineOf(DIR).prospects.find(p => p.name === '工房丙');
+  check('N1 真實樣本短名配對及完整標籤', sampleProspect?.stage === 2 && sampleProspect.label === '工房丙 · 試供中的供貨工房');
   const beforeSync = brain.pipelineOf(DIR).prospects.map(p => [p.name, p.stage]);
   const samplePage = fixture.window.STARTUP_OS_PAGE, confirmation = { pageId: samplePage.page.id, values: {}, edits: [], confirmedAt: '2026-11-05' };
   state.ledgerFrom = samplePage.page.id;

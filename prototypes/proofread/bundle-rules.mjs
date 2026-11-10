@@ -1,6 +1,6 @@
 // 程式檔清單（MVP 規格 2026-10-29 第 2 節第 1、6 項）：安裝（install.mjs）同插件打包（build-plugin.mjs）共用同一張排除清單。
 // 次序：先排除插件資料夾本身同市集資訊資料夾（避免將插件複製入插件），再排除資料、示範、設計稿、截圖、交接筆記。
-// fixtures/ 唔排除：交資料、情景演練、紅藍對打、示範種子都要讀入面嘅虛構範本（「從田間到餐桌」），排除咗交資料會失敗。
+// fixtures/ 唔排除：交資料、情景演練、紅藍對打、示範種子都要讀入面嘅虛構範本（「月月鮮烘」），排除咗交資料會失敗。
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

@@ -1,0 +1,335 @@
+{
+  "matchId": "D1",
+  "basedOn": {
+    "blue": "blue.json",
+    "red": "red.json",
+    "rebuttal": "rebuttal.json",
+    "judge": "judge.json"
+  },
+  "cards": [
+    {
+      "id": "T1",
+      "from": {
+        "claimIds": [
+          "B1"
+        ],
+        "attackIds": [
+          "R1"
+        ],
+        "verdict": "受傷",
+        "persona": "訂戶",
+        "topRiskRank": 1,
+        "founderVote": "同意"
+      },
+      "critique": "每包比超市貴四十元，一年多出幾百元，而我根本喝不出新鮮與否",
+      "judgeSaid": "只有一位博主口頭表示值得，尚未有訂戶付款；須有人實際支付較高月費，才可判為「企得住」",
+      "handling": "修正",
+      "whyThis": "攻擊屬實；先以兩個月費測試訂戶是否願付較高月費，再決定收入安排",
+      "changes": [
+        {
+          "cell": "收入",
+          "before": "訂戶按月付訂閱費",
+          "after": "就同一款豆提供兩個月費，記錄預訂者選擇後再定正式訂閱費"
+        }
+      ],
+      "advantage": "",
+      "assumptionChanges": [
+        {
+          "assumptionId": "H1",
+          "change": "改寫",
+          "text": "咖啡愛好者願意為新鮮烘焙付較高月費",
+          "cheapestTest": "就同一款豆向預訂者報兩個月費",
+          "supersedes": "H1"
+        },
+        {
+          "assumptionId": "H5",
+          "change": "新增",
+          "text": "較高月費可抵銷小批次包裝及速遞成本",
+          "cheapestTest": "記錄一份試飲裝的包裝及速遞成本",
+          "supersedes": ""
+        }
+      ],
+      "routeImpact": [
+        {
+          "milestoneId": "m5",
+          "change": "none",
+          "detail": "連續兩個月付費：增加觀察項「每月毛利」",
+          "value": ""
+        }
+      ],
+      "test": {
+        "what": "兩星期內就同一款豆向預訂者報兩個月費",
+        "by": "@+12d",
+        "testBy": "founder",
+        "success": "至少一位預訂者選擇較高月費",
+        "stop": "如兩星期內沒有人選較高月費，便改以方便寄到家作賣點",
+        "founderAction": "向預訂者提供兩個月費並記錄選擇",
+        "costHours": 2
+      },
+      "reattacks": [
+        {
+          "round": 1,
+          "persona": "投資者",
+          "attack": "若訂戶只選較低月費，小批次包裝及速遞成本從何彌補？",
+          "severity": "中",
+          "verdict": "受傷",
+          "reason": "須待試飲裝成本與預訂者選擇記錄完成，論點才穩妥"
+        }
+      ],
+      "askFirst": true,
+      "label": "Zero 建議 · 未確認",
+      "status": "擬議",
+      "founderNote": ""
+    },
+    {
+      "id": "T2",
+      "from": {
+        "claimIds": [
+          "B4"
+        ],
+        "attackIds": [
+          "R5"
+        ],
+        "verdict": "倒下",
+        "persona": "投資者",
+        "topRiskRank": 2,
+        "founderVote": "同意"
+      },
+      "critique": "烘焙後三日內寄出五十份，一人無法完成，病倒一星期便會斷貨",
+      "judgeSaid": "一人未必能在烘焙後三日內包裝並寄出五十份，須先試行並安排後備人手",
+        "handling": "反轉做優勢",
+        "whyThis": "把包裝寄貨的瓶頸轉為工房烘焙後即日代寄，既減少創辦人的人手壓力，也突顯工房直送的新鮮；兼職包裝人手仍在物色作後備。",
+      "changes": [
+        {
+          "cell": "關鍵伙伴",
+          "before": "創辦人親自包裝寄貨",
+            "after": "工房烘焙後即日代寄；創辦人正物色兼職包裝人手作後備"
+        },
+        {
+          "cell": "渠道",
+            "before": "烘焙後三日內寄出",
+            "after": "工房烘焙後即日代寄，並標示烘焙日期"
+        }
+      ],
+        "advantage": "「工房直送、更新鮮」：咖啡豆由工房烘焙後即日代寄，附口味介紹",
+      "assumptionChanges": [
+        {
+          "assumptionId": "H4",
+          "change": "取代",
+          "text": "創辦人親自包裝寄貨足以應付首五十位訂戶",
+            "cheapestTest": "付費試用一間速遞公司的同日取件服務一次",
+          "supersedes": "H4"
+        }
+      ],
+      "routeImpact": [
+        {
+          "milestoneId": "m3",
+          "change": "retarget",
+            "detail": "首批續訂前增加觀察項「工房同日代寄是否可行」",
+            "value": "一次同日取件服務及一位兼職後備"
+        }
+      ],
+      "test": {
+          "what": "付費試用一間速遞公司的同日取件服務一次",
+        "by": "@+9d",
+          "testBy": "approval",
+          "success": "工房烘焙當日寄出，訂戶三日內收到",
+          "stop": "如同日取件未能安排，便先物色兼職包裝人手",
+          "founderAction": "批准並支付一次速遞公司同日取件服務費",
+        "costHours": 1
+      },
+      "reattacks": [
+        {
+          "round": 1,
+          "persona": "投資者",
+          "attack": "速遞同日取件遇上工房臨時改烘焙日便會失約，仍要有人手後備",
+          "severity": "高",
+          "verdict": "受傷",
+            "reason": "須確認工房可即日代寄，並繼續物色兼職包裝人手作後備"
+        }
+      ],
+      "askFirst": true,
+      "label": "Zero 建議 · 未確認",
+      "status": "擬議",
+      "founderNote": ""
+    },
+    {
+      "id": "T3",
+      "from": {
+        "claimIds": [
+          "B5"
+        ],
+        "attackIds": [
+          "R6"
+        ],
+        "verdict": "受傷",
+        "persona": "競爭者",
+        "topRiskRank": 3,
+        "founderVote": "未投"
+      },
+      "critique": "聖誕前博主排期已滿，沒有時間為新品牌試飲和推介",
+      "judgeSaid": "時機合適，但博主在聖誕前最忙碌",
+      "handling": "先驗證",
+      "whyThis": "本週發出三個試飲邀請即可驗證博主是否有檔期，毋須承諾正式合作",
+      "changes": [],
+      "advantage": "",
+      "assumptionChanges": [
+        {
+          "assumptionId": "H6",
+          "change": "新增",
+          "text": "聖誕前仍有博主願意抽出一小時試豆",
+          "cheapestTest": "本週發三個試飲邀請",
+          "supersedes": ""
+        }
+      ],
+      "routeImpact": [
+        {
+          "milestoneId": "m2",
+          "change": "none",
+          "detail": "訂戶試訂：沒有改動",
+          "value": ""
+        }
+      ],
+      "test": {
+        "what": "本週發三個試飲邀請",
+        "by": "@+7d",
+        "testBy": "founder",
+        "success": "一星期內兩位以上博主答應",
+        "stop": "如少於兩位答應，試飲裝便改於一月第二週舉行",
+        "founderAction": "親自打電話邀請三位博主",
+        "costHours": 2
+      },
+      "reattacks": [
+        {
+          "round": 1,
+          "persona": "競爭者",
+          "attack": "即使博主答應試飲，聖誕前未必有時間完成合作推介",
+          "severity": "低",
+          "verdict": "企得住",
+          "reason": "試飲邀請可先驗證檔期，正式推介日期仍要由博主確認"
+        }
+      ],
+      "askFirst": false,
+      "label": "Zero 建議 · 未確認",
+      "status": "擬議",
+      "founderNote": ""
+    },
+    {
+      "id": "T4",
+      "from": {
+        "claimIds": [
+          "B2"
+        ],
+        "attackIds": [
+          "R3",
+          "R9"
+        ],
+        "verdict": "企得住",
+        "persona": "工房伙伴",
+        "topRiskRank": null,
+        "founderVote": "唔同意"
+      },
+      "critique": "兩間小工房一旦生豆缺貨或烘豆機故障，下一批便會斷貨",
+      "judgeSaid": "重判：紅方未能證明兩間工房會同時斷貨；工房甲首批已準時交貨，第二批已到貨待點收，仍須繼續記錄缺貨情況",
+      "handling": "接受並監察",
+      "whyThis": "斷貨風險屬實，但尚未有第三間已簽約工房，短期內無法改變；整體生意在此風險下仍然可行",
+      "changes": [],
+      "advantage": "",
+      "assumptionChanges": [
+        {
+          "assumptionId": "H2",
+          "change": "加限制",
+          "text": "兩間工房可以每月穩定供貨，但須持續記錄生豆缺貨及機器故障",
+          "cheapestTest": "查閱每批收貨紀錄的缺貨比例",
+          "supersedes": ""
+        }
+      ],
+      "routeImpact": [
+        {
+          "milestoneId": "m5",
+          "change": "none",
+          "detail": "連續兩個月付費：增加觀察項「每批缺貨比例」，超過兩成即重新辯論",
+          "value": ""
+        }
+      ],
+      "test": {
+          "what": "查閱兩間工房過去兩批的收貨紀錄，計算每批缺貨比例",
+        "by": "@+14d",
+          "testBy": "ai",
+        "success": "兩間工房連續兩批按時交貨，且缺貨不超過兩成",
+          "stop": "如任何一批缺貨超過兩成，便重新辯論並物色第三間工房",
+        "founderAction": "",
+        "costHours": 1,
+        "aiChecked": [
+          {
+          "finding": "工房甲首批準時交貨、沒有缺貨；第二批已到貨，待你點收後照常記錄缺貨比例",
+            "label": "observation",
+            "sources": [
+              {
+                "title": "工房收貨紀錄",
+                "url": "",
+                "readOn": "2026-10-27"
+              }
+            ],
+            "minutes": 6
+          }
+        ]
+      },
+      "reattacks": [
+        {
+          "round": 1,
+          "persona": "工房伙伴",
+          "attack": "兩批交貨未能證明生豆缺貨或烘豆機故障時仍可供貨",
+          "severity": "中",
+          "verdict": "企得住",
+          "reason": "觀察項會持續跟進，並要物色第三間工房作後備"
+        }
+      ],
+      "askFirst": false,
+      "label": "Zero 建議 · 未確認",
+      "status": "擬議",
+      "founderNote": "兩間工房遇上生豆缺貨便會同時斷貨，我不認同此論點「企得住」"
+    }
+  ],
+  "accepted": [
+    {
+      "claimId": "B3",
+      "note": "判為「受傷」但暫時接受：試飲時順道詢問咖啡愛好者現時購豆的烘焙日期，不另設測試"
+    }
+  ],
+  "modelRevision": {
+    "version": 2,
+      "summary": "先測試較高月費；以工房同日代寄試行並物色兼職後備",
+    "cells": [
+      {
+        "cell": "收入",
+        "text": "就同一款豆提供兩個月費，記錄預訂者選擇後再定正式訂閱費",
+        "fromCardId": "T1"
+      },
+      {
+        "cell": "關鍵伙伴",
+        "text": "工房甲及工房丙供貨；工房烘焙後即日代寄（試行中）；另物色兼職包裝人手作後備",
+        "fromCardId": "T2"
+      },
+      {
+        "cell": "渠道",
+          "text": "工房烘焙後即日代寄，並標示烘焙日期",
+        "fromCardId": "T2"
+      }
+    ]
+  },
+  "founderQuestions": [
+    {
+      "cardId": "T1",
+      "question": "先以兩個月費測試訂戶意向，是否採用？",
+      "recommend": "A",
+      "why": "付款紀錄可直接驗證是否有人願意付較高月費"
+    },
+    {
+      "cardId": "T2",
+        "question": "先試用工房同日代寄服務並物色兼職人手，是否採用？",
+      "recommend": "A",
+        "why": "判為「倒下」的論點必須處理；先試用可驗證工房同日代寄是否可行"
+    }
+  ]
+}

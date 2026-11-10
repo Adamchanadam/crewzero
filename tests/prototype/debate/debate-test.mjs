@@ -51,10 +51,10 @@ try {
   seedDemo(DEMO, { reset: true });
   // 辯論示範論點引用的假設及證據級，必須存在於這個隔離測試帳本。
   { const f = path.join(DEMO, 'ledger', 'state.json'), s = JSON.parse(fs.readFileSync(f, 'utf8')); s.company.assumptions = [
-    { id: 'H1', text: '餐廳願意為可追溯來源付較高價錢', grade: 'said' },
-    { id: 'H2', text: '兩個農場可以每週穩定供貨', grade: 'did' },
-    { id: 'H3', text: '中小型餐廳找不到穩定的本地菜源', grade: 'did' },
-    { id: 'H4', text: '創辦人親自送貨足以應付首三間餐廳', grade: 'guess' }
+    { id: 'H1', text: '咖啡愛好者願意為新鮮烘焙付較高月費', grade: 'said' },
+    { id: 'H2', text: '兩間工房可以每月穩定供貨', grade: 'did' },
+    { id: 'H3', text: '上班族在超市買不到新鮮烘焙的咖啡豆', grade: 'did' },
+    { id: 'H4', text: '創辦人親自包裝寄貨足以應付首五十位訂戶', grade: 'guess' }
   ]; fs.writeFileSync(f, JSON.stringify(s)); }
   { const f = path.join(DEMO, 'brain', 'reveal.json'), r = JSON.parse(fs.readFileSync(f, 'utf8')); r.seededAt = new Date(Date.now() - 900000).toISOString(); fs.writeFileSync(f, JSON.stringify(r)); }
   await kit.certifyDirect(DEMO, PROTO, ADAPTER);
@@ -72,7 +72,7 @@ try {
   /* ---------- B. 快打（定價）：藍 → 紅 → 裁判 → 完場出回應包 ---------- */
   const seats1 = ['付款者', '採購或審批者', '競爭者'];
   mode(DEMO, 'debate-blue:slow\nnote:slow');
-  ok('開場：快打收到', (await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'pricing', title: '每週訂菜定價', seats: seats1, level: 'hard' })).code === 202);
+  ok('開場：快打收到', (await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'pricing', title: '每月咖啡訂閱定價', seats: seats1, level: 'hard' })).code === 202);
   const id1 = await waitFor(() => latestId(A, 2));
   const priorityHelp = await A.post('/api/intake', { kind: 'note', type: 'help', text: '請在下一輪前說明。' });
   const priorityRun = priorityHelp.code === 202 && await waitFor(async () => (await A.get('/api/status')).runs.find(r => r.kind === 'note' && r.ref === priorityHelp.j.id && r.state === 'running'), 20000);
@@ -96,7 +96,7 @@ try {
   ok('監察台：紅藍對打等你回應、深連回應包', (await A.get('/api/dashboard')).brain.items.find(x => x.id === 'wargame').waitHref === '/#/ask/' + rp1);
 
   /* ---------- C. 全場（成盤生意）：加藍方反駁；第二場回應包照出（唔會當答過） ---------- */
-  ok('開場：全場收到', (await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'business', title: '從田間到餐桌成盤生意（第二次）', seats: ['付款者', '買家或使用者', '競爭者', '投資者'], level: 'normal' })).code === 202);
+  ok('開場：全場收到', (await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'business', title: '月月鮮烘整體生意（第二次）', seats: ['付款者', '買家或使用者', '競爭者', '投資者'], level: 'normal' })).code === 202);
   const id2 = await waitFor(() => latestId(A, 3));
   let m2 = await until(A, id2, m => m.phase === 'done');
   ok('全場：四個回合、有反駁', m2 && m2.format === '全場' && m2.rebuttals > 0 && m2.budget.aiStarts === 4, m2 && m2.budget);
@@ -104,9 +104,9 @@ try {
   ok('全場：較上場只同同類題目比（同示範第 1 場成盤生意比，唔同定價比）', m2 && m2.delta && m2.delta.prevId === 'D1', m2 && m2.delta);
   ok('快打（定價）係第一場定價：冇較上場', !(await match(A, id1)).delta);
   // 回應：不同意第一個關鍵時刻（一擊倒下 B4）、挑戰一句、寫一個真實證據
-  await answer(A, m2.packs.response, { v1: '不同意', ch: '其實農場甲答應幫手送貨', ev: '農場甲老闆話每週可以順路送一間', evg: '有人講過' });
+  await answer(A, m2.packs.response, { v1: '不同意', ch: '其實已物色兼職包裝人手', ev: '創辦人上週試行一晚包裝五十包，並記錄時間', evg: '有人講過' });
   m2 = await until(A, id2, m => m.phase === 'adopt', 60000);
-  ok('回應：記低表態、證據、挑戰（你原話）', m2 && m2.founder.votes[0].agree === false && m2.founder.evidence.length === 1 && m2.founder.challenges[0].claimId === 'B4' && m2.founder.challenges[0].note.includes('農場甲'), m2 && m2.founder);
+  ok('回應：記低表態、證據、挑戰（你原話）', m2 && m2.founder.votes[0].agree === false && m2.founder.evidence.length === 1 && m2.founder.challenges[0].claimId === 'B4' && m2.founder.challenges[0].note.includes('兼職包裝人手'), m2 && m2.founder);
   ok('重判：只改挑戰嗰條、標重判、原判保留', m2 && m2.rows.find(r => r.claim.id === 'B4').verdict.rejudged === true && fs.existsSync(path.join(DEMO, 'debates', id2, 'judge-original.json')) && m2.founder.challenges[0].rejudged, m2 && m2.rows.map(r => r.verdict));
   ok('證據：出確認包，唔自動改證據級', m2 && m2.founder.evidence[0].packId && (await A.get('/api/ask?id=' + m2.founder.evidence[0].packId)).pack.debate.kind === 'evidence' && m2.rows.every((r, i) => r.claim.evidence === raw(DEMO, id2, 'blue.json').claims[i].evidence));
   const s2 = m2 && m2.strengthen;
@@ -156,7 +156,7 @@ try {
 
   /* ---------- E. 出錯出口：一方失敗 → 重跑一次；第二次唔准 ---------- */
   mode(DEMO, 'debate-red:debate-bad');
-  await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'milestone', title: '首條送貨路線', seats: ['該站的外部角色', '競爭者', '投資者'] });
+  await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'milestone', title: '首批寄貨安排', seats: ['該站的外部角色', '競爭者', '投資者'] });
   const id3 = await waitFor(() => latestId(A, 4));
   let m3 = await until(A, id3, m => m.phase === 'failed');
   ok('紅方交唔到格式：標未完成、唔會不停重試', m3 && m3.failed.pass === 'red' && !m3.next && m3.budget.aiStarts === 2, m3 && { failed: m3.failed, budget: m3.budget });
@@ -178,7 +178,7 @@ try {
 
   /* ---------- F. AI 未設定：等設定，設定好自動續做（唔計重跑） ---------- */
   fs.rmSync(path.join(DEMO, 'ledger', 'adapter-cert.json'));
-  await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'partner', title: '請農場甲代送', seats: ['伙伴本人', '投資者'] });
+  await A.post('/api/intake', { kind: 'note', type: 'debate-start', topicType: 'partner', title: '請工房甲協助包裝', seats: ['伙伴本人', '投資者'] });
   const id4 = await waitFor(() => latestId(A, 5));
   let m4 = await until(A, id4, m => m.failed && m.failed.waitingAI);
   ok('AI 未設定：等設定，唔失敗', m4 && m4.phase === 'failed' && m4.failed.waitingAI, m4 && m4.failed);
@@ -205,9 +205,9 @@ try {
   /* ---------- H. 試驗資料夾（舊場 W1，冇 match.json、冇反駁、冇裁判命中）：照常顯示；回應 → 轉強寫疊加，試驗資料夾唔郁 ---------- */
   const REAL = path.join(OUT, 'real'), TRIAL = path.join(OUT, 'trial');
   fs.mkdirSync(path.join(TRIAL, 'wargame'), { recursive: true });
-  const ex = path.join(PROTO, 'fixtures', 'demo-farm', 'brain', 'wargame');
+  const ex = path.join(PROTO, 'fixtures', 'demo-shop', 'brain', 'wargame');
   const jx = JSON.parse(fs.readFileSync(path.join(ex, 'judge.json'), 'utf8')); delete jx.attackVerdicts; delete jx.factChecks; delete jx.overall;
-  const bx = JSON.parse(fs.readFileSync(path.join(ex, 'blue.json'), 'utf8')); bx.admittedWeaknesses = ['未有餐廳付過錢', '送貨靠一個人'];
+  const bx = JSON.parse(fs.readFileSync(path.join(ex, 'blue.json'), 'utf8')); bx.admittedWeaknesses = ['未有訂戶付過錢', '包裝寄貨靠創辦人一人'];
   fs.writeFileSync(path.join(TRIAL, 'wargame', 'blue.json'), JSON.stringify(bx)); fs.copyFileSync(path.join(ex, 'red.json'), path.join(TRIAL, 'wargame', 'red.json')); fs.writeFileSync(path.join(TRIAL, 'wargame', 'judge.json'), JSON.stringify(jx));
   fs.writeFileSync(path.join(TRIAL, '01-生意體檢.md'), '# 生意體檢\n\n## 最弱三個位\n\n### 測試弱點\n\n內容\n');
   fs.mkdirSync(path.join(REAL, 'founder', 'desk'), { recursive: true });

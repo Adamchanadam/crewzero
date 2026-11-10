@@ -67,7 +67,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   ok('假 AI 認證（兩個資料夾）', (await certify(PA)) === 'passed' && (await certify(PB)) === 'passed');
 
-  /* A：未確認公司概覽 → 今日要做的事＝校對；第一次打開冇「上次離開之後」；第二次先有；輪詢唔算打開 */
+  /* A：未確認公司概覽 → 今日要做的事＝校對；第一次打開冇「上次離開之後」；沒有內容時不顯示該行；輪詢唔算打開 */
   const A = `http://127.0.0.1:${PA}/`;
   await usePass(A, { send });
   await go(A);
@@ -79,8 +79,8 @@ try {
   await sleep(9500); // 首頁輪詢最少一次
   ok('輪詢唔算打開：時間冇變', seenAt(DA) === at1, { at1, now: seenAt(DA) });
   await send('Page.reload', { ignoreCache: true }); await sleep(1800);
-  ok('再打開：有「上次離開之後」一行，時間係上次', (await text('#since')).startsWith(N.dash.since) && seenAt(DA) !== at1, await text('#since'));
-  ok('「上次離開之後」：冇新事就寫「沒有新事項」或者列數目', /沒有新事項|AI 完成了|條等你回答|最近發生/.test(await text('#since')), await text('#since'));
+  ok('再打開：仍記低上次打開時間，「上次離開之後」只放 Zero 開工卡內', seenAt(DA) !== at1 && await has('#run-strip') && !(await has('#since')) && !(await has('#back-after')), { at1, now: seenAt(DA), runStrip: await text('#run-strip') });
+  ok('沒有新事項時不顯示「上次離開之後」或「沒有新事項」', !(await text('#run-strip')).includes(N.dash.since) && !(await text('#run-strip')).includes('沒有新事項'), await text('#run-strip'));
   await shot('b1-hub-proofread.png');
 
   /* B：已確認 → 次序、圖示、逾期；未有首次訪問日期先等待 */
@@ -101,6 +101,8 @@ try {
   ok('其他待決事項：同伺服器次序一致', JSON.stringify(rows.map(r => r.id)) === JSON.stringify(want), { rows: rows.map(r => r.id), want });
   ok('每項有類型圖示同類型名稱', rows.every(r => r.ic === N.TODO_ICON[r.type] && r.t.includes(N.dash['ty_' + r.type])), rows);
   ok('試行到期：標「已逾期 2 日」', /已逾期 2 日/.test((rows.find(r => r.id === 'ask-trial') || {}).t || ''), rows.find(r => r.id === 'ask-trial'));
+  const otherSummary = await ev(`(()=>{const d=document.querySelector('#other-pending'),s=d&&d.querySelector('summary .sum-line'),names=d?[...d.querySelectorAll('[data-todo] .t')].map(x=>{const c=x.cloneNode(true),i=c.querySelector('.ic');if(i)i.remove();return c.textContent.trim()}):[];return {text:s&&s.textContent,names}})()`);
+  ok('其他待決事項的摺疊標題列出收起各項名稱', otherSummary && otherSummary.names.length > 0 && otherSummary.names.every(n => otherSummary.text.includes(n)), otherSummary);
   // 首次訪問未到但有待決事項：今日主線是作答，首張待決事項就是主卡，不另放今日卡
   const sfB = path.join(DB, 'ledger', 'state.json');
   const home = (await api(PB, '/api/home')).j;
@@ -108,8 +110,9 @@ try {
   fs.mkdirSync(path.dirname(sfB), { recursive: true }); const stateB = fs.existsSync(sfB) ? JSON.parse(fs.readFileSync(sfB, 'utf8')) : {}; stateB.interviews = { ...(stateB.interviews || {}), nextOn: '2099-01-05' }; fs.writeFileSync(sfB, JSON.stringify(stateB, null, 2));
   pack(DB, 'ask-first-interview', { todoType: 'interview', due: '2099-01-05' }, ago(1));
   await send('Page.reload'); await sleep(1800);
-  ok('有首次訪問問題包和日期時，今日要做的事卡改為待首次訪問', (await ev(`(document.querySelector('#today-card')||{}).dataset.key`)) === 'firstInterview' && (await text('#today-do')).includes('1 月 5 日'), await text('#today-card'));
-  ok('畫面文字（卡、上次離開之後、其他待決事項）：用字檢查零命中', !(await scanText(['#today-card', '#since', '#other-pending', '#next-list', '#next-action'])).length, await scanText(['#today-card', '#since', '#other-pending', '#next-list', '#next-action']));
+  const firstInterviewRow = await ev(`(()=>{const r=document.querySelector('[data-todo="ask-first-interview"]'),a=r&&r.querySelector('a[href="#/ask/ask-first-interview"]');return r&&a?{text:r.innerText,href:a.getAttribute('href'),today:!!document.querySelector('#today-card')}:null})()`);
+  ok('有首次訪問問題包和日期時，今日指引併入該列而不另開卡', firstInterviewRow && firstInterviewRow.text.includes('1 月 5 日') && firstInterviewRow.href === '#/ask/ask-first-interview' && !firstInterviewRow.today, firstInterviewRow);
+  ok('畫面文字（待決列、上次離開之後、其他待決事項）：用字檢查零命中', !(await scanText(['#since', '#other-pending', '#next-list', '#next-action'])).length, await scanText(['#since', '#other-pending', '#next-list', '#next-action']));
   await shot('b2-hub-sorted.png');
 
   /* 確認掣字眼：有 AI 跟進先寫「確認並交 AI 處理」，冇就「確認」；送出後外殼有冇開 AI 要一致 */
@@ -147,7 +150,9 @@ try {
   const inp = (stB.inputs || []).find(i => i.via === 'doc');
   ok('只附文件：記成一份輸入（標題寫文件名、唔顯示副檔名），文件封存', inp && /文件（.*）：會議紀錄$/.test(inp.title) && inp.files.length === 1 && fs.existsSync(path.join(DB, inp.files[0])) && !fs.readdirSync(path.join(DB, 'founder', 'inbox')).some(f => f.includes('-note-doc')), inp);
   await go(B + '#/');
-  ok('首頁「最近交給 Zero 的事」列出剛送出的文件類輸入', await waitFor(async () => (await ev(`!!document.querySelector('#recent-list [data-input="${inp.id}"]')`))), await text('#recent-inputs'));
+  const recentInputs = await waitFor(async () => await ev(`(()=>{const d=document.querySelector('#recent-inputs'),item=d&&d.querySelector('[data-input="${inp.id}"]');return d&&item?{details:d.tagName==='DETAILS',open:d.open,rows:d.querySelectorAll('#recent-list li').length,feedback:!!item.querySelector('[data-feedback]'),answer:!!item.querySelector('[data-answer]')}:null})()`));
+  ok('首頁「最近交給 Zero 的事」收起、最多 3 行；列出剛送出的文件且只可查看回饋', recentInputs && recentInputs.details && !recentInputs.open && recentInputs.rows <= 3 && recentInputs.feedback && !recentInputs.answer, recentInputs);
+  ok('頁腳有情景演練與紅藍對打連結，已移除的功能卡不再存在', await ev(`(()=>{const p=document.querySelector('#foot-practice'),d=document.querySelector('#foot-debate');return !!p&&p.getAttribute('href')==='#/practice'&&!!d&&d.getAttribute('href')==='#/debate'&&!document.querySelector('#practice-card,#debate-card,#brain-line,#tell-help')})()`));
   await go(B + 'dashboard/inputs');
   ok('真實進展頁「交給 Zero 的事」也列出文件類（按月摺疊）', (await has('#in-inbox details.mo-month')) && (await ev(`!!document.querySelector('#in-inbox [data-input="${inp.id}"]')`)), await text('#in-inbox'));
   await ev(`document.querySelector('#tool-more').open=true`);
@@ -156,7 +161,7 @@ try {
   ok('本機固定動作唔接受參數', (await api(PB, '/api/setup', { action: 'openFolder', path: 'C:/' })).code === 400 && (await api(PB, '/api/setup', { action: 'runNow', type: 'x' })).code === 400);
   await waitFor(async () => !(await api(PB, '/api/dashboard')).j.ai.busy, 30000);
   await go(B + '#/');
-  ok('首頁「Zero 近期工作」卡有「現在開工」及兩行說明', (await has('#run-now')) && (await text('#run-now')) === N.ui.runNow && (await ev(`document.querySelectorAll('#run-preview li').length`)) >= 1, await text('#run-preview'));
+  ok('首頁「Zero 開工」卡有「現在開工」及兩行說明', (await has('#run-strip')) && (await has('#run-now')) && (await text('#run-now')) === N.ui.runNow && (await ev(`document.querySelectorAll('#run-preview li').length`)) >= 1, await text('#run-strip'));
   await click('#run-now');
   ok('「現在開工」：開始一次手動工作', (await text('#toast')).includes(N.ui.runNowSent), await text('#toast'));
   const manual = await waitFor(async () => ((await api(PB, '/api/dashboard')).j.runs || []).find(r => r.trigger === 'manual'), 40000);

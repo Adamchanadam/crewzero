@@ -87,7 +87,7 @@ try {
   /* ---------- 桌面 ---------- */
   await metrics(1440, 900, false);
   await fresh(PAGE);
-  ok('載入公司名（虛構樣本）', (await text('h1')) === '從田間到餐桌');
+  ok('載入公司名（虛構樣本）', (await text('h1')) === '月月鮮烘');
   ok('頂部大掣「採用 AI 建議並開始」', (await text('#go-main')) === N.ui.adoptStart);
   ok('只有 3 張「要你決定」卡', (await ev(`document.querySelectorAll('.dq').length`)) === 3);
   ok('三張卡係規劃書 3.1 嘅三條（而家去到邊、下一步、本季目標）', await ev(`['dq-status','dq-next-action','dq-goal-quarter'].every(i=>document.getElementById(i))`));
@@ -105,7 +105,7 @@ try {
   // 卡 2：下一步揀第二個
   await click('#dq-next-action > .opt:nth-of-type(2)');
   ok('揀選項即算答咗', (await prog()) === '請你先決定：已答 1／3');
-  ok('頂部說明跟住下一步改', (await text('.hero-p')).includes('先約何師傅'));
+  ok('頂部說明跟住下一步改', (await text('.hero-p')).includes('完成網上收款及寄送設定'));
   ok('大掣變「其餘採用 AI 建議並開始」', (await text('#go-main')) === N.ui.adoptRestStart);
   // 卡 1：而家去到邊，撳一項再揀程度
   await click('#dq-status .chip');
@@ -123,9 +123,9 @@ try {
   // 自己寫
   await click('#dq-next-action .dq-foot .btn.small');
   await click('#dq-next-action textarea');
-  await send('Input.insertText', { text: '先同何師傅飲茶傾試送餐廳' });
+  await send('Input.insertText', { text: '先完成收款及寄送設定，再安排工房丙試供' });
   await click('#dq-next-action .p-foot .btn.primary');
-  ok('自己寫嘅答案顯示出嚟', (await text('#dq-next-action .dq-custom')).includes('先同何師傅飲茶'));
+  ok('自己寫嘅答案顯示出嚟', (await text('#dq-next-action .dq-custom')).includes('先完成收款及寄送設定'));
   await scrollTo('.decide'); await shot('d2-answered.png');
   // 打開全文
   await click('#rest-toggle');
