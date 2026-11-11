@@ -392,11 +392,15 @@ export function applyKindFix(state, { id, kind, role = '' } = {}) {
   return r.ok ? r.state : state;
 }
 
-/* ---------- 真實事件確認項目：每件事最多一個新對象；三項上限內先排序再截（假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作） ---------- */
-export const EVENT_ITEM_ORDER = ['assumption', 'milestone', 'newActor', 'followUp', 'nextAction'];
+/* ---------- 真實事件確認項目：每件事最多一個新對象及新名稱；三項上限內先排序再截（假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作 ＞ 新名稱） ---------- */
+export const EVENT_ITEM_ORDER = ['assumption', 'milestone', 'newActor', 'followUp', 'nextAction', 'newTerm'];
 export function orderEventItems(items, max = 3) {
-  let seenActor = false;
-  const keep = (items || []).filter(x => { if (x && x.kind === 'newActor') { if (seenActor) return false; seenActor = true; } return true; });
+  let seenActor = false, seenTerm = false;
+  const keep = (items || []).filter(x => {
+    if (x && x.kind === 'newActor') { if (seenActor) return false; seenActor = true; }
+    if (x && x.kind === 'newTerm') { if (seenTerm) return false; seenTerm = true; }
+    return true;
+  });
   const rank = x => { const i = EVENT_ITEM_ORDER.indexOf(x && x.kind); return i < 0 ? EVENT_ITEM_ORDER.length : i; };
   return keep.map((x, i) => ({ x, i })).sort((a, b) => rank(a.x) - rank(b.x) || a.i - b.i).map(o => o.x).slice(0, max);
 }

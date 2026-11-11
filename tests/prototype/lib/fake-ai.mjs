@@ -234,6 +234,7 @@ if (type === 'work' && outputMode === 'agy') {
   const pick = /^event-pick-/.test(M) ? M.slice(11) : '';
   const m = pick ? L.milestones.find(x => x.id === pick) : L.milestones.find(x => !x.done && /伙伴|介紹/.test(x.name)) || L.milestones.find(x => !x.done);
   const items = [];
+  let contrasts = [];
   if (a) items.push({ kind: 'assumption', id: a.id, grade: 'did', why: '對方答應介紹餐廳並約定再談，屬對方採取的實際行動。' });
   if (m) items.push({ kind: 'milestone', id: m.id, done: true, why: '會面已舉行並有會後紀錄，符合這一站的完成標準。' });
   if (M === 'event-next') items.push({ kind: 'nextAction', text: '測試：與對方約定下次會面', milestoneId: (L.milestones.find(x => !x.done && x.id !== (m && m.id)) || {}).id, why: '測試理由：會面已舉行，下一步是約下次會面。' });
@@ -241,11 +242,51 @@ if (type === 'work' && outputMode === 'agy') {
   const evDate = (/事件日期：(\d{4}-\d{2}-\d{2})/.exec(fs.readFileSync('event.md', 'utf8')) || [])[1] || '2026-01-01';
   const plus = n => { const d = new Date(evDate + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   if (/^event-follow/.test(M)) items.push({ kind: 'followUp', date: M === 'event-follow-bad' && type === 'event' ? plus(-3) : plus(14), action: '回覆甲餐廳的報價', station: M === 'event-follow-station' ? 'm-nope' : undefined, why: '會議紀錄寫明須在該日前回覆。' });
+  if (M === 'event-term-order') {
+    items.length = 0;
+    const next = L.milestones.find(x => !x.done);
+    items.push({ kind: 'followUp', date: plus(14), action: '回覆乙餐廳的報價', why: '原話寫明兩星期內回覆乙餐廳報價。' });
+    items.push({ kind: 'followUp', date: plus(21), action: '向乙餐廳寄出樣本', why: '原話寫明三星期內寄出樣本。' });
+    items.push({ kind: 'nextAction', text: '與乙餐廳約定試用日期', ...(next ? { milestoneId: next.id } : {}), why: '原話寫明要與乙餐廳約定試用日期。' });
+  }
   // 新對象建議（event-actor／-similar／-contact／-ghost／-dup／-team）：名稱取自創辦人原話；contact 第一次在機構寫電郵（修正後改好）；ghost 名稱不在原話內
   if (/^event-actor/.test(M)) {
     const known = (L.actors || [])[0] || {}, first = Array.from(known.name || '陳')[0];
     const base = { kind: 'newActor', name: '黃小姐', org: '乙餐廳', role: '負責人', actorKind: 'customer', why: '原話提到她是乙餐廳負責人，之後可能成為試單對象。' };
     const byMode = { 'event-actor': {}, 'event-actor-similar': { name: first, org: '' }, 'event-actor-contact': { name: '吳小姐', org: type === 'event' ? 'a@b.com' : '乙餐廳' }, 'event-actor-ghost': { name: '周先生' }, 'event-actor-dup': { name: known.name || '陳經理' }, 'event-actor-team': { name: '林師傅', org: '', role: '送貨', actorKind: 'team', teamType: 'parttime' } }[M] || {};
+    items.push({ ...base, ...byMode });
+  }
+  // 常用名稱表建議：名稱必須由事件原話或定稿會議紀錄逐字支持；ghost／phrase／contact 供外殼靜默丟棄測試。
+  if (/^event-term/.test(M)) {
+    const base = { kind: 'newTerm', name: '晨霧冷萃禮盒', termKind: 'product', why: '原話提到這是公司新推出的產品名稱。' };
+    const byMode = {
+      'event-term': {},
+      'event-term-similar': { name: '晨霧冷萃', termKind: 'product' },
+      'event-term-decline': { name: '微光試飲禮盒' },
+      'event-term-order': { name: '午後冰滴禮盒' },
+      'event-term-transcript-only': { name: '晨霧冷萃禮盒' },
+      'event-term-minute': {},
+      'event-term-minute-marked': {},
+      'event-term-minute-filled': {},
+      'event-term-minute-no-name': {},
+      'event-term-minute-quote': { name: '星塵禮盒' },
+      'event-term-minute-quote-marked': { name: '晨霧冷翠禮盒' },
+      'event-term-change-list': { name: '晨霧冷翠禮盒' },
+      'event-term-change-list-h3': { name: '晨霧冷翠禮盒' },
+      'event-term-change-list-colon': { name: '晨霧冷翠禮盒' },
+      'event-term-change-list-after': { name: '晨霧冷翠禮盒' },
+      'event-term-change-list-nested': { name: '晨霧冷翠禮盒' },
+      'event-term-revision': {},
+      'event-term-unchanged': {},
+      'event-term-conflict': { name: '暮色熱泡' },
+      'event-term-conflict-gone': { name: '晚霧熱泡' },
+      'event-term-ghost': { name: '月光冷萃禮盒' },
+      'event-term-only-ghost': { name: '月光冷萃禮盒' },
+      'event-term-phrase': { name: '產品計劃' },
+      'event-term-contact': { name: '晨霧91234567禮盒' },
+      'event-term-no-why': { why: '' },
+      'event-term-bad-quote': { sourceQuote: '找不到的來源句' }
+    }[M] || {};
     items.push({ ...base, ...byMode });
   }
   // 會議紀錄定稿：交四項，當中一項引用 ⚠️ 行，另一項引用 ✏️ 的待補負責人，供外殼核對標示及分批。
@@ -256,6 +297,52 @@ if (type === 'work' && outputMode === 'agy') {
     items.push({ kind: 'followUp', date: plus(14), action: '確認首批數量及負責人', station: next && next.id, sourceQuote: '請補負責人', why: '✏️（請補負責人）後才可安排跟進。' });
     // 第四項一般事項（下一個對外動作另有一包）：令一般事項多於三項，核對排隊不丟失
     items.push({ kind: 'followUp', date: plus(21), action: '寄出首批樣本', station: next && next.id, sourceQuote: '寄出首批樣本', why: '會議紀錄寫明三星期內寄出樣本。' });
+  }
+  if (M === 'event-term-bad-quote') {
+    const term = items.find(item => item.kind === 'newTerm');
+    if (term) term.sourceQuote = '找不到的來源句';
+  }
+  if (M === 'event-term-only-ghost') {
+    const term = items.find(item => item.kind === 'newTerm');
+    items.length = 0; if (term) items.push(term);
+  }
+  if (/^event-term-minute(?:-(?:marked|filled|no-name|quote|quote-marked))?$/.test(M)) {
+    const term = items.find(item => item.kind === 'newTerm');
+    if (term) term.sourceQuote = M === 'event-term-minute-marked' ? '⚠️（名稱待核對）晨霧冷萃禮盒下星期推出。' : M === 'event-term-minute-filled' ? '✏️（請補名稱）晨霧冷萃禮盒下星期推出。' : M === 'event-term-minute-no-name' ? '供應商會在兩星期內回覆報價。' : M === 'event-term-minute-quote' ? '星塵禮盒下月推出。' : M === 'event-term-minute-quote-marked' ? '⚠️ 不肯定：晨霧冷翠禮盒下星期推出。' : '晨霧冷萃禮盒下星期推出。';
+  }
+  if (/^event-term-change-list(?:-(?:h3|colon|after|nested))?$/.test(M)) {
+    const term = items.find(item => item.kind === 'newTerm');
+    if (term) term.sourceQuote = '晨霧冷翠禮盒 → 晨霧冷萃禮盒';
+  }
+  if (M === 'event-term-revision') {
+    const term = items.find(item => item.kind === 'newTerm');
+    if (term) {
+      const event = fs.readFileSync('event.md', 'utf8');
+      term.sourceQuote = event.includes('第三版') ? '晨霧冷萃禮盒正式推出。' : event.includes('第二版') ? '晨霧冷萃禮盒明天推出。' : '晨霧冷萃禮盒下星期推出。';
+    }
+  }
+  if (M === 'event-term-unchanged') {
+    const term = items.find(item => item.kind === 'newTerm');
+    if (term) term.sourceQuote = '晨霧冷萃禮盒下星期推出。';
+  }
+  if (['event-term-minute', 'event-term-minute-marked', 'event-term-minute-filled', 'event-term-minute-no-name', 'event-term-minute-quote', 'event-term-minute-quote-marked', 'event-term-revision', 'event-term-unchanged', 'event-term-change-list', 'event-term-change-list-h3', 'event-term-change-list-colon', 'event-term-change-list-after', 'event-term-change-list-nested'].includes(M)) {
+    const term = items.find(item => item.kind === 'newTerm');
+    items.length = 0; if (term) items.push(term);
+  }
+  if (M === 'event-term-change-list-after') {
+    items.push({ kind: 'newTerm', name: '星塵禮盒', termKind: 'product', why: '原話提到星塵禮盒將在下月推出。', sourceQuote: '星塵禮盒下月推出。' });
+  }
+  if (M === 'event-term-bad-quote') {
+    const term = items.find(item => item.kind === 'newTerm');
+    items.length = 0;
+    if (term) items.push(term);
+    items.push({ kind: 'followUp', date: plus(14), action: '回覆報價', sourceQuote: '供應商會在兩星期內回覆報價。', why: '會議紀錄已寫明供應商會回覆報價。' });
+  }
+  if (M === 'event-term-transcript-only') {
+    const term = items.find(item => item.kind === 'newTerm');
+    items.length = 0;
+    if (term) items.push({ ...term, sourceQuote: '工房丙提到晨霧冷萃禮盒將於下月推出。', why: '逐字稿提到這是公司下月推出的產品名稱。' });
+    items.push({ kind: 'followUp', date: plus(14), action: '回覆報價', sourceQuote: '供應商會在兩星期內回覆報價。', why: '會議紀錄已寫明供應商會在兩星期內回覆報價。' });
   }
   // 會議紀錄外殼反例：每個模式只造必要項目，避免其他一般建議掩蓋守門結果。
   if (M === 'event-next-only') {
@@ -340,12 +427,37 @@ if (type === 'work' && outputMode === 'agy') {
       items.push({ kind: 'followUp', date: '2026-11-20', action: '回覆報價', station, sourceQuote: '寄出樣本及回覆報價', why: '會議紀錄已寫明回覆報價日期。' });
     }
   }
+  // 會議紀錄資料脈絡：只交測試指定項目，避免預設建議觸發修正或遮蔽守門結果。
+  if (/^event-context-/.test(M)) {
+    const context = fs.existsSync('context.md') ? fs.readFileSync('context.md', 'utf8') : '';
+    const minuteText = fs.existsSync(path.join('files', '會議紀錄.md')) ? fs.readFileSync(path.join('files', '會議紀錄.md'), 'utf8') : '';
+    const taskId = (context.match(/\[日程\s+([^；\]]+)/) || [])[1] || 'fu-not-in-context';
+    const current = minuteText.split(/\r?\n/).map(line => line.trim()).filter(line => /^-\s+/.test(line) && !/[⚠✏]/.test(line) && line.length > 10);
+    const past = context.split(/\r?\n/).map(line => (/^-\s+(.+?)\s+\[[^\]]+\]$/.exec(line.trim()) || [])[1]).filter(Boolean);
+    items.length = 0;
+    const quote = current.find(line => line.includes('提供報價')) || current[0] || '提供報價';
+    const date = (/2026\s*年\s*11\s*月\s*(\d{1,2})\s*日/.exec(quote) || [])[1] || '25';
+    const due = `2026-11-${String(date).padStart(2, '0')}`;
+    if (M === 'event-context-same' || M === 'event-context-invalid-same') {
+      items.push({ kind: 'followUp', date: due, action: '提供報價', sameAsTask: M === 'event-context-same' ? taskId : 'fu-not-in-context', sourceQuote: quote, why: '會議紀錄寫明新的提供日期。' });
+    }
+    if (M === 'event-context-duplicate') {
+      items.push({ kind: 'followUp', date: due, action: '提供報價', sameAsTask: taskId, sourceQuote: quote, why: '會議紀錄寫明新的提供日期。' });
+      items.push({ kind: 'followUp', date: due, action: '補交報價附件', sameAsTask: taskId, sourceQuote: current[1] || quote, why: '會議紀錄寫明要補交附件。' });
+    }
+    if (M === 'event-context-compare' || M === 'event-context-many' || M === 'event-context-missing') {
+      const count = (M === 'event-context-compare' || M === 'event-context-many') ? 5 : 1;
+      contrasts = Array.from({ length: count }, (_, index) => ({ nowQuote: current[index] || current[0] || '今次引句', pastQuotes: [M === 'event-context-missing' ? '不存在的以往引句' : (past[index] || past[0] || '不存在的以往引句')], note: '條件與以往不同，請核對。' }));
+      if (M !== 'event-context-many' && current[0]) items.push({ kind: 'followUp', date: due, action: '提供報價', sourceQuote: current[0], why: '會議紀錄寫明新的提供日期。' });
+    }
+    if (M === 'event-context-revision') items.push({ kind: 'followUp', date: due, action: '提供報價', sourceQuote: quote, why: '會議紀錄寫明新的提供日期。' });
+  }
   const OFFICE_EV = /\.(docx?|pptx?|xlsx?)$/i;
   const looseName = f => 'files/' + f.replace(/\.[^.]+$/, e => e.toUpperCase()), loose = /-loose$/.test(M);
   const unreadable = [...(fs.existsSync('files') ? fs.readdirSync('files') : []).filter(f => OFFICE_EV.test(f) && !fs.existsSync(path.join('files', f + '.md'))).map(f => ({ file: loose ? looseName(f) : f, reason: loose ? 'Word 檔目前讀唔到' : M === 'event-unread-longreason' ? '長'.repeat(90) : '測試：Word／PowerPoint／Excel 檔目前讀不到' })), ...(M === 'event-unread-bogus' ? [{ file: '不是這次附件的檔案.docx', reason: '虛構' }] : [])];
   const finalItems = M === 'event-none' || /^event-unread/.test(M) ? [] : items;
   const fl = fs.existsSync('files') ? fs.readdirSync('files') : [];
-  const ev = { summary: '測試 AI：' + said, grade: 'did', read: { summary: '測試 AI：讀了創辦人原話及 ' + fl.length + ' 份附件，對照了假設及站點。', highlights: [{ text: '會議紀錄寫明須在兩星期內回覆報價。', page: 2, ...(fl[0] ? { file: fl[0] } : {}) }] }, ...(finalItems.length ? {} : { reason: '測試理由：這件事沒有改變對方做到哪一步，也沒有新的日期。' }), items: finalItems, ...(unreadable.length ? { unreadable } : {}) };
+  const ev = { summary: '測試 AI：' + said, grade: 'did', read: { summary: '測試 AI：讀了創辦人原話及 ' + fl.length + ' 份附件，對照了假設及站點。', highlights: [{ text: '會議紀錄寫明須在兩星期內回覆報價。', page: 2, ...(fl[0] ? { file: fl[0] } : {}) }] }, ...(finalItems.length ? {} : { reason: '測試理由：這件事沒有改變對方做到哪一步，也沒有新的日期。' }), items: finalItems, contrasts, ...(unreadable.length ? { unreadable } : {}) };
   if (type === 'event' && M === 'event-bad') ev.items = [{ kind: 'assumption', id: 'H99', grade: 'great' }];
   fs.writeFileSync('out/event.json', JSON.stringify(ev, null, 2));
   done();

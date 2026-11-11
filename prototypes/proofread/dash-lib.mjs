@@ -10,6 +10,7 @@ import { hosts, modelCandidates, modelName } from './host-lib.mjs';
 import { isInboxAttachment, NAMES, BIZ_TYPES, readJSON, listPacks, loadPack, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
 import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS, peopleSyncKey } from './people-ops.mjs';
+import { applyTermOp } from './terms-ops.mjs';
 import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
 import { titleOf, liveCards, cardById, resolveCardId, avatarKindOf, AVATAR_KINDS, AVATAR_LEAD, isPausedToday, supportsLines, pauseCard, resumeCard, rolesKey, pausedCardsToday, overCap, permissionsOf, LIFECYCLES } from './roles-ops.mjs';
 import { PACES, PACE_KEYS, PACE_ESTIMATE, PACE_OPS, paceKey, fuseOf, itemsCapOf, countStarts, runIdsOfDay, proofreadStarts, applyPaceOps, addDays, SPRINT_MAX_DAYS, sprintDefaultUntil, unreadCount } from './pace-lib.mjs';
@@ -159,9 +160,29 @@ export function applyFounderOps(state, ops = []) {
       // 名單改正（改名、類別、合併、不再接觸、成員狀態、工作負責人）：純函數在 people-ops.mjs；失敗（找不到、重名、已合併）時原樣不動
       const r = applyActorOp({ company: out.company || {}, tasks: out.tasks || [] }, item.op, { ...value, id: item.target, from: item.target });
       if (r.ok) { out.company = r.state.company; out.tasks = r.state.tasks; }
+    } else if (['termAdd', 'termRename', 'termRemove'].includes(item.op) && typeof item.target === 'string') {
+      // 常用名稱表同樣只疊加純函數結果；重播相同操作不會新增第二筆名稱。
+      const at = /^\d{4}-\d{2}-\d{2}/.test(String(item.at || '')) ? String(item.at).slice(0, 10) : localIso().slice(0, 10);
+      const r = applyTermOp({ company: out.company || {}, termSync: out.termSync || {} }, item.op, { ...value, id: item.target }, { today: at, opId: item.id || '' });
+      if (r.ok) { out.company = r.state.company; out.termSync = r.state.termSync; }
     }
   }
   return out;
+}
+
+function termsView(state) {
+  const terms = Array.isArray(state?.company?.terms) ? state.company.terms : [];
+  const dayText = value => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    return m ? Number(m[2]) + ' 月 ' + Number(m[3]) + ' 日' : '';
+  };
+  return terms.slice().sort((a, b) => String(b?.addedAt || '').localeCompare(String(a?.addedAt || ''))).map(term => {
+    const kind = ['product', 'campaign', 'other'].includes(term?.kind) ? term.kind : 'other';
+    const from = ['event', 'doc', 'chat', 'manual'].includes(term?.addedFrom) ? term.addedFrom : 'manual';
+    const addedAt = typeof term?.addedAt === 'string' ? term.addedAt : '';
+    const addedAtText = dayText(addedAt);
+    return { id: String(term?.id || ''), name: String(term?.name || ''), kind, kindText: N_('term_kind_' + kind), aliases: Array.isArray(term?.aliases) ? term.aliases.filter(alias => typeof alias === 'string' && alias) : [], addedAt, addedAtText, from, fromText: N_('term_from_' + from, { d: addedAtText }) };
+  }).filter(term => term.id && term.name);
 }
 
 // 預覽覆蓋用的兩個包裝：只把純函數會讀寫的欄傳入，結果寫回；純函數認為無效（找不到卡、已是該狀態）時原樣回傳
@@ -794,7 +815,7 @@ export function dashboardState(DIR, extra = {}) {
     company, goals, nextAction, metrics, since, pathTouched,
     ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', ...modelDisplay(DIR, cert), busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
     lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, calendar, tasks, parallel,
-    brain, people: { ...(() => { const v = peopleView(state, { today: ymd(today) }); return { external: v.external, closed: v.closed, team: v.team }; })(), ownership: ownershipOf(state), gapDays: GAP_DAYS, sync: peopleSyncView(DIR, state) },
+    brain, people: { ...(() => { const v = peopleView(state, { today: ymd(today) }); return { external: v.external, closed: v.closed, team: v.team }; })(), terms: termsView(state), ownership: ownershipOf(state), gapDays: GAP_DAYS, sync: peopleSyncView(DIR, state) },
     teammates: teammates.map(t => { const v = team.roles.find(r => r.id === t.id); return { ...t, name: titleOf(t), title: titleOf(t), avatarKind: avatarKindFor(t), lifecycle: lifecycleOf(t), milestones: (t.milestoneIds || []).map(msTitle).filter(Boolean), activity: v ? v.activity : 'idle' }; }),
     team, pace, deliveries, rolesSync: rolesSyncView(DIR, state),
     capabilities: Array.isArray(state.capabilities) ? state.capabilities : [],
@@ -1046,6 +1067,13 @@ export function inputView(DIR, input, ctx = {}, { detail = false } = {}) {
   if (detail) {
     const qa = full && Array.isArray(full.questions) ? full.questions.map(q => { const a = answers[q.id]; return { ask: String(q.ask || q.about || ''), answer: a ? String(Array.isArray(a.value) ? a.value.join('、') : a.value) : '', at: a ? a.at || '' : '', suggest: String(q.value || '') }; }) : [];
     v.said = said; v.qa = qa; v.confirmedAt = qa.map(x => x.at).filter(Boolean).sort().pop() || ''; v.packTitle = full ? full.title || '' : '';
+    v.compare = (Array.isArray(input.compare) ? input.compare : []).slice(0, 3).map(item => {
+      const row = item && typeof item === 'object' ? item : {}, past = Array.isArray(row.past) ? row.past : [];
+      return { now: String(row.now == null ? '' : row.now), past: past.slice(0, 3).map(old => {
+        const source = old && typeof old === 'object' ? old : {};
+        return { quote: String(source.quote == null ? '' : source.quote), from: String(source.from == null ? '' : source.from) };
+      }), note: String(row.note == null ? '' : row.note) };
+    });
     // 回饋卡第二步「提到的對象」：原話、標題及 Zero 摘要內出現的名單對象（完整名稱或別名；最長名稱優先；已合併者不單獨列）
     try { const actors = (((readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}).company || {}).actors) || []; v.mentioned = actorsMentioned(actors, [said, input.title, input.summary].filter(Boolean).join(' ')).map(a => ({ name: a.name, org: a.org || '' })).slice(0, 6); } catch { v.mentioned = []; }
   }

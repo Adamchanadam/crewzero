@@ -16,6 +16,8 @@ import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches,
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkLinks } from './link-check.mjs';
 import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId, kindOf, founderNamesIn, checkPeopleSync, applyKindFix, peopleSyncDue, nextActorId, duplicateActor, mixSpace } from './people-ops.mjs';
+import { checkNewTermItem, applyNewTerm } from './terms-ops.mjs';
+import { buildMeetingContext, contextQuoteSources, contextTasks } from './context-lib.mjs';
 import { pad, localIso, stamp, readJSON, writeJSON, fnv, proofreadHash, proofreadHashMatches, isInboxNote, isInboxIntake, isInboxPrefill, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
@@ -25,7 +27,7 @@ import { registerInput, recordReading, addEffect, applyFollowUp, refreshSnapshot
 import * as PACE from './pace-lib.mjs';
 import * as ROLES from './roles-ops.mjs';
 import { buildBrief, buildProofreadBrief, checkBrief, briefFailStreak } from './brief-lib.mjs';
-import { readMinutes, patchMinutes, minutesFilePath, fileNameFor, cleanTitle, sha256, sourceDir, overviewLines } from './minutes-lib.mjs';
+import { readMinutes, patchMinutes, minutesFilePath, fileNameFor, cleanTitle, sha256, sourceDir, overviewLines, termLines } from './minutes-lib.mjs';
 import { parseTurns, applyMap, unmappedIn, marks, markLegend } from './transcript-lib.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
@@ -483,7 +485,11 @@ function confirmedMarkdown(page, reg, values, c) {
   }
   if (listOf(dt.assumptions).length) {
     L.push('', '## Zero 假設（未證實）');
-    for (const a of listOf(dt.assumptions)) L.push(`- ${v(a.id)}${a.test ? `（成本最低的測試：${a.test}）` : ''}`);
+    for (const a of listOf(dt.assumptions)) {
+      const label = typeof a.label === 'string' ? a.label.trim() : '', value = String(v(a.id) ?? '').trim(), text = label || value;
+      const test = a.test || (a.tentative && a.tentative.test);
+        L.push(`- ${text}${label && value && value !== label ? `（目前：${value}）` : ''}${test ? `（成本最低的測試：${test}）` : ''}`);
+    }
   }
   for (const r of listOf(dt.rules)) {
     L.push('', `## ${r.label}`, `- ${v(r.id)}`);
@@ -986,8 +992,12 @@ async function handleMinutesDraft(run) {
     return a.name + (notes.length ? '（' + notes.join('；') + '）' : '');
   }).join('、') || '沒有'), '', '## 已換名逐字稿', '', applyMap(source, map)].join('\n') + '\n');
   fs.copyFileSync(path.join(ROOT, 'meeting-minutes-format.md'), path.join(sb, 'meeting-minutes-format.md'));
+  const terms = termLines((((loadState().company || {}).terms) || []));
   const companyNames = overviewLines(loadPage(), readJSON(CONFIRMED, null));
-  if (companyNames.length) fs.writeFileSync(path.join(sb, 'company-names.md'), ['# ' + U.minReadOverview, '', ...companyNames].join('\n') + '\n');
+  const nameSections = [];
+  if (terms.length) nameSections.push(['# ' + U.minReadTerms, ...terms].join('\n'));
+  if (companyNames.length) nameSections.push(['# ' + U.minReadOverview, ...companyNames].join('\n'));
+  if (nameSections.length) fs.writeFileSync(path.join(sb, 'company-names.md'), nameSections.join('\n\n') + '\n');
   fs.copyFileSync(path.join(ROOT, 'ai-minutes-draft.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'minutes-draft', mid: rec.id, meetingDate: rec.meetingDate || '' });
   step(run, 'ai', label, 'running', '');
@@ -1386,6 +1396,50 @@ function minuteSourceForItem(item, minute) {
   if (found.length > 1) return { ok: false, error: 'sourceQuote 對應多於一行，請改為可唯一定位的引句' };
   return { ok: true, value: { sourceQuote: quote, sourceLine: found[0].text, sourceLineNo: found[0].number } };
 }
+function confirmedQuoteSource(confirmed, quote) {
+  const needle = String(quote || '').trim();
+  if (!needle) return '';
+  let station = '', found = [];
+  for (const raw of String(confirmed || '').split(/\r?\n/)) {
+    const heading = /^###\s+第\s*\d+\s*站：([^（(]+?)(?:[（(]|$)/.exec(raw.trim());
+    if (heading) station = heading[1].trim();
+    if (station && /邊個要點頭/.test(raw) && raw.includes(needle)) found.push(station);
+  }
+  return found.length === 1 ? NAMES.t('contextOverviewFrom', { n: found[0] }) : '';
+}
+function contextCompareItems(ev, minute, sandbox) {
+  const supplied = ev && ev.contrasts;
+  if (!Array.isArray(supplied)) { log(NAMES.t('contextCompareDropped', { r: '格式不正確' })); return []; }
+  let context = '', confirmed = '';
+  try { context = fs.readFileSync(path.join(sandbox, 'context.md'), 'utf8'); } catch { }
+  try { confirmed = fs.readFileSync(path.join(sandbox, 'confirmed-page.md'), 'utf8'); } catch { }
+  const kept = [], seen = new Set();
+  for (const item of supplied) {
+    const now = typeof (item && item.nowQuote) === 'string' ? item.nowQuote.trim() : '';
+    const note = typeof (item && item.note) === 'string' ? item.note.trim() : '';
+    const nowHits = now && now.length <= 160 ? (minute.lines || []).filter(line => line.text.includes(now)) : [];
+    const pastQuotes = Array.isArray(item && item.pastQuotes) ? item.pastQuotes : [];
+    if (nowHits.length !== 1 || !note || note.length > 200 || NAMES.styleIssues(note).length || /已更新|將會加入/u.test(note) || !pastQuotes.length || pastQuotes.length > 3) { log(NAMES.t('contextCompareDropped', { r: '引句或說明不合' })); continue; }
+    const past = [];
+    let bad = false;
+    for (const raw of pastQuotes) {
+      const quote = typeof raw === 'string' ? raw.trim() : '';
+      if (!quote || quote.length > 160) { bad = true; break; }
+      const contextHits = contextQuoteSources(context, quote);
+      if (contextHits.length === 1) past.push({ quote, from: contextHits[0].source });
+      else {
+        const from = confirmedQuoteSource(confirmed, quote);
+        if (!from) { bad = true; break; }
+        past.push({ quote, from });
+      }
+    }
+    const key = now + '\u0000' + past.map(row => row.quote + '\u0000' + row.from).join('\u0001');
+    if (bad || seen.has(key)) { log(NAMES.t('contextCompareDropped', { r: bad ? '以往引句找不到' : '重複' })); continue; }
+    seen.add(key); kept.push({ now, nowLine: nowHits[0].text, past, note });
+    if (kept.length === 3) break;
+  }
+  return kept;
+}
 function priorMinute(input) {
   const info = input && input.minutes;
   // 伺服器交出修改版時已把登記檔的 inputId 換成新版；機讀區的 revisionOf 才是上一件輸入。
@@ -1406,6 +1460,12 @@ function priorFollowUpTask(prior, record) {
 function taskFromSource(info, line) {
   if (!info || !info.id || !line) return null;
   const found = (loadState().tasks || []).filter(task => task && task.status !== 'done' && task.status !== 'cancelled' && task.minutesSource && task.minutesSource.id === info.id && task.minutesSource.line === String(line).trim());
+  return found.length === 1 ? found[0] : null;
+}
+// 已完成或已取消的日程只用來阻止修改版重出「加入」題；不可作為修訂目標。
+function taskFromSourceAnyStatus(info, line) {
+  if (!info || !info.id || !line) return null;
+  const found = (loadState().tasks || []).filter(task => task && task.minutesSource && task.minutesSource.id === info.id && task.minutesSource.line === String(line).trim());
   return found.length === 1 ? found[0] : null;
 }
 function priorMinuteMatch(item, prior, previousLine) {
@@ -1431,9 +1491,22 @@ function ambiguousMinuteMatch(item, prior, beforeLines = []) {
   return { record: null, candidates };
 }
 function revisionItems(input, items) {
-  const context = minuteContext(input), changed = minuteLineChanges(context.info, context.text), prior = priorMinute(input);
-  if (!changed.size) return [];
-  return items.flatMap(item => {
+  const context = minuteContext(input), changed = minuteLineChanges(context.info, context.text), prior = priorMinute(input), notes = [];
+  if (!changed.size) return { items: [], notes };
+  const protectedTask = task => task && task.minutesSource && task.minutesSource.id && task.minutesSource.id !== context.info.id;
+  const protectedNote = task => {
+    const note = NAMES.t('contextRevisionProtected', { a: clip(task.title, 40) });
+    if (!notes.includes(note)) notes.push(note);
+  };
+  // AI 沒有交回這一項時也要交代保護結果：上一版已有的跟進日程若已由較新會議接手，不可沉默。
+  for (const change of changed.values()) {
+    const before = change.ambiguous ? change.beforeLines || [] : [change.before];
+    for (const record of listOf(prior && prior.minuteItems).filter(row => row && row.kind === 'followUp' && before.some(line => line === row.sourceLine || (row.sourceQuote && line.includes(row.sourceQuote))))) {
+      const task = priorFollowUpTask(prior, record) || taskFromSource(context.info, record.sourceLine);
+      if (protectedTask(task)) protectedNote(task);
+    }
+  }
+  const kept = items.flatMap(item => {
     const change = changed.get(item.sourceLineNo);
     if (!change) return [];
     // 下一個對外動作只有一個（新的取代舊的）：照用一般的「下一個對外動作」題，題目已顯示現值及新值，可直接更新
@@ -1444,14 +1517,26 @@ function revisionItems(input, items) {
     if (!match.record) {
       const choices = item.kind === 'followUp' ? match.candidates.map(record => {
         const task = priorFollowUpTask(prior, record) || taskFromSource(context.info, record.sourceLine);
+        if (protectedTask(task)) { protectedNote(task); return null; }
         return task ? { date: record.date || '', action: record.action || '', revisionOfTaskId: task.id } : null;
       }).filter(Boolean) : [];
+      if (item.kind === 'followUp' && !choices.length) return [];
       return [{ ...item, revisionAmbiguity: { sourceLineNo: item.sourceLineNo || 0, before: change.before, after: change.after, choices } }];
     }
     const revisionFrom = Object.fromEntries(['date', 'action', 'text'].filter(key => match.record[key]).map(key => [key, match.record[key]]));
-    const priorTask = item.kind === 'followUp' ? priorFollowUpTask(prior, match.record) || taskFromSource(context.info, change.before) : null;
+    const rawTask = item.kind === 'followUp' ? priorFollowUpTask(prior, match.record) || taskFromSource(context.info, change.before) : null;
+    // 合併後原本的日程編號已消失時，已完成／取消的目標不可變成一條新的加入題。
+    const terminalTask = item.kind === 'followUp' && !rawTask ? taskFromSourceAnyStatus(context.info, change.before) : null;
+    if (terminalTask && ['done', 'cancelled'].includes(terminalTask.status)) {
+      const note = NAMES.t('contextRevisionDone', { a: clip(terminalTask.title, 40) });
+      if (!notes.includes(note)) notes.push(note);
+      return [];
+    }
+    if (protectedTask(rawTask)) { protectedNote(rawTask); return []; }
+    const priorTask = rawTask;
     return [{ ...item, ...(Object.keys(revisionFrom).length ? { revisionFrom } : {}), ...(priorTask ? { revisionOfTaskId: priorTask.id } : {}) }];
   });
+  return { items: kept, notes };
 }
 // 修訂題保底（不靠 AI）：創辦人改動的行若是已加入日程的待辦或下一個對外動作的來源行（按 minutesSource 精確對應），
 // 而 AI 交回的事項沒有對應這項日程，就由外殼出修訂題；讀不出唯一新日期、一行對應多於一項、改動有歧義或來源行被刪，
@@ -1626,6 +1711,38 @@ function minuteRevisionLines(ev, rows) {
   if (!pairs.length) return [];
   return ['- 這是創辦人修改後的第 ' + info.version + ' 版會議紀錄。創辦人今次改動了以下各行；這些行以修改後內容為準，即使與逐字稿或紀錄其他段落不一致（不一致時在 `why` 提醒創辦人核對，`sourceQuote` 引用修改後的行）：', ...pairs.slice(0, 20)];
 }
+function founderTextForContext(input) {
+  const file = minuteDataPath(input && input.file);
+  if (!file || !fs.existsSync(file)) return '';
+  try {
+    const raw = fs.readFileSync(file, 'utf8'), at = raw.search(/\r?\n\r?\n/);
+    return (at < 0 ? raw : raw.slice(at).trim()).slice(0, 4000);
+  } catch { return ''; }
+}
+function contextMinutesInput(input) {
+  if (!input) return null;
+  const row = attachmentRows(input).find(item => item.name === '會議紀錄.md');
+  if (!row || !row.abs || !fs.existsSync(row.abs)) return null;
+  let text = '';
+  try { text = fs.readFileSync(row.abs, 'utf8'); } catch { return null; }
+  if (!text) return null;
+  const info = input.minutes && typeof input.minutes === 'object' ? input.minutes : {}, rec = info.id ? readMinutes(DIR, info.id) : null;
+  const speakers = rec && rec.speakers || {}, source = rec ? minutesText(rec) : '', speakerCounts = {};
+  for (const label of Object.keys(speakers)) if (label) speakerCounts[label] = source ? source.split(label).length - 1 : 0;
+  return { inputId: input.id, id: info.id || input.id, version: Number.isInteger(info.version) ? info.version : 1, date: input.eventDate || input.receivedAt || '', text, speakers, speakerCounts, founderText: founderTextForContext(input), effects: input.effects || [] };
+}
+function meetingContextData(s, ev) {
+  const input = (s.inputs || []).find(item => item && item.id === 'in-' + ev.ref) || null;
+  const currentMeeting = contextMinutesInput(input);
+  const meetings = (s.inputs || []).map(contextMinutesInput).filter(Boolean);
+  return {
+    demo: s.demo === true,
+    actors: ((s.company || {}).actors) || [], tasks: s.tasks || [], milestones: s.milestones || [], inputs: s.inputs || [],
+    current: { inputId: input && input.id || '', meetingId: currentMeeting && currentMeeting.id || '', text: currentMeeting && currentMeeting.text || '', founderText: ev.text || '', speakers: currentMeeting && currentMeeting.speakers || {}, speakerCounts: currentMeeting && currentMeeting.speakerCounts || {} },
+    meetings,
+    events: (s.inputs || []).filter(item => item && item.via === 'event' && item.id !== (input && input.id)).map(item => ({ id: item.id, title: item.title, eventDate: item.eventDate, receivedAt: item.receivedAt, founderText: founderTextForContext(item) }))
+  };
+}
 function eventTask(sb, s, ev) {
   const rows = ev.rows || ev.files.map(f => ({ name: path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''), abs: f }));
   const listing = writeAttachments(sb, rows);
@@ -1636,9 +1753,15 @@ function eventTask(sb, s, ev) {
     assumptions: ((s.company || {}).assumptions || []).map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '' })),
     nextExternalAction: (s.company || {}).nextExternalAction || null,
     // 人物及機構名單（只給名稱、別名、類別、機構、角色，用來避免重複建議；不含編號及任何聯絡方式）
-    actors: (((s.company || {}).actors) || []).filter(x => x && !x.mergedInto).slice(0, 80).map(x => ({ name: x.name, aliases: x.aliases || [], kind: x.kind || '', ...(x.org ? { org: x.org } : {}), ...(x.role ? { role: x.role } : {}), status: x.status || 'active' }))
+    actors: (((s.company || {}).actors) || []).filter(x => x && !x.mergedInto).slice(0, 80).map(x => ({ name: x.name, aliases: x.aliases || [], kind: x.kind || '', ...(x.org ? { org: x.org } : {}), ...(x.role ? { role: x.role } : {}), status: x.status || 'active' })),
+    // 常用名稱表只供避免重複建議；不交出內部編號、日期或來源。
+    terms: (((s.company || {}).terms) || []).filter(x => x && typeof x.name === 'string').slice(0, 60).map(x => ({ name: x.name, aliases: Array.isArray(x.aliases) ? x.aliases : [], kind: x.kind || '' }))
   });
   writeConfirmedPage(sb);
+  if (hasMinutes) {
+    const context = buildMeetingContext(meetingContextData(s, ev));
+    if (context.text) fs.writeFileSync(path.join(sb, 'context.md'), context.text);
+  }
   fs.copyFileSync(path.join(ROOT, 'ai-event.md'), path.join(sb, 'task.md'));
   writeJSON(path.join(sb, 'job.json'), { type: 'event', ...(ev.minutes ? { minutes: ev.minutes } : {}) });
 }
@@ -1652,6 +1775,8 @@ function checkEvent(out, input = null, lenient = false) {
   const minute = minuteContext(input), missingSpeakers = minute.text ? unmappedIn(minute.text, minute.map) : [];
   if (missingSpeakers.length) errors.push(NAMES.t('minUnmapped', { labels: missingSpeakers.join('、') }));
   if (!ev || typeof ev !== 'object') return { ok: false, errors: ['未有交出 out/event.json，或內容無法讀取'] };
+  let contextText = ''; try { contextText = fs.readFileSync(path.join(sbDir, 'context.md'), 'utf8'); } catch { }
+  const contextTaskMap = contextTasks(contextText), usedContextTasks = new Set();
   const txt = (x, n) => typeof x === 'string' && x.trim() && x.length <= n;
   const checkMappedText = (value, at) => {
     const labels = unmappedIn(String(value || ''), minute.map);
@@ -1664,6 +1789,73 @@ function checkEvent(out, input = null, lenient = false) {
   (Array.isArray(ev.items) ? ev.items : []).forEach((it, i) => {
     const at = `items 第 ${i + 1} 項`;
     if (!it || typeof it !== 'object') return errors.push(at + '格式不正確');
+    // 新名稱不可進入共用檢查：它不合格時只丟棄該項，不可觸發修正一次或令整件事件失敗。
+    // 因此這裏自行完成未對照講者、why、逐字來源及會議紀錄 sourceQuote 的核對。
+    if (it.kind === 'newTerm') {
+      for (const [field, value] of [['why', it.why], ['sourceQuote', it.sourceQuote], ['name', it.name]]) {
+        if (typeof value === 'string' && unmappedIn(value, minute.map).length) {
+          log(`真實事件建議的新名稱已丟棄（${field} 有未對照講者）：${clip(it.name, 30)}`);
+          return;
+        }
+      }
+      // 新名稱的來源規則只在這裏判斷：只要附件名為「會議紀錄.md」，不論有沒有頂部說明或登記資料，便只可使用其未標示的正文行。
+      let minuteForTerm = null;
+      for (const rel of (input && input.files) || []) {
+        if (attachName(rel) !== '會議紀錄.md') continue;
+        const file = minuteDataPath(rel);
+        if (!file || !fs.existsSync(file)) continue;
+        try {
+          const text = fs.readFileSync(file, 'utf8'), marked = new Set(marks(text).map(mark => mark.line));
+          const lines = [], rawLines = text.split(/\r?\n/);
+          let changeListLevel = 0;
+          for (let lineNo = 0; lineNo < rawLines.length; lineNo++) {
+            const body = rawLines[lineNo].trim();
+            const changeList = /^(#{2,6})\s+改動清單\s*[：:]?\s*$/.exec(body);
+            if (changeList) {
+              const level = changeList[1].length;
+              if (!changeListLevel || level <= changeListLevel) changeListLevel = level;
+              continue;
+            }
+            const heading = /^(#{1,6})(?:\s|$)/.exec(body);
+            if (changeListLevel && heading && heading[1].length <= changeListLevel) changeListLevel = 0;
+            const text = body.replace(/^>\s?/, '').trim();
+            if (!text || /[⚠✏]/.test(text) || /^#/.test(body) || MINUTE_LEGEND.test(body) || changeListLevel || marked.has(lineNo + 1)) continue;
+            lines.push({ number: lineNo + 1, text });
+          }
+          minuteForTerm = { lines };
+        } catch { minuteForTerm = { lines: [] }; }
+        break;
+      }
+      const termTexts = minuteForTerm ? minuteForTerm.lines.map(line => line.text) : [said0, ...fileTexts];
+      const r = checkNewTermItem(it, {
+        texts: termTexts,
+        terms: ((s.company || {}).terms) || [],
+        actors: ((s.company || {}).actors) || [],
+        companyName: ((loadPage() || {}).company || {}).name || '',
+        overview: overviewLines(loadPage(), readJSON(CONFIRMED, null)),
+        declined: ((s.termSync || {}).declined) || {}
+      });
+      if (r.status !== 'ok') {
+        log(`真實事件建議的新名稱已丟棄（${r.reason || '格式不正確'}）：${clip(it.name, 30)}`);
+        return;
+      }
+      let sourceData = {};
+      if (minuteForTerm) {
+        const quote = typeof it.sourceQuote === 'string' ? it.sourceQuote.trim() : '';
+        const found = quote && quote.length <= 160 ? minuteForTerm.lines.filter(line => line.text.includes(quote)) : [];
+        if (found.length !== 1 || !found[0].text.includes(r.item.name)) {
+          const reason = !quote || quote.length > 160 ? '缺少可定位的 sourceQuote（逐字引句最多 160 字）' : found.length > 1 ? 'sourceQuote 對應多於一行，請改為可唯一定位的引句' : found.length ? 'sourceQuote 所在行沒有名稱' : 'sourceQuote 找不到會議紀錄來源行，請重新核對';
+          log(`真實事件建議的新名稱已丟棄（${reason}）：${clip(r.item.name, 30)}`);
+          return;
+        }
+        sourceData = { sourceQuote: quote, sourceLine: found[0].text, sourceLineNo: found[0].number };
+      }
+      const itemId = 'newTerm:' + pnorm(r.item.name);
+      if (seen.has(itemId)) return;
+      seen.add(itemId);
+      items.push({ ...r.item, id: itemId, itemId, ...sourceData, ...(minuteForTerm || pnorm(said0).includes(pnorm(r.item.name)) ? {} : { fromDoc: true }) });
+      return;
+    }
     for (const [field, value] of [['why', it.why], ['sourceQuote', it.sourceQuote], ['text', it.text], ['action', it.action], ['name', it.name], ['org', it.org], ['role', it.role]]) {
       if (typeof value === 'string') checkMappedText(value, `${at} 的 ${field} `);
     }
@@ -1689,7 +1881,13 @@ function checkEvent(out, input = null, lenient = false) {
       const bad = checkFollowUpItem(it, at, { eventDate: input && input.eventDate, milestones: s.milestones || [], styleIssues: NAMES.styleIssues });
       if (bad.length) return errors.push(...bad);
       if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
-      seen.add(itemId); items.push({ kind: 'followUp', id: itemId, itemId, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why, ...sourceData });
+      const sameAsTask = typeof it.sameAsTask === 'string' ? it.sameAsTask.trim() : '';
+      const task = sameAsTask && (s.tasks || []).find(row => row && row.id === sameAsTask);
+      const related = sameAsTask && contextTaskMap.get(sameAsTask);
+      const acceptedSame = !!(task && related && !usedContextTasks.has(sameAsTask) && !['done', 'cancelled'].includes(task.status) && task.owner !== 'ai' && !task.firstBatch);
+      if (sameAsTask && !acceptedSame) log(NAMES.t('contextSameTaskDropped', { r: !related ? '不在 context.md' : !task ? '找不到日程' : usedContextTasks.has(sameAsTask) ? '同一日程已使用' : '日程不適用' }));
+      if (acceptedSame) usedContextTasks.add(sameAsTask);
+      seen.add(itemId); items.push({ kind: 'followUp', id: itemId, itemId, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why, ...sourceData, ...(acceptedSame ? { sameAsTask, sameTaskFrom: related.from } : {}) });
       return;
     }
     if (it.kind === 'assumption') {
@@ -1715,7 +1913,7 @@ function checkEvent(out, input = null, lenient = false) {
       if (it.milestoneId && !(s.milestones || []).some(x => x.id === it.milestoneId)) return errors.push(at + '：找不到站 ' + it.milestoneId);
       if (((s.company || {}).nextExternalAction || {}).text === text) return;
       seen.add(itemId); items.push({ kind: 'nextAction', itemId, text, ...(it.milestoneId ? { milestoneId: it.milestoneId } : {}), why: it.why, ...sourceData });
-    } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp 或 newActor');
+    } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp、newActor 或 newTerm');
   });
   // 未能讀取的附件：結構化清單（檔名必須是這次附件的檔名），摘要不再兼顧逐份列出
   let unreadable = [];
@@ -1745,12 +1943,15 @@ function checkEvent(out, input = null, lenient = false) {
     for (const [i, highlight] of rd.read.highlights.entries()) checkMappedText(highlight.text, `read.highlights 第 ${i + 1} 項 `);
   }
   if (rs.reason) checkMappedText(rs.reason, 'reason ');
-  if (!items.length && !rs.reason && !rs.errors.length && !lenient) errors.push('沒有任何確認項目時，reason 必須填寫：一句講清楚為甚麼這件事沒有影響（最多 120 字）');
+  // AI 原本只交新名稱而全部被靜默丟棄時，不能因為沒有 reason 再叫它修正一次。
+  const onlyDroppedTerms = Array.isArray(ev.items) && ev.items.length > 0 && ev.items.every(item => item && item.kind === 'newTerm');
+  if (!items.length && !rs.reason && !rs.errors.length && !lenient && !onlyDroppedTerms) errors.push('沒有任何確認項目時，reason 必須填寫：一句講清楚為甚麼這件事沒有影響（最多 120 字）');
   if (errors.length) return { ok: false, errors };
-  // 次序：假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作；每包由 finishEvent 分成最多三題，不能因為第四項而丟失。
+  // 次序：假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作 ＞ 新名稱；每包由 finishEvent 分成最多三題，不能因為第四項而丟失。
   const kept = orderEventItems(items, Number.MAX_SAFE_INTEGER);
+  const contrasts = contextCompareItems(ev, minute, sbDir);
 
-  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason, minute };
+  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason, minute, contrasts };
 }
 // 新對象確認題（真實事件及 Zero 整理名單共用）：二選項，或疑似變體時三選項；askKey 決定問句（這件事提到／公司概覽提到）
 function newActorQuestion(s, it, i, askKey, qid = 'q' + (i + 1)) {
@@ -1765,6 +1966,20 @@ function newActorQuestion(s, it, i, askKey, qid = 'q' + (i + 1)) {
     options = [alias, other, no];
   } else { add.rec = true; options = [add, no]; }
   return { id: qid, priority: i + 1, about: clip(it.name, 30), ask: mixSpace(NAMES.t(askKey, { who })), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
+}
+// 新名稱確認題：加入為預設；名稱與現有正式名稱互為子字串時，先建議記為該名稱的另一個寫法。
+function newTermQuestion(s, it, i, qid = 'q' + (i + 1)) {
+  const kn = U['term_kind_' + it.termKind] || '', terms = ((s.company || {}).terms) || [];
+  const sim = it.similarTo ? terms.find(term => term && term.id === it.similarTo) : null;
+  const item = { kind: 'newTerm', name: it.name, termKind: it.termKind, ...(it.fromDoc ? { fromDoc: true } : {}) };
+  const add = { text: NAMES.t('newTermYes', { k: kn }), apply: { op: 'addTerm', mode: 'accept', item } }, no = { text: U.newTermNo, apply: { op: 'keep' } };
+  let options;
+  if (sim) {
+    const alias = { text: NAMES.t('newTermAlias', { n: sim.name }), rec: true, apply: { op: 'addTerm', mode: 'alias', aliasOf: sim.id, item } };
+    const other = { text: NAMES.t('newTermOther', { k: kn }), apply: { op: 'addTerm', mode: 'accept', item } };
+    options = [alias, other, no];
+  } else { add.rec = true; options = [add, no]; }
+  return { id: qid, priority: i + 1, about: clip(it.name, 30), ask: NAMES.t('newTermAsk', { n: it.name }), judge: NAMES.t('newTermSug', { k: kn }) + '。' + U.newTermJudge, kind: 'choice', effect: 'now', options, value: options.find(option => option.rec).text, why: clip(it.why, 200) };
 }
 // 名單類別名稱表（套用時寫入效果及事件用）
 const kindTexts = () => ({ kind: Object.fromEntries(['customer', 'partner', 'investor', 'advisor', 'team'].map(k => [k, NAMES.dash['ppl_kind_' + k]])), added: U.peopleAdded, aliased: U.peopleAliased, skipped: U.peopleSkipped });
@@ -1972,7 +2187,16 @@ function eventPack(run, s, input, items) {
         options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why };
     }
     if (it.kind === 'newActor') return newActorQuestion(s, it, i, 'newActorAsk', qid);
+    if (it.kind === 'newTerm') return newTermQuestion(s, it, i, qid);
     if (it.kind === 'followUp') {
+      const sameTask = it.sameAsTask && (s.tasks || []).find(task => task && task.id === it.sameAsTask);
+      if (sameTask) return { id: qid, priority: i + 1, about: clip(it.action, 40), ask: NAMES.t('contextTaskAsk', { a: it.action }), judge: NAMES.t('contextTaskJudge'), kind: 'choice', effect: 'now',
+        pair: { old: { title: sameTask.title, date: sameTask.dueAt || '', from: it.sameTaskFrom || '' }, now: { text: it.action, date: it.date } },
+        options: [
+          { text: NAMES.t('contextTaskUpdateOption', { d: dayText(it.date) }), rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), revisionOfTaskId: sameTask.id } },
+          { text: NAMES.t('contextTaskAddOption'), apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } },
+          { text: NAMES.t('contextTaskSkipOption'), apply: { op: 'keep' } }
+        ], value: NAMES.t('contextTaskUpdateOption', { d: dayText(it.date) }), why: it.why };
       const revised = it.revisionFrom && (it.revisionFrom.date !== it.date || it.revisionFrom.action !== it.action);
       const ask = revised && it.revisionFrom.date !== it.date
         ? NAMES.t('minRevDateAsk', { a: dayText(it.revisionFrom.date), b: dayText(it.date) })
@@ -2016,6 +2240,15 @@ async function finishEvent(run, sb, label, styleWarnings) {
   // 會後紀錄的跟進日期走同一條路：創辦人寫了日期而 Zero 沒有同日的跟進建議，外殼補一條跟進題（仍要創辦人確認才入日程）
   const hint = input.followUpHint;
   let items = guardMinuteItems(chk.items, chk.minute.entries);
+  // 修改版只按上一版已寫入事項的修訂對應出題，不能藉 sameAsTask 改到其他會議的日程。
+  if (input.minutes && (input.minutes.revisionOf || Number(input.minutes.version) > 1)) {
+    items = items.map(item => {
+      if (!item.sameAsTask && !item.sameTaskFrom) return item;
+      log(NAMES.t('contextSameTaskDropped', { r: '修改版不使用' }));
+      const { sameAsTask, sameTaskFrom, ...withoutSameTask } = item;
+      return withoutSameTask;
+    });
+  }
   if (hint && /^\d{4}-\d{2}-\d{2}$/.test(String(hint.date || '')) && (!input.eventDate || hint.date >= input.eventDate)) {
     const act = NAMES.t('followUpDebrief', { n: hint.who || '對方' });
     const itemId = 'followUp:' + hint.date + ':' + act;
@@ -2023,11 +2256,21 @@ async function finishEvent(run, sb, label, styleWarnings) {
   }
   let revisionNotes = [];
   if (input.minutes && input.minutes.revisionOf) {
-    items = revisionItems(input, items);
+    const revised = revisionItems(input, items);
+    items = revised.items; revisionNotes.push(...revised.notes);
     const back = revisionBackstop(input, items, s);
-    items = back.items; revisionNotes = back.notes;
+    items = back.items; revisionNotes.push(...back.notes);
     if (revisionNotes.length) { input.effects = input.effects || []; for (const change of revisionNotes) input.effects.push({ targetKind: 'decision', targetId: input.id, change }); }
   }
+  const compare = [];
+  for (const contrast of chk.contrasts || []) {
+    const sameLine = items.find(item => item && item.sourceLine === contrast.nowLine);
+    if (sameLine) {
+      const past = contrast.past.map(row => NAMES.t('contextWhyPastPart', { f: row.from, q: row.quote })).join('；');
+      sameLine.why = clip([sameLine.why, NAMES.t('contextWhyPast', { p: past })].filter(Boolean).join(' '), 200);
+    } else compare.push({ now: contrast.now, past: contrast.past, note: contrast.note });
+  }
+  input.compare = compare;
   const asked = new Set(input.askedEventItemIds || []);
   items = items.filter(item => item && item.itemId && !asked.has(item.itemId));
   if (input.minutes && chk.minute.text) input.minuteItems = items.map(minuteItemRecord);
@@ -2084,6 +2327,20 @@ function handleEventConfirm(run, pack, store) {
       if (!sel && !opt) { s.peopleSync = s.peopleSync || {}; const sim = opts.find(o => o.apply && o.apply.op === 'addActor' && o.apply.mode === 'alias'); const t = customAnswered(s, s.peopleSync, pnorm(it.name), { ...it, why: q.why, ...(sim ? { similarTo: sim.apply.aliasOf } : {}) }, it.name, a.value); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); continue; }
       if (!sel) { s.peopleSync = s.peopleSync || {}; s.peopleSync.declined = { ...(s.peopleSync.declined || {}) }; s.peopleSync.declined[pnorm(it.name)] = (s.peopleSync.declined[pnorm(it.name)] || 0) + 1; }
       if (sel) { const t = mixSpace(sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(a => a.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] })); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); }
+      continue;
+    }
+    const ntOpt = opts.find(o => o.apply && o.apply.op === 'addTerm');
+    if (ntOpt) {
+      // 新名稱：加入／別名才寫入；不加入才計數；自訂答案只記「沒有加入」，不算拒絕、亦不再追問。
+      const sel = opt && opt.apply && opt.apply.op === 'addTerm' ? opt.apply : null, it = { kind: 'newTerm', ...ntOpt.apply.item };
+      const answer = sel ? sel.mode : opt ? 'reject' : 'other';
+      const addedFrom = input.source === 'chat' ? 'chat' : (input.via === 'doc' || it.fromDoc ? 'doc' : 'event');
+      const termsBefore = JSON.stringify(((s.company || {}).terms) || []);
+      sync(applyNewTerm(s, { inputId: input.id, qid: q.id, item: it, answer, aliasOf: sel && sel.aliasOf, today: todayIso(), addedFrom }));
+      const termChanged = termsBefore !== JSON.stringify(((s.company || {}).terms) || []);
+      const target = sel && sel.mode === 'alias' ? ((s.company.terms || []).find(term => term.id === sel.aliasOf) || {}).name || '' : it.name;
+      const t = !sel ? NAMES.t('termSkipped', { n: it.name }) : !termChanged ? NAMES.t('termNotApplied', { n: it.name }) : sel.mode === 'alias' ? NAMES.t('termAliased', { n: target }) : NAMES.t('termAdded', { n: it.name, k: U['term_kind_' + it.termKind] || '' });
+      ev('input', t, [input.id], ['now', 'inputs']); said.push(t);
       continue;
     }
     const fuOpt = opts.find(o => o.apply && o.apply.op === 'addFollowUp');

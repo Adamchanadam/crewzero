@@ -3,7 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import { readJSON, localIso } from './ask-lib.mjs';
+
+const NAMES = createRequire(import.meta.url)('./names.js');
 
 export const STATES = ['speakers', 'drafting', 'ready', 'failed', 'submitted'];
 export const MAX_CHARS = 60000;
@@ -104,6 +107,32 @@ export function overviewLines(page, confirmed) {
         total -= removed.length + (kept.length ? 1 : 0);
       }
       if (total + (kept.length ? 1 : 0) + tail.length <= cap) kept.push(tail);
+      return kept;
+    }
+    return kept;
+  } catch { return []; }
+}
+
+// 創辦人已確認的常用名稱不依賴公司概覽，獨立交給會議紀錄草稿使用。
+export function termLines(terms) {
+  try {
+    if (!Array.isArray(terms)) return [];
+    const kind = value => NAMES.ui && NAMES.ui['term_kind_' + value];
+    const rows = terms.map(term => {
+      if (!term || typeof term !== 'object' || Array.isArray(term) || typeof term.name !== 'string' || !Array.isArray(term.aliases) || !kind(term.kind) || term.aliases.some(alias => typeof alias !== 'string')) throw new Error('invalid term');
+      const name = cleanOverviewValue(term.name);
+      const aliases = term.aliases.map(cleanOverviewValue).filter(Boolean);
+      if (!name) throw new Error('invalid name');
+      return { addedAt: typeof term.addedAt === 'string' ? term.addedAt : '', line: name + '（' + kind(term.kind) + (aliases.length ? '；另一個寫法：' + aliases.join('、') : '') + '）' };
+    }).sort((a, b) => b.addedAt.localeCompare(a.addedAt)).slice(0, 60);
+    const kept = [], tail = '（其餘從略）'; let total = 0;
+    for (const row of rows) {
+      const next = total + (kept.length ? 1 : 0) + row.line.length;
+      if (next <= 3000) { kept.push(row.line); total = next; continue; }
+      while (kept.length && total + 1 + tail.length > 3000) {
+        const removed = kept.pop(); total -= removed.length + (kept.length ? 1 : 0);
+      }
+      if (total + (kept.length ? 1 : 0) + tail.length <= 3000) kept.push(tail);
       return kept;
     }
     return kept;

@@ -18,7 +18,7 @@ const DIR = ask.dataDirs(PROTO);
 const write = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 2));
 const stateFile = path.join(DIR.ledger, 'state.json');
 write(stateFile, {
-  company: { nextExternalAction: { text: '聯絡客戶安排會面', milestoneId: 'M1' } },
+  company: { nextExternalAction: { text: '聯絡客戶安排會面', milestoneId: 'M1' }, actors: [{ id: 'pr-term-list', name: '名單現有名稱', label: '名單現有名稱', kind: 'customer', aliases: [], status: 'active', fromMilestoneIds: [] }] },
   intake: { state: 'complete' },
   milestones: [{ id: 'M1', short: '取得首個客戶', event: '聯絡客戶安排會面', state: 'active', pathStatus: 'confirmed', order: 1 }],
   events: []
@@ -53,6 +53,23 @@ try {
   srv = start();
   ok('伺服器就緒', await ready());
   await usePass(BASE);
+  // TF-01 至 TF-07：常用名稱表操作沿用同一創辦人隊列；各種拒絕均不可留下排隊項目。
+  const termQueueCount = () => (ask.readJSON(path.join(DIR.ledger, 'founder-ops.json'), []) || []).filter(op => /^term/.test(op.op)).length;
+  const staged = readState(); staged.company.terms = [{ id: 'tn-existing', name: '已有名稱', kind: 'product', aliases: [], addedAt: '2026-11-10', addedFrom: 'manual' }]; write(stateFile, staged);
+  const duplicateTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '已有名稱', kind: 'product' } });
+  const inListTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '名單現有名稱', kind: 'product' } });
+  const contactTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '電話91234567', kind: 'product' } });
+  ok('TF-02 重名、已在名單及聯絡資料被拒而且不入隊列', duplicateTerm.code === 400 && duplicateTerm.json?.message === ask.NAMES.ui.term_errDuplicate && inListTerm.code === 400 && inListTerm.json?.message === ask.NAMES.ui.term_errInList && contactTerm.code === 400 && contactTerm.json?.message === ask.NAMES.ui.ppl_errContact && termQueueCount() === 0, { duplicateTerm, inListTerm, contactTerm, queued: termQueueCount() });
+  const full = readState(); full.company.terms = Array.from({ length: 60 }, (_, i) => ({ id: 'tn-full-' + i, name: '滿額名稱' + i, kind: 'product', aliases: [], addedAt: '2026-11-10', addedFrom: 'manual' })); write(stateFile, full);
+  const fullTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '第六十一個名稱', kind: 'product' } });
+  ok('TF-03 已有 60 個名稱被拒而且不入隊列', fullTerm.code === 400 && fullTerm.json?.message === ask.NAMES.ui.term_errFull && termQueueCount() === 0, { fullTerm, queued: termQueueCount() });
+  const clearTerms = readState(); clearTerms.company.terms = []; write(stateFile, clearTerms);
+  const termAdded = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '測試禮盒', kind: 'product' } });
+  const termId = termAdded.json?.op?.id ? 'tn-' + termAdded.json.op.id : '';
+  const termRenamed = await post('/api/founder-op', { op: 'termRename', target: termId, value: { name: '測試禮盒新版' } });
+  const termRemoved = await post('/api/founder-op', { op: 'termRemove', target: termId, value: {} });
+  const termDash = await get('/api/dashboard');
+  ok('TF-01 termAdd、termRename、termRemove 各成功一次並即時疊加', termAdded.code === 202 && termRenamed.code === 202 && termRemoved.code === 202 && termQueueCount() === 3 && Array.isArray(termDash.people?.terms) && termDash.people.terms.length === 0, { termAdded, termRenamed, termRemoved, queued: termQueueCount(), terms: termDash.people?.terms });
   const changed = await post('/api/founder-op', { op: 'reschedule', target: 'nextAction', value: { date: '2030-02-04' } });
   ok('改期操作獲接收', changed.code === 202 && changed.json && changed.json.ok, changed);
   let dash = await get('/api/dashboard');
@@ -68,8 +85,14 @@ try {
   srv.kill(); srv = null;
   const merged = spawnSync(process.execPath, [path.join(PROTO, 'run.mjs')], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA }, encoding: 'utf8', timeout: 30000 });
   const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  ok('下一次外殼開工合併操作', merged.status === 0 && state.company.nextExternalAction.text === '安排下一次客戶會面' && !fs.existsSync(path.join(DIR.ledger, 'founder-ops.json')), { status: merged.status, stderr: String(merged.stderr || '').slice(0, 300), next: state.company.nextExternalAction });
+  ok('TF-04 下一次外殼開工正確合併名稱操作', merged.status === 0 && state.company.nextExternalAction.text === '安排下一次客戶會面' && !fs.existsSync(path.join(DIR.ledger, 'founder-ops.json')) && Array.isArray(state.company.terms) && state.company.terms.length === 0 && state.termSync?.declined?.['測試禮盒'] === 2 && state.termSync?.declined?.['測試禮盒新版'] === 2, { status: merged.status, stderr: String(merged.stderr || '').slice(0, 300), next: state.company.nextExternalAction, terms: state.company.terms, declined: state.termSync?.declined });
   ok('外殼合併後留下創辦人操作事件', (state.events || []).filter(event => event.type === 'founder-op').length >= 4, state.events);
+  const termReplay = { id: 'fo-term-replay', at: '2030-02-09T09:59:00+00:00', op: 'termAdd', target: 'terms', value: { name: '重播名稱', kind: 'campaign' } };
+  write(path.join(DIR.ledger, '.founder-ops-99-999.json'), [termReplay]);
+  const termReplayFirst = runShell(), termReplayState = readState();
+  write(path.join(DIR.ledger, '.founder-ops-99-1000.json'), [termReplay]);
+  const termReplaySecond = runShell(), termReplayAgain = readState();
+  ok('TF-05 同一個名稱操作重播不重複', termReplayFirst.status === 0 && termReplaySecond.status === 0 && termReplayState.company.terms.filter(term => term.name === '重播名稱').length === 1 && termReplayAgain.company.terms.filter(term => term.name === '重播名稱').length === 1, { first: termReplayState.company.terms, replay: termReplayAgain.company.terms });
   // 中斷後留下的批次先處理；已儲存的操作重播時不可再套用或再記錄事件。
   const recovered = { id: 'fo-recovered', at: '2030-02-09T10:00:00+00:00', op: 'reschedule', target: 'nextAction', value: { date: '2030-02-09' } };
   write(path.join(DIR.ledger, '.founder-ops-100-1000.json'), [recovered]);
@@ -168,6 +191,9 @@ try {
   const demoRes = await fetch(BASE + '/api/founder-op', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE, cookie: fresh.name + '=' + fresh.value }, body: JSON.stringify({ op: 'cancelNext', target: 'nextAction', value: {} }) });
   const demo = { code: demoRes.status, json: await demoRes.json() };
   ok('示範資料拒絕創辦人操作', demo.code === 400 && demo.json && demo.json.error === 'demo', demo);
+  const demoTermRes = await fetch(BASE + '/api/founder-op', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE, cookie: fresh.name + '=' + fresh.value }, body: JSON.stringify({ op: 'termAdd', target: 'terms', value: { name: '示範名稱', kind: 'product' } }) });
+  const demoTerm = { code: demoTermRes.status, json: await demoTermRes.json() };
+  ok('TF-06 示範資料拒絕名稱操作而且不入隊列', demoTerm.code === 400 && demoTerm.json?.error === 'demo' && !fs.existsSync(path.join(DIR.ledger, 'founder-ops.json')), demoTerm);
 } catch (error) {
   ok('測試程式出錯', false, String(error && error.stack || error));
 } finally {

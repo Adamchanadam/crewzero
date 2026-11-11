@@ -6,7 +6,7 @@
 //       node ask.mjs <問題包.json>      放上去並打開頁面
 //       node ask.mjs <問題包.json> --no-open
 //       node ask.mjs --list              列出等緊答嘅問題包
-//       node ask.mjs --read <檔案>        只讀附件，辨認逐字稿、講者例句、字數及已確認公司概覽的名稱及用詞
+//       node ask.mjs --read <檔案>        只讀附件，辨認逐字稿、講者例句、字數及已確認常用名稱表與公司概覽的名稱及用詞
 //       node ask.mjs --dashboard --sim <實例資料夾>   模擬實例（資料喺 <實例>/data，預設 4650；假 AI 喺 <實例>/../tools）
 // 格式同出題規則：ask-format.md。超過 12 條會按優先自動拆包；答過嘅題目會自動拎走。
 import fs from 'node:fs';
@@ -23,7 +23,7 @@ import { dashboardState, guideCard } from './dash-lib.mjs';
 import { officeKind, officeToText } from './office-text.mjs';
 import { isPdf, pdfToText } from './pdf-text.mjs';
 import { detect, samples } from './transcript-lib.mjs';
-import { overviewLines } from './minutes-lib.mjs';
+import { overviewLines, termLines } from './minutes-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -62,7 +62,7 @@ if (STATUS_ONLY) {
   console.log('重新打開：在 AI 對話輸入 /crewzero:dashboard（或說「打開 CrewZero」）');
   process.exit(0);
 }
-// --read：只讀一份附件，讓「和 Zero 討論」先辨認會議逐字稿及講者，並附已確認公司概覽的名稱及用詞；不建立資料夾、不寫旁檔。
+// --read：只讀一份附件，讓「和 Zero 討論」先辨認會議逐字稿及講者，並附已確認常用名稱表與公司概覽的名稱及用詞；不建立資料夾、不寫旁檔。
 if (READ_AT >= 0) {
   const file = args[READ_AT + 1] || '';
   if (!file) { console.log(NAMES.ui.minReadMissing); process.exit(1); }
@@ -97,6 +97,12 @@ if (READ_AT >= 0) {
     samples(text, label, 3).forEach(function (line) { console.log('- ' + line); });
   });
   console.log(NAMES.t('minReadWords', { n: [...text.replace(/\s/g, '')].length }));
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), null);
+  const terms = termLines(((state && state.company) || {}).terms || []);
+  if (terms.length) {
+    console.log(NAMES.ui.minReadTerms);
+    terms.forEach(line => console.log(line));
+  }
   const companyNames = overviewLines(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null));
   if (companyNames.length) {
     console.log(NAMES.ui.minReadOverview);

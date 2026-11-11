@@ -130,11 +130,11 @@ await test('端到端：成功與失敗都留紀錄而唔留 runs', () => {
   const e2e = path.join(make('e2e'), 'temp'); fs.mkdirSync(e2e, { recursive: true });
   const env = { ...process.env, TEMP: e2e, TMP: e2e, TMPDIR: e2e }; delete env.SOS_TEST_OUT;
   const runAll = path.join(HERE, '..', 'run-all.mjs'), good = path.join(e2e, 'good');
-  const first = spawnSync(process.execPath, [runAll, '--proto', PROTO, '--out', good, '--only', '名稱表', '--no-browser'], { encoding: 'utf8', env, timeout: 180000 });
+  const first = spawnSync(process.execPath, [runAll, '--proto', PROTO, '--out', good, '--only', 'core/names-check.mjs', '--no-browser'], { encoding: 'utf8', env, timeout: 180000 });
   const goodSummary = exists(path.join(good, 'summary.json')) ? JSON.parse(fs.readFileSync(path.join(good, 'summary.json'))) : null;
   if (first.status !== 0 || !goodSummary || !goodSummary.finished || !exists(path.join(good, 'logs')) || exists(path.join(good, 'runs')) || !readOutputMarker(good) || readOutputMarker(good).marker.state !== 'finished') throw new Error((first.stdout || '') + (first.stderr || ''));
   const fake = path.join(e2e, 'fake-proto'); write(path.join(fake, 'server.mjs'), ''); const bad = path.join(e2e, 'bad');
-  const second = spawnSync(process.execPath, [runAll, '--proto', fake, '--out', bad, '--only', '名稱表', '--no-browser'], { encoding: 'utf8', env, timeout: 180000 });
+  const second = spawnSync(process.execPath, [runAll, '--proto', fake, '--out', bad, '--only', 'core/names-check.mjs', '--no-browser'], { encoding: 'utf8', env, timeout: 180000 });
   const badSummary = exists(path.join(bad, 'summary.json')) ? JSON.parse(fs.readFileSync(path.join(bad, 'summary.json'))) : null;
   if (second.status === 0 || !badSummary || !badSummary.finished || !exists(path.join(bad, 'logs')) || exists(path.join(bad, 'runs'))) throw new Error((second.stdout || '') + (second.stderr || ''));
 });

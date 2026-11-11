@@ -15,7 +15,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { receiveAttachments, collectLinks, convertInboundText, rereadLink, rehomeInterruptedUploads } from './inbound-lib.mjs';
 import { ROLES_OPS, ROLES_OP_NAMES, checkRolesOp } from './ledger-ops.mjs';
 import { PACE_KEYS, timeoutOf } from './pace-lib.mjs';
-import { applyActorOp, ACTOR_OPS, ownerKind } from './people-ops.mjs';
+import { applyActorOp, ACTOR_OPS, hasContactInfo, ownerKind } from './people-ops.mjs';
+import { applyTermOp } from './terms-ops.mjs';
 import { parseGoogleLink } from './link-fetch.mjs';
 import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
@@ -26,7 +27,7 @@ import { listScenarios, loadScenario, listSessions, loadSession, startSession, s
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
-import { cleanTitle, createMinutes, fileNameFor, listOpen, minutesFilePath, minutesShown, patchMinutes, readMinutes, reserveMinutesId, sha256, sourceDir } from './minutes-lib.mjs';
+import { cleanTitle, createMinutes, fileNameFor, listOpen, minutesFilePath, minutesShown, overviewLines, patchMinutes, readMinutes, reserveMinutesId, sha256, sourceDir } from './minutes-lib.mjs';
 import { detect, formatMap, gate, marks, samples, unmappedIn } from './transcript-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -1291,12 +1292,13 @@ function founderOp(body) {
   // 隊列先讀、state.json 最後讀（與外殼合併「改名 → 套用 → 存檔 → 刪批次檔」配合），剛排隊的暫停／恢復不會被漏看
   const { state, pending } = readFounderOpsSnapshot(DIR);
   if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
-  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ROLES_OP_NAMES, ...ACTOR_OPS].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ROLES_OP_NAMES, ...ACTOR_OPS, 'termAdd', 'termRename', 'termRemove'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
-  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], ...ROLES_OPS, actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'] }[body.op];
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], ...ROLES_OPS, actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'], termAdd: ['name', 'kind'], termRename: ['name'], termRemove: [] }[body.op];
   if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   let opValue = value;
+  const opId = 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex');
   if (ROLES_OP_NAMES.includes(body.op)) {
     // 0.41.0：節奏三檔、暫停／恢復 Zero、崗位暫停／恢復、請 Zero 重新擬崗位。核對在 ledger-ops.checkRolesOp（連同尚未合併的同類操作重播）；隊列只存整理過的欄位
     const packs = listPacks(DIR).filter(p => p.open).map(p => loadPack(DIR, p.id)).filter(Boolean);
@@ -1332,7 +1334,20 @@ function founderOp(body) {
     if (!trial.ok) return { ok: false, error: 'invalid', message: NAMES.ui['pbErr_' + trial.error] || NAMES.ui.founderOpInvalid };
     if (body.op === 'actorTeam') { const t = value.team && typeof value.team === 'object' ? value.team : {}; opValue = { team: Object.fromEntries(['type', 'state', 'owns'].filter(k => k in t).map(k => [k, t[k]])) }; }
   }
-  const op = { id: 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex'), at: localIso(), op: body.op, target: body.target, value: opValue };
+  if (['termAdd', 'termRename', 'termRemove'].includes(body.op)) {
+    // 常用名稱表同樣先在已疊加的帳本試套；公司概覽只在新增時用來避免重複記錄。
+    const eff = applyFounderOps(state, pending);
+    const page = readJSON(path.join(DIR.company, 'page.json'), null), confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
+    const trial = applyTermOp({ company: eff.company || {}, termSync: eff.termSync || {} }, body.op, { ...value, id: body.target }, { today: localIso().slice(0, 10), opId, overview: overviewLines(page, confirmed) });
+    if (!trial.ok) {
+      const message = trial.reason === 'inList' ? NAMES.ui.term_errInList
+        : trial.reason === 'full' ? NAMES.ui.term_errFull
+          : ['duplicateName', 'companyName'].includes(trial.reason) ? NAMES.ui.term_errDuplicate
+            : hasContactInfo(value.name) ? NAMES.ui.ppl_errContact : NAMES.ui.founderOpInvalid;
+      return { ok: false, error: 'invalid', message };
+    }
+  }
+  const op = { id: opId, at: localIso(), op: body.op, target: body.target, value: opValue };
   if (!appendFounderOp(op)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
   schedule(200);
   return { ok: true, op: { id: op.id, at: op.at, op: op.op, target: op.target }, message: NAMES.ui.founderOpSaved };

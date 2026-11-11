@@ -6,7 +6,7 @@
 
 - `minutes-input.md`：會議日期、公司名單及已換成確認名字的完整逐字稿。
 - `meeting-minutes-format.md`：唯一的會議紀錄格式及標示規格，必須完整遵守；不要在這份工作說明重抄規格。
-- `company-names.md`（如有）：創辦人已確認的公司概覽內的名稱及用詞。只可按 `meeting-minutes-format.md` 的校正規則核對名稱寫法，不是會議內容；沒有這個檔就只按名單校正。
+- `company-names.md`（如有）：你已確認的常用名稱表及公司概覽內的名稱及用詞。只可按 `meeting-minutes-format.md` 的校正規則核對名稱寫法，不是會議內容；沒有這個檔就只按名單校正。
 
 ## 要做
 

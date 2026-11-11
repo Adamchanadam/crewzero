@@ -48,8 +48,11 @@ try {
   // 0.42.0：checkEvent 會核對會議紀錄附件及講者標籤；本測試沒有會議紀錄，用「沒有附件」的替身，講者核對用真函數
   const transcriptLib = await import(pathToFileURL(path.join(PROTO, 'transcript-lib.mjs')).href);
   const askLib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+  // 0.42.1：checkEvent 讀 context.md 的日程對照（純函數），放入真函數
+  const contextLib = await import(pathToFileURL(path.join(PROTO, 'context-lib.mjs')).href);
+  Object.assign(ctx, { contextTasks: contextLib.contextTasks, contextQuoteSources: contextLib.contextQuoteSources });
   Object.assign(ctx, { guardMinuteItems: items => items, revisionItems: (input, items) => items, fnv: askLib.fnv, minuteContext: () => ({ text: '', info: null, rec: null, map: {}, entries: [] }), unmappedIn: transcriptLib.unmappedIn });
-  vm.runInContext(section('const unreadList =', '\n') + '\n' + section('function checkEvent(', 'function eventPack(') + '\nthis.checkEvent=checkEvent;', ctx);
+  vm.runInContext(section('const unreadList =', '\n') + '\n' + section('function confirmedQuoteSource(', 'function priorMinute(') + '\n' + section('function checkEvent(', 'function eventPack(') + '\nthis.checkEvent=checkEvent;', ctx);
   const before = fs.readFileSync(stateFile, 'utf8');
   fs.writeFileSync(path.join(data, 'fake-mode.txt'), 'debrief:auto-grade\n');
   await import(pathToFileURL(path.join(PROTO, '..', '..', 'tests', 'prototype', 'lib', 'fake-ai.mjs')).href + '?grade');

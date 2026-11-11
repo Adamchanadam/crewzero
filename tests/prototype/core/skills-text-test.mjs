@@ -31,9 +31,10 @@ ok('discuss：交給 Zero 前先問「要不要把以下內容交給 Zero」', d
 ok('discuss：會議逐字稿觸發詞齊全', ['會議逐字稿', '轉會議紀錄', '整理會議紀錄', '逐字稿'].every(k => d.includes(k)));
 ok('discuss：會議紀錄先讀檔、逐位確認講者、依規格寫草稿及核實相對日期', d.includes('--read') && /每位都確認前，不可整理草稿/.test(d) && d.includes('meeting-minutes-format.md') && d.includes('相對日期先以會議日期核實'));
 ok('discuss：會議紀錄交出前詢問、正文帶講者對照，附件名稱正確', d.includes('要不要把以下內容交給 Zero') && d.includes('formatMap()') && d.includes('會議紀錄.md'));
-ok('S1 會議紀錄技能寫明公司概覽名稱清單、改動清單及逐字稿邊界', d.includes('已確認公司概覽的名稱及用詞') && d.includes('改動清單') && d.includes('會議紀錄只可寫逐字稿的內容'));
+ok('TS1 會議紀錄技能寫明常用名稱表、公司概覽、改動清單及逐字稿邊界，命令白名單沒有新增', d.includes('常用名稱表') && d.includes('公司概覽') && d.includes('記住這個名稱') && d.includes('要不要交給 Zero') && d.includes('改動清單') && d.includes('會議紀錄只可寫逐字稿的內容') && !/--(?:term|names|remember)\b/.test(d));
 const minutesFormat = read(path.join(PROTO, 'meeting-minutes-format.md'));
-ok('S2 會議紀錄規格列明名稱校正、別名改正式名字、逐字稿優先及沒有概覽時的規則', ['人名以名單為準', '包括名單列出的別名，改用正式名字', '不可改成公司概覽的說法', '不可寫入會議紀錄', '沒有已確認公司概覽時，只按名單校正'].every(k => minutesFormat.includes(k)), minutesFormat);
+ok('TS2 會議紀錄規格列明名單、常用名稱表、公司概覽的次序，別名校正及逐字稿邊界', ['錯字及專有名詞只可按名單、常用名稱表及已確認公司概覽校正', '次序為名單、常用名稱表、公司概覽', '包括名單列出的別名，改用正式名字', '逐字稿出現常用名稱表列出的「另一個寫法」時，改用正式名稱', '不可寫入會議紀錄'].every(k => minutesFormat.includes(k)), minutesFormat);
+ok('TS3 會議紀錄規格寫明同音或近似名稱的上下文判斷及正式寫法', ['讀音相同或只差一兩個字', '視為同一個名稱'].every(k => minutesFormat.includes(k)), minutesFormat);
 const minutesTask = read(path.join(PROTO, 'ai-minutes-draft.md'));
 ok('S3 草稿工作說明提及名稱清單、明示不是會議內容，不誤列完整概覽或重抄人名規則', minutesTask.includes('company-names.md') && minutesTask.includes('不是會議內容') && !minutesTask.includes('confirmed-page.md') && !minutesTask.includes('人名以名單為準'), minutesTask);
 ok('discuss：三種工具打法齊全（含描述）', ['/crewzero:discuss', '$crewzero:discuss', '/discuss'].every(k => d.includes(k)) && /description:.*\/crewzero:discuss.*\$crewzero:discuss.*\/discuss/.test(d.replace(/\r\n/g, '\n')));

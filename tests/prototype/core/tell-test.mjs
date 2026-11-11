@@ -38,6 +38,16 @@ const ask = (...args) => spawnSync(process.execPath, [path.join(INSTALL, 'ask.mj
 const draftFile = (name, obj) => { const p = path.join(OUT, name + '.json'); fs.writeFileSync(p, typeof obj === 'string' ? obj : JSON.stringify(obj)); return p; };
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 const sh = (name, ...a) => name;
+const fileManifest = root => {
+  const rows = [];
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name), rel = path.relative(root, full).replace(/\\/g, '/');
+      if (entry.isDirectory()) walk(full); else rows.push({ rel, hash: sha(fs.readFileSync(full)) });
+    }
+  };
+  walk(root); return rows.sort((a, b) => a.rel.localeCompare(b.rel));
+};
 
 try {
   await usePass(BASE);
@@ -67,8 +77,11 @@ try {
     page.detail.reading.find(field => field.id === 'canvas-partners').value = '銀杏速遞行';
     fs.writeFileSync(path.join(r4Data, 'company', 'page.json'), JSON.stringify(page, null, 2));
     fs.writeFileSync(path.join(r4Data, 'ledger', 'confirmed.json'), JSON.stringify(confirmed, null, 2));
-    const r4 = askRead(r4Data, '--read', transcript);
+    fs.writeFileSync(path.join(r4Data, 'ledger', 'state.json'), JSON.stringify({ company: { terms: [{ id: 'tn-read', name: '晨霧冷萃禮盒', kind: 'product', aliases: ['晨霧禮盒'], addedAt: '2026-11-10', addedFrom: 'event' }] } }, null, 2));
+    const r4Before = fileManifest(r4Data), r4 = askRead(r4Data, '--read', transcript), r4After = fileManifest(r4Data);
     ok('R4 --read：附已確認名稱清單，只印確認值、清走電郵，且不印路徑或欄位編號', r4.status === 0 && r4.stdout.includes(N.ui.minReadOverview) && r4.stdout.includes('月月鮮烘') && r4.stdout.includes('星塵慢烘禮盒') && !r4.stdout.includes('demo@example.invalid') && !r4.stdout.includes('銀杏速遞行') && !/[A-Za-z]:[\\/]/.test(r4.stdout) && !/canvas-value/.test(r4.stdout), r4.stdout);
+    const r4TermsAt = r4.stdout.indexOf(N.ui.minReadTerms), r4NameAt = r4.stdout.indexOf('晨霧冷萃禮盒'), r4OverviewAt = r4.stdout.indexOf(N.ui.minReadOverview);
+    ok('TR1 --read：名稱表在公司概覽之前，沒有編號或磁碟路徑，資料夾每個檔案相對路徑及內容雜湊全程不變', r4.status === 0 && r4TermsAt >= 0 && r4NameAt >= 0 && r4OverviewAt >= 0 && r4NameAt < r4OverviewAt && JSON.stringify(r4Before) === JSON.stringify(r4After) && !r4.stdout.includes('tn-read') && !/[A-Za-z]:[\\/]/.test(r4.stdout), { out: r4.stdout, before: r4Before, after: r4After });
     const r6Data = path.join(OUT, 'read-page-mismatch');
     fs.mkdirSync(path.join(r6Data, 'company'), { recursive: true }); fs.mkdirSync(path.join(r6Data, 'ledger'), { recursive: true });
     fs.writeFileSync(path.join(r6Data, 'company', 'page.json'), JSON.stringify(page, null, 2));

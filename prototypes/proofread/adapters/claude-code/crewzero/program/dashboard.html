@@ -381,6 +381,7 @@ details.legend-d .blegend{margin-top:6px}
 .track5{margin-bottom:6px}
 .ppl .sec-h{display:flex;align-items:baseline;gap:10px;margin:18px 0 8px;font-size:var(--fs-body);font-weight:650}.ppl .sec-h small{color:var(--muted);font-weight:400;font-size:var(--fs-sub)}
 .ppl .chips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}.ppl .chips .chip{display:inline-flex;align-items:center;gap:6px;text-decoration:none}.ppl .chips .chip b{font-family:var(--mono);font-weight:500;color:var(--muted)}.ppl .chips .chip.on b{color:var(--mint)}
+.ppl .terms-box{margin-top:22px;padding-top:6px;border-top:1px solid var(--line)}.ppl .terms-intro{margin:0 0 10px}.ppl .terms{display:flex;flex-direction:column;gap:8px}.ppl .term{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,1.6fr) auto;gap:14px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.015)}.ppl .term .tn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}.ppl .term .tn b{font-size:var(--fs-body);overflow-wrap:anywhere}.ppl .term .tag.kind{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--line)}.ppl .term .tmeta{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:var(--fs-sub)}.ppl .term .tmeta span{overflow-wrap:anywhere}.ppl .term .tmeta small{color:var(--muted);font-size:var(--fs-label)}.ppl .terms-foot{margin-top:10px}.ppl .term .fixwrap .btn,.ppl .terms-foot .btn{min-height:44px}.ppl .term-fld{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:12px 0;text-align:left}.ppl .term-fld label{font-size:var(--fs-sub);color:var(--muted);text-align:left}.ppl .term-fld .in{box-sizing:border-box;width:100%;min-height:44px;height:44px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0f1116;color:var(--text);font:inherit;font-size:var(--fs-body)}.ppl .term-kinds{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.ppl .term-kinds .opt{min-height:44px}.term-menu a,.pair-modal .term-modal .pair-actions .btn{min-height:44px}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
 .fixwrap{position:relative}.menu{position:absolute;right:0;top:36px;z-index:5;min-width:210px;padding:6px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:#12141a;box-shadow:0 18px 40px -10px rgba(0,0,0,.8)}
 .menu a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:7px;color:var(--text);text-decoration:none;font-size:var(--fs-sub)}.menu a:hover{background:rgba(255,255,255,.06)}.menu a.warn{color:var(--red)}.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .ppl .sync{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}.ppl .sync p{margin:0}.ppl .teamnote{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 6px}.ppl .closed{margin-top:14px;border:1px dashed var(--line);border-radius:10px;padding:10px 14px}.ppl .closed summary{cursor:pointer;font-size:var(--fs-sub);color:var(--muted);min-height:32px}.ppl .closed .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-sub)}.ppl .closed .row .sp{flex:1 1 220px;min-width:0}
@@ -393,6 +394,7 @@ details.legend-d .blegend{margin-top:6px}
 .ppl .fld{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center;margin:10px 0}.ppl .fld label{color:var(--muted);font-size:var(--fs-sub)}.ppl .fld .in{box-sizing:border-box;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font:inherit}
 .pair-modal .layer.ppl{width:min(520px,100%)}.pair-modal .mm{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin:10px 0}.mm .box{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:var(--fs-sub)}.mm .box small{display:block;color:var(--muted);font-size:var(--fs-label)}.mm .arrow{color:var(--amber);font-size:var(--fs-title)}
 @media (max-width:900px){.pr{grid-template-columns:1fr}.mem-grid{grid-template-columns:1fr}.fixwrap .btn{width:100%}.menu{left:0;right:0;min-width:0}}
+@media (max-width:700px){.ppl .term{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"tn fix" "tm tm"}.ppl .term .tn{grid-area:tn}.ppl .term .tmeta{grid-area:tm}.ppl .term .fixwrap{grid-area:fix}}
 @media (max-width:600px){.ppl .btn,.ppl .btn.small,.pair-modal .btn{min-height:44px;height:auto;padding:8px 16px}.ppl .chips .chip{min-height:44px}.menu a{min-height:44px}.pair-modal .opt{min-height:48px}.ppl .fld{grid-template-columns:1fr;gap:4px}.ppl .fld .in{height:44px}.pair-modal .mm{grid-template-columns:1fr}.mm .arrow{text-align:center;transform:rotate(90deg)}.ppl .closed summary{min-height:44px;display:flex;align-items:center}.own th,.own td{padding:8px 6px}}
 .track5{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .track5 span{font-size:var(--fs-min);color:var(--muted);text-align:center;border-top:3px solid rgba(255,255,255,.08);padding-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2755,9 +2757,9 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   }
   function closePplModal() { var m = $('#ppl-modal'); if (m) m.remove(); document.removeEventListener('keydown', pplEsc); }
   function pplEsc(e) { if (e.key === 'Escape') closePplModal(); }
-  function openPplModal(eyebrow, title, body, actions) {
+  function openPplModal(eyebrow, title, body, actions, extraClass) {
     closePplModal();
-    var box = h('section', { class: 'layer accent ppl' }, h('span', { class: 'eyebrow' }, eyebrow), h('h2', null, title), body, h('div', { class: 'pair-actions' }, actions));
+    var box = h('section', { class: 'layer accent ppl' + (extraClass ? ' ' + extraClass : '') }, h('span', { class: 'eyebrow' }, eyebrow), h('h2', null, title), body, h('div', { class: 'pair-actions' }, actions));
     var m = h('div', { class: 'pair-modal', id: 'ppl-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title, onclick: function (e) { if (e.target === m) closePplModal(); } }, box);
     document.body.append(m); document.addEventListener('keydown', pplEsc);
     var f = m.querySelector('input,button.opt,button'); if (f) f.focus();
@@ -2806,6 +2808,45 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function pplMenuItems(p, pool) {
     return [{ text: D.ppl_fixRename, run: function () { dlgRename(p); } }, { text: D.ppl_fixKind, run: function () { dlgKind(p); } }, { text: D.ppl_fixMerge, run: function () { dlgMerge(p, pool); } }, '-', { text: D.ppl_fixClose, warn: true, run: function () { dlgClose(p); } }];
   }
+  function termList() { return Array.isArray(people().terms) ? people().terms : []; }
+  function termError(e) { return (e && e.said) || D.ppl_errGeneric; }
+  function sendTerm(op, target, value) {
+    return postJSON('/api/founder-op', { op: op, target: target, value: value || {} }).then(function (j) {
+      if (j && j.ok === false) throw j;
+      closePplModal(); toast(D.ppl_saved); return load();
+    }).catch(function (e) { toast(termError(e)); throw e; });
+  }
+  function termFixMenu(t) {
+    var key = 'term-' + t.id, open = V.pplMenu === key;
+    var btn = h('button', { type: 'button', class: 'btn small', id: 'term-fix-' + t.id, 'aria-haspopup': 'menu', 'aria-expanded': open ? 'true' : 'false', onclick: function (e) { e.stopPropagation(); V.pplMenu = open ? null : key; render(true); } }, D.ppl_fix);
+    function item(id, text, run, warn) { return h('a', { href: '#', id: id, role: 'menuitem', class: warn ? 'warn' : null, onclick: function (e) { e.preventDefault(); e.stopPropagation(); V.pplMenu = null; render(true); run(); } }, text); }
+    return h('div', { class: 'fixwrap' }, btn, open ? h('div', { class: 'menu term-menu', role: 'menu' }, item('term-rename-' + t.id, D.ppl_fixRename, function () { dlgTermRename(t); }), item('term-remove-' + t.id, N.ui.term_fixRemove, function () { dlgTermRemove(t); }, true)) : null);
+  }
+  function dlgTermAdd() {
+    var kind = 'product', inp = h('input', { type: 'text', class: 'in', id: 'term-add-name', maxlength: '30', 'aria-label': N.ui.term_name });
+    var opts = ['product', 'campaign', 'other'].map(function (key) { return h('button', { type: 'button', class: 'opt' + (key === kind ? ' cur' : ''), 'data-term-kind': key, onclick: function () { kind = key; opts.forEach(function (opt) { opt.classList.toggle('cur', opt.getAttribute('data-term-kind') === kind); }); } }, h('span', { class: 'dot' }), h('span', null, N.ui['term_kind_' + key])); });
+    var go = h('button', { type: 'button', class: 'btn primary big', id: 'term-add-submit', onclick: function () { var name = inp.value.trim(); if (!name) return; go.disabled = true; sendTerm('termAdd', 'terms', { name: name, kind: kind }).catch(function () { go.disabled = false; }); } }, N.ui.term_addDo);
+    openPplModal(N.ui.term_title + ' · ' + N.ui.term_add, N.ui.term_add, [h('p', { class: 'small muted' }, N.ui.term_addBody), h('div', { class: 'term-fld' }, h('label', { for: 'term-add-name' }, N.ui.term_name), inp), h('div', { class: 'term-kinds', role: 'radiogroup', 'aria-label': N.ui.term_kind }, opts)], [go, pplCancel()], 'term-modal');
+  }
+  function dlgTermRename(t) {
+    var inp = h('input', { type: 'text', class: 'in', id: 'term-rename-name', maxlength: '30', value: t.name, 'aria-label': N.ui.term_name });
+    var current = t.aliases && t.aliases.length ? N.t('term_currentAlias', { n: t.name, a: t.aliases.join('、') }) : N.t('term_current', { n: t.name });
+    var go = h('button', { type: 'button', class: 'btn primary big', id: 'term-rename-submit', onclick: function () { var name = inp.value.trim(); if (!name || name === t.name) { closePplModal(); return; } go.disabled = true; sendTerm('termRename', t.id, { name: name }).catch(function () { go.disabled = false; }); } }, D.ppl_save);
+    openPplModal(N.ui.term_title + ' · ' + D.ppl_fix, D.ppl_fixRename, [h('p', { class: 'small muted' }, N.ui.term_renameBody), h('div', { class: 'term-fld' }, h('label', { for: 'term-rename-name' }, N.ui.term_name), inp), h('p', { class: 'small muted' }, current)], [go, pplCancel()], 'term-modal');
+  }
+  function dlgTermRemove(t) {
+    var go = h('button', { type: 'button', class: 'btn danger big', id: 'term-remove-submit', onclick: function () { go.disabled = true; sendTerm('termRemove', t.id, {}).catch(function () { go.disabled = false; }); } }, N.ui.term_delDo);
+    openPplModal(N.ui.term_title + ' · ' + D.ppl_fix, N.t('term_delTitle', { n: t.name }), h('p', { class: 'small muted' }, N.ui.term_delBody), [go, pplCancel()], 'term-modal');
+  }
+  function termRow(t) {
+    return h('div', { class: 'term', 'data-term': t.id }, h('div', { class: 'tn' }, h('b', null, t.name), tag(t.kindText, 'kind')),
+      h('div', { class: 'tmeta' }, t.aliases && t.aliases.length ? h('span', null, N.t('term_alias', { a: t.aliases.join('、') })) : null, h('small', null, t.fromText)), termFixMenu(t));
+  }
+  function termsBox() {
+    var terms = termList();
+    return h('div', { class: 'terms-box', id: 'terms' }, h('div', { class: 'sec-h' }, N.ui.term_title, h('small', null, d('ppl_count', { n: terms.length }))), h('p', { class: 'small muted terms-intro' }, N.ui.term_intro),
+      terms.length ? h('div', { class: 'terms' }, terms.map(termRow)) : h('p', { class: 'small muted', id: 'terms-empty' }, N.ui.term_empty), h('div', { class: 'terms-foot' }, h('button', { type: 'button', class: 'btn', id: 'term-add', onclick: dlgTermAdd }, N.ui.term_add)));
+  }
   function contactText(p) {
     if (p.lastContact) return '「' + p.lastContact.text + '」（' + md(p.lastContact.date) + '）';
     if (p.stage > 0) return D.ppl_noRecord;
@@ -2828,7 +2869,6 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   /* 6 對象推進追蹤：類別篩選、分組、五格推進板、更正 */
   function pagePipe(x) {
     var list = (x.detail || {}).prospects || [], P = people(), closed = P.closed || [];
-    if (!list.length && !closed.length) return itemPage(x, plainBody(x));
     var filter = V.pplFilter || 'all', team = teamLive();
     var chip = function (key, label, n, href) {
       var on = filter === key;
@@ -2853,7 +2893,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         h('div', { class: 'r' }, folderBadge(), h('a', { class: 'btn small', href: brainHref() }, D.backBrain))),
       chips,
       h('div', { class: 'pipehead' }, h('span', null, '只有真實行為才會令對象向右推進；演練與 Zero 推論不計算在內。'), STAGE5.map(function (s2, i) { return h('span', null, s2 + ' ', h('b', null, String(list.filter(function (p) { return p.stage === i; }).length))); })),
-      h('div', { id: 'pipeline' }, groups, teamSec), closedBox)];
+      h('div', { id: 'pipeline' }, groups, teamSec), termsBox(), closedBox)];
   }
   // Zero 整理名單的入口及狀態（團隊頁）：可以要求／整理中／已擬好確認題（連到待決事項）／已整理；示範或未確認概覽不顯示
   function syncBox() {
