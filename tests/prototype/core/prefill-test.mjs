@@ -3,6 +3,7 @@
 // 用法：node prefill-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,7 +12,7 @@ const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); // 重試時上一次嘅 Chrome 可能未放手
+freshTestOut(OUT); // 重試時上一次嘅 Chrome 可能未放手
 const DATA = path.join(OUT, 'data');
 fs.mkdirSync(DATA, { recursive: true });
 const BASE = `http://127.0.0.1:${PORT}`;

@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { certify, usePass } from '../lib/testkit.mjs';
@@ -22,7 +23,7 @@ const mode = m => fs.writeFileSync(path.join(DATA, 'fake-mode.txt'), m + '\n');
 const fence = String.fromCharCode(96).repeat(3);
 const helpStill = N.ui.helpStill;
 
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], {
   cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' },

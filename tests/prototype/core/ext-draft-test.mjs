@@ -1,0 +1,32 @@
+// 延伸功能草稿：外殼只可由 drafting 改為 ready 或 failed，並保留修訂保護。
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { freshTestOut } from '../lib/out-guard.mjs';
+
+const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const [PROTO = path.resolve(here, '../../../prototypes/proofread'), OUT] = process.argv.slice(2);
+if (!OUT) throw new Error('需要系統暫存資料夾內的輸出資料夾');
+freshTestOut(OUT);
+const ext = await import(pathToFileURL(path.join(PROTO, 'ext-lib.mjs')).href);
+const store = await import(pathToFileURL(path.join(PROTO, 'ext-store.mjs')).href);
+const DIR = { ledger: path.join(OUT, 'data', 'ledger'), data: path.join(OUT, 'data') };
+const results = [], ok = (name, pass, info = '') => results.push({ name, pass: !!pass, info });
+const decl = JSON.parse(fs.readFileSync(path.join(PROTO, 'fixtures', 'ext-templates', 'orders.json'), 'utf8')).decl;
+delete decl.page;
+const id = 'x-2026-11-11-120000-001';
+store.createDraft(DIR, { id, state: 'drafting', from: 'sentence', ask: '訂單進度', base: {}, baseRev: 0, sample: [], edits: { forRev: 0 }, revise: '', folder: '', sourceHash: '', error: '' }, { now: '2026-11-11T12:00:00+00:00' });
+const ready = store.patchDraft(DIR, id, { state: 'ready', base: decl, baseRev: 1, sample: [] }, 'shell', { expect: 'drafting', now: '2026-11-11T12:01:00+00:00' });
+ok('合格草稿改為 ready 並提升 baseRev', ready.ok && ready.draft.state === 'ready' && ready.draft.baseRev === 1 && ext.validate(ready.draft.base, { fromZero: true }).ok);
+const reuse = JSON.parse(JSON.stringify(decl)); reuse.tables[0].fields.push({ id: decl.tables[0].fields[0].id, label: '重用', type: 'text' });
+ok('修改版重用代號被拒絕', !ext.checkRevision(decl, reuse).ok);
+const failedId = 'x-2026-11-11-120000-002';
+store.createDraft(DIR, { id: failedId, state: 'drafting', from: 'sentence', ask: '測試', base: {}, baseRev: 0, sample: [], edits: { forRev: 0 }, revise: '', folder: '', sourceHash: '', error: '' });
+const failed = store.patchDraft(DIR, failedId, { state: 'failed', error: '格式不符' }, 'shell', { expect: 'drafting' });
+ok('重寫仍不合格會記為 failed', failed.ok && failed.draft.state === 'failed');
+const cancelled = store.patchDraft(DIR, id, { state: 'cancelled' }, 'server', { expect: 'ready' });
+ok('已取消草稿不會再交外殼起草', cancelled.ok && !store.patchDraft(DIR, id, { state: 'ready', base: decl, baseRev: 2, sample: [] }, 'shell', { expect: 'drafting' }).ok);
+const pass = results.filter(item => item.pass).length;
+for (const item of results) console.log((item.pass ? 'PASS ' : 'FAIL ') + item.name + (item.pass ? '' : '\n      ' + JSON.stringify(item.info)));
+console.log(`\n${pass}/${results.length} passed`);
+process.exit(pass === results.length ? 0 : 1);

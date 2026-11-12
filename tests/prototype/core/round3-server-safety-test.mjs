@@ -1,6 +1,7 @@
 // R3 反例：舊 /api/status 可以謊報 PID；換版前必須由作業系統核對埠擁有者，不能終止無關程序。
 import http from 'node:http';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -10,7 +11,7 @@ const [PROTO, OUT, PORT] = process.argv.slice(2);
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const waitExit = child => new Promise(resolve => { const timer = setTimeout(() => resolve(false), 5000); child.once('exit', () => { clearTimeout(timer); resolve(true); }); });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data'); seedCompany(DATA, PROTO);
 let mock = null, waiter = null, candidate = null;
 try {

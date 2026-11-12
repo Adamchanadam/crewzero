@@ -8,6 +8,7 @@
 // 用法：node roles-server-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>（用 port 至 port+4）
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { usePass, forgetPass } from '../lib/testkit.mjs';
@@ -19,7 +20,7 @@ const imp = f => import(pathToFileURL(path.join(PROTO, f)).href);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
 const attempt = async (name, fn) => { try { await fn(); } catch (e) { ok(name + '（執行出錯）', false, String(e && e.stack || e).slice(0, 500)); } };
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const pad = n => String(n).padStart(2, '0');
 const localDay = (add = 0) => { const d = new Date(); d.setDate(d.getDate() + add); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const J = f => JSON.parse(fs.readFileSync(f, 'utf8'));

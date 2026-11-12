@@ -2,6 +2,7 @@
 // 用法：node novice-test.mjs <chrome> <輸出> <原型> <假 adapter> <port>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
@@ -12,7 +13,7 @@ const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const PORT = Number(PORT_ARG), BASE = 'http://127.0.0.1:' + PORT, DATA = path.join(OUT, 'data');
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const waitFor = async (fn, ms = 30000) => { const until = Date.now() + ms; while (Date.now() < until) { try { const v = await fn(); if (v) return v; } catch { } await sleep(250); } return null; };
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const server = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' }, stdio: 'ignore', windowsHide: true });
 let chrome;
 try {

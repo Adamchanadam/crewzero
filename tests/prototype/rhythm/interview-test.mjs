@@ -5,6 +5,7 @@
 // 用法：node interview-test.mjs <程式資料夾> <輸出資料夾> <埠> <假 AI 設定> <Chrome>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
@@ -15,7 +16,7 @@ const START = START_ARG || '2026-10-29T12:00:00';
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), U = N.ui;
 const lib = await import(new URL('file:///' + path.join(PROTO, 'ask-lib.mjs').replace(/\\/g, '/')).href);
 const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p, info: i }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + String(JSON.stringify(i ?? '')).slice(0, 400))); };
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 const DATA = path.join(OUT, 'data'), BASE = 'http://127.0.0.1:' + PORT;
 fs.mkdirSync(DATA, { recursive: true });
 fs.mkdirSync(path.join(DATA, 'founder', 'desk'), { recursive: true });

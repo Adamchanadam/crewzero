@@ -1,7 +1,9 @@
 // 無頭 Chrome 小工具：開頁、等、撳、截圖（元素範圍）
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+// Windows 上只停主程序會留下無頭瀏覽器的子程序：連整個程序樹一併停止
+const stopTree = child => { if (process.platform === 'win32' && child.pid) { try { spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); return; } catch { } } child.kill(); };
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
 export async function openChrome(CHROME, profile, cport) {
   const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars', `--remote-debugging-port=${cport}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
@@ -58,5 +60,5 @@ export async function openChrome(CHROME, profile, cport) {
     const r = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
   }
-  return { send, ev, go, click, type, shot, errors, close: () => { try { ws.close(); } catch { } chrome.kill(); }, width: () => W };
+  return { send, ev, go, click, type, shot, errors, close: () => { try { ws.close(); } catch { } stopTree(chrome); }, width: () => W };
 }

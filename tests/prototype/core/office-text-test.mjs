@@ -3,6 +3,7 @@
 // 夾具用 zlib.deflateRawSync 自組最小 ZIP，唔靠外部檔案（真檔只作額外核對，搵唔到就跳過）。
 // 用法：node office-text-test.mjs（結束碼 0 = 全過）
 import fs from 'node:fs';
+import { assertTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -15,7 +16,7 @@ const results = [];
 const ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const T0 = Date.now();
 const tmpDirs = [];
-const mkTmp = prefix => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); tmpDirs.push(d); return d; };
+const mkTmp = prefix => { const d = makeTestTemp(prefix); tmpDirs.push(d); return d; };
 
 /* ---------- 自寫 ZIP 寫入器 ---------- */
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -174,7 +175,9 @@ const docxOf = body => makeZip([{ name: 'word/document.xml', data: `<?xml versio
   const evil = makeZip([{ name: '../evil.txt', data: 'pwn' }, { name: '/abs/evil2.txt', data: 'pwn' }, { name: 'word/document.xml', data: `<w:document ${W}><w:body><w:p>${run('正常')}</w:p></w:body></w:document>` }]);
   fs.writeFileSync(path.join(inner, 'e.docx'), evil);
   const re = writeTextSidecar(path.join(inner, 'e.docx'));
-  ok('安全：ZIP 內 ../ 與絕對路徑項目不被跟從、不寫出任何解壓檔（旁放檔以外沒有新檔）', re.ok && !fs.existsSync(path.join(tmpRoot, 'evil.txt')) && fs.readdirSync(inner).sort().join(',') === 'e.docx,e.docx.md' && fs.readdirSync(tmpRoot).join(',') === 'inner', fs.readdirSync(inner));
+  // 暫存資料夾由 makeTestTemp 建立，內有守門標記檔 .cz-test-tmp；核對「沒有新檔」時略過該標記
+  const listed = dir => fs.readdirSync(dir).filter(name => name !== '.cz-test-tmp').sort();
+  ok('安全：ZIP 內 ../ 與絕對路徑項目不被跟從、不寫出任何解壓檔（旁放檔以外沒有新檔）', re.ok && !fs.existsSync(path.join(tmpRoot, 'evil.txt')) && listed(inner).join(',') === 'e.docx,e.docx.md' && listed(tmpRoot).join(',') === 'inner', { inner: fs.readdirSync(inner), root: fs.readdirSync(tmpRoot) });
   // 惡意標籤：未收尾的 <w:t>、巨量 '<a' 都不可拖慢
   const t1 = Date.now();
   const hostile = officeToText(docxOf('<w:p>' + '<w:t>'.repeat(300000) + '</w:p>'), 'h.docx');
@@ -276,7 +279,7 @@ const docxOf = body => makeZip([{ name: 'word/document.xml', data: `<?xml versio
 
 ok('整個測試 30 秒內完成', Date.now() - T0 < 30000, Date.now() - T0);
 
-for (const d of tmpDirs) fs.rmSync(d, { recursive: true, force: true });
+for (const d of tmpDirs) { assertTestOut(d); fs.rmSync(d, { recursive: true, force: true }); }
 const pass = results.filter(r => r.pass).length;
 for (const r of results) console.log((r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.pass ? '' : '\n      ' + String(JSON.stringify(r.info)).slice(0, 900)));
 console.log(`\n${pass}/${results.length} passed`);

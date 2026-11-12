@@ -7,6 +7,7 @@
 // 更新命令由插件附帶嘅 program/update.mjs 執行（將原型嘅 adapters/claude-code/crewzero 複製去輸出資料夾，同真實安裝一樣由 program/ 行；旁邊有 MANIFEST.sha256）；program/ 要同原型同步（插件打包測試另外核對）。
 // 用法：node update-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -17,7 +18,7 @@ const unpairs = [];
 const [PROTO, OUT, PORT, FAKE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const rules = await import(pathToFileURL(path.join(PROTO, 'bundle-rules.mjs')).href);
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const sha = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');

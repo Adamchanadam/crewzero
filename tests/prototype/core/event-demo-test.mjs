@@ -2,12 +2,13 @@
 // 用法：node event-demo-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 const DATA = path.join(OUT, 'data');
 const { seedDemo } = await import(new URL('file:///' + path.join(PROTO, 'demo-seed.mjs').replace(/\\/g, '/')).href);
 seedDemo(DATA, { copyCert: false });

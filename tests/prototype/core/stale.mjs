@@ -2,11 +2,12 @@
 // 用法：node stale.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const DATA = path.join(OUT, 'data'); process.env.SOS_DATA = DATA;

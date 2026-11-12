@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { assertTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -31,7 +32,7 @@ assert.equal(ctx.brainLedger().hints.lowestForNextStations.length, 0);
 assert.equal(ctx.brainLedger().hints.unchanged28Days.length, 0);
 
 // 經收到準備要求的正式函數，讀回收件匣，再由外殼函數寫出 request.md。
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-ticket3-'));
+const tmp = makeTestTemp('crewzero-ticket3-');
 try {
   const inbox = path.join(tmp, 'inbox'), sb = path.join(tmp, 'sandbox');
   fs.mkdirSync(inbox); fs.mkdirSync(sb);
@@ -101,5 +102,5 @@ try {
   assert.equal(out.ok, true); assert.equal(Object.hasOwn(out.result.list[0], 'previousId'), false);
   out = ctx.checkOpportunities({ list: [{ ...item, title: '新機會', previousId: 'last-result' }] }, '2026-11-06', { knownOpportunityIds: ['last-result'] });
   assert.equal(out.result.list[0].previousId, 'last-result');
-} finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+} finally { assertTestOut(tmp); fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log('PASS 工作票 3 補完：hints、準備要求、暫不次數');

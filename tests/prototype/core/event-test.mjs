@@ -3,6 +3,7 @@
 // 用法：node event-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { usePass } from '../lib/testkit.mjs';
@@ -13,7 +14,7 @@ const lib = await import(new URL('file:///' + path.join(PROTO, 'ask-lib.mjs').re
 const termsOps = await import(new URL('file:///' + path.join(PROTO, 'terms-ops.mjs').replace(/\\/g, '/')).href);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 const DATA = path.join(OUT, 'data');
 for (const d of ['company', 'ledger']) fs.mkdirSync(path.join(DATA, d), { recursive: true });
 const FX = oldInstall(DATA, PROTO);

@@ -2,6 +2,7 @@
 // 用法：node brain-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,7 +11,7 @@ const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const { seedDemo } = await import(pathToFileURL(path.join(PROTO, 'demo-seed.mjs')).href);
 const kit = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
 const servers = [];

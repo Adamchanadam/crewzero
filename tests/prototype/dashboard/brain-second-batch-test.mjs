@@ -1,6 +1,7 @@
 // 無伺服器反例：直接核對實際驗證器，假 AI 缺陷模式在整合測試可重用。
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { assertTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import vm from 'node:vm';
 import os from 'node:os';
@@ -95,7 +96,7 @@ const item = { title: '機會', why: '理由', firstTest: '測試', source: '資
 assert.equal(c.checkOpportunities({ list: [{ ...item, windowDate: '', previousId: 'old' }] }, '2026-11-06', { counterparts: [], rejectedOpportunities: [{ id: 'old', title: '舊機會' }] }).ok, false);
 assert.equal(c.checkOpportunities({ list: [item] }, '2026-11-06', { counterparts: [] }).ok, false);
 assert.equal(c.checkOpportunities({ list: [{ ...item, windowDate: '2026-11-07', counterpartId: 'a' }] }, '2026-11-06', { counterparts: [{ id: 'a' }] }).result.list[0].counterpartId, 'a');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-second-batch-'));
+const tmp = makeTestTemp('crewzero-second-batch-');
 try {
   fs.mkdirSync(path.join(tmp, 'out')); fs.mkdirSync(path.join(tmp, 'example'));
   for (const name of ['blue.json', 'red.json', 'judge.json', 'rebuttal.json', 'strengthen.json']) fs.copyFileSync(path.join(root, 'fixtures/demo-shop/brain/wargame', name), path.join(tmp, 'example', name));
@@ -130,5 +131,5 @@ try {
   pc.markBrokenLinks = async e => e; pc.markSource = (t, e, access) => t + (access === 'search' ? NAMES.ui.sourceSearchOnly : ops.fullTextSuffix(e, NAMES.ui.sourceSearchOnly)); vm.createContext(pc); vm.runInContext(part('async function finishPracticePrep(', 'async function handleDebrief(') + '\nthis.finishPracticePrep=finishPracticePrep;', pc);
   const practiceRun = {}; await pc.finishPracticePrep(practiceRun, tmp, '測試');
   assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'scenarios', 'Stest.json'))).persona.stance.source, 'Zero 解讀'); assert.ok(practiceRun.result.warnings.length);
-} finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+} finally { assertTestOut(tmp); fs.rmSync(tmp, { recursive: true, force: true }); }
 console.log('PASS 第二批無伺服器機械核對反例');

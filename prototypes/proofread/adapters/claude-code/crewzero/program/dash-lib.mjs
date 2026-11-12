@@ -9,11 +9,13 @@ import { fileURLToPath } from 'node:url';
 import { hosts, modelCandidates, modelName } from './host-lib.mjs';
 import { isInboxAttachment, NAMES, BIZ_TYPES, readJSON, listPacks, loadPack, loadAnswers, localIso, pad, clockNow } from './ask-lib.mjs';
 import { loadBrain } from './brain-lib.mjs';
-import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS, peopleSyncKey } from './people-ops.mjs';
+import { applyActorOp, ACTOR_OPS, ownerKind, ownerView, peopleView, ownershipOf, actorsMentioned, GAP_DAYS, peopleSyncKey, resolveActorId } from './people-ops.mjs';
 import { applyTermOp } from './terms-ops.mjs';
 import { rhythmOf, nextRunAt, nextWeekday, isRunDay, scheduleEligibility } from './rhythm-lib.mjs';
 import { titleOf, liveCards, cardById, resolveCardId, avatarKindOf, AVATAR_KINDS, AVATAR_LEAD, isPausedToday, supportsLines, pauseCard, resumeCard, rolesKey, pausedCardsToday, overCap, permissionsOf, LIFECYCLES } from './roles-ops.mjs';
 import { PACES, PACE_KEYS, PACE_ESTIMATE, PACE_OPS, paceKey, fuseOf, itemsCapOf, countStarts, runIdsOfDay, proofreadStarts, applyPaceOps, addDays, SPRINT_MAX_DAYS, sprintDefaultUntil, unreadCount } from './pace-lib.mjs';
+import { readMoney, listImportBatches } from './money-store.mjs';
+import { samePeriodMetrics, compareMonths, cashRunway, goalProgress, trend as moneyTrend, topUnlistedPayers, payerStats, monthMetrics, liveRecords, hasEvidence } from './money-lib.mjs';
 
 // 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
 // v 係修改時間，頁面用嚟分辨換咗新圖；冇就 null。
@@ -99,7 +101,8 @@ export const readFounderOpsSnapshot = DIR => {
 // 所有新欄可缺，舊資料沒有覆蓋檔時保持原有行為。
 export function applyFounderOps(state, ops = []) {
   if (!Array.isArray(ops) || !ops.length) return state || {};
-  let out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) }, targetOverride: { ...((state && state.targetOverride) || {}) }, targetOverrideBase: { ...((state && state.targetOverrideBase) || {}) }, targetOverrideAt: { ...((state && state.targetOverrideAt) || {}) } };
+  let out = { ...(state || {}), founderSnoozes: { ...((state && state.founderSnoozes) || {}) }, founderSnoozeDays: { ...((state && state.founderSnoozeDays) || {}) }, targetOverride: { ...((state && state.targetOverride) || {}) }, targetOverrideBase: { ...((state && state.targetOverrideBase) || {}) }, targetOverrideAt: { ...((state && state.targetOverrideAt) || {}) }, goals: { ...((state && state.goals) || {}) } };
+  if (out.goals.quarter && typeof out.goals.quarter === 'object') out.goals.quarter = { ...out.goals.quarter, ...(out.goals.quarter.target ? { target: { ...out.goals.quarter.target } } : {}) };
   if (state && state.company) out.company = { ...state.company };
   if (state && state.interviews) out.interviews = { ...state.interviews };
   if (Array.isArray(state && state.milestones)) out.milestones = state.milestones.map(m => ({ ...m }));
@@ -143,6 +146,26 @@ export function applyFounderOps(state, ops = []) {
         const time = /T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(String(task.dueAt || ''));
         task.dueAt = value.date + (time ? time[0] : '');
       }
+    } else if (item.op === 'setGoalNumber' && ['income', 'net', 'payers'].includes(value.metric)) {
+      const at = /^\d{4}-\d{2}-\d{2}/.test(String(item.at || '')) ? String(item.at).slice(0, 10) : '';
+      if (!at) continue;
+      const prior = out.goals && out.goals.quarter && out.goals.quarter.target;
+      const metric = value.metric;
+      const amountText = typeof value.amount === 'string' ? value.amount : '';
+      const amountCents = Number.isSafeInteger(value.amountCents) ? value.amountCents
+        : /^\d+$/.test(amountText) ? Number(amountText)
+          : /^\d+\.\d{1,2}$/.test(amountText) ? Number(amountText.split('.')[0]) * 100 + Number((amountText.split('.')[1] + '00').slice(0, 2)) : null;
+      const count = Number(value.count);
+      const valid = metric === 'payers' ? Number.isSafeInteger(count) && count > 0 : Number.isSafeInteger(amountCents) && amountCents > 0;
+      if (!valid) continue;
+      const quarter = out.goals.quarter && typeof out.goals.quarter === 'object' ? out.goals.quarter : {};
+      const target = {
+        metric,
+        ...(metric === 'payers' ? { count } : { amountCents, currency: typeof value.currency === 'string' ? value.currency : (prior && prior.currency) || '' }),
+        from: prior && prior.metric === metric && isDay(prior.from) ? prior.from : at,
+        setAt: item.at || '', by: 'founder'
+      };
+      out.goals = { ...out.goals, quarter: { ...quarter, target } };
     } else if (PACE_OPS.includes(item.op)) {
       // 節奏及暫停 Zero：交 pace-lib.applyPaceOps（只傳它會讀寫的欄），預覽與外殼套用同一套邏輯
       out = paceOverlay(out, item);
@@ -158,7 +181,7 @@ export function applyFounderOps(state, ops = []) {
       out.peopleSync = { ...(out.peopleSync || {}), requested: true, requestedAt: item.at || localIso() };
     } else if (ACTOR_OPS.includes(item.op) && typeof item.target === 'string') {
       // 名單改正（改名、類別、合併、不再接觸、成員狀態、工作負責人）：純函數在 people-ops.mjs；失敗（找不到、重名、已合併）時原樣不動
-      const r = applyActorOp({ company: out.company || {}, tasks: out.tasks || [] }, item.op, { ...value, id: item.target, from: item.target });
+      const r = applyActorOp({ company: out.company || {}, tasks: out.tasks || [] }, item.op, { ...value, id: item.target, from: item.target, at: item.at || '' });
       if (r.ok) { out.company = r.state.company; out.tasks = r.state.tasks; }
     } else if (['termAdd', 'termRename', 'termRemove'].includes(item.op) && typeof item.target === 'string') {
       // 常用名稱表同樣只疊加純函數結果；重播相同操作不會新增第二筆名稱。
@@ -168,6 +191,82 @@ export function applyFounderOps(state, ops = []) {
     }
   }
   return out;
+}
+
+function moneyWithResolvedActors(saved, actors) {
+  const list = Array.isArray(actors) ? actors : [];
+  const resolvedId = id => resolveActorId(list, id) || id;
+  return {
+    ...saved,
+    records: saved.records.map(record => record?.counterpartId ? { ...record, counterpartId: resolvedId(record.counterpartId) } : record),
+    links: Object.fromEntries(Object.entries(saved.links || {}).map(([key, id]) => [key, resolvedId(id)]))
+  };
+}
+
+// 業績頁與頁頂共用同一個只讀投影；金額與指標一律交由 money-lib 計算。
+export function moneyView(DIR, { today, full = false } = {}) {
+  const at = isDay(today) ? today : ymd(clockNow());
+  const saved = readMoney(DIR);
+  const state0 = readJSON(path.join(DIR.ledger, 'state.json'), null) || {};
+  const state = state0.demo === true ? state0 : applyFounderOps(state0, pendingFounderOps(DIR, state0));
+  const money = moneyWithResolvedActors(saved, state.company?.actors);
+  const period = samePeriodMetrics(money.records, at, money.mainCurrency, money.links);
+  const page = readJSON(path.join(DIR.company, 'page.json'), null);
+  const confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
+  const values = page ? registryValues(page, confirmed) : {};
+  const goalRow = page && page.glance && (page.glance.rows || []).find(row => row.plan === 'G1');
+  const pageEnds = goalRow && goalRow.due ? String(values[goalRow.due.id] ?? goalRow.due.value ?? '') : '';
+  const quarter = state.goals && state.goals.quarter || {};
+  const target = quarter.target && typeof quarter.target === 'object' ? quarter.target : null;
+  const goal = target && isDay(quarter.endsOn || pageEnds) ? goalProgress(target, money.records, quarter.endsOn || pageEnds, money.mainCurrency, money.links) : null;
+  const live = liveRecords(money.records);
+  let waiting = 0, packs = [];
+  try { packs = listPacks(DIR); } catch { }
+  for (const item of packs) {
+    const pack = loadPack(DIR, item.id), answers = loadAnswers(DIR, item.id).answers || {};
+    if (pack && Array.isArray(pack.questions)) waiting += pack.questions.filter(question => question && question.kind === 'money' && !answers[question.id]).length;
+  }
+  const base = {
+    has: live.length > 0,
+    mainCurrency: money.mainCurrency,
+    today: at,
+    month: period.month,
+    cur: period.cur,
+    prev: period.prev,
+    cutoff: period.cutoff,
+    cmp: {
+      income: compareMonths(period.cur.income, period.prev.income),
+      net: compareMonths(period.cur.net, period.prev.net),
+      payers: compareMonths(period.cur.payers, period.prev.payers)
+    },
+    runway: cashRunway(money.balance, money.records, at, money.mainCurrency),
+    goal,
+    waiting,
+    noEvidence: live.filter(record => !hasEvidence(record)).length
+  };
+  if (!full) return base;
+  const categoryTotals = new Map();
+  for (const record of live) {
+    if (record.currency !== money.mainCurrency || record.dir !== 'out' || String(record.date || '').slice(0, 7) !== period.month) continue;
+    categoryTotals.set(record.category, (categoryTotals.get(record.category) || 0) + (record.refund ? -record.amountCents : record.amountCents));
+  }
+  const canvas = page && page.canvas && Array.isArray(page.canvas.rows) ? page.canvas.rows : [];
+  const valueOfPlan = plan => {
+    const row = canvas.find(item => item && item.plan === plan);
+    return row ? String(values[row.id] ?? row.value ?? '') : '';
+  };
+  return {
+    ...base,
+    records: money.records,
+    trend: moneyTrend(money.records, period.month, 6, money.mainCurrency, money.links),
+    top: topUnlistedPayers(money.records, money.mainCurrency, money.links),
+    categories: [...categoryTotals.entries()].map(([category, totalCents]) => ({ category, totalCents })).sort((left, right) => right.totalCents - left.totalCents || left.category.localeCompare(right.category)),
+    batches: listImportBatches(DIR).batches.map(batch => {
+      const total = Array.isArray(batch.rows) ? batch.rows.filter(row => row?.include === true && ['ok', 'dup'].includes(row.status)).length : 0;
+      return { id: batch.id, state: batch.state, file: batch.file?.name ? { name: path.basename(batch.file.name) } : null, summary: { ...(batch.summary || {}), total }, confirmedAt: batch.confirmedAt || '', createdAt: batch.createdAt || '' };
+    }),
+    plan: { income: valueOfPlan('canvas.revenue'), expense: valueOfPlan('canvas.cost') }
+  };
 }
 
 function termsView(state) {
@@ -503,6 +602,7 @@ export function dashboardState(DIR, extra = {}) {
   const pageQuarter = goalRow ? { text: String(values[goalRow.id] ?? goalRow.value), endsOn: goalRow.due ? String(values[goalRow.due.id] ?? goalRow.due.value ?? '') : '' } : null;
   // 逐欄合併：帳本的目標（例如每月覆核改寫的文字）沒有期限時，期限回落到已確認的公司概覽
   const goals = state.goals ? { ...state.goals, quarter: state.goals.quarter ? { ...state.goals.quarter, endsOn: state.goals.quarter.endsOn || (pageQuarter ? pageQuarter.endsOn : '') } : pageQuarter } : { quarter: pageQuarter };
+  const money = moneyView(DIR, { today: ymd(today), full: false });
   const storedNextAction = (state.company && state.company.nextExternalAction) || (nextRow ? { text: String(values[nextRow.id] ?? nextRow.value), milestoneId: confirmed && confirmed.nextActionMilestone || nextRow.flagTo || '' } : null);
 
   /* 里程碑 */
@@ -627,6 +727,21 @@ export function dashboardState(DIR, extra = {}) {
 
   /* 事件 */
   const brain = { ...loadBrain(DIR, { now, runs: status.runs || [], packs, state }), pending: brainTodo.length };
+  const actorIds = ((state.company || {}).actors) || [], moneyForPeople = moneyWithResolvedActors(readMoney(DIR), actorIds);
+  const enrichProspects = detail => {
+    if (!detail || !Array.isArray(detail.prospects)) return detail;
+    return { ...detail, prospects: detail.prospects.map(prospect => {
+      const id = resolveActorId(actorIds, prospect && prospect.id);
+      if (!id) return prospect;
+      const paid = payerStats(moneyForPeople.records, id, moneyForPeople.links, moneyForPeople.mainCurrency);
+      const needsEvidence = liveRecords(moneyForPeople.records).some(record => {
+        const linked = record.counterpartId || moneyForPeople.links[record.payerKey];
+        return record.dir === 'in' && !record.refund && record.category !== 'funding' && !hasEvidence(record) && linked === id;
+      });
+      return { ...prospect, money: { ...paid, needsEvidence } };
+    }) };
+  };
+  if (Array.isArray(brain.items)) brain.items = brain.items.map(item => item && item.id === 'pipeline' ? { ...item, detail: enrichProspects(item.detail) } : item);
   // 結果卡意見事件：標題用現時顯示版嘅卡名（帳本原文唔改；卡名改寫過都一致）
   const fbTitle = e => { const f = e.type === 'input' && /^你對「.*」的意見：/.test(String(e.title || '')) && brain && brain.feedback && brain.feedback[(e.relatedIds || [])[0]];
     return f && f.title ? { ...e, title: '你對「' + (f.itemName ? f.itemName + '：' : '') + f.title + '」的意見：' + String(e.title).replace(/^你對「.*」的意見：/, '') } : e; };
@@ -742,7 +857,7 @@ export function dashboardState(DIR, extra = {}) {
     plannedRunDays, paused: pausedCalendar, pausedDays,
     items: calendarItems(calendarFrom, calendarTo, true),
     rhythm: rhythm ? { runCadence: calendarRhythm.runCadence, runTime: calendarRhythm.runTime, interviewWeekday: calendarRhythm.interviewWeekday, scheduler } : null,
-    quarter: goals && goals.quarter ? { text: goals.quarter.text || '', endsOn: goals.quarter.endsOn || '' } : null,
+    quarter: goals && goals.quarter ? { text: goals.quarter.text || '', endsOn: goals.quarter.endsOn || '', target: goals.quarter.target || null } : null,
     ready: company.ready && company.confirmed
   };
   // 模組狀態：等待、受阻由帳本事實推導（靜態色）；工作中只由作業網入面工作中嘅會話推導
@@ -766,7 +881,7 @@ export function dashboardState(DIR, extra = {}) {
   /* 頁首指標 */
   const counted = milestones.filter(m => m.pathStatus === 'confirmed' || m.pathStatus === 'trial');
   const metrics = {
-    quarter: { done: counted.filter(m => m.state === 'done').length, total: counted.length, text: goals && goals.quarter ? goals.quarter.text : '', endsOn: goals && goals.quarter ? goals.quarter.endsOn : '' },
+    quarter: { done: counted.filter(m => m.state === 'done').length, total: counted.length, text: goals && goals.quarter ? goals.quarter.text : '', endsOn: goals && goals.quarter ? goals.quarter.endsOn : '', target: goals && goals.quarter ? goals.quarter.target || null : null },
     pending: todo.length,
     inbox: unprocessed.length,
     nextInterview: interviews && interviews.nextOn || '',
@@ -812,7 +927,7 @@ export function dashboardState(DIR, extra = {}) {
 
   return {
     ok: true, sample, now: localIso(now), today: ymd(today), guide, firstWeekDone: ivDone,
-    company, goals, nextAction, metrics, since, pathTouched,
+    company, goals, nextAction, metrics, money, ext: extra.ext || null, since, pathTouched,
     ai: { ready: !!cert, label: cert ? cert.label : '', certifiedAt: cert ? cert.certifiedAt : '', ...modelDisplay(DIR, cert), busy: !!extra.busy || !!running, running: running ? { label: running.label, startedAt: running.startedAt } : null },
     lines, orderUnconfirmed, milestones, assumptions, options, todo, brainTodo, snoozed, schedule: sched, calendar, tasks, parallel,
     brain, people: { ...(() => { const v = peopleView(state, { today: ymd(today) }); return { external: v.external, closed: v.closed, team: v.team }; })(), terms: termsView(state), ownership: ownershipOf(state), gapDays: GAP_DAYS, sync: peopleSyncView(DIR, state) },

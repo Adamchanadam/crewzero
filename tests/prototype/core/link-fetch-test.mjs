@@ -2,6 +2,7 @@
 // 全部用注入的假 fetch，零外網請求；每次請求都記錄並斷言主機名只可能是 Google 的三種網域
 // 用法：node tests/prototype/core/link-fetch-test.mjs （結束碼 0 = 全過）
 import fs from 'node:fs';
+import { assertTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -81,7 +82,7 @@ const SLIDES = `https://docs.google.com/presentation/d/${ID}/edit`;
 const ALLOWED_HOSTS = h => h === 'docs.google.com' || h === 'accounts.google.com' || h.endsWith('.googleusercontent.com') || h === 'evilgoogleusercontent.com' || h === 'googleusercontent.com.evil.com' || h === 'evil.com';
 const requests = [];
 const allRequests = []; // 累計（requests 會被個別測試清空）
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-linkfetch-'));
+const tmpRoot = makeTestTemp('crewzero-linkfetch-');
 let dirN = 0;
 const newDir = () => path.join(tmpRoot, 'dest' + (++dirN));
 const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(200, 1)]);
@@ -330,7 +331,7 @@ const fetchIt = (link, fetchImpl, extra = {}) => fetchGoogleLink(link, { destDir
 ok('零外網：所有請求主機名只可能是 docs.google.com／accounts.google.com／*.googleusercontent.com（及測試用的假惡意網域，且從未被請求）', allRequests.length > 20 && allRequests.every(q => ALLOWED_HOSTS(q.host) && !['evilgoogleusercontent.com', 'googleusercontent.com.evil.com', 'evil.com'].includes(q.host)) && allRequests.every(q => ['docs.google.com', 'accounts.google.com'].includes(q.host) || q.host.endsWith('.googleusercontent.com')), { n: allRequests.length, hosts: [...new Set(allRequests.map(q => q.host))] });
 ok('整個測試 30 秒內完成', Date.now() - t0 < 30000, Date.now() - t0 + 'ms');
 
-fs.rmSync(tmpRoot, { recursive: true, force: true });
+assertTestOut(tmpRoot); fs.rmSync(tmpRoot, { recursive: true, force: true });
 const failed = results.filter(r => !r.pass);
 console.log('\n' + (results.length - failed.length) + '/' + results.length + ' 通過' + (failed.length ? '，失敗：' + failed.map(f => f.name).join('；') : ''));
 process.exit(failed.length ? 1 : 0);

@@ -1,5 +1,6 @@
 // R2 手機配對：只用本機 HTTP 與測試資料。測一次性秘密、待接受 403、接受／撤銷、到期與每來源速率限制。
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import net from 'node:net';
 import vm from 'node:vm';
@@ -9,7 +10,7 @@ import { seedCompany, usePass, passCookie } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT, ADAPTER] = process.argv.slice(2);
 const results = []; const ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data'), BASE = `http://127.0.0.1:${PORT}`;
 seedCompany(DATA, PROTO);
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });

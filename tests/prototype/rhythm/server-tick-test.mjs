@@ -1,6 +1,7 @@
 // 真實時鐘伺服器定時：每 30 秒檢查一次，用隔離 SOS_DATA 和假 AI，唔會花費。
 // 用法：node server-tick-test.mjs <原型> <輸出> <埠> <假AI>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -30,7 +31,7 @@ async function waitFor(fn, timeout = 40000) {
   return false;
 }
 try {
-  fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+  freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
   // 跨午夜時 slot 容易變成前一日；依規格等到 00:03 才繼續。
   const now = new Date();
   if (now.getHours() === 0 && now.getMinutes() < 3) await sleep((3 - now.getMinutes()) * 60000);

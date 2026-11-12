@@ -5,6 +5,7 @@
 // 用法：node strip-done-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -14,7 +15,7 @@ const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), D = N.dash, U = N.ui;
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const { seedDemo } = await import(pathToFileURL(path.join(PROTO, 'demo-seed.mjs')).href);

@@ -1,0 +1,30 @@
+{
+  "decl": {
+    "format": "crewzero.extension/1",
+    "guide": 1,
+    "name": "存貨",
+    "about": "記錄貨品數量、再訂購水平及供應方",
+    "tables": [
+      {
+        "id": "t1",
+        "label": "存貨",
+        "title": "f1",
+        "fields": [
+          { "id": "f1", "label": "貨品", "type": "text", "required": true },
+          { "id": "f2", "label": "數量", "type": "number", "required": true },
+          { "id": "f3", "label": "單位", "type": "text" },
+          { "id": "f4", "label": "再訂購水平", "type": "number" },
+          { "id": "f5", "label": "供應方", "type": "actor" }
+        ],
+        "summary": [
+          { "label": "存貨總量", "rule": "sum", "field": "f2" }
+        ]
+      }
+    ]
+  },
+  "sample": [
+    { "f1": "牛皮紙", "f2": 480, "f3": "張", "f4": 600, "f5": { "id": "pc-demo-21", "name": "紙品供應社" } },
+    { "f1": "環保油墨", "f2": 18, "f3": "罐", "f4": 12, "f5": { "id": "pc-demo-22", "name": "印材商行" } },
+    { "f1": "封箱膠帶", "f2": 32, "f3": "卷", "f4": 20, "f5": { "id": "pc-demo-23", "name": "包裝用品社" } }
+  ]
+}

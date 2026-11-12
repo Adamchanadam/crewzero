@@ -3,6 +3,7 @@
 // 全部用假工具（暫存資料夾入面嘅假 npm 殼同假腳本），唔開真 AI、零費用。只喺 Windows 有意義，其他系統記一項略過。
 // 用法：node host-shim-test.mjs <原型資料夾> <輸出資料夾> <port>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -11,7 +12,7 @@ import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 let srv = null;
 try {
   if (process.platform !== 'win32') { ok('非 Windows：npm 啟動殼只喺 Windows 出現，略過', true); throw null; }

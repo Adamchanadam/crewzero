@@ -326,12 +326,12 @@ body.paused .bg *{animation:none!important}
   function clip(x, n) { x = String(x || ''); return x.length > n ? x.slice(0, n - 1) + '…' : x; }
   var WD = ['日', '一', '二', '三', '四', '五', '六'];
 
-  /* ---------- 九個分頁三組（規劃書 4.1）；網址照舊，舊深連繼續用得 ---------- */
-  var GROUPS = [['navDo', ['pending', 'inputs', 'company']], ['navRun', ['overview', 'brain', 'path']], ['navRef', ['team', 'log', 'system'], 'ref']];
-  var HREF = { pending: '/', inputs: '/dashboard/inputs', company: '/proofread.html', overview: '/dashboard', brain: '/dashboard/brain', path: '/dashboard/path', team: '/dashboard/team', log: '/dashboard/log', system: '/dashboard/system' };
+  /* ---------- 十一個分頁三組（規劃書 4.1）；網址照舊，舊深連繼續用得 ---------- */
+  var GROUPS = [['navDo', ['pending', 'inputs', 'company']], ['navRun', ['overview', 'brain', 'path', 'money', 'ext']], ['navRef', ['team', 'log', 'system'], 'ref']];
+  var HREF = { pending: '/', inputs: '/dashboard/inputs', company: '/proofread.html', overview: '/dashboard', brain: '/dashboard/brain', path: '/dashboard/path', money: '/dashboard/money', ext: '/dashboard/ext', team: '/dashboard/team', log: '/dashboard/log', system: '/dashboard/system' };
   // 頁頭眉題：CrewZero · 分組名 · 頁名
   function groupName(t) { for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i][1].indexOf(t) >= 0) return D[GROUPS[i][0]]; return ''; }
-  function tabName(t) { return t === 'pending' || t === 'company' ? U[t] : D[t]; }
+  function tabName(t) { return t === 'pending' || t === 'company' ? U[t] : t === 'money' ? N.ui.mnyTab : t === 'ext' ? N.ui.extTab : D[t]; }
   // Founder Desk 畫面（ask.html／proofread.html）屬邊個分頁：答題、交要求、交資料、設定、決定紀錄、練習、辯論
   var PAGE = { pending: ['pending'], request: ['pending', U.fbCrumb], company: ['company'], intake: ['company', U.intake], log: ['log', D.logDecisions], setup: ['system', U.setup], practice: ['brain', U.practice], debate: ['brain', U.debate] };
 

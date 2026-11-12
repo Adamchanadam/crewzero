@@ -3,3 +3,5 @@ prototypes/proofread/adapters/claude-code/crewzero/program/** -text
 # 授權原文及作者聲明必須保持原位元組（LICENSE 雜湊有測試校驗），不可被換行轉換
 LICENSE -text
 NOTICE -text
+# 編碼測試樣本故意不是 UTF-8（Big5 位元組），必須保持原位元組，不可被換行轉換
+tests/prototype/fixtures/csv/big5.csv binary

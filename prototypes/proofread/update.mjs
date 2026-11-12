@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { programFiles, pluginVersion, INSTALL_SKIP, GENERATED, compareVersions, writeGenerated, manifestOf, parseManifest, sha256, INSTALL_DIR, findInstall } from './bundle-rules.mjs';
+import { programFiles, pluginVersion, INSTALL_SKIP, GENERATED, compareVersions, writeGenerated, manifestOf, parseManifest, manifestEntryProblem, sha256, INSTALL_DIR, findInstall } from './bundle-rules.mjs';
 import { rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, BASE_PORT } from './ask-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -44,6 +44,11 @@ const sha = f => sha256(fs.readFileSync(f));
 const shaOr = f => { try { return sha(f); } catch { return ''; } };
 const at = (dir, f) => path.join(dir, ...f.split('/'));
 const readVersion = dir => { try { return fs.readFileSync(path.join(dir, 'VERSION'), 'utf8').trim(); } catch { return ''; } };
+const manifestProblem = (manifest, root) => Object.keys(manifest).map(rel => manifestEntryProblem(rel, root)).find(Boolean) || '';
+function stopForManifest() {
+  say('更新已停止：安裝資料夾內的程式清單內容不符，沒有刪除或更改任何檔案。');
+  process.exit(1);
+}
 // 安裝資料夾入面嘅檔（相對路徑，用「/」分隔）：跳過 data/ 同所有備份資料夾；其餘（包括創辦人自己放入嘅檔）都計
 function listInstall(dir) {
   const out = [];
@@ -58,13 +63,29 @@ function listInstall(dir) {
 }
 function copyInto(src, dst, files) { for (const f of files) { fs.mkdirSync(path.dirname(at(dst, f)), { recursive: true }); fs.copyFileSync(at(src, f), at(dst, f)); } }
 function removeFile(dir, f) {
+  if (installPathHasLink(dir, f)) throw new Error('安裝資料夾內的程式清單內容不符');
   fs.rmSync(at(dir, f), { force: true });
   let d = path.dirname(at(dir, f));
   while (d.length > dir.length && d.toLowerCase().startsWith(dir.toLowerCase()) && fs.existsSync(d) && !fs.readdirSync(d).length) { fs.rmdirSync(d); d = path.dirname(d); }
 }
+function installPathHasLink(dir, f) {
+  let current = path.resolve(dir);
+  try { if (fs.lstatSync(current).isSymbolicLink()) return true; } catch { return false; }
+  for (const part of String(f || '').split('/')) {
+    if (!part || part === '.') continue;
+    current = path.join(current, part);
+    try { if (fs.lstatSync(current).isSymbolicLink()) return true; }
+    catch { return false; }
+  }
+  return false;
+}
+function installPathsSafe(dir, files) {
+  return [...new Set(files)].every(f => !installPathHasLink(dir, f));
+}
 // 由備份還原：備份入面每個檔抄返去；known 入面（已知嘅程式檔、生成檔）而備份冇嘅就刪走；最後逐檔核對。回傳唔一致嘅檔
 function restoreFrom(backup, dir, known) {
   const bFiles = listInstall(backup);
+  if (!installPathsSafe(dir, [...bFiles, ...known])) throw new Error('安裝資料夾內的程式清單內容不符');
   copyInto(backup, dir, bFiles);
   for (const f of known) if (!bFiles.includes(f) && !f.startsWith('data/') && fs.existsSync(at(dir, f))) removeFile(dir, f);
   return bFiles.filter(f => shaOr(at(dir, f)) !== sha(at(backup, f)));
@@ -131,6 +152,10 @@ if (ROLLBACK) {
   const backup = backups[0].dir, bVersion = readVersion(backup) || path.basename(backup).replace(/^\.backup-/, ''), cur = readVersion(target) || '未知';
   const bFiles = listInstall(backup);
   if (!bFiles.includes('ask.mjs')) { say('備份不完整，不能還原。今次沒有改動任何檔案。'); tech(`備份位置：${backup}；缺少 ask.mjs。`); process.exit(1); }
+  const installedManifest = parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '');
+  if (manifestProblem(installedManifest, target)) stopForManifest();
+  const known = [...Object.keys(installedManifest), ...GENERATED];
+  if (!installPathsSafe(target, [...bFiles, ...known])) stopForManifest();
   if (!APPLY) {
     say(`將把 CrewZero 還原到版本 ${bVersion}；現時版本 ${cur} 的程式會被取代，公司資料不會改動。`);
     tech(`備份位置：${backup}；程式檔數量：${bFiles.length}；公司資料：${DATA}`);
@@ -141,7 +166,6 @@ if (ROLLBACK) {
   if (!release) { say('Zero 工作進行中，完成後再試。今次沒有改動任何檔案。'); process.exit(4); }
   let bad = [];
   try {
-    const known = [...Object.keys(parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '')), ...GENERATED];
     bad = restoreFrom(backup, target, known);
   } catch (e) { bad = ['還原時出錯']; tech(e && e.message || e); }
   finally { release(); }
@@ -165,9 +189,11 @@ if (fs.existsSync(path.join(ROOT, 'MANIFEST.sha256'))) {
   if (off.length) { say('CrewZero 插件檔案不完整，今次沒有改動任何檔案。請重新安裝 CrewZero 插件，然後再更新一次。'); tech(`插件附帶的程式檔與清單不符：${off.length} 個，例如 ${off[0]}`); process.exit(1); }
 }
 const oldManifest = parseManifest(fs.existsSync(path.join(target, 'MANIFEST.sha256')) ? fs.readFileSync(path.join(target, 'MANIFEST.sha256'), 'utf8') : '');
+if (manifestProblem(oldManifest, target)) stopForManifest();
 // 新版已經冇嘅舊程式檔：只刪舊清單列明嘅（創辦人自己放入嘅檔唔喺清單，唔會刪）；舊安裝冇清單就一個都唔刪
 const stale = Object.keys(oldManifest).filter(f => !want[f] && !GENERATED.includes(f) && !f.startsWith('data/') && fs.existsSync(at(target, f)));
 const changed = files.filter(f => shaOr(at(target, f)) !== want[f]);
+if (!installPathsSafe(target, [...Object.keys(oldManifest), ...files, ...GENERATED])) stopForManifest();
 const cmp = compareVersions(oldVersion, newVersion);
 if (cmp > 0) { say(`已安裝的版本 ${oldVersion} 比插件的版本 ${newVersion} 新，不會改成舊版。今次沒有改動任何檔案。`); process.exit(1); }
 if (cmp === 0) {

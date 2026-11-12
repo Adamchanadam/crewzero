@@ -4,6 +4,7 @@
 // 測試夾具（原型冇呢啲入口，照實記錄）：試行站（冇採用路徑嘅入口）、第四次訪問（每月覆核）、今日 AI 啟動上限
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { usePass } from '../lib/testkit.mjs';
@@ -13,7 +14,7 @@ const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), U = N.ui
 const lib = await import(new URL('file:///' + path.join(PROTO, 'ask-lib.mjs').replace(/\\/g, '/')).href);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p, info: i }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + JSON.stringify(i ?? '').slice(0, 300))); };
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 const DATA = path.join(OUT, 'data'), BASE = 'http://127.0.0.1:' + PORT;
 fs.mkdirSync(DATA, { recursive: true });
 const get = async p => (await fetch(BASE + p)).json();

@@ -1,0 +1,6 @@
+Name,Created at,Paid at,Financial Status,Currency,Total,Lineitem name,Billing Name,Email
+#1001,2026-10-01 10:00,2026-10-01 10:12,paid,HKD,238.00,哥倫比亞 慧蘭 250g,林小姐,lin@example.com
+#1001,2026-10-01 10:00,2026-10-01 10:12,paid,HKD,,掛耳包 10 入,林小姐,lin@example.com
+#1002,2026-10-03 09:00,2026-10-03 09:05,refunded,HKD,180.00,耶加 250g,陳先生,chan@example.com
+#1003,2026-10-04 12:00,2026-10-04 12:01,voided,HKD,120.00,掛耳包 5 入,何太,ho@example.com
+#1004,2026-10-05 15:00,2026-10-05 15:02,paid,HKD,"1,280.50",企業禮盒,好日子咖啡室,

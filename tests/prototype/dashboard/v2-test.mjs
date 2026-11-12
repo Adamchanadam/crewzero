@@ -4,6 +4,7 @@
 // 用法：node v2-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -13,7 +14,7 @@ const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const { seedDemo } = await import(pathToFileURL(path.join(PROTO, 'demo-seed.mjs')).href);
 const kit = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
 const { openChrome } = await import(pathToFileURL(path.join(HERE, '..', 'lib', 'cdp-lib.mjs')).href);
@@ -136,7 +137,8 @@ try {
   await waitFor(async () => (await c.ev(flow)).working >= 1, 15000);
 
   /* ---------- C. 導航、公司現況三帶 ---------- */
-  ok('導航三組（決定二十五）：待決事項・真實進展・公司概覽 ｜ 公司現況・生意大腦・業務路徑 ｜ 團隊・紀錄・系統', await c.ev(`[...document.querySelectorAll('nav.tabs [data-grp]')].map(g=>[...g.querySelectorAll('a')].map(a=>a.childNodes[0].textContent).join()).join('|')==='待決事項,真實進展,公司概覽|公司現況,生意大腦,業務路徑|團隊,紀錄,系統' && document.querySelectorAll('nav.tabs .divider').length===2`), await c.ev(`document.querySelector('nav.tabs').textContent`));
+  // 0.43.0：「公司運作」一組在「業務路徑」之後加「業績報告」「延伸功能」（已批原型 docs/evidence/results-ext-2026-11-10/prototype/build.mjs 第 40 行）
+  ok('導航三組（決定二十五；0.43.0 加業績報告、延伸功能）：待決事項・真實進展・公司概覽 ｜ 公司現況・生意大腦・業務路徑・業績報告・延伸功能 ｜ 團隊・紀錄・系統', await c.ev(`[...document.querySelectorAll('nav.tabs [data-grp]')].map(g=>[...g.querySelectorAll('a')].map(a=>a.childNodes[0].textContent).join()).join('|')==='待決事項,真實進展,公司概覽|公司現況,生意大腦,業務路徑,業績報告,延伸功能|團隊,紀錄,系統' && document.querySelectorAll('nav.tabs .divider').length===2`), await c.ev(`document.querySelector('nav.tabs').textContent`));
   ok('生意大腦分頁有「等你處理」數目', await c.ev(`(document.querySelector('nav.tabs a[href="/dashboard/brain"] .cnt')||{}).textContent`) === String(d ? (await get('/api/dashboard')).brain.items.filter(x => x.status === 'waiting').length : -1));
   ok('首頁三帶（方案 B）：壓縮條＋待你處理、運作環＋事件流、分類索引＋生意大腦摘要；冇甲板、冇首頁日程', await c.ev(`!!document.querySelector('.band.strip #strip') && !!document.querySelector('.band.strip #needs') && !!document.querySelector('.band.b #arena-panel') && !!document.querySelector('.band.b #evstream') && document.querySelectorAll('#index-row .module').length===10 && !!document.querySelector('#brain-strip') && !document.querySelector('.deck') && !document.querySelector('#schedule')`));
   ok('未來兩星期日程搬咗去業務路徑頁', await (async () => { await c.go(B + '/dashboard/path', 1440, 2500); return c.ev(`!!document.querySelector('#schedule-panel #schedule')`); })());

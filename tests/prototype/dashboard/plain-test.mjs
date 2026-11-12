@@ -2,11 +2,12 @@
 // 用法：node plain-test.mjs <輸出資料夾> <原型資料夾> <假 adapter>
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 const [OUT, PROTO, ADAPTER] = process.argv.slice(2);
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const imp = f => import(pathToFileURL(path.join(PROTO, f)).href);
 const P = await imp('plain-lib.mjs'), A = await imp('ask-lib.mjs'), SC = await imp('style-check.mjs');
 const N = A.NAMES;

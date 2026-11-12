@@ -4,6 +4,7 @@
 // 埠段：本組只可使用 [起始埠, 起始埠 + 埠段大小) 之內的埠（run-all.mjs 給「目標日期」20 個），否則會落入下一組的埠段
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import vm from 'node:vm';
 import net from 'node:net';
@@ -22,7 +23,7 @@ const trace = msg => traceLog(new Date().toISOString().slice(11, 19) + ' ---- ' 
 const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p, info: i }); traceLog(new Date().toISOString().slice(11, 19) + ' ' + (p ? 'PASS' : 'FAIL') + ' ' + n); };
 // 等伺服器、查狀態的 fetch 一律有時限：埠接受連線卻不回應時，不會空等預設的 300 秒
 const tfetch = (u, o = {}) => fetch(u, { signal: AbortSignal.timeout(20000), ...o });
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 const PORT = Number(PORT0), SPAN = Number(SPAN0 || 20);
 const KEY_LEGACY = 'sos-proofread:goal-dates-repro-2026-11-06:1:b1024575', KEY_STRUCT = 'sos-proofread:goal-dates-repro-structured-2026-11-06:1:54829453';

@@ -1,6 +1,7 @@
 // 常用名稱表頁面：固定帳本資料配假 adapter，驗證畫面、三個創辦人操作與手機界限。
 // 用法：node cdp-terms.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -11,7 +12,7 @@ const [CHROME, OUT, PROTO, ADAPTER, PORT_ARG] = process.argv.slice(2);
 const PORT = Number(PORT_ARG), BASE = 'http://127.0.0.1:' + PORT;
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const run = fs.mkdtempSync(path.join(OUT, 'terms-')), DATA = path.join(run, 'data');
 const write = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
 const get = async p => { const r = await fetch(BASE + p); let j = null; try { j = await r.json(); } catch {} return { code: r.status, j }; };

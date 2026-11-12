@@ -5,6 +5,7 @@
 // 用法：node fixes-0402-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -22,7 +23,7 @@ const inb = await imp('inbound-lib.mjs');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
 const attempt = async (name, fn) => { try { await fn(); } catch (e) { ok(name + '（執行出錯）', false, String(e && e.stack || e).slice(0, 400)); } };
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const b64 = x => Buffer.from(x).toString('base64');
 const file = (name, data) => ({ name, data: b64(data) });
 const needFn = (o, k) => typeof o[k] === 'function';

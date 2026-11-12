@@ -1,0 +1,999 @@
+{
+  "about": "業績情景表（規劃書第 2.3 節及第 10 節第 2、3、7 項）。預期數字由主線人手計算；金額單位為分。",
+  "records": [
+    {
+      "id": "mn-2026-11-01-090000-001",
+      "dir": "in",
+      "amountCents": 100000,
+      "currency": "HKD",
+      "date": "2026-09-05",
+      "counterpartId": "pc-1",
+      "payer": "示範客戶甲",
+      "payerKey": "示範客戶甲",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [
+        {
+          "inputId": "in-2026-09-05-100000-000",
+          "file": "收據.pdf",
+          "page": 1
+        }
+      ],
+      "source": "receipt",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-09-05T10:00:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-002",
+      "dir": "in",
+      "amountCents": 50000,
+      "currency": "HKD",
+      "date": "2026-09-20",
+      "counterpartId": "",
+      "payer": "陳記餐廳",
+      "payerKey": "陳記餐廳",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:00:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-003",
+      "dir": "out",
+      "amountCents": 30000,
+      "currency": "HKD",
+      "date": "2026-09-10",
+      "counterpartId": "",
+      "payer": "豆商",
+      "payerKey": "豆商",
+      "category": "goods",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:01:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-004",
+      "dir": "in",
+      "amountCents": 200000,
+      "currency": "HKD",
+      "date": "2026-09-15",
+      "counterpartId": "",
+      "payer": "創辦人",
+      "payerKey": "創辦人",
+      "category": "funding",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:02:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-005",
+      "dir": "in",
+      "amountCents": 80000,
+      "currency": "HKD",
+      "date": "2026-10-03",
+      "counterpartId": "pc-1",
+      "payer": "示範客戶甲",
+      "payerKey": "示範客戶甲",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "import",
+      "importBatch": "mb-2026-10-31-120000-000",
+      "importKey": "map-aaaa1111|o|#900",
+      "confirmedAt": "2026-11-01T09:03:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-006",
+      "dir": "in",
+      "amountCents": 20000,
+      "currency": "HKD",
+      "date": "2026-10-03",
+      "counterpartId": "pc-1",
+      "payer": "示範客戶甲",
+      "payerKey": "示範客戶甲",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:04:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-007",
+      "dir": "in",
+      "amountCents": 40000,
+      "currency": "HKD",
+      "date": "2026-10-08",
+      "counterpartId": "",
+      "payer": "新客甲",
+      "payerKey": "新客甲",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:05:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-008",
+      "dir": "in",
+      "amountCents": 40000,
+      "currency": "HKD",
+      "date": "2026-10-08",
+      "counterpartId": "",
+      "payer": "新客甲",
+      "payerKey": "新客甲",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:06:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-009",
+      "dir": "in",
+      "amountCents": 10000,
+      "currency": "HKD",
+      "date": "2026-10-12",
+      "counterpartId": "",
+      "payer": "陳記餐廳",
+      "payerKey": "陳記餐廳",
+      "category": "sales",
+      "what": "",
+      "refund": true,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:07:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-010",
+      "dir": "in",
+      "amountCents": 30000,
+      "currency": "HKD",
+      "date": "2026-10-15",
+      "counterpartId": "",
+      "payer": "",
+      "payerKey": "",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:08:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-011",
+      "dir": "out",
+      "amountCents": 50000,
+      "currency": "HKD",
+      "date": "2026-10-20",
+      "counterpartId": "",
+      "payer": "業主",
+      "payerKey": "業主",
+      "category": "rent",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:09:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-012",
+      "dir": "out",
+      "amountCents": 5000,
+      "currency": "HKD",
+      "date": "2026-10-22",
+      "counterpartId": "",
+      "payer": "豆商",
+      "payerKey": "豆商",
+      "category": "goods",
+      "what": "",
+      "refund": true,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:10:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-013",
+      "dir": "in",
+      "amountCents": 60000,
+      "currency": "HKD",
+      "date": "2026-10-25",
+      "counterpartId": "",
+      "payer": "陳記餐廳",
+      "payerKey": "陳記餐廳",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:11:00+08:00",
+      "confirmedBy": "founder",
+      "status": "void",
+      "voidedAt": "2026-11-01T10:00:00+08:00",
+      "voidReason": "金額記錯",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-014",
+      "dir": "in",
+      "amountCents": 66000,
+      "currency": "HKD",
+      "date": "2026-10-25",
+      "counterpartId": "",
+      "payer": "陳記餐廳",
+      "payerKey": "陳記餐廳",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:12:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": "mn-2026-11-01-090000-013"
+    },
+    {
+      "id": "mn-2026-11-01-090000-015",
+      "dir": "in",
+      "amountCents": 5000,
+      "currency": "USD",
+      "date": "2026-10-18",
+      "counterpartId": "",
+      "payer": "Overseas Co",
+      "payerKey": "Overseas Co",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:13:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-016",
+      "dir": "out",
+      "amountCents": 1200,
+      "currency": "USD",
+      "date": "2026-10-19",
+      "counterpartId": "",
+      "payer": "Cloud Tools",
+      "payerKey": "Cloud Tools",
+      "category": "tools",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:14:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-017",
+      "dir": "in",
+      "amountCents": 99999,
+      "currency": "HKD",
+      "date": "2026-10-30",
+      "counterpartId": "",
+      "payer": "天使投資人",
+      "payerKey": "天使投資人",
+      "category": "funding",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:15:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    {
+      "id": "mn-2026-11-01-090000-018",
+      "dir": "out",
+      "amountCents": 700,
+      "currency": "JPY",
+      "date": "2026-01-02",
+      "counterpartId": "",
+      "payer": "日本網店",
+      "payerKey": "日本網店",
+      "category": "tools",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-09T23:00:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    }
+  ],
+  "expect": {
+    "mainCurrency": "HKD",
+    "months": {
+      "2026-08": {
+        "income": 0,
+        "expense": 0,
+        "net": 0,
+        "funding": 0,
+        "payers": 0,
+        "repeat": 0,
+        "avg": null,
+        "unattributed": 0,
+        "other": {}
+      },
+      "2026-09": {
+        "income": 150000,
+        "expense": 30000,
+        "net": 120000,
+        "funding": 200000,
+        "payers": 2,
+        "repeat": 0,
+        "avg": 75000,
+        "unattributed": 0,
+        "other": {}
+      },
+      "2026-10": {
+        "income": 266000,
+        "expense": 45000,
+        "net": 221000,
+        "funding": 99999,
+        "payers": 3,
+        "repeat": 2,
+        "avg": 88667,
+        "unattributed": 1,
+        "other": {
+          "USD": {
+            "income": 5000,
+            "expense": 1200
+          }
+        }
+      }
+    },
+    "compareOctSep": {
+      "diff": 116000,
+      "pct": 0.7733333333333333
+    },
+    "compareSepAug": {
+      "diff": 150000,
+      "pct": null
+    },
+    "compareNegative": {
+      "cur": -5000,
+      "prev": -2000,
+      "diff": -3000,
+      "pct": -1.5
+    },
+    "compareNegToPos": {
+      "cur": 1000,
+      "prev": -2000,
+      "diff": 3000,
+      "pct": 1.5
+    },
+    "trend3To2026_10": [
+      "2026-08",
+      "2026-09",
+      "2026-10"
+    ],
+    "goals": [
+      {
+        "target": {
+          "metric": "income",
+          "amountCents": 500000,
+          "currency": "HKD",
+          "from": "2026-09-15"
+        },
+        "endDate": "2026-10-31",
+        "current": 316000,
+        "ratio": 0.632
+      },
+      {
+        "target": {
+          "metric": "net",
+          "amountCents": 500000,
+          "currency": "HKD",
+          "from": "2026-09-15"
+        },
+        "endDate": "2026-10-31",
+        "current": 271000,
+        "ratio": 0.542
+      },
+      {
+        "target": {
+          "metric": "payers",
+          "count": 4,
+          "from": "2026-09-15"
+        },
+        "endDate": "2026-10-31",
+        "current": 3,
+        "ratio": 0.75
+      },
+      {
+        "target": {
+          "metric": "income",
+          "amountCents": 100000,
+          "currency": "HKD",
+          "from": "2026-09-01"
+        },
+        "endDate": "2026-10-31",
+        "current": 416000,
+        "ratio": 1
+      }
+    ],
+    "payerStatsPc1": {
+      "count": 3,
+      "totalCents": 200000,
+      "currency": "HKD"
+    },
+    "topUnlisted": [
+      {
+        "name": "陳記餐廳",
+        "totalCents": 106000
+      },
+      {
+        "name": "新客甲",
+        "totalCents": 80000
+      }
+    ],
+    "pipelinePaidIds": [
+      "pc-1"
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "作廢 10 月 25 日陳記餐廳的補記一筆：10 月收入、付款客戶及回頭客回落",
+      "ops": [
+        {
+          "id": "fo-a",
+          "op": "moneyVoid",
+          "target": "mn-2026-11-01-090000-014",
+          "value": {
+            "reason": "重複"
+          }
+        }
+      ],
+      "month": "2026-10",
+      "expect": {
+        "income": 200000,
+        "payers": 2,
+        "repeat": 1,
+        "avg": 100000
+      }
+    },
+    {
+      "name": "作廢兩筆附證據的收入：示範客戶甲不再推到「付出成本」",
+      "ops": [
+        {
+          "id": "fo-b",
+          "op": "moneyVoid",
+          "target": "mn-2026-11-01-090000-001",
+          "value": {
+            "reason": "x"
+          }
+        },
+        {
+          "id": "fo-c",
+          "op": "moneyVoid",
+          "target": "mn-2026-11-01-090000-005",
+          "value": {
+            "reason": "x"
+          }
+        }
+      ],
+      "pipelinePaidIds": []
+    },
+    {
+      "name": "連名單：新客甲連到 pc-2，再加一筆 pc-2 的 10 月 28 日收入；付款客戶仍是 3，回頭客變 3",
+      "ops": [
+        {
+          "id": "fo-d",
+          "op": "moneyLink",
+          "target": "新客甲",
+          "value": {
+            "counterpartId": "pc-2"
+          }
+        }
+      ],
+      "add": [
+        {
+          "id": "mn-2026-11-01-090000-019",
+          "dir": "in",
+          "amountCents": 15000,
+          "currency": "HKD",
+          "date": "2026-10-28",
+          "counterpartId": "pc-2",
+          "payer": "新客甲有限公司",
+          "payerKey": "新客甲有限公司",
+          "category": "sales",
+          "what": "",
+          "refund": false,
+          "evidence": [],
+          "source": "quick",
+          "importBatch": "",
+          "importKey": "",
+          "confirmedAt": "2026-11-02T09:00:00+08:00",
+          "confirmedBy": "founder",
+          "status": "confirmed",
+          "voidedAt": "",
+          "voidReason": "",
+          "replaces": ""
+        }
+      ],
+      "month": "2026-10",
+      "expect": {
+        "income": 281000,
+        "payers": 3,
+        "repeat": 3
+      }
+    },
+    {
+      "name": "同一新紀錄未連名單時：新客甲與 pc-2 算兩位，付款客戶 4，回頭客 2",
+      "add": [
+        {
+          "id": "mn-2026-11-01-090000-019",
+          "dir": "in",
+          "amountCents": 15000,
+          "currency": "HKD",
+          "date": "2026-10-28",
+          "counterpartId": "pc-2",
+          "payer": "新客甲有限公司",
+          "payerKey": "新客甲有限公司",
+          "category": "sales",
+          "what": "",
+          "refund": false,
+          "evidence": [],
+          "source": "quick",
+          "importBatch": "",
+          "importKey": "",
+          "confirmedAt": "2026-11-02T09:00:00+08:00",
+          "confirmedBy": "founder",
+          "status": "confirmed",
+          "voidedAt": "",
+          "voidReason": "",
+          "replaces": ""
+        }
+      ],
+      "month": "2026-10",
+      "expect": {
+        "income": 281000,
+        "payers": 4,
+        "repeat": 2
+      }
+    },
+    {
+      "name": "連名單後再改連另一編號：以最後一次為準",
+      "ops": [
+        {
+          "id": "fo-g",
+          "op": "moneyLink",
+          "target": "新客甲",
+          "value": {
+            "counterpartId": "pc-9"
+          }
+        },
+        {
+          "id": "fo-h",
+          "op": "moneyLink",
+          "target": "新客甲",
+          "value": {
+            "counterpartId": "pc-2"
+          }
+        }
+      ],
+      "add": [
+        {
+          "id": "mn-2026-11-01-090000-019",
+          "dir": "in",
+          "amountCents": 15000,
+          "currency": "HKD",
+          "date": "2026-10-28",
+          "counterpartId": "pc-2",
+          "payer": "新客甲有限公司",
+          "payerKey": "新客甲有限公司",
+          "category": "sales",
+          "what": "",
+          "refund": false,
+          "evidence": [],
+          "source": "quick",
+          "importBatch": "",
+          "importKey": "",
+          "confirmedAt": "2026-11-02T09:00:00+08:00",
+          "confirmedBy": "founder",
+          "status": "confirmed",
+          "voidedAt": "",
+          "voidReason": "",
+          "replaces": ""
+        }
+      ],
+      "month": "2026-10",
+      "expect": {
+        "income": 281000,
+        "payers": 3,
+        "repeat": 3
+      },
+      "links": {
+        "新客甲": "pc-2"
+      }
+    },
+    {
+      "name": "補證據：陳記餐廳連到 pc-3 並補上 9 月 20 日一筆的證據 → pc-3 推到「付出成本」",
+      "ops": [
+        {
+          "id": "fo-e",
+          "op": "moneyLink",
+          "target": "陳記餐廳",
+          "value": {
+            "counterpartId": "pc-3"
+          }
+        },
+        {
+          "id": "fo-f",
+          "op": "moneyEvidence",
+          "target": "mn-2026-11-01-090000-002",
+          "value": {
+            "file": "轉帳截圖.png"
+          }
+        }
+      ],
+      "pipelinePaidIds": [
+        "pc-1",
+        "pc-3"
+      ]
+    },
+    {
+      "name": "同一操作做兩次、紀錄在待合併檔及 money.json 兩邊都有：結果與做一次相同",
+      "duplicateEverything": true,
+      "ops": [
+        {
+          "id": "fo-a",
+          "op": "moneyVoid",
+          "target": "mn-2026-11-01-090000-014",
+          "value": {
+            "reason": "重複"
+          }
+        }
+      ],
+      "month": "2026-10",
+      "expect": {
+        "income": 200000,
+        "payers": 2,
+        "repeat": 1
+      }
+    }
+  ],
+  "imports": {
+    "existingQuick": {
+      "id": "mn-2026-11-03-100000-001",
+      "dir": "in",
+      "amountCents": 8000,
+      "currency": "HKD",
+      "date": "2026-11-03",
+      "counterpartId": "",
+      "payer": "Cat",
+      "payerKey": "Cat",
+      "category": "sales",
+      "what": "",
+      "refund": false,
+      "evidence": [],
+      "source": "quick",
+      "importBatch": "",
+      "importKey": "",
+      "confirmedAt": "2026-11-01T09:16:00+08:00",
+      "confirmedBy": "founder",
+      "status": "confirmed",
+      "voidedAt": "",
+      "voidReason": "",
+      "replaces": ""
+    },
+    "fileA": {
+      "mapId": "map-aaaa1111",
+      "batch": "mb-2026-11-05-100000-000",
+      "drafts": [
+        {
+          "dir": "in",
+          "amountCents": 12000,
+          "currency": "HKD",
+          "date": "2026-11-01",
+          "payer": "Amy",
+          "what": "豆 A",
+          "orderNo": "#1001",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 12000,
+          "currency": "HKD",
+          "date": "2026-11-01",
+          "payer": "Ben",
+          "what": "豆 A",
+          "orderNo": "#1002",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 8000,
+          "currency": "HKD",
+          "date": "2026-11-02",
+          "payer": "Cat",
+          "what": "豆 B",
+          "orderNo": "#1003",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "currency": "HKD",
+          "date": "2026-11-02",
+          "payer": "Dee",
+          "what": "豆 B",
+          "orderNo": "#1005",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 9000,
+          "currency": "HKD",
+          "date": "2026-11-02",
+          "payer": "Eve",
+          "what": "豆 C",
+          "orderNo": "#1006",
+          "category": "sales",
+          "cancelled": true
+        }
+      ],
+      "expectFirst": [
+        "ok",
+        "ok",
+        "dup",
+        "incomplete",
+        "cancelled"
+      ],
+      "expectAgain": [
+        "seen",
+        "seen",
+        "dup",
+        "incomplete",
+        "cancelled"
+      ]
+    },
+    "fileB": {
+      "mapId": "map-aaaa1111",
+      "drafts": [
+        {
+          "dir": "in",
+          "amountCents": 12000,
+          "currency": "HKD",
+          "date": "2026-11-01",
+          "payer": "Ben",
+          "what": "豆 A",
+          "orderNo": "#1002",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 12000,
+          "currency": "HKD",
+          "date": "2026-11-02",
+          "payer": "Dan",
+          "what": "豆 A",
+          "orderNo": "#1004",
+          "category": "sales"
+        }
+      ],
+      "expect": [
+        "seen",
+        "ok"
+      ]
+    },
+    "fileC": {
+      "mapId": "map-bbbb2222",
+      "drafts": [
+        {
+          "dir": "in",
+          "amountCents": 12000,
+          "currency": "HKD",
+          "date": "2026-11-02",
+          "payer": "Amy",
+          "what": "網上付款",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 12000,
+          "currency": "HKD",
+          "date": "2026-11-09",
+          "payer": "Amy",
+          "what": "網上付款",
+          "category": "sales"
+        }
+      ],
+      "expect": [
+        "dup",
+        "ok"
+      ]
+    },
+    "fileD": {
+      "mapId": "map-cccc3333",
+      "batch": "mb-2026-11-06-100000-000",
+      "drafts": [
+        {
+          "dir": "in",
+          "amountCents": 3000,
+          "currency": "HKD",
+          "date": "2026-11-05",
+          "payer": "現金",
+          "what": "咖啡",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 3000,
+          "currency": "HKD",
+          "date": "2026-11-05",
+          "payer": "現金",
+          "what": "咖啡",
+          "category": "sales"
+        }
+      ],
+      "expectFirst": [
+        "ok",
+        "ok"
+      ],
+      "expectAgain": [
+        "seen",
+        "seen"
+      ]
+    },
+    "fileE": {
+      "mapId": "map-dddd4444",
+      "note": "只以 existingQuick（Cat，11 月 3 日 HK$80）作已有紀錄：同額而兩邊名稱不同不算重複；一邊沒有名稱仍算可能重複；名稱相同仍算可能重複",
+      "drafts": [
+        {
+          "dir": "in",
+          "amountCents": 8000,
+          "currency": "HKD",
+          "date": "2026-11-04",
+          "payer": "Zed",
+          "what": "豆 B",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 8000,
+          "currency": "HKD",
+          "date": "2026-11-04",
+          "payer": "",
+          "what": "現金",
+          "category": "sales"
+        },
+        {
+          "dir": "in",
+          "amountCents": 8000,
+          "currency": "HKD",
+          "date": "2026-11-05",
+          "payer": " cat ",
+          "what": "豆 B",
+          "category": "sales"
+        }
+      ],
+      "expect": [
+        "ok",
+        "dup",
+        "dup"
+      ]
+    }
+  }
+}

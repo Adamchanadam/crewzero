@@ -1,0 +1,42 @@
+{
+  "format": "crewzero.extension/1",
+  "guide": 1,
+  "name": "訂單生產進度",
+  "about": "每張客戶訂單做到哪個工序",
+  "tables": [
+    {
+      "id": "t1",
+      "label": "訂單",
+      "title": "f1",
+      "due": "f4",
+      "fields": [
+        { "id": "f1", "label": "訂單名稱", "type": "text", "required": true },
+        { "id": "f2", "label": "客戶", "type": "actor" },
+        { "id": "f3", "label": "數量", "type": "number" },
+        { "id": "f4", "label": "交貨日", "type": "date", "required": true },
+        {
+          "id": "f5",
+          "label": "工序",
+          "type": "stage",
+          "stages": [
+            { "id": "s1", "label": "打樣" },
+            { "id": "s2", "label": "印刷" },
+            { "id": "s3", "label": "成型" },
+            { "id": "s4", "label": "品檢" },
+            { "id": "s5", "label": "出貨" }
+          ]
+        },
+        { "id": "f6", "label": "備註", "type": "text", "hidden": true }
+      ],
+      "summary": [
+        { "label": "延誤", "rule": "overdue" },
+        { "label": "七日內交貨", "rule": "dueWithin", "days": 7 },
+        { "label": "進行中", "rule": "open" }
+      ],
+      "handoff": [
+        { "stage": "s5", "text": "訂單「{f1}」已出貨給{f2}，數量 {f3} 個。" }
+      ]
+    }
+  ],
+  "page": { "label": "排期圖", "port": 4391 }
+}

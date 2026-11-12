@@ -15,20 +15,25 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { receiveAttachments, collectLinks, convertInboundText, rereadLink, rehomeInterruptedUploads } from './inbound-lib.mjs';
 import { ROLES_OPS, ROLES_OP_NAMES, checkRolesOp } from './ledger-ops.mjs';
 import { PACE_KEYS, timeoutOf } from './pace-lib.mjs';
-import { applyActorOp, ACTOR_OPS, hasContactInfo, ownerKind } from './people-ops.mjs';
+import { applyActorOp, ACTOR_OPS, hasContactInfo, ownerKind, duplicateActor, MAX_ACTIVE, liveActors } from './people-ops.mjs';
 import { applyTermOp } from './terms-ops.mjs';
 import { parseGoogleLink } from './link-fetch.mjs';
 import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply } from './ask-lib.mjs';
-import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, readFounderOpsSnapshot, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile } from './dash-lib.mjs';
+import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply, fnv } from './ask-lib.mjs';
+import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, readFounderOpsSnapshot, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile, moneyView } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
 import { brainSource, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { cleanTitle, createMinutes, fileNameFor, listOpen, minutesFilePath, minutesShown, overviewLines, patchMinutes, readMinutes, reserveMinutesId, sha256, sourceDir } from './minutes-lib.mjs';
 import { detect, formatMap, gate, marks, samples, unmappedIn } from './transcript-lib.mjs';
+import { CATEGORIES, toCents, validateBalance, validateRecord, newMoneyId, payerKeyOf, mapIdFor, classifyImportRows, recordsFromBatch } from './money-lib.mjs';
+import { moneyPaths, readImportBatch, readMoney } from './money-store.mjs';
+import { parseCsv, guessMap, draftsFrom, storeImportOriginal } from './money-import.mjs';
+import { extensionsDir, folderNameFor, validate, applyEdits, newDraftId } from './ext-lib.mjs';
+import { listExtensions, listDrafts, readDraft, createDraft, patchDraft, templateDraft, createExtension, registerExtension, writeExtension, revisionCheck, rowWrite, archiveDone, readExtensionRows, extOverview, markHanded, readRegistry, writeRegistry, extensionPaths } from './ext-store.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // 模擬／測試資料夾一定要同預設 data/ 係兩個實體位置。path.resolve() 睇唔到 Windows
@@ -244,13 +249,13 @@ function refuse(req, res, url, why) {
 }
 // Founder Desk（首頁等你決定、問題包、決定紀錄）係 ask.html；公司概覽係 proofread.html
 // 頁面同共用檔（名稱、版面、Markdown）：只准呢幾個檔，加共用檔就加入 SHARED
-const SHARED = ['md.js', 'names.js', 'desk.js', 'orbit.js', 'pair.js', 'celebration.js'];
-const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'proofread.html', '/startup-background-template.md': 'startup-background-template.md', ...Object.fromEntries(SHARED.map(f => ['/' + f, f])) };
+const SHARED = ['md.js', 'names.js', 'desk.js', 'orbit.js', 'pair.js', 'celebration.js', 'ext-view.js', 'drag.js'];
+const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'proofread.html', '/startup-background-template.md': 'startup-background-template.md', '/ext-style.css': 'ext-style.css', ...Object.fromEntries(SHARED.map(f => ['/' + f, f])) };
 // 營運監察台：/dashboard（公司現況）、/dashboard/<分頁> 同 /dashboard/brain/<項目>，同一個頁面檔
-const DASH_TABS = ['path', 'brain', 'inputs', 'team', 'log', 'system'];
+const DASH_TABS = ['path', 'brain', 'inputs', 'team', 'money', 'ext', 'log', 'system'];
 const BRAIN_PAGES = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
 let lastSeenPrev = null;
-const TYPES = { '.md': 'text/markdown; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
+const TYPES = { '.md': 'text/markdown; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
 const KINDS = ['proofread', 'ask-answer'];
 
 const pad = n => String(n).padStart(2, '0');
@@ -671,7 +676,7 @@ async function receiveNote(body, opts = {}) {
   return receiveWork(body, opts);
 }
 // 發生了一件事（含只附文件）、請 Zero 做一件事、想改計劃：三類同一道門檻（公司概覽已確認）、同一套附件處理（Office 轉文字、Google 連結取回、說明檔）。
-// opts.source 只供 /api/tell（與 Zero 的討論）傳入 'chat'；網頁送出的 body.source 一律不理。
+  // opts.source 只供 /api/tell（與 Zero 的討論）及延伸功能交接傳入；網頁送出的 body.source 一律不理。
 async function receiveWork(body, opts = {}) {
   const fail = message => ({ error: 'invalid', message });
   const type = body.type;
@@ -686,8 +691,8 @@ async function receiveWork(body, opts = {}) {
   if (!Array.isArray(links) || links.length > 10 || links.some(u => typeof u !== 'string' || u.length > 2048)) return fail('連結格式不正確。');
   const hasLink = collectLinks(text, links).length > 0;
   if (type === 'doc' ? !list.length && !hasLink : type === 'event' ? !text && !list.length && !hasLink : !text) return fail(type === 'doc' ? '請先加入文件。' : type === 'event' ? '請寫下發生了甚麼事，或加入文件。' : '請用一兩句寫下你的要求（最多 4000 字）。');
-  // 事件日期由創辦人在頁面填（唔係提交時間）；只有與 Zero 的討論（chat）可以不寫，當日算
-  if (type === 'event' && opts.source !== 'chat' && !body.date) return fail('請選擇事件日期。');
+    // 事件日期由創辦人在頁面填（唔係提交時間）；系統代交的延伸功能工作以當日作日期，並清楚標示不是逐字原話。
+    if (type === 'event' && !['chat', 'extension'].includes(opts.source) && !body.date) return fail('請選擇事件日期。');
   if (body.date != null && body.date !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.date)) || isNaN(new Date(body.date + 'T00:00:00')))) return fail('請選擇事件日期。');
   const date = body.date ? String(body.date) : localIso().slice(0, 10);
   const got = takeFiles(list);
@@ -713,7 +718,7 @@ async function receiveWork(body, opts = {}) {
     }
     // 只貼連結、沒有寫字也沒有附件，而連結全部讀不到：沒有東西可交給 Zero，清掉說明檔並告訴創辦人怎樣做
     if (!text && !records.length) { for (const p of created) try { fs.unlinkSync(p); } catch { } return fail(NAMES.ui.linkNotShared); }
-    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records, ...(opts.minutes ? { minutes: opts.minutes } : {}) })}\n\`\`\`\n` : `${text}\n`;
+    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records, ...(opts.minutes ? { minutes: opts.minutes } : {}), ...(opts.source === 'extension' ? { source: 'extension', extensionName: String(opts.extensionName || '') } : {}) })}\n\`\`\`\n` : `${text}\n`;
     const p = path.join(DIR.inbox, `${id}-note-${type}.md`);
     fs.writeFileSync(p, `kind: note\ntype: ${type}\nat: ${localIso()}\n\n${body2}`, { flag: 'wx' }); created.push(p);
     return { ok: true, id, receivedAt: localIso(), ...(meta.linkErrors.length ? { linkErrors: meta.linkErrors } : {}) };
@@ -730,7 +735,8 @@ const minutesMarkInfo = text => {
 };
 const minutesNote = (id, type) => {
   const file = path.join(DIR.inbox, id + '-note-' + type + '.md');
-  fs.writeFileSync(file, 'kind: note\ntype: ' + type + '\nat: ' + localIso() + '\n\n', { flag: 'wx' });
+  const machine = type === 'ext-draft' ? `\`\`\`json\n${JSON.stringify({ draftId: id })}\n\`\`\`\n` : '';
+  fs.writeFileSync(file, 'kind: note\ntype: ' + type + '\nat: ' + localIso() + '\n\n' + machine, { flag: 'wx' });
   return file;
 };
 const removeMinuteFiles = files => { for (const file of files) try { fs.unlinkSync(file); } catch { } };
@@ -1073,7 +1079,7 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
   res.writeHead(code, {
     'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    'Content-Security-Policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
   });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
@@ -1257,6 +1263,366 @@ function appendFounderOp(op) {
     return true;
   });
 }
+function appendFounderOps(ops) {
+  return withFounderOpsLock(() => {
+    const prior = readJSON(FOUNDER_OPS, []), list = Array.isArray(prior) ? prior : [];
+    list.push(...ops); writeJSON(FOUNDER_OPS, list); return true;
+  });
+}
+const opId = () => 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex');
+const founderOperation = (op, target, value = {}) => ({ id: opId(), at: localIso(), op, target, value });
+const moneyInvalid = () => ({ ok: false, error: 'invalid', message: NAMES.ui.mnyErrInvalid });
+const moneyImportInvalid = () => ({ ok: false, error: 'invalid', message: NAMES.ui.mnyErrImportRecord || NAMES.ui.mnyErrInvalid });
+const extInvalid = reason => ({ ok: false, error: 'invalid', message: String(NAMES.ui.extErrInvalid || '').replace('{reason}', reason || '') });
+const moneyBatchId = () => newMoneyId().replace(/^mn-/, 'mb-');
+const cleanFileName = name => String(name || '').replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 80);
+function atomicReplace(file, value, { create = false } = {}) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (create && fs.existsSync(file)) throw new Error('exists');
+  const temp = `${file}.${process.pid}-${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    fs.writeFileSync(temp, JSON.stringify(value, null, 2), { flag: 'wx' });
+    for (let i = 0; ; i++) {
+      try { fs.renameSync(temp, file); return; }
+      catch (error) { if (i >= 40 || !['EPERM', 'EBUSY', 'EACCES'].includes(error?.code)) throw error; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25); }
+    }
+  } finally { try { if (fs.existsSync(temp)) fs.rmSync(temp, { force: true }); } catch { } }
+}
+const retryableFileError = error => ['EPERM', 'EBUSY', 'EACCES'].includes(error?.code);
+function moneyAttachments(id, list) {
+  if (!Array.isArray(list) || list.length > 3) return { error: NAMES.ui.mnyErrInvalid };
+  const got = takeFiles(list); if (got.error) return { error: got.error };
+  const total = got.files.reduce((sum, item) => sum + item.bytes.length, 0);
+  if (total > 45 * 1024 * 1024) return { error: NAMES.ui.mnyErrInvalid };
+  const folder = path.join(moneyPaths(DIR).evidence, id), created = [];
+  try {
+    fs.mkdirSync(folder, { recursive: true });
+    for (const item of got.files) {
+      const name = cleanFileName(item.name), file = path.join(folder, name);
+      fs.writeFileSync(file, item.bytes, { flag: 'wx' }); created.push(file);
+    }
+    return { files: got.files.map(item => cleanFileName(item.name)), created };
+  } catch (error) { for (const file of created) try { fs.rmSync(file, { force: true }); } catch { } return { error: NAMES.ui.mnyErrInvalid }; }
+}
+function newMoneyActor(name, kind, source) {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, actors = state.company?.actors || [];
+  if (!trimmed || trimmed.length > 20 || hasContactInfo(trimmed) || !['customer', 'partner'].includes(kind) || duplicateActor(actors, trimmed) || liveActors(actors).length >= MAX_ACTIVE) return null;
+  const id = /^mn-\d{4}-\d{2}-\d{2}-\d{6}-\d{3}$/.test(String(source)) ? `pc-m-${source}` : `pc-m-${crypto.createHash('sha256').update(String(source)).digest('hex').slice(0, 10)}`;
+  return { id, name: trimmed, kind };
+}
+function moneyRecord(body, { source = 'quick', id = newMoneyId() } = {}) {
+  const dir = body?.dir, amount = toCents(body?.amount), current = readMoney(DIR), currency = String(body?.currency || current.mainCurrency || '').trim().toUpperCase();
+  const record = { id, dir, amountCents: amount, currency, date: String(body?.date || ''), counterpartId: typeof body?.counterpartId === 'string' ? body.counterpartId : '', payer: typeof body?.payer === 'string' ? body.payer.trim() : '', payerKey: '', category: body?.category,
+    what: typeof body?.what === 'string' ? body.what.trim() : '', refund: false, evidence: [], source, importBatch: '', importKey: '', confirmedAt: localIso(), confirmedBy: 'founder', status: 'confirmed', voidedAt: '', voidReason: '', replaces: '' };
+  record.payerKey = payerKeyOf(record.payer); return record;
+}
+function toBalanceCents(value) {
+  if (value === 0) return 0;
+  if (typeof value !== 'string') return toCents(value);
+  const text = value.trim().replace(/^(?:HK\$|US\$|NT\$|RMB\s*|[A-Z]{3}\s*)/i, '').replace(/,/g, '');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;
+  const [whole, decimal = ''] = text.split('.'), cents = Number(whole) * 100 + Number((decimal + '00').slice(0, 2));
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+function writePendingMoney(record) {
+  const file = path.join(moneyPaths(DIR).pending, `${record.id}.json`);
+  try { atomicReplace(file, record, { create: true }); return { ok: true, file, created: true }; }
+  catch (error) { return error?.message === 'exists' ? { ok: true, file, created: false } : { ok: false }; }
+}
+function importSummary(rows, mainCurrency) {
+  const picked = (rows || []).filter(row => row.include && ['ok', 'dup'].includes(row.status) && row.draft?.currency === mainCurrency);
+  const inRows = picked.filter(row => row.draft.dir === 'in'), outRows = picked.filter(row => row.draft.dir === 'out');
+  const dates = picked.map(row => row.draft.date).filter(Boolean).sort();
+  return { total: picked.length, inN: inRows.length, inSum: inRows.reduce((sum, row) => sum + row.draft.amountCents, 0), outN: outRows.length, outSum: outRows.reduce((sum, row) => sum + row.draft.amountCents, 0), from: dates[0] || '', to: dates.at(-1) || '', seen: (rows || []).filter(row => row.status === 'seen').length, dup: (rows || []).filter(row => row.status === 'dup').length, incomplete: (rows || []).filter(row => row.status === 'incomplete').length, cancelled: (rows || []).filter(row => row.status === 'cancelled').length };
+}
+function parsedImportRows(parsed, map, kind) {
+  const source = draftsFrom(parsed.rows, map, { mainCurrency: readMoney(DIR).mainCurrency || 'HKD', kind });
+  const classified = classifyImportRows(source.map(item => item.draft), readMoney(DIR).records, { mapId: mapIdFor(parsed.headers) });
+  return classified.map((item, index) => ({ ...item, line: source[index].line }));
+}
+function validImportMap(raw, headers) {
+  if (!plain(raw) || !plain(raw.fields) || !Array.isArray(headers)) return null;
+  const allowed = new Set(headers), fields = {};
+  for (const key of ['date', 'amount', 'currency', 'payer', 'what', 'orderNo', 'status', 'fee']) {
+    const value = typeof raw.fields[key] === 'string' ? raw.fields[key] : '';
+    if (value && !allowed.has(value)) return null;
+    fields[key] = value;
+  }
+  const dirMode = raw.dirMode;
+  const fixedDir = typeof raw.fixedDir === 'string' ? raw.fixedDir : '';
+  const inCol = typeof raw.inCol === 'string' ? raw.inCol : '';
+  const outCol = typeof raw.outCol === 'string' ? raw.outCol : '';
+  if (![inCol, outCol].every(value => !value || allowed.has(value))) return null;
+  if (!fields.date || (!fields.amount && !inCol && !outCol)) return null;
+  if (!['sign', 'twoCols', 'fixed'].includes(dirMode) || (dirMode === 'fixed' && !['in', 'out'].includes(fixedDir))) return null;
+  return { fields, dirMode, fixedDir, inCol, outCol };
+}
+function extTemplateList() {
+  return ['orders', 'bookings', 'stock'].map(id => {
+    const item = readJSON(path.join(ROOT, 'fixtures', 'ext-templates', `${id}.json`), null), decl = item?.decl || {};
+    return { id, name: String(decl.name || ''), about: String(decl.about || '') };
+  }).filter(item => item.name);
+}
+function receiveMoney(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return moneyInvalid();
+  const action = body.action, paths = moneyPaths(DIR), current = readMoney(DIR);
+  if (action === 'add') {
+    const record = moneyRecord(body), addKind = body.addToList?.kind;
+    if (!validateRecord(record).ok || (record.counterpartId && !(readJSON(path.join(DIR.ledger, 'state.json'), {})?.company?.actors || []).some(actor => actor?.id === record.counterpartId)) || (addKind != null && !['customer', 'partner'].includes(addKind)) || (addKind && record.counterpartId)) return moneyInvalid();
+    const actor = addKind ? newMoneyActor(record.payer, addKind, record.id) : null; if (addKind && !actor) return moneyInvalid();
+    if (actor) record.counterpartId = actor.id;
+    const files = moneyAttachments(record.id, Array.isArray(body.files) ? body.files : []); if (files.error) return { ok: false, error: 'invalid', message: files.error };
+    record.evidence = files.files.map(file => ({ store: 'money', file }));
+    const pending = writePendingMoney(record); if (!pending.ok) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    const ops = [...(actor ? [founderOperation('actorAdd', actor.id, { name: actor.name, kind: actor.kind })] : []), ...(actor ? [founderOperation('moneyLink', record.payerKey, { counterpartId: actor.id })] : []), founderOperation('moneyAdd', record.id)];
+    if (!appendFounderOps(ops)) { if (pending.created) try { fs.rmSync(pending.file, { force: true }); } catch { } for (const file of files.created) try { fs.rmSync(file, { force: true }); } catch { } return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy }; }
+    schedule(200); return { ok: true, id: record.id, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'void') {
+    const record = current.records.find(item => item.id === body.id && item.status !== 'void'), reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (!record || !reason || reason.length > 200) return moneyInvalid();
+    if (!appendFounderOps([founderOperation('moneyVoid', record.id, { reason })])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    schedule(200); return { ok: true, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'evidence') {
+    const record = current.records.find(item => item.id === body.id); if (!record) return { ok: false, error: 'invalid', message: NAMES.ui.mnyErrNotFound };
+    const files = moneyAttachments(record.id, body.files); if (files.error) return { ok: false, error: 'invalid', message: files.error };
+    if (!files.files.length) return moneyInvalid();
+    const ops = files.files.map(file => founderOperation('moneyEvidence', record.id, { file }));
+    if (!appendFounderOps(ops)) { for (const file of files.created) try { fs.rmSync(file, { force: true }); } catch { } return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy }; }
+    schedule(200); return { ok: true, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'link') {
+    const payerKey = typeof body.payerKey === 'string' ? body.payerKey.trim() : '';
+    if (!payerKey) return moneyInvalid();
+    if (typeof body.counterpartId === 'string' && !body.newName) {
+      if (!(readJSON(path.join(DIR.ledger, 'state.json'), {})?.company?.actors || []).some(actor => actor?.id === body.counterpartId)) return moneyInvalid();
+      if (!appendFounderOps([founderOperation('moneyLink', payerKey, { counterpartId: body.counterpartId })])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    } else {
+      const actor = newMoneyActor(body.newName, body.kind, payerKey); if (!actor) return moneyInvalid();
+      if (!appendFounderOps([founderOperation('actorAdd', actor.id, { name: actor.name, kind: actor.kind }), founderOperation('moneyLink', payerKey, { counterpartId: actor.id })])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    }
+    schedule(200); return { ok: true, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'balance') {
+    const amountCents = toBalanceCents(body.amount), currency = String(body.currency || current.mainCurrency || '').toUpperCase(), asOf = String(body.asOf || '');
+    const balance = { amountCents, currency, asOf, confirmedAt: localIso(), by: 'founder' };
+    if (!validateBalance(balance).ok || asOf > localIso().slice(0, 10) || (current.mainCurrency && currency !== current.mainCurrency)) return moneyInvalid();
+    if (!appendFounderOps([founderOperation('moneyBalance', 'balance', { amount: String(amountCents), currency, asOf })])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    schedule(200); return { ok: true, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'goal') {
+    const metric = body.metric, value = metric === 'payers' ? Number(body.count) : toCents(body.amount), currency = String(body.currency || current.mainCurrency || '').toUpperCase();
+    if (!['income', 'net', 'payers'].includes(metric) || !Number.isSafeInteger(value) || value <= 0 || !/^[A-Z]{3}$/.test(currency)) return moneyInvalid();
+    const valueBody = metric === 'payers' ? { metric, count: String(value), currency } : { metric, amount: String(value), currency };
+    if (!appendFounderOps([founderOperation('setGoalNumber', 'quarter', valueBody)])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    schedule(200); return { ok: true, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'importUpload') {
+    if (!['shop', 'payment', 'bank', 'other'].includes(body.kind) || typeof body.name !== 'string' || typeof body.data !== 'string' || !B64.test(body.data)) return moneyInvalid();
+    const bytes = Buffer.from(body.data, 'base64'); if (bytes.length > 2 * 1024 * 1024) return { ok: false, error: 'invalid', message: NAMES.ui.mnyErrTooBig };
+    const parsed = parseCsv(bytes); if (!parsed.ok) return { ok: false, error: 'invalid', message: parsed.error === 'encoding' ? NAMES.ui.mnyErrEncoding : parsed.error === 'tooBig' ? NAMES.ui.mnyErrTooBig : (NAMES.ui.mnyErrCsv || NAMES.ui.mnyErrInvalid) };
+    const mapId = mapIdFor(parsed.headers), saved = current.importMaps.find(item => item?.id === mapId && validImportMap(item, parsed.headers)), map = saved ? validImportMap(saved, parsed.headers) : guessMap(parsed.headers);
+    const hasSignedDirection = map.dirMode === 'sign' && parsed.rows.some(row => /^-\d+(?:\.\d{1,2})?$/.test(String(row.values?.[map.fields?.amount] || '').trim().replace(/^(?:HK\$|US\$|NT\$|RMB\s*|[A-Z]{3}\s*)/i, '').replace(/,/g, '')));
+    if (body.kind === 'shop' && !saved && map.dirMode !== 'twoCols' && !hasSignedDirection) { map.dirMode = 'fixed'; map.fixedDir = 'in'; }
+    const id = moneyBatchId(), name = cleanFileName(body.name), folder = path.join(paths.imports, id), raw = parsedImportRows(parsed, map, body.kind);
+    const batch = { schema: 1, id, state: 'parsed', createdAt: localIso(), file: { name, stored: `money/imports/${id}/${name}`, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') }, kind: body.kind, mapId, map: { ...map, headers: parsed.headers }, rows: raw, confirmedAt: '', undoneAt: '' };
+    if (!storeImportOriginal(folder, name, bytes, () => atomicReplace(path.join(paths.imports, `${id}.json`), batch, { create: true })).ok) return moneyInvalid();
+    return { ok: true, id, summary: importSummary(batch.rows, current.mainCurrency || 'HKD'), message: NAMES.ui.mnySaved };
+  }
+  const batchId = typeof body.id === 'string' ? body.id : '', loaded = readImportBatch(DIR, batchId), batch = loaded.batch;
+  if (!batch || !['parsed', 'confirmed'].includes(batch.state)) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+  const batchFile = path.join(paths.imports, `${batchId}.json`);
+  if (action === 'importMap') {
+    if (batch.state !== 'parsed' || !plain(body.map)) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const original = path.join(paths.imports, batchId, path.basename(batch.file?.name || '')); const parsed = parseCsv(fs.readFileSync(original)); if (!parsed.ok) return moneyInvalid();
+    const map = validImportMap(body.map, parsed.headers);
+    if (!map) return moneyInvalid();
+    const rows = parsedImportRows(parsed, map, body.kind || batch.kind); atomicReplace(batchFile, { ...batch, kind: body.kind || batch.kind, map: { ...map, headers: parsed.headers }, rows }); return { ok: true, summary: importSummary(rows, current.mainCurrency || 'HKD'), message: NAMES.ui.mnySaved };
+  }
+  if (action === 'importInclude') {
+    if (!plain(body.lines)) return moneyInvalid();
+    if (batch.state !== 'parsed') return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const rows = batch.rows.map(row => own(body.lines, String(row.line)) && ['ok', 'dup'].includes(row.status) && typeof body.lines[String(row.line)] === 'boolean' ? { ...row, include: body.lines[String(row.line)] } : row);
+    atomicReplace(batchFile, { ...batch, rows }); return { ok: true, summary: importSummary(rows, current.mainCurrency || 'HKD'), message: NAMES.ui.mnySaved };
+  }
+  if (action === 'importCancel' && batch.state === 'parsed') { atomicReplace(batchFile, { ...batch, state: 'cancelled' }); return { ok: true, message: NAMES.ui.mnySaved }; }
+  if (action === 'importUndo' && batch.state === 'confirmed') {
+    try {
+      if (!appendFounderOps([founderOperation('moneyUndoImport', batch.id)])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+      const next = { ...batch, state: 'undone', undoneAt: localIso() }; atomicReplace(batchFile, next);
+    } catch (error) {
+      if (retryableFileError(error)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+      throw error;
+    }
+    schedule(200); return { ok: true, message: NAMES.ui.mnySaved };
+  }
+  if (action === 'importConfirm' && batch.state === 'parsed') {
+    let confirmed;
+    try {
+      confirmed = withFounderOpsLock(() => {
+        const latest = readImportBatch(DIR, batch.id).batch; if (!latest || latest.state !== 'parsed') return null;
+        const currentRows = classifyImportRows(latest.rows.map(row => row.draft), readMoney(DIR).records, { mapId: latest.mapId }).map((row, index) => ({ ...row, line: latest.rows[index].line, include: ['ok', 'dup'].includes(row.status) ? latest.rows[index].include === true : false }));
+        const next = { ...latest, rows: currentRows, state: 'confirmed', confirmedAt: localIso() };
+        if (recordsFromBatch(next).some(record => !validateRecord(record).ok)) return { invalid: true };
+        const ops = [founderOperation('moneyImport', latest.id)];
+        const actors = readJSON(path.join(DIR.ledger, 'state.json'), {})?.company?.actors || [], linked = readMoney(DIR).links || {};
+        for (const row of currentRows) if (row.include && row.draft?.payer) { const key = payerKeyOf(row.draft.payer), actor = actors.find(item => payerKeyOf(item?.name) === key); if (actor && !linked[key] && !ops.some(op => op.op === 'moneyLink' && op.target === key)) ops.push(founderOperation('moneyLink', key, { counterpartId: actor.id })); }
+        const list = readJSON(FOUNDER_OPS, []); if (!Array.isArray(list)) return null; list.push(...ops); writeJSON(FOUNDER_OPS, list); atomicReplace(batchFile, next); return next;
+      });
+    } catch (error) {
+      if (retryableFileError(error)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+      throw error;
+    }
+    if (confirmed?.invalid) return moneyImportInvalid();
+    if (!confirmed) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    schedule(200); return { ok: true, summary: importSummary(confirmed.rows, current.mainCurrency || 'HKD'), message: NAMES.ui.mnySaved };
+  }
+  return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+}
+function startExtDraft(draft, { expect } = {}) {
+  let note = '', wroteNote = false;
+  try { note = minutesNote(draft.id, 'ext-draft'); wroteNote = true; }
+  catch (error) {
+    if (error?.code !== 'EEXIST') return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  const patched = patchDraft(DIR, draft.id, { state: 'drafting', ...(draft.revise ? { revise: draft.revise } : {}) }, 'server', { expect, now: localIso() });
+  if (!patched.ok) { if (wroteNote) try { fs.rmSync(note, { force: true }); } catch { } return patched; }
+  schedule(200); return patched;
+}
+function receiveExt(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return extInvalid('');
+  const action = body.action, crewPort = PORT;
+  if (action === 'draftTemplate') {
+    const result = templateDraft(ROOT, DIR, body.template, { now: localIso() }); return result.ok ? { ok: true, id: result.draft.id, message: NAMES.ui.extSaved } : extInvalid('');
+  }
+  if (action === 'draftSentence') {
+    const ask = typeof body.ask === 'string' ? body.ask.trim() : '';
+    if (!ask || ask.length > 300) return extInvalid('');
+    if (!certInfo()) return { ok: false, error: 'noAi', message: NAMES.ui.extNoAi };
+    let made = null;
+    for (let i = 0; i < 50 && !made; i++) {
+      const draft = { id: newDraftId(new Date(Date.now() + i)), state: 'drafting', from: 'sentence', ask, base: {}, baseRev: 0, sample: [], edits: { forRev: 0 }, revise: '', folder: '', sourceHash: '', error: '' };
+      const result = createDraft(DIR, draft, { now: localIso() }); if (result.ok) made = result.draft;
+    }
+    if (!made) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    try { minutesNote(made.id, 'ext-draft'); } catch { return extInvalid(''); }
+    schedule(200); return { ok: true, id: made.id, message: NAMES.ui.extSaved };
+  }
+  if (action === 'draftEdit') {
+    const result = patchDraft(DIR, body.id, { edits: body.edits }, 'server', { expect: 'ready', now: localIso() });
+    return result.ok ? { ok: true, message: NAMES.ui.extSaved } : result.error === 'stale' ? { ok: false, error: 'stale', message: NAMES.ui.extStale } : extInvalid(result.reason || '');
+  }
+  if (action === 'draftRevise') {
+    const draft = readDraft(DIR, body.id), revise = typeof body.revise === 'string' ? body.revise.trim() : '';
+    if (!draft || !revise || revise.length > 300) return extInvalid('');
+    const result = startExtDraft({ ...draft, revise }, { expect: 'ready' });
+    if (!result.ok) return result.error === 'stale' ? { ok: false, error: 'stale', message: NAMES.ui.extStale } : result.error === 'busy' ? { ok: false, error: 'busy', message: result.message || NAMES.ui.founderOpBusy } : extInvalid(result.reason || '');
+    return { ok: true, message: NAMES.ui.extSaved };
+  }
+  if (action === 'draftRetry') {
+    const draft = readDraft(DIR, body.id), old = draft && Date.parse(draft.updatedAt || draft.createdAt || '');
+    if (!draft || (draft.state !== 'failed' && !(draft.state === 'drafting' && Number.isFinite(old) && Date.now() - old > 10 * 60000))) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const result = startExtDraft(draft, { expect: draft.state });
+    return result.ok ? { ok: true, message: NAMES.ui.extSaved } : result.error === 'stale' ? { ok: false, error: 'stale', message: NAMES.ui.extStale } : result.error === 'busy' ? { ok: false, error: 'busy', message: result.message || NAMES.ui.founderOpBusy } : extInvalid(result.reason || '');
+  }
+  if (action === 'draftCancel') {
+    const result = patchDraft(DIR, body.id, { state: 'cancelled' }, 'server', { expect: ['drafting', 'ready', 'failed'], now: localIso() });
+    return result.ok ? { ok: true, message: NAMES.ui.extSaved } : { ok: false, error: 'stale', message: NAMES.ui.extStale };
+  }
+  if (action === 'enable') {
+    const draft = readDraft(DIR, body.id); if (!draft || draft.state !== 'ready' || typeof body.name !== 'string') return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const decl = applyEdits(draft.base, draft.baseRev, draft.edits), checked = validate(decl, { crewPort }); if (!checked.ok) return extInvalid(checked.errors.join('；'));
+    const folder = draft.folder || folderNameFor(body.name, new Set(listExtensions(ROOT, DIR, { crewPort }).map(item => item.folder)));
+    const named = draft.folder ? { ok: true } : patchDraft(DIR, draft.id, { folder }, 'server', { expect: 'ready', now: localIso() }); if (!named.ok) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const created = createExtension(ROOT, DIR, folder, decl); if (!created.ok) return extInvalid('');
+    registerExtension(DIR, folder, decl, { state: 'enabled', now: localIso() });
+    if (!appendFounderOps([founderOperation('extEnable', folder)])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    const enabled = patchDraft(DIR, draft.id, { state: 'enabled', folder }, 'server', { expect: 'ready', now: localIso() });
+    if (!enabled.ok) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    schedule(200); return { ok: true, folder, message: NAMES.ui.extSaved };
+  }
+  if (action === 'enablePending') {
+    const items = listExtensions(ROOT, DIR, { crewPort }), item = items.find(entry => entry.folder === body.folder && entry.state === 'pending');
+    if (!item) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    registerExtension(DIR, item.folder, item.decl, { state: 'enabled', now: localIso() });
+    if (!appendFounderOps([founderOperation('extEnable', item.folder)])) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+    schedule(200); return { ok: true, message: NAMES.ui.extSaved };
+  }
+  if (action === 'modifyStart') {
+    const item = listExtensions(ROOT, DIR, { crewPort }).find(entry => entry.folder === body.folder && ['enabled', 'disabled'].includes(entry.state)); if (!item) return extInvalid('');
+    const file = path.join(extensionsDir(ROOT, DIR), item.folder, 'extension.json'), source = fs.readFileSync(file, 'utf8');
+    for (let i = 0; i < 50; i++) {
+      const draft = { id: newDraftId(new Date(Date.now() + i)), state: 'ready', from: `folder:${item.folder}`, ask: '', base: item.decl, baseRev: 1, sample: [], edits: { forRev: 1 }, revise: '', folder: item.folder, sourceHash: crypto.createHash('sha256').update(source).digest('hex'), error: '' };
+      const made = createDraft(DIR, draft, { now: localIso() }); if (made.ok) return { ok: true, id: made.draft.id, message: NAMES.ui.extSaved };
+    }
+    return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  if (action === 'apply') {
+    const draft = readDraft(DIR, body.id); if (!draft || draft.state !== 'ready' || !draft.folder) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const file = path.join(extensionsDir(ROOT, DIR), draft.folder, 'extension.json'); let source = ''; try { source = fs.readFileSync(file, 'utf8'); } catch { return extInvalid(''); }
+    if (crypto.createHash('sha256').update(source).digest('hex') !== draft.sourceHash) return { ok: false, error: 'stale', message: NAMES.ui.extStale };
+    const next = applyEdits(draft.base, draft.baseRev, draft.edits), revision = revisionCheck(ROOT, DIR, draft.folder, next); if (!revision.ok || !revision.checked.ok) { say(`延伸功能套用核對失敗：${String((revision.checked?.errors || []).join('；')).slice(0, 300)}`); return { ok: false, error: 'invalid', message: NAMES.ui.extApplyCheckFailed || '這個工序仍有卡，請先移到其他工序。' }; }
+    const written = writeExtension(ROOT, DIR, draft.folder, next); if (!written.ok) return extInvalid(written.error || '');
+    registerExtension(DIR, draft.folder, next, { state: readRegistry(DIR).items.find(item => item.folder === draft.folder)?.state || 'enabled', now: localIso() });
+    const applied = patchDraft(DIR, draft.id, { state: 'enabled' }, 'server', { expect: 'ready', now: localIso() });
+    return applied.ok ? { ok: true, message: NAMES.ui.extSaved } : { ok: false, error: 'stale', message: NAMES.ui.extStale };
+  }
+  if (action === 'disable' || action === 'enableAgain') {
+    const item = readRegistry(DIR).items.find(entry => entry.folder === body.folder); if (!item) return extInvalid('');
+    const registry = readRegistry(DIR); registry.items = registry.items.map(entry => entry.folder === body.folder ? { ...entry, state: action === 'disable' ? 'disabled' : 'enabled' } : entry); writeRegistry(DIR, registry);
+    return { ok: true, message: NAMES.ui.extSaved };
+  }
+  if (action === 'row') {
+    const result = rowWrite(ROOT, DIR, body, { now: localIso() });
+    if (result.ok) return { ok: true, row: result.row, message: NAMES.ui.extSaved };
+    if (result.error === 'stale') return { ok: false, error: 'stale', row: result.row, message: NAMES.ui.extStale };
+    if (result.error === 'limit') return { ok: false, error: 'invalid', message: String(NAMES.ui.extErrLimit || '').replace('{reason}', '') };
+    if (result.error === 'badFormat') return { ok: false, error: 'invalid', message: String(NAMES.ui.extBadFormat || '').replace('{reason}', '') };
+    return result.error === 'notFound' ? extInvalid(NAMES.ui.extErrNotFound) : extInvalid(result.reason || '');
+  }
+  if (action === 'archiveDone') {
+    const result = archiveDone(ROOT, DIR, body.folder, body.table, { now: localIso() });
+    return result.ok ? { ok: true, changed: result.changed, message: NAMES.ui.extSaved } : extInvalid(result.error || '');
+  }
+  if (action === 'handoff') {
+    if (!companyStatus().confirmed) return { ok: false, error: 'invalid', message: NAMES.ui.extHandoffNeedsOverview };
+    const text = typeof body.text === 'string' ? body.text.trim() : ''; if (!text || text.length > 500) return extInvalid('');
+    const item = listExtensions(ROOT, DIR, { crewPort }).find(entry => entry.folder === body.folder); if (!item) return extInvalid('');
+    const marked = markHanded(ROOT, DIR, body.folder, body.table, body.id, body.rev, { now: localIso() });
+    if (!marked.ok) return marked.error === 'stale' ? { ok: false, error: 'stale', message: NAMES.ui.extStale } : extInvalid('');
+    const note = receiveNote({ type: 'event', text: `${NAMES.ui.extHandoff}：${item.name}：${text}`, date: localIso().slice(0, 10) }, { source: 'extension', extensionName: item.name });
+    return Promise.resolve(note).then(result => { if (result.ok) { schedule(200); return { ok: true, message: NAMES.ui.extSaved }; } markHanded(ROOT, DIR, body.folder, body.table, body.id, body.rev, { clear: true }); return extInvalid(''); });
+  }
+  return extInvalid('');
+}
+const plain = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
+function receiptMoney(reply, pack) {
+  if (!pack || reply?.head?.hash !== fnv(JSON.stringify(pack))) return { ok: false, error: 'stale', message: NAMES.ui.mnyPackChanged || '問題包已經更改，請重新開啟頁面再作答。' };
+  const answers = reply.machine?.answers, questions = new Map((pack.questions || []).map(question => [String(question.id), question]));
+  if (!Array.isArray(answers) || new Set(answers.map(answer => String(answer?.id))).size !== answers.length) return moneyInvalid();
+  const confirm = NAMES.ui.mnyConfirm, confirmEdit = NAMES.ui.mnyConfirmEdit, reject = NAMES.ui.mnyReject;
+  const records = [];
+  for (const answer of answers) {
+    const question = questions.get(String(answer?.id)); if (!question || question.kind !== 'money' || ![confirm, confirmEdit, reject].includes(answer.value) || answer.value === reject) continue;
+    const base = question.money, edit = answer.value === confirmEdit ? answer.edit : {};
+    if (!plain(base) || !plain(edit) || Object.keys(edit).some(key => !['amount', 'date', 'category', 'what', 'payer'].includes(key))) return moneyInvalid();
+    const payer = own(edit, 'payer') ? edit.payer : base.payer, payerChanged = own(edit, 'payer') && payerKeyOf(payer) !== payerKeyOf(base.payer);
+    const record = { id: String(base.id || ''), dir: base.dir, amountCents: own(edit, 'amount') ? toCents(edit.amount) : base.amountCents, currency: base.currency, date: own(edit, 'date') ? edit.date : base.date,
+      counterpartId: payerChanged ? '' : String(base.counterpartId || ''), payer, payerKey: '', category: own(edit, 'category') ? edit.category : base.category, what: own(edit, 'what') ? edit.what : base.what,
+      refund: !!base.refund, evidence: Array.isArray(base.evidence) ? base.evidence : [], source: 'receipt', importBatch: '', importKey: '', confirmedAt: localIso(), confirmedBy: 'founder', status: 'confirmed', voidedAt: '', voidReason: '', replaces: '' };
+    record.payerKey = payerKeyOf(record.payer); if (!validateRecord(record).ok) return moneyInvalid(); records.push(record);
+  }
+  if (new Set(records.map(record => record.id)).size !== records.length) return moneyInvalid();
+  if (records.length && isDemoInstance()) return { ok: false, error: 'demo', message: NAMES.ui.mnyDemo };
+  if (records.some(record => fs.existsSync(path.join(moneyPaths(DIR).pending, `${record.id}.json`)))) return { ok: false, error: 'answered', message: NAMES.ui.mnyReceiptAnswered || '這題已經答過，以先送出的答案為準。' };
+  const created = [], ops = [];
+  for (const record of records) { const pending = writePendingMoney(record); if (!pending.ok) { for (const file of created) try { fs.rmSync(file, { force: true }); } catch { } return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy }; } if (pending.created) { created.push(pending.file); ops.push(founderOperation('moneyAdd', record.id)); } }
+  if (ops.length && !appendFounderOps(ops)) { for (const file of created) try { fs.rmSync(file, { force: true }); } catch { } return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy }; }
+  return { ok: true };
+}
 // 更正公司概覽「Zero 依據」的來源連結（創辦人試用：Zero 抄錯網址而 404）。只改 page.json 該項來源的 url；第一次更正時舊值存 urlBefore，另記 fixedOn。
 // 不改任何題目答案、不改 confirmed.json、不開 Zero 工作；帳本事件經創辦人操作隊列記錄（外殼合併時寫入 events）。
 function fixSourceUrl(body) {
@@ -1292,7 +1658,7 @@ function founderOp(body) {
   // 隊列先讀、state.json 最後讀（與外殼合併「改名 → 套用 → 存檔 → 刪批次檔」配合），剛排隊的暫停／恢復不會被漏看
   const { state, pending } = readFounderOpsSnapshot(DIR);
   if (state.demo === true) return { ok: false, error: 'demo', message: NAMES.ui.founderDemoDenied };
-  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ROLES_OP_NAMES, ...ACTOR_OPS, 'termAdd', 'termRename', 'termRemove'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ROLES_OP_NAMES, ...ACTOR_OPS.filter(op => op !== 'actorAdd'), 'termAdd', 'termRename', 'termRemove'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
   const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], ...ROLES_OPS, actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'], termAdd: ['name', 'kind'], termRename: ['name'], termRemove: [] }[body.op];
@@ -1674,7 +2040,19 @@ const handler = async (req, res) => {
         // 待決事項頁輪詢只用交付卡：不觀測、不回其他資料；計法與完整監察台相同
         if (url.searchParams.get('lite') === '1') return send(res, 200, { ok: true, deliveries: dashboardState(DIR, { cert: certInfo(), sim: simInfo() }).deliveries });
         const observedLive = await observeNow(), oc = observeCfg(), work = workStatus(DIR, { outerAlive: shellAlive(), pending: pendingFiles() });
-        return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), localOnly: pass.kind === 'phone', version: SERVER_VERSION, instance: INSTANCE });
+        return send(res, 200, { ...dashboardState(DIR, { cert: certInfo(), busy: !!work.running, scheduler: SIM ? 'sim' : 'none', schedStatus: SIM ? null : schedReadback(), sim: simInfo(), lastSeen: lastSeenPrev, observed: observedLive, observeFolders: oc.folders.map(f => ({ hash: f.hash.slice(0, 12), name: f.name })), observePending: oc.pending, ext: extOverview(ROOT, DIR, localIso().slice(0, 10)) }), workStatus: work, observed: observedLive, devices: deviceList(pass), phone: phoneInfo(), localOnly: pass.kind === 'phone', version: SERVER_VERSION, instance: INSTANCE });
+      }
+      if (p === '/api/money') return send(res, 200, { ok: true, ...moneyView(DIR, { today: localIso().slice(0, 10), full: true }) });
+      if (p === '/api/money/import') {
+        const loaded = readImportBatch(DIR, url.searchParams.get('id')), batch = loaded.batch;
+        if (!batch) return send(res, 404, { error: 'not found', message: NAMES.ui.mnyErrNotFound });
+        const safe = { ...batch, file: { name: batch.file?.name || '', bytes: batch.file?.bytes || 0, sha256: batch.file?.sha256 || '' } };
+        return send(res, 200, { ok: true, batch: safe, summary: importSummary(batch.rows, readMoney(DIR).mainCurrency || 'HKD') });
+      }
+      if (p === '/api/ext') return send(res, 200, { ok: true, items: listExtensions(ROOT, DIR, { crewPort: PORT }), drafts: listDrafts(DIR).map(draft => ({ ...draft, preview: applyEdits(draft.base, draft.baseRev, draft.edits) })), templates: extTemplateList(), aiReady: !!certInfo(), demo: isDemoInstance(), crewPort: PORT });
+      if (p === '/api/ext/rows') {
+        const result = readExtensionRows(ROOT, DIR, url.searchParams.get('folder'), url.searchParams.get('table'));
+        return result.ok ? send(res, 200, { ok: true, rows: result.rows, problems: result.problems, bad: result.bad }) : send(res, 404, { error: 'not found', message: NAMES.ui.extErrNotFound });
       }
       // Founder Desk 待決事項頁：「今日要做的事」卡同「上次離開之後」；頁面第一次載入（seen=1）先記低今次時間，輪詢唔算
       // 一個殼嘅頁頭（決定二十五）：公司、三個業務指標、生意大腦等你處理數目；唔觀測、唔寫檔（Founder Desk 畫面每 5 秒讀一次）
@@ -1769,6 +2147,30 @@ const handler = async (req, res) => {
       if (kickMinutes) schedule();
       return send(res, code, result);
     }
+    if (req.method === 'POST' && p === '/api/money') {
+      const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
+      const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
+      if (!loopback && !phone) return refuse(req, res, url, 'origin');
+      if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
+      const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
+      if (isDemoInstance()) return send(res, 409, { error: 'demo', message: NAMES.ui.mnyDemo });
+      const body = JSON.parse(await readBody(req, 45 * 1024 * 1024) || '{}');
+      if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
+      const result = receiveMoney(body), code = result.ok ? 202 : ['busy', 'stale'].includes(result.error) ? 409 : 400;
+      return send(res, code, result);
+    }
+    if (req.method === 'POST' && p === '/api/ext') {
+      const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
+      const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
+      if (!loopback && !phone) return refuse(req, res, url, 'origin');
+      if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
+      const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
+      if (isDemoInstance()) return send(res, 409, { error: 'demo', message: NAMES.ui.extDemo });
+      const body = JSON.parse(await readBody(req, 64 * 1024) || '{}');
+      if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
+      const result = await receiveExt(body), code = result.ok ? 202 : ['busy', 'stale', 'noAi'].includes(result.error) ? 409 : 400;
+      return send(res, code, result);
+    }
     if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/input-reread' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/source-url' || p === '/api/celebrations/seen' || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
@@ -1834,8 +2236,12 @@ const handler = async (req, res) => {
       // 手機可以採用預設，但不得藉一般回覆改寫 G7 權限或 G8 經營節奏。
       if (phone && changesLocalOnly(body, reply)) return send(res, 403, { error: 'local' });
       // 收之前先核對：問題包要喺呢度（舊分頁、測試分頁送嚟嘅唔收，免得收咗先失敗）
-      if (body.kind === 'ask-answer' && !loadPack(DIR, body.ref)) return send(res, 404, { error: 'pack-not-here', message: '此問題包已不在此處，可能是舊分頁。請返回待決事項查看最新問題。' });
-      if (body.kind === 'ask-answer') { const v = validateAskReply(reply, loadPack(DIR, body.ref)); if (!v.ok) { say('拒收問題包答案：' + v.reason); return send(res, 400, { error: 'answer-identity', message: NAMES.ui.errAnswerIdentity }); } }
+      const askPack = body.kind === 'ask-answer' ? loadPack(DIR, body.ref) : null;
+      if (body.kind === 'ask-answer' && !askPack) return send(res, 404, { error: 'pack-not-here', message: '此問題包已不在此處，可能是舊分頁。請返回待決事項查看最新問題。' });
+      if (body.kind === 'ask-answer') {
+        const v = validateAskReply(reply, askPack); if (!v.ok) { say('拒收問題包答案：' + v.reason); return send(res, 400, { error: 'answer-identity', message: NAMES.ui.errAnswerIdentity }); }
+        const receipt = receiptMoney(reply, askPack); if (!receipt.ok) return send(res, ['busy', 'demo', 'answered', 'stale'].includes(receipt.error) ? 409 : 400, receipt);
+      }
       let name = `${fileStamp()}-${body.kind}-${body.ref}.md`, n = 1;
       while (fs.existsSync(path.join(DIR.replies, name))) name = `${fileStamp()}-${body.kind}-${body.ref}-${++n}.md`;
        const via = pass.kind === 'phone' ? `device:${pass.id}` : `browser:${pass.id.slice(0, 6)}`;

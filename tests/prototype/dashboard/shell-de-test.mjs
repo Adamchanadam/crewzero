@@ -1,5 +1,5 @@
 // 階段 D＋E 驗收（設計文件 2026-10-28 第 7 節 D、E 兩行；規劃書 4.1、4.7、決定二十五、二十六；視覺規格第 2、3、5 節）：
-// 一個殼（九個分頁三組、兩道門、紀錄三個篩選、設定歸系統、回覆盒只一處、典型一日點擊）、
+// 一個殼（十一個分頁三組、兩道門、紀錄三個篩選、設定歸系統、回覆盒只一處、典型一日點擊）、
 // 運作環第三版（閒置零亮線零粒子、真實工作亮線粒子、強度三級、子代理、未登記工作、範圍模式、會話詳情）、
 // 真實轉變脈衝、慶祝三級、計數跳動、卡片外框平時靜止（內容改變轉兩週即停）、同頁讀回就地更新、進場只播一次、
 // 「AI 團隊」標籤唔疊字、首屏 1440×900、1024、390、暫停與減少動態、字級變數、冇「示意」字。
@@ -7,6 +7,7 @@
 // 用法：node shell-de-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -16,7 +17,7 @@ const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js')), D = N.dash, U = N.ui;
 const { seedDemo } = await import(pathToFileURL(path.join(PROTO, 'demo-seed.mjs')).href);
 const kit = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
@@ -50,11 +51,12 @@ try {
   const orb = () => c.ev(`(()=>{const f=document.querySelector('.o-canvas');const o=document.querySelector('#orbit');return f?{lit:+f.dataset.lit,pts:+f.dataset.particles,moving:+f.dataset.moving,sub:+f.dataset.sub,twoHop:+f.dataset.twoHop,level:+(o.dataset.level||0),last:f.dataset.lastPulse,hp:f.dataset.humanPulse,working:document.querySelectorAll('.o-node.working').length}:null})()`);
   const shot = n => c.shot(path.join(OUT, n));
 
-  /* ---------- A. 一個殼：九個分頁三組、兩道門、每頁同一個頁頭 ---------- */
-  const TABS = ['pending', 'inputs', 'company', 'overview', 'brain', 'path', 'team', 'log', 'system'];
-  const NAME = t => t === 'pending' || t === 'company' ? U[t] : D[t];
+  /* ---------- A. 一個殼：十一個分頁三組、兩道門、每頁同一個頁頭 ---------- */
+  // 0.43.0：「公司運作」一組在「業務路徑」之後加「業績報告」「延伸功能」（已批原型 docs/evidence/results-ext-2026-11-10/prototype/build.mjs 第 40 行），每個畫面的導航相同
+  const TABS = ['pending', 'inputs', 'company', 'overview', 'brain', 'path', 'money', 'ext', 'team', 'log', 'system'];
+  const NAME = t => t === 'pending' || t === 'company' ? U[t] : t === 'money' ? U.mnyTab : t === 'ext' ? U.extTab : D[t];
   // 舊網址 /#/request/event：沒有對應的輸入時回首頁（待決事項）並展開「告訴 Zero 一件事」，所以所屬分頁是待決事項
-  const PAGES = [['/', 'pending'], ['/#/intake', 'company'], ['/#/setup', 'system'], ['/#/log', 'log'], ['/#/request/event', 'pending'], ['/#/debate', 'brain'], ['/proofread.html', 'company'], ['/dashboard', 'overview'], ['/dashboard/brain', 'brain'], ['/dashboard/path', 'path'], ['/dashboard/inputs', 'inputs'], ['/dashboard/team', 'team'], ['/dashboard/log', 'log'], ['/dashboard/system', 'system']];
+  const PAGES = [['/', 'pending'], ['/#/intake', 'company'], ['/#/setup', 'system'], ['/#/log', 'log'], ['/#/request/event', 'pending'], ['/#/debate', 'brain'], ['/proofread.html', 'company'], ['/dashboard', 'overview'], ['/dashboard/brain', 'brain'], ['/dashboard/path', 'path'], ['/dashboard/money', 'money'], ['/dashboard/ext', 'ext'], ['/dashboard/inputs', 'inputs'], ['/dashboard/team', 'team'], ['/dashboard/log', 'log'], ['/dashboard/system', 'system']];
   const navOf = `(()=>{const n=document.querySelector('nav.tabs');if(!n)return null;return {groups:[...n.querySelectorAll('[data-grp]')].map(g=>({name:g.getAttribute('data-name'),tabs:[...g.querySelectorAll('a[data-tab]')].map(a=>[a.getAttribute('data-tab'),a.childNodes[0].textContent,a.getAttribute('href')])})),dividers:n.querySelectorAll('.divider').length,cur:[...n.querySelectorAll('a[aria-current="page"]')].map(a=>a.getAttribute('data-tab')),more:/更多/.test(n.textContent),metrics:[...document.querySelectorAll('.metric')].map(m=>m.getAttribute('data-metric')),mark:(document.querySelector('.dtop .mark')||{}).textContent}})()`;
   const navBad = [];
   for (const [p, want] of PAGES) {
@@ -62,16 +64,16 @@ try {
     const nv = await c.ev(navOf);
     const good = nv && nv.groups.length === 3 && nv.groups.map(g => g.name).join('|') === [D.navDo, D.navRun, D.navRef].join('|') && nv.dividers === 2 && !nv.more
       && nv.groups.flatMap(g => g.tabs.map(t => t[0])).join(',') === TABS.join(',') && nv.groups.flatMap(g => g.tabs.map(t => t[1])).join(',') === TABS.map(NAME).join(',')
-      && nv.cur.length === 1 && nv.cur[0] === want && nv.metrics.join(',') === 'quarter,pending,inputs' && nv.mark === '鮮烘';
+      && nv.cur.length === 1 && nv.cur[0] === want && nv.metrics.filter(Boolean).join(',') === 'quarter,pending,inputs' && nv.metrics.length === (['overview', 'money'].includes(want) ? 6 : 3) && nv.mark === '鮮烘';
     if (!good) navBad.push({ p, want, nv });
   }
-  ok('一個殼：十四個畫面（三個頁面檔）都係同一列導航——九個分頁三組（你要做／公司運作／參考）、兩條分隔線、冇「更多」選單、名稱由名稱表、只標一個所屬分頁；頁頭同一個標誌同三個業務指標', !navBad.length, navBad.slice(0, 2));
-  // 九個分頁連結各自開到對應分頁
+  ok('一個殼：十六個畫面（三個頁面檔）都係同一列導航——十一個分頁三組（你要做／公司運作／參考）、兩條分隔線、冇「更多」選單、名稱由名稱表、只標一個所屬分頁；頁頭同一個標誌同三個業務指標', !navBad.length, navBad.slice(0, 2));
+  // 十一個分頁連結各自開到對應分頁
   const hrefBad = [];
   await c.go(B + '/dashboard', 1440, 2600);
   const hrefs = (await c.ev(navOf)).groups.flatMap(g => g.tabs);
   for (const [t, , h] of hrefs) { await c.go(B + h, 1440, 2200); const cur = (await c.ev(navOf) || {}).cur; if (!cur || cur[0] !== t) hrefBad.push([t, h, cur]); }
-  ok('九個分頁連結：每個都開到該分頁並標示', !hrefBad.length, hrefBad);
+  ok('十一個分頁連結：每個都開到該分頁並標示', !hrefBad.length, hrefBad);
   ok('兩道門：/ 開到待決事項、/dashboard 開到公司現況', hrefs.find(x => x[0] === 'pending')[2] === '/' && hrefs.find(x => x[0] === 'overview')[2] === '/dashboard');
   const shellM = await api('/api/shell');
   await c.go(B + '/', 1440, 3500);
@@ -193,8 +195,9 @@ try {
   await c.go(B + '/dashboard', 1440, 4000);
   const lab = await c.ev(`[...document.querySelectorAll('#evlist li')].map(li=>{const w=li.querySelector('.who'),t=li.querySelector('.tt');const a=w.getBoundingClientRect(),b=t.getBoundingClientRect();return {who:w.textContent,ok:a.right<=b.left+0.5&&w.scrollWidth<=w.clientWidth+1}}).filter(x=>!x.ok)`);
   ok('即時事件流：「AI 團隊」等角色標籤唔會闊過欄、唔會疊住後面文字', lab.length === 0 && await c.ev(`[...document.querySelectorAll('#evlist .who')].some(w=>w.textContent===${JSON.stringify(D.hostShell)})`), lab);
-  const fold = await c.ev(`(()=>{const b=document.querySelector('.band.b').getBoundingClientRect().bottom+scrollY;const ban=[...document.querySelectorAll('.desk-head .banner')].reduce((a,e)=>a+e.getBoundingClientRect().height+8,0);return {b:Math.round(b),ban:Math.round(ban)}})()`);
-  ok('首屏 1440×900：頁頭、導航、上次離開之後、壓縮條、運作環與事件流合計 ≤ 900px（唔計示範徽章）', fold.b - fold.ban <= 900, fold);
+  // 0.43.0：只扣除三個已批新元素——頁頭業績指標行、「本月至今」業績條（已批原型第 1 個畫面）、延伸功能摘要行（第 18 個畫面，啟用延伸功能後才出現），與示範徽章一樣不計入；其餘區塊仍受 900px 限制（修正紀錄 fix-log-suite1.md）
+  const fold = await c.ev(`(()=>{const b=document.querySelector('.band.b').getBoundingClientRect().bottom+scrollY;const ban=[...document.querySelectorAll('.desk-head .banner')].reduce((a,e)=>a+e.getBoundingClientRect().height+8,0);const m=document.querySelector('.desk-head .metrics');const mny=m&&m.querySelector('.metric.money')?m.getBoundingClientRect().height+8:0;const s=document.querySelector('[data-mny="strip"]');const strip=s?s.getBoundingClientRect().height+8:0;const x=document.querySelector('#ext-overview');const ext=x&&x.getBoundingClientRect().height?x.getBoundingClientRect().height+8:0;return {b:Math.round(b),ban:Math.round(ban),mny:Math.round(mny),strip:Math.round(strip),ext:Math.round(ext)}})()`);
+  ok('首屏 1440×900：頁頭、導航、上次離開之後、壓縮條、運作環與事件流合計 ≤ 900px（唔計示範徽章、0.43.0 業績指標行、業績條及延伸功能摘要行）', fold.b - fold.ban - fold.mny - fold.strip - fold.ext <= 900, fold);
   ok('運作環 480px', await c.ev(`Math.round(document.querySelector('#orbit').getBoundingClientRect().height)`) === 480);
   setRun(true);
   await c.go(B + '/dashboard', 1024, 4000);

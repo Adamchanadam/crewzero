@@ -2,6 +2,7 @@
 // 用法：node cdp-test2.mjs <chrome.exe> <輸出資料夾> <proofread.html file URL> <第二間公司資料 file URL>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const [CHROME, OUT, PAGE, ALT] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(path.dirname(fileURLToPath(new URL(PAGE))), 'names.js'));
 const DL = path.join(OUT, 'downloads');
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(DL, { recursive: true });
 const port = 9361;
 const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',

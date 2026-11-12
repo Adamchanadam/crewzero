@@ -2,6 +2,7 @@
 // 用法：node biztype-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
@@ -33,7 +34,7 @@ const resultAsk = {
   service: '這星期完成了多少次服務？收到多少款項？', goods: '這星期賣出多少件？收到多少款項？', online: '這星期有多少人使用？收到多少款項？', nonprofit: '這星期服務了多少人？取得多少資助或捐款？', other: '這星期有甚麼實際成果？（有數字請寫數字）'
 };
 
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 let chrome = null;
 try {
   const base = start(DATA, PORT);

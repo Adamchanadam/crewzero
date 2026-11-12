@@ -5,6 +5,7 @@
 // 用法：node inputs-v040-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -17,7 +18,7 @@ const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const b64 = x => Buffer.from(x).toString('base64');
 const file = (name, data) => ({ name, data: b64(data) });
 const localDay = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };

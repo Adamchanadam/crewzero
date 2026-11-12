@@ -2,6 +2,7 @@
 // 用法：node cdp-context.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 // 純函數：node cdp-context.mjs --pure <原型資料夾>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -39,7 +40,7 @@ if (PURE) {
 
 const PORT = Number(PORT_ARG), BASE = 'http://127.0.0.1:' + PORT;
 const childEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/(TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|BEARER|OAUTH)/i.test(key)));
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const run = fs.mkdtempSync(path.join(OUT, 'context-')), DATA = path.join(run, 'data');
 fs.mkdirSync(DATA, { recursive: true });
 await certifyDirect(DATA, PROTO, ADAPTER);

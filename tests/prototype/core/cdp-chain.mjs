@@ -2,13 +2,14 @@
 // 用法：node cdp-chain.mjs <chrome> <輸出資料夾> <原型資料夾> <adapter 檔或 default> <port> <ok|missing> <最長等幾多秒>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { seedCompany, certify, usePass } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, PORT, MODE, WAIT] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = [];

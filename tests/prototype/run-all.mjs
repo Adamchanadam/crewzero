@@ -60,6 +60,10 @@ const fileUrl = p => 'file:///' + p.replace(/\\/g, '/');
 // [名稱, 檔案, 參數, 要瀏覽器, 埠段大小（預設 10）]；{out} 每項自己一個資料夾，{port} 每項自己一段埠，{span} 這一段有多少個埠
 // 測試自己另選埠時（例如「目標日期」第九節起）只可在 {port} 起、{span} 個埠之內選，否則會落入下一組的埠段
 const TESTS = [
+  // 硬防線：放最前，先攔「未定義名稱」及「伺服器一起動便出錯」兩類問題（0.43.0 反審第 6 節）
+  ['未定義名稱靜態檢查', 'core/static-undefined-test.mjs', ['{proto}', '{out}']],
+  // 沒有 Chrome 時只跑端點部分（頁面部分在輸出中註明未做），所以不標要瀏覽器
+  ['啟動煙霧測試', 'core/boot-smoke-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}']],
   ['後端', 'core/backend-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['裝置通行證', 'core/pass-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['安裝', 'core/install-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
@@ -164,7 +168,31 @@ const TESTS = [
   ['伺服器定時', 'rhythm/server-tick-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['排程登記', 'rhythm/schedule-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}']],
   ['自動開工設定', 'rhythm/rhythm-edit-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
-  ['每週訪問', 'rhythm/interview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '{chrome}'], true]
+  ['每週訪問', 'rhythm/interview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '{chrome}'], true],
+  ['業績純函數', 'core/money-lib-test.mjs', ['{proto}', '{out}']],
+  ['延伸功能純函數', 'core/ext-lib-test.mjs', ['{proto}', '{out}']],
+  ['業績匯入解讀', 'core/money-import-test.mjs', ['{proto}', '{out}']],
+  ['延伸功能讀寫', 'core/ext-store-test.mjs', ['{proto}', '{out}']],
+  ['業績頁面計算', 'core/money-view-test.mjs', ['{proto}', '{out}']],
+  ['延伸功能頁面計算', 'core/ext-view-test.mjs', ['{proto}']],
+  ['業績合併', 'core/money-merge-test.mjs', ['{proto}', '{out}']],
+  ['收據確認', 'core/receipt-test.mjs', ['{proto}', '{out}']],
+  ['公司紀錄輸出', 'core/records-test.mjs', ['{proto}', '{out}']],
+  ['延伸功能起草', 'core/ext-draft-test.mjs', ['{proto}', '{out}']],
+  ['業績端點', 'core/money-api-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['延伸功能端點', 'core/ext-api-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['業績頁面', 'core/cdp-money.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['收據確認頁面', 'core/cdp-receipt.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['延伸功能頁面', 'core/cdp-ext.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['測試刪除守門', 'core/out-guard-test.mjs', ['{proto}', '{out}']],
+  ['測試刪除靜態檢查', 'core/test-delete-static-test.mjs', ['{proto}', '{out}']],
+  ['匯入原檔清理', 'core/import-original-test.mjs', ['{proto}', '{out}']],
+  ['更新清單核對', 'core/update-manifest-test.mjs', ['{proto}', '{out}']],
+  ['審閱修正甲', 'core/review-fix-a-test.mjs', ['{proto}', '{out}']],
+  ['審閱修正乙', 'core/review-fix-b-test.mjs', ['{proto}', '{out}']],
+  ['最後修正甲', 'core/review-fix-c-test.mjs', ['{proto}', '{out}']],
+  ['最後修正乙', 'core/review-fix-d-test.mjs', ['{proto}', '{out}']],
+  ['最後修正丙（畫面）', 'core/cdp-final-fix.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true]
 ];
 // 結果：最後一行「x / y」「x/y passed」「x/y 通過」；冇總數就睇有冇 FAIL 行
 function verdict(text, code) {
@@ -228,6 +256,8 @@ for (const [i, [name, file, params, browser]] of TESTS.entries()) {
   const t0 = Date.now(), log = path.join(OUT, 'logs', pad(i + 1) + '-' + path.basename(file, '.mjs') + '.txt');
   let { text, code } = await run(file, { list, out });
   fs.writeFileSync(log, text);
+  // 得分 0/0：測試根本沒有執行任何核對，另列「未執行」，不與「不通過」混在一起
+  const notRunOf = r => r.score === '0/0';
   let v = verdict(text, code), first = null;
   // 唔通過就自動重試一次（機器忙時嘅時序問題）；兩次都照記，總結標明「重試後通過」
   if (!v.pass) {
@@ -246,16 +276,17 @@ for (const [i, [name, file, params, browser]] of TESTS.entries()) {
   let cleared = { removed: false, left: [] };
   if (!KEEP_RUNS && fs.existsSync(out)) cleared = quietly(() => safeRemove(out, OUT), cleared);
   const leftBytes = dirSize(out);
-  results.push({ name, file, port, ...v, ...(first ? { retried: true, firstScore: first } : {}), seconds: Math.round((Date.now() - t0) / 1000), evidence, leftBytes, ...(cleared.left.length ? { cleanupLeft: cleared.left } : {}) });
+  const notRun = !v.pass && notRunOf(v);
+  results.push({ name, file, port, ...v, ...(notRun ? { notRun: true } : {}), ...(first ? { retried: true, firstScore: first } : {}), seconds: Math.round((Date.now() - t0) / 1000), evidence, leftBytes, ...(cleared.left.length ? { cleanupLeft: cleared.left } : {}) });
   writeSummary(false);
-  console.log(`${v.pass ? '✓' : '✗'} ${name}：${v.score}${first ? (v.pass ? '（重試後通過；第一次 ' + first + '）' : '（重試都唔通過；第一次 ' + first + '）') : ''}（${Math.round((Date.now() - t0) / 1000)} 秒）`);
+  console.log(`${v.pass ? '✓' : notRun ? '－' : '✗'} ${name}：${notRun ? '未執行（0/0）' : v.score}${first ? (v.pass ? '（重試後通過；第一次 ' + first + '）' : '（重試都唔通過；第一次 ' + first + '）') : ''}（${Math.round((Date.now() - t0) / 1000)} 秒）`);
 }
-const failed = results.filter(r => !r.pass), retriedOk = results.filter(r => r.pass && r.retried);
+const notRunList = results.filter(r => r.notRun), failed = results.filter(r => !r.pass && !r.notRun), retriedOk = results.filter(r => r.pass && r.retried);
 if (!KEEP_RUNS && fs.existsSync(path.join(OUT, 'runs'))) quietly(() => safeRemove(path.join(OUT, 'runs'), OUT));
 quietly(() => updateOutputMarker(OUT, { state: 'finished', heartbeatAt: new Date().toISOString() }));
 const pruned = quietly(() => pruneOutputs(OUTPUT_ROOTS, OUT), { removed: [] });
 const output = { bytes: dirSize(OUT), removedOld: pruned.removed, ...(cleanupErrors.length ? { cleanupErrors } : {}) };
 writeSummary(true, output);
-console.log(`\n${results.length - failed.length}／${results.length} 項通過${retriedOk.length ? '（其中 ' + retriedOk.length + ' 項重試後通過：' + retriedOk.map(r => r.name).join('、') + '）' : ''}${failed.length ? '；唔通過：' + failed.map(r => r.name).join('、') + '（逐項紀錄：' + path.join(OUT, 'logs') + '）' : ''}`);
+console.log(`\n${results.length - failed.length - notRunList.length}／${results.length} 項通過${retriedOk.length ? '（其中 ' + retriedOk.length + ' 項重試後通過：' + retriedOk.map(r => r.name).join('、') + '）' : ''}；唔通過 ${failed.length} 項${failed.length ? '：' + failed.map(r => r.name).join('、') : ''}；未執行 ${notRunList.length} 項${notRunList.length ? '（得分 0/0）：' + notRunList.map(r => r.name).join('、') : ''}${failed.length || notRunList.length ? '（逐項紀錄：' + path.join(OUT, 'logs') + '）' : ''}`);
 console.log('輸出保留 ' + (output.bytes / 1024 / 1024).toFixed(1) + ' MB');
-process.exit(failed.length ? 1 : 0);
+process.exit(failed.length || notRunList.length ? 1 : 0);

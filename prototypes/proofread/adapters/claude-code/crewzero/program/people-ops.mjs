@@ -160,6 +160,21 @@ const fail = (state, error) => ({ ok: false, error, state });
 export function applyActorOp(state, op, v = {}) {
   const s = clone(state || {}); s.company = s.company || {}; const actors = Array.isArray(s.company.actors) ? s.company.actors : (s.company.actors = []);
   const get = id => actors.find(a => a && a.id === id);
+  if (op === 'actorAdd') {
+    const id = String(v.id || v.target || '');
+    if (!id) return fail(state, 'invalid');
+    if (get(id)) return { ok: true, state: s }; // 同一操作重播時不會再建立一位對象。
+    const name = String(v.name == null ? '' : v.name).trim(), kind = v.kind;
+    if (!name || name.length > NAME_MAX || !KINDS.includes(kind)) return fail(state, 'invalid');
+    if (hasContactInfo(name)) return fail(state, 'contactInfo');
+    if (duplicateActor(actors, name) || liveActors(actors).length >= MAX_ACTIVE) return fail(state, 'duplicateName');
+    const at = String(v.at || v.confirmedAt || ''), addedAt = at.slice(0, 10);
+    const actor = { id, name, label: name, kind, aliases: [], status: 'active', addedFrom: 'money',
+      ...(isDay(addedAt) ? { addedAt } : {}), ...(at ? { confirmedAt: at } : {}), fromMilestoneIds: [],
+      ...(kind === 'team' ? { team: { type: 'parttime', state: 'active', owns: [] } } : {}) };
+    actors.push(actor);
+    return { ok: true, state: s };
+  }
   if (op === 'taskOwner') {
     const t = (s.tasks || []).find(x => x && x.id === v.id); if (!t) return fail(state, 'notFound');
     const owner = v.owner;
@@ -228,7 +243,7 @@ export function applyActorOp(state, op, v = {}) {
   }
   return fail(state, 'unknownOp');
 }
-export const ACTOR_OPS = ['actorRename', 'actorKind', 'actorMerge', 'actorStatus', 'actorTeam', 'taskOwner'];
+export const ACTOR_OPS = ['actorAdd', 'actorRename', 'actorKind', 'actorMerge', 'actorStatus', 'actorTeam', 'taskOwner'];
 
 /* ---------- 工作負責人 ---------- */
 // 約定：owner 為 'founder'／'ai'／成員編號。沒有 owner 當 'ai'（舊資料）

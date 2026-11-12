@@ -3,6 +3,7 @@
 // 用法：node logo-test.mjs <chrome> <輸出資料夾> <原型資料夾> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { seedCompany, usePass } from '../lib/testkit.mjs';
@@ -10,7 +11,7 @@ import { openChrome, sleep } from '../lib/cdp-lib.mjs';
 
 const [CHROME, OUT, PROTO, PORT] = process.argv.slice(2);
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data'); seedCompany(DATA, PROTO);
 const BASE = `http://127.0.0.1:${PORT}`, LOGO_DIR = path.join(DATA, 'company');
 

@@ -1,5 +1,6 @@
 // 不啟動伺服器：檢查部分完成、對象識別及會後建議的輸入核對。
 import fs from 'node:fs';
+import { assertTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -13,7 +14,7 @@ const prefillLib = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs'
 const ops = await import(pathToFileURL(path.join(PROTO, 'ledger-ops.mjs')));
 const people = await import(pathToFileURL(path.join(PROTO, 'people-ops.mjs'))); // run.mjs 模組層從這裏取 orderEventItems 等函數，vm 環境要一併放入
 const pageCheck = await import(pathToFileURL(path.join(PROTO, 'company-page-check.mjs')));
-const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-first-batch-'));
+const temp = makeTestTemp('crewzero-first-batch-');
 const previous = process.cwd(), previousData = process.env.SOS_DATA;
 let passed = 0, total = 0;
 function check(name, ok) { total++; if (ok) passed++; console.log((ok ? 'PASS ' : 'FAIL ') + name); }
@@ -280,6 +281,6 @@ try {
   check('一般卡片即使編號碰巧相同亦不當成舊場', linked === '');
 
 } catch (e) { total++; console.log('FAIL 測試執行：' + e.stack); }
-finally { process.chdir(previous); if (previousData == null) delete process.env.SOS_DATA; else process.env.SOS_DATA = previousData; fs.rmSync(temp, { recursive: true, force: true }); }
+finally { process.chdir(previous); if (previousData == null) delete process.env.SOS_DATA; else process.env.SOS_DATA = previousData; assertTestOut(temp); fs.rmSync(temp, { recursive: true, force: true }); }
 console.log(`${passed}/${total} passed`);
 if (passed !== total) process.exitCode = 1;

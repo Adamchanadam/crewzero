@@ -87,7 +87,7 @@ try {
   await shot('fd-phone.png');
   write(path.join(DATA, 'ledger', 'confirmed.json'), { confirmedAt: new Date().toISOString() });
   await chrome.send('Page.reload'); await sleep(800); await go('/#/log');
-  ok('確認後恢復三個指標及九個分頁', await ev(`!document.querySelector('#first-steps') && document.querySelectorAll('.metric').length===3 && document.querySelectorAll('.desk-nav a[data-tab]').length===9`));
+  ok('確認後恢復三個指標及十一個分頁', await ev(`!document.querySelector('#first-steps') && document.querySelectorAll('.metric').length===3 && document.querySelectorAll('.desk-nav a[data-tab]').length===11`));
   // 升級後設定改變：舊認證不再算通過，頁面如實顯示並提供入口
   const certFile = path.join(DATA, 'ledger', 'adapter-cert.json'), certKeep = fs.readFileSync(certFile, 'utf8');
   fs.writeFileSync(certFile, JSON.stringify({ ...JSON.parse(certKeep), argsHash: 'old-config' }));
@@ -104,7 +104,7 @@ try {
   fs.rmSync(path.join(DATA, 'ledger', 'confirmed.json'));
   write(path.join(DATA, 'ledger', 'state.json'), { demo: true, tasks: [], events: [], company: {}, interviews: {} });
   await go('/#/intake');
-  ok('示範資料保留完整介面', await ev(`!document.querySelector('#first-steps') && document.querySelectorAll('.metric').length===3 && document.querySelectorAll('.desk-nav a[data-tab]').length===9`));
+  ok('示範資料保留完整介面', await ev(`!document.querySelector('#first-steps') && document.querySelectorAll('.metric').length===3 && document.querySelectorAll('.desk-nav a[data-tab]').length===11`));
 } catch (error) { ok('驗收中斷', false, String(error.stack || error)); }
 ok('瀏覽器沒有程式錯誤', !!chrome && !chrome.errors.length, chrome?.errors);
 chrome?.close(); server.kill();

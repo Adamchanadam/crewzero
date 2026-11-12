@@ -6,6 +6,7 @@
 // 用法：node roles-chain-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter（不使用）> <起始埠>（用 port 至 port+2）
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -29,7 +30,7 @@ const attempt = async (name, fn) => { const n = parseInt(name, 10); if (n > STOP
 } };
 const waitFor = async (fn, ms = 10000, step = 200) => { const until = Date.now() + ms; while (Date.now() < until) { try { const v = await fn(); if (v) return v; } catch { } await sleep(step); } return null; };
 const jr = f => JSON.parse(fs.readFileSync(f, 'utf8'));
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 
 const TODAY = lib.localIso().slice(0, 10);
 const ymd = (off = 0) => lib.localIso(new Date(Date.now() + off * 86400000)).slice(0, 10);

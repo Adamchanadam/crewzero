@@ -9,6 +9,7 @@
 // 埠：只用起始埠起的兩個（伺服器、Chrome 除錯埠）。
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
@@ -21,7 +22,7 @@ const PORT = Number(PORT0);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p, info: i }); };
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 const loadFixture = f => { const c = { window: {} }; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(PROTO, 'fixtures', f), 'utf8'), c); return c.window.STARTUP_OS_PAGE; };
 const KEY = 'sos-proofread:goal-dates-repro-structured-2026-11-06:1:54829453';

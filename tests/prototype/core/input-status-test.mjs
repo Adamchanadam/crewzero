@@ -4,6 +4,7 @@
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -52,7 +53,7 @@ for (const [name, input, ctx, want] of rows) {
 for (const code of ['working', 'failed', 'awaiting', 'updated', 'noeffect']) { const t = inputStatus({ ...base, status: code === 'awaiting' ? 'awaitingFounder' : code === 'updated' || code === 'noeffect' ? 'processed' : 'unprocessed', effects: code === 'updated' ? [{ change: 'a' }] : [] }, { pack: pack(1), runs: code === 'failed' ? [run('failed')] : [] }); ok('狀態名稱存在：' + code, t.code === code && N.ui[t.tag], t.tag); }
 
 /* ---------- B. 夾具＋資料層 ---------- */
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data'), ADIR = path.join(OUT, 'adapters'), ads = writeAdapters(ADIR);
 const built = await buildV0400(DATA, PROTO, { confirmed: true, adapter: ads.fake });
 const [idB, idD, idA, idF, idC, idE, idG, idH] = built.inputs;

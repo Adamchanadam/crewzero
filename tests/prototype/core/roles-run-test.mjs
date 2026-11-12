@@ -5,6 +5,7 @@
 // 用法：node roles-run-test.mjs <原型資料夾> <輸出資料夾> <port（不使用）>
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -19,7 +20,7 @@ const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const lib = await imp('ask-lib.mjs'), P = await imp('people-ops.mjs'), R = await imp('roles-ops.mjs'), PACE = await imp('pace-lib.mjs'), brain = await imp('brain-lib.mjs');
 const results = []; const ok = (n, p, i) => { results.push({ name: n, pass: !!p, info: i }); console.log((p ? 'PASS ' : 'FAIL ') + n + (p ? '' : '  ' + JSON.stringify(i ?? '').slice(0, 300))); };
 const attempt = async (name, fn) => { try { await fn(); } catch (e) { ok(name + '（執行出錯）', false, String(e && e.stack || e).slice(0, 500)); } };
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 
 // 測試 AI 設定：用共用的 fake adapter 形狀，換成自帶假 AI
 const AD = writeAdapters(path.join(OUT, 'adapters'));

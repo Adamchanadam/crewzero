@@ -1,6 +1,7 @@
 // 會議紀錄共用模組（minutes-lib.mjs）純函數測試：位置、檔名、登記檔合併寫入及欄位擁有權。不開程序、不連網。
 // 用法：node minutes-lib-test.mjs <原型資料夾> <輸出資料夾>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -8,7 +9,7 @@ const [PROTO = path.resolve(path.dirname(new URL(import.meta.url).pathname.repla
 const M = await import(pathToFileURL(path.join(PROTO, 'minutes-lib.mjs')).href);
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
 const threw = fn => { try { fn(); return ''; } catch (e) { return String(e && e.message || e); } };
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 
 // 位置：真實實例在項目資料夾下；其他實例在資料夾內；根目錄不建
 const proj = path.join(OUT, 'proj'), root = path.join(proj, 'crewzero');

@@ -1,6 +1,7 @@
 // 伺服器每日開工授權與登入啟動：全部經 SOS_SCHED_CMD 假程式，唔會登記真排程。
 // 用法：node schedule-test.mjs <chrome-unused> <輸出> <原型> <假AI> <port-unused>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -9,7 +10,7 @@ const [, OUT, PROTO, FAKE] = process.argv.slice(2);
 const results = [];
 const ok = (name, pass, info = '') => results.push({ name, pass: !!pass, info });
 const read = file => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const LOG = path.join(OUT, 'schedule-calls.jsonl');
 const clean = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^SOS_/.test(key)));
 const HERE = path.dirname(fileURLToPath(import.meta.url));

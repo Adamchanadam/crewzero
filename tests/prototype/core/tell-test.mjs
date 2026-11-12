@@ -3,6 +3,7 @@
 // 用法：node tell-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -14,7 +15,7 @@ const { oldInstall } = await import(pathToFileURL(path.join(HERE, '..', 'fixture
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const PROJ = path.join(OUT, 'proj'), INSTALL = path.join(PROJ, 'crewzero'), DATA = path.join(INSTALL, 'data-test');
 fs.mkdirSync(PROJ, { recursive: true });
 fs.cpSync(PROTO, INSTALL, { recursive: true, filter: s => !/[\\/]data$/.test(s) && !/[\\/]node_modules[\\/]/.test(s) });

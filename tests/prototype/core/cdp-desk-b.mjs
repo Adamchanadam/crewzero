@@ -2,6 +2,7 @@
 // 用法：node cdp-desk-b.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { usePass } from '../lib/testkit.mjs';
@@ -12,7 +13,7 @@ const { oldInstall } = await import(new URL('../fixtures/old-install.mjs', impor
 const lib = await import(new URL('file:///' + path.join(PROTO, 'ask-lib.mjs').replace(/\\/g, '/')).href);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true }); // 重試時上一次嘅 Chrome 可能未放手
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true }); // 重試時上一次嘅 Chrome 可能未放手
 // 兩個資料夾：A 未確認公司概覽；B 已確認（舊安裝夾具）
 const DA = path.join(OUT, 'data-a'), DB = path.join(OUT, 'data-b');
 fs.mkdirSync(DA, { recursive: true }); seedCompany(DA, PROTO);

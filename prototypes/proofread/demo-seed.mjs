@@ -4,9 +4,11 @@
 // AI 設定（只限 ask.mjs 開示範時，copyCert）：如果 data/ 已經認證咗 AI 工具，抄一份認證過去，示範入面試兩個新入口時唔使再認證（認證只關 AI 工具嘅啟動設定，同資料夾無關）。
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolveTimes } from './dash-lib.mjs';
 import { loadMatch, adoptionPacks } from './debate-lib.mjs';
+import { validateRecord } from './money-lib.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.join(ROOT, 'fixtures', 'demo-shop');
@@ -22,6 +24,81 @@ const ARTIFACTS = {
   'R-demo-c': { label: '整理收款及寄送查詢清單', summary: '列出三類開放訂閱前要辦妥的事項及查詢方法；建議先申請收款服務，再開速遞帳戶。', file: 'payment-shipping-checklist.md', title: '收款及寄送查詢清單（初稿）',
     text: '# 收款及寄送查詢清單（初稿）\n\n> 以下由 Zero 整理，**要確認**：以服務商答覆為準。\n\n| 類別 | 要問的問題 | 查詢方法 |\n|---|---|---|\n| 網上收款服務 | 審批需要甚麼文件、需時多久？ | 向兩間收款服務商查詢 |\n| 速遞月結帳戶 | 每月最低寄件量及收費？ | 速遞公司網頁 |\n| 商業登記 | 網店名稱是否需要另行登記？ | 商業登記處網頁 |\n' }
 };
+
+// 月月鮮烘的虛構業績紀錄，與 0.43.0 原型的 shopRecords() 相同。
+function demoShopRecords() {
+  let seq = 0;
+  const pad = n => String(n).padStart(2, '0');
+  const record = (dir, cents, date, o = {}) => ({
+    id: 'mn-' + date + '-1000' + pad(seq % 60) + '-' + String(seq++).padStart(3, '0'),
+    dir, amountCents: cents, currency: o.cur || 'HKD', date,
+    counterpartId: o.cid || '', payer: o.payer || '', payerKey: o.payer || '',
+    category: o.cat || (dir === 'in' ? 'sales' : 'otherOut'), what: o.what || '',
+    refund: !!o.refund,
+    evidence: o.ev === false ? [] : (o.src === 'import' ? [] : [{ store: 'money', file: '單據.jpg' }]),
+    source: o.src || 'quick',
+    importBatch: o.src === 'import' ? 'mb-2026-' + date.slice(5, 7) + '-02-090000-000' : '',
+    importKey: o.src === 'import' ? 'map-shop0001|o|#' + (900 + seq) : '',
+    confirmedAt: date + 'T21:00:00+08:00', confirmedBy: 'founder',
+    status: o.void ? 'void' : 'confirmed', voidedAt: o.void ? date + 'T22:00:00+08:00' : '',
+    voidReason: o.void || '', replaces: ''
+  });
+  const subscribers = ['林小姐', '黃先生', '周小姐', '陳先生', '何小姐', '梁先生', '吳小姐', '鄭先生', '馮小姐', '蔡先生', '袁小姐', '潘先生', '許小姐', '盧先生', '蕭小姐', '葉先生', '曾小姐', '羅先生', '韋小姐', '程先生'];
+  const months = ['2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11'];
+  const active = [5, 8, 10, 13, 16, 11];
+  const records = [];
+  months.forEach((month, i) => {
+    const last = month === '2026-11' ? 10 : 28;
+    for (let k = 0; k < active[i]; k++) {
+      const day = Math.min(last, 1 + (k * 3) % last);
+      records.push(record('in', k % 4 === 1 ? 39800 : 23800, month + '-' + pad(day), {
+        payer: subscribers[k], what: k % 4 === 1 ? '雙人訂閱一個月' : '單人訂閱一個月', src: 'import'
+      }));
+    }
+    records.push(record('out', Math.round(active[i] * 9800), month + '-' + pad(Math.min(last, 5)), { cat: 'goods', payer: '工房甲', cid: 'pc-ws1', what: '咖啡豆' }));
+    records.push(record('out', active[i] * 3500, month + '-' + pad(Math.min(last, 8)), { cat: 'shipping', payer: '速遞公司', what: '寄送' }));
+    records.push(record('out', 18800, month + '-' + pad(Math.min(last, 2)), { cat: 'tools', payer: '網店平台', what: '網店月費' }));
+    records.push(record('out', 2900, month + '-' + pad(Math.min(last, 3)), { cat: 'tools', payer: '設計軟件', what: '設計軟件月費', cur: 'USD' }));
+  });
+  records.push(record('in', 168000, '2026-08-21', { payer: '安和設計', cid: 'pc-co1', what: '辦公室咖啡豆（月度）' }));
+  records.push(record('in', 168000, '2026-10-20', { payer: '安和設計', cid: 'pc-co1', what: '辦公室咖啡豆（月度）' }));
+  records.push(record('in', 120000, '2026-09-25', { payer: '曙光診所', cid: 'pc-co2', what: '候診室咖啡豆' }));
+  records.push(record('in', 120000, '2026-11-06', { payer: '曙光診所', cid: 'pc-co2', what: '候診室咖啡豆', ev: false }));
+  records.push(record('in', 2000000, '2026-06-01', { cat: 'funding', payer: '創辦人', what: '創辦人墊支', ev: false }));
+  records.push(record('out', 60000, '2026-07-12', { cat: 'marketing', payer: '週末市集', what: '市集攤位' }));
+  records.push(record('out', 60000, '2026-10-17', { cat: 'marketing', payer: '週末市集', what: '市集攤位' }));
+  records.push(record('out', 45000, '2026-09-30', { cat: 'professional', payer: '會計師事務所', what: '開業登記諮詢' }));
+  records.push(record('in', 23800, '2026-10-26', { payer: '黃先生', what: '退回一個月訂閱費', refund: true }));
+  records.push(record('in', 86000, '2026-11-08', { payer: '', cat: 'sales', what: '市集現金銷售', ev: false }));
+  records.push(record('out', 42000, '2026-11-09', { cat: 'goods', payer: '包材店', what: '試飲裝紙袋', ev: false }));
+  records.push(record('out', 9900, '2026-11-04', { cat: 'tools', payer: '網店平台', what: '重複扣款', void: '重複扣款，已退回' }));
+  return records;
+}
+
+function demoMoney() {
+  const records = demoShopRecords();
+  for (const record of records) {
+    const checked = validateRecord(record);
+    if (!checked.ok) throw new Error('示範業績紀錄格式不符：' + checked.errors.join('；'));
+  }
+  return {
+    schema: 1, mainCurrency: 'HKD', records, importMaps: [], links: {}, mergedBatches: [], undoneBatches: [],
+    balance: { amountCents: 5800000, currency: 'HKD', asOf: '2026-11-01', confirmedAt: '2026-11-02T09:15:00+08:00', by: 'founder' }
+  };
+}
+
+function seedDemoExtension(dir, now) {
+  const source = path.join(ROOT, 'fixtures', 'ext-example', '訂單生產進度');
+  const target = path.join(dir, '延伸功能', '訂單生產進度');
+  fs.cpSync(source, target, { recursive: true });
+  fs.renameSync(path.join(target, 'rows'), path.join(target, 'data'));
+  const decl = fs.readFileSync(path.join(target, 'extension.json'));
+  const hash = crypto.createHash('sha256').update(decl).digest('hex');
+  write(path.join(dir, 'ledger', 'extensions', 'index.json'), {
+    schema: 1,
+    items: [{ folder: '訂單生產進度', state: 'enabled', enabledAt: now.toISOString(), declHash: hash, seenHash: hash }]
+  });
+}
 
 // 實際位置：路徑未存在時，取最近一個已存在的上層的實際位置，再接回其餘部分（連結亦按實際指向計算）
 function realOf(p) {
@@ -76,6 +153,8 @@ export function seedDemo(dir = DEMO_DIR, { reset = false, now = new Date(), copy
   for (const d of ['founder/inbox', 'founder/replies', 'founder/desk', 'company', 'archive', 'ledger/answers', 'asks', 'sandbox', 'work']) fs.mkdirSync(path.join(dir, d), { recursive: true });
   // 帳本：保留相對時間
   fs.copyFileSync(path.join(FIX, 'state.json'), path.join(dir, 'ledger', 'state.json'));
+  write(path.join(dir, 'ledger', 'money.json'), demoMoney());
+  seedDemoExtension(dir, now);
   // 公司概覽同成頁確認（次序照附錄 C 更正句：工房、收款寄送、試訂、續訂、連續兩個月）
   const page = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures', 'example-company-page.json'), 'utf8'));
   page.page.preparedAt = resolveTimes('@-26d', now);

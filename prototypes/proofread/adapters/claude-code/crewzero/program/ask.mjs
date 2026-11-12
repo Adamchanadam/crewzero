@@ -24,12 +24,18 @@ import { officeKind, officeToText } from './office-text.mjs';
 import { isPdf, pdfToText } from './pdf-text.mjs';
 import { detect, samples } from './transcript-lib.mjs';
 import { overviewLines, termLines } from './minutes-lib.mjs';
+import { readMoney } from './money-store.mjs';
+import { liveRecords, monthMetrics, monthsBack } from './money-lib.mjs';
+import { validate as validateExtension } from './ext-lib.mjs';
+import { listExtensions, readExtensionRows } from './ext-store.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const STATUS_ONLY = args.includes('--status');
 const BRIEF = args.includes('--brief');
 const READ_AT = args.indexOf('--read');
+const RECORDS = args.includes('--records');
+const CHECK_EXTENSION_AT = args.indexOf('--check-extension');
 // 模擬實例（設計稿第 8 節）：獨立資料夾、模擬時鐘、預設 4650；唔係生意證據
 const si = args.indexOf('--sim');
 const PORT0 = si >= 0 ? 4650 : BASE_PORT;
@@ -40,7 +46,7 @@ if (si >= 0) {
 }
 // 示範（虛構公司「月月鮮烘」）：用另一個資料夾，唔會郁真實資料；未有就建
 if (args.includes('--demo')) process.env.SOS_DATA = DEMO_DIR;
-const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF && READ_AT < 0 });
+const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF && !RECORDS && CHECK_EXTENSION_AT < 0 && READ_AT < 0 });
 if (STATUS_ONLY) {
   if (!fs.existsSync(DIR.data)) {
     console.log('未能讀取目前安排：尚未找到 CrewZero 資料。');
@@ -109,6 +115,34 @@ if (READ_AT >= 0) {
     companyNames.forEach(line => console.log(line));
   }
   process.exit(0);
+}
+// --records：只讀匯出已確認、未作廢的公司及業績資料，供創辦人自行保存或分析。
+if (RECORDS) {
+  const state = readJSON(path.join(DIR.ledger, 'state.json'), {}) || {}, page = readJSON(path.join(DIR.company, 'page.json'), {}) || {};
+  const money = readMoney(DIR), now = new Date(), endMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const records = liveRecords(money.records);
+  const months = monthsBack(endMonth, 12).map(month => ({ month, ...monthMetrics(records, month, money.mainCurrency, money.links) }));
+  const out = {
+    schema: 1,
+    company: { name: String(page?.company?.name || ''), mainCurrency: money.mainCurrency || '' },
+    people: (((state.company || {}).actors) || []).filter(person => person && !person.mergedInto && person.status !== 'inactive').map(person => ({ id: person.id, name: person.name, kind: person.kind, ...(person.org ? { org: person.org } : {}), ...(person.role ? { role: person.role } : {}) })),
+    milestones: (state.milestones || []).map(item => ({ id: item.id, name: item.short, state: item.state })),
+    goal: ((state.goals || {}).quarter) || null,
+    money: { records, months }
+  };
+  console.log(JSON.stringify(out, null, 2));
+  process.exit(0);
+}
+// --check-extension <資料夾名>：只讀核對宣告及資料列，不建立或修改任何檔案。
+if (CHECK_EXTENSION_AT >= 0) {
+  const folder = String(args[CHECK_EXTENSION_AT + 1] || '');
+  const item = listExtensions(ROOT, DIR).find(entry => entry.folder === folder);
+  if (!item) { console.log(JSON.stringify({ ok: false, error: '找不到延伸功能' })); process.exit(1); }
+  if (!item.decl) { console.log(JSON.stringify({ ok: false, folder, validate: { ok: false, errors: [item.error || '設定不符合格式'] }, tables: [] }, null, 2)); process.exit(1); }
+  const tables = item.decl.tables.map(table => ({ id: table.id, ...readExtensionRows(ROOT, DIR, folder, table.id) }));
+  const checked = validateExtension(item.decl);
+  console.log(JSON.stringify({ ok: checked.ok && tables.every(table => table.ok), folder, validate: checked, tables }, null, 2));
+  process.exit(checked.ok && tables.every(table => table.ok) ? 0 : 1);
 }
 // --brief：只讀，印一段白話背景給 AI 對話討論前閱讀。不印檔案路徑、編號、秘密、通行證；沒有資料就印一句中文並以非零結束。
 if (BRIEF) {

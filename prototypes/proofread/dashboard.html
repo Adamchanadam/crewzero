@@ -11,6 +11,9 @@
 <script src="/desk.js"></script>
 <script src="/celebration.js"></script>
 <script src="/orbit.js"></script>
+<link rel="stylesheet" href="/ext-style.css">
+<script src="/drag.js"></script>
+<script src="/ext-view.js"></script>
 <style>
 /* 營運監察台：顏色、按鈕、標記、對話框沿用 desk.js（兩個產品同一套）；以下只係監察台獨有嘅版面。風格沿用創辦人認可嘅協作監察台。 */
 .muted{color:var(--muted)}
@@ -933,6 +936,12 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
 @media (max-width:1200px){.band.strip{grid-template-columns:minmax(0,1fr) 360px}.band.b{grid-template-columns:minmax(0,2.4fr) minmax(0,1fr)}.index-row{grid-template-columns:repeat(7,minmax(0,1fr))}.module.ex{grid-column:span 1}.bstrip{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){.band.strip,.band.b{grid-template-columns:1fr}.strip-row{flex-wrap:wrap}.strip-row .stages{display:contents}.st-stage{flex:1 1 30%}.orbit{height:400px}.index-row{grid-template-columns:repeat(5,minmax(0,1fr))}}
 @media (max-width:600px){.st-stage{flex:1 1 45%;height:auto;padding:6px 8px}.st-stage .dots{display:none}.strip-cap{white-space:normal;flex-direction:column;gap:2px}.orbit{display:none}.o-list{display:block}.evs{max-height:none}.ev:nth-child(n+7){display:none}.index-row{grid-template-columns:repeat(2,minmax(0,1fr))}.bstrip{grid-template-columns:repeat(2,minmax(0,1fr))}.todo-mini .ph{flex-wrap:wrap}.todo-mini .row{grid-template-columns:18px minmax(0,1fr)}.todo-mini .row .btn{grid-column:1/-1;width:100%;height:44px}.panel{padding:12px 14px}.panel:hover{transform:none}.rh-chip{height:44px;min-width:44px}.rh-time{height:44px}.rh-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}.rh-days .rh-chip{min-width:0;padding:0}}
+.metrics.m6{width:100%;margin-left:0;flex-wrap:wrap;gap:18px}.metrics.m6 .metric{flex:1 1 150px;min-width:112px}.metrics.m6 .metric.money strong{font-size:var(--fs-page)}.metrics.m6 .metric .mny-header-bar{display:block;height:5px;border-radius:9px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden}.metrics.m6 .metric .mny-header-bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--amber),#ffc18e)}
+.mny-page{display:grid;gap:14px}.mny-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}.mny-head h2{margin:0;font-size:var(--fs-page)}.mny-actions,.mny-chips,.mny-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mny-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.mny-kpi,.mny-runway,.mny-box{border:1px solid var(--line);border-radius:10px;padding:12px;background:rgba(255,255,255,.015);min-width:0}.mny-kpi label,.mny-runway label,.mny-box label{display:block;color:var(--muted);font-size:var(--fs-label)}.mny-kpi b,.mny-runway b{display:block;font:500 var(--fs-title)/1.2 var(--mono);margin:4px 0}.mny-kpi small,.mny-runway small{display:block;color:var(--muted);font-size:var(--fs-label)}.mny-runway{display:flex;justify-content:space-between;gap:12px;align-items:center}.mny-runway .stale{color:var(--wait)}.mny-progress{height:7px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}.mny-progress i{display:block;height:100%;background:var(--mint)}.mny-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:14px}.mny-list{display:grid;gap:7px}.mny-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:var(--fs-sub)}.mny-item:first-child{border-top:0}.mny-item .grow{flex:1;min-width:0}.mny-table{width:100%;border-collapse:collapse;font-size:var(--fs-sub)}.mny-table th,.mny-table td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}.mny-table th{color:var(--muted);font-size:var(--fs-label);font-weight:400}.mny-table .r{text-align:right}.mny-form{display:grid;gap:10px}.mny-form label{display:grid;gap:4px;color:var(--muted);font-size:var(--fs-sub)}.mny-form input,.mny-form select,.mny-form textarea{box-sizing:border-box;width:100%;min-height:40px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:inherit}.mny-form textarea{min-height:76px;resize:vertical}.mny-switch{display:flex;gap:6px}.mny-switch button.on,.mny-chip.on{border-color:var(--mint);color:var(--mint)}.mny-chip{border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);padding:6px 10px;font:inherit;font-size:var(--fs-label);cursor:pointer}.mny-dialog{max-width:680px;margin:0 auto}.mny-empty{padding:18px 0;color:var(--muted)}.mny-bars{display:flex;align-items:end;gap:8px;height:150px;padding:10px 0}.mny-bar{flex:1;min-width:28px;display:grid;gap:4px;align-items:end;text-align:center;font-size:var(--fs-min);color:var(--muted)}.mny-bar i{display:block;min-height:3px;border-radius:5px 5px 0 0;background:var(--amber)}.mny-bar em{display:block;min-height:3px;border-radius:5px 5px 0 0;background:var(--blue)}.mny-import-group{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}.mny-file{display:none}.mny-overview{margin-bottom:14px}.mny-overview .mny-row{font-size:var(--fs-sub);color:var(--muted)}
+@media (max-width:1100px){.mny-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:600px){.mny-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.mny-kpi b{font-size:var(--fs-body)}.mny-grid{grid-template-columns:1fr}.mny-runway{align-items:flex-start;flex-direction:column}.mny-actions .btn,.mny-form .btn{min-height:44px;height:auto}.mny-table{display:block;overflow-x:auto}.mny-overview{margin-bottom:12px}}
+@media (max-width:1200px) and (min-width:601px){.metrics.m6 .metric{flex-basis:28%}}
+@media (max-width:600px){.metrics.m6{flex-wrap:wrap;gap:10px 12px}.metrics.m6 .metric{flex:1 1 28%;min-width:0}.metrics.m6 .metric.money strong{font-size:var(--fs-title)}}
 </style>
 </head>
 <body>
@@ -987,12 +996,12 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
 
   /* ---------- 狀態 ---------- */
   // 一個殼、九個分頁三組（決定二十五）：導航由共用殼 desk.js 畫；呢個檔負責監察台嗰七個分頁嘅內容
-  var TABS = ['overview', 'brain', 'path', 'inputs', 'team', 'log', 'system'];
+  var TABS = ['overview', 'brain', 'path', 'money', 'ext', 'inputs', 'team', 'log', 'system'];
   var ITEMS = ['checkup', 'wargame', 'scenario', 'opportunities', 'routes', 'pipeline'];
   var pm = /^\/dashboard\/([a-z]+)(?:\/([a-z]+))?$/.exec(location.pathname) || [];
   var tab = pm[1] || 'overview', sub = tab === 'brain' && ITEMS.indexOf(pm[2]) >= 0 ? pm[2] : null;
   if (TABS.indexOf(tab) < 0) tab = 'overview';
-  var V = { data: null, hash: '', conn: 'live', instance: null, scope: 'all', view: 'map', scheduleView: 'list', calMonth: '', calDay: '', kbMs: 'all', log: { list: 'events', q: '', type: 'all', page: 1 }, paused: REDUCED, focus: null, fbOpen: null, fbVerdict: null, wgSeen: null, rhythmEdit: null, rhythmConfirm: false, rhythmNote: '', rhythmBusy: false };
+  var V = { data: null, hash: '', conn: 'live', instance: null, scope: 'all', view: 'map', scheduleView: 'list', calMonth: '', calDay: '', kbMs: 'all', log: { list: 'events', q: '', type: 'all', page: 1 }, paused: REDUCED, focus: null, fbOpen: null, fbVerdict: null, wgSeen: null, rhythmEdit: null, rhythmConfirm: false, rhythmNote: '', rhythmBusy: false, money: null, moneyReadAt: 0, moneyReading: false, moneyMode: '', moneyFilter: 'all', moneyForm: null, extMount: null };
   try { V.scheduleView = localStorage.getItem('crewzero-schedule-view') === 'calendar' ? 'calendar' : 'list'; } catch (e) { }
   var calQuery = new URLSearchParams(location.search);
   if (calQuery.get('calendar') === '1') { V.scheduleView = 'calendar'; V.calMonth = /^\d{4}-\d{2}$/.test(calQuery.get('month') || '') ? calQuery.get('month') : ''; V.calDay = /^\d{4}-\d{2}-\d{2}$/.test(calQuery.get('day') || '') ? calQuery.get('day') : ''; }
@@ -1663,11 +1672,13 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     if (!V.paused && !REDUCED) [].forEach.call(document.querySelectorAll('#needs .needn'), function (a) { var k = a.getAttribute('data-need'), n = a.querySelector('.num'); if (nb[k] != null && nb[k] !== n.textContent) { n.classList.add('tick'); setTimeout(function () { n.classList.remove('tick'); }, 700); } });
     syncOrbit(scopeOnly);
     var n = syncEvents(); if (n && !scopeOnly) flowPanel($('#evstream'));
-    syncIndex(); syncBrain(); syncSpark();
+    syncIndex(); syncBrain(); syncSpark(); syncExtOverview();
   }
   function pageOverview() {
     V.okey = null; V.ohead = null;
     return h('div', { id: 'ov' }, h('div', { id: 'block-wrap' }),
+      mnyOverviewLine(),
+      h('section', { class: 'panel', id: 'ext-overview' }),
       h('div', { class: 'band strip' }, h('section', { class: 'panel strip-panel', id: 'strip', 'aria-label': D.stripTitle }), h('section', { class: 'panel todo-mini needs', id: 'needs', 'aria-label': D.todo })),
       h('div', { class: 'band b' },
         h('section', { class: 'panel orbit-panel arena-panel', id: 'arena-panel', 'data-level': '0' }, h('div', { class: 'ph', id: 'orbit-head' }), h('div', { class: 'orbit', id: 'orbit', 'aria-label': D.workNet }), h('ul', { class: 'o-list arena-list', id: 'arena-list', 'aria-label': D.workNet })),
@@ -2860,6 +2871,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       h('div', { class: 'nm' }, h('b', null, p.name), pplSub(p) ? h('small', null, pplSub(p)) : null, fresh ? tag(D.ppl_justAdded, 'mint') : null),
       h('div', null, h('div', { class: 'track5' }, STAGE5.map(function (s2, i) { return h('span', { class: i < p.stage ? 'on' : i === p.stage ? 'cur' : '' }, s2); })),
         h('span', { class: 'said' }, contactText(p)), p.gapDays != null && p.gapDays >= (V.data.people.gapDays || 14) ? h('small', { class: 'gap' }, d('ppl_gap', { n: p.gapDays })) : null,
+        p.money && p.money.count ? h('small', { class: 'said' }, mny('mnyPaidTimes', { n: p.money.count, total: mnyFmt(p.money.totalCents, p.money.currency) })) : null,
+        p.money && p.money.needsEvidence ? h('small', { class: 'gap' }, N.ui.mnyEvidenceToAdvance) : null,
         p.rehearsal ? h('small', null, tag(D.rehearsalTag, 'src-ai'), ' ', p.rehearsal.replace(/^演練：/, '').replace(/（唔計證據）$/, '')) : null),
       h('div', { class: 'next' }, h('small', null, D.ppl_next), p.next, p.nextBy === 'ai' ? [' ', tag('Zero 建議 · 未確認', 'src-ai')] : null, p.nextDue ? h('small', null, md(p.nextDue)) : null,
         h('div', { class: 'docs' }, docCount ? h('a', { href: '/#/feedback/' + docs[0].inputId, title: docs.map(function (x) { return x.title; }).join('、') }, d('ppl_docs', { n: docCount })) : h('small', null, D.ppl_noDocs)),
@@ -2974,6 +2987,208 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     });
   }
 
+  /* ---------- 業績及延伸功能 ---------- */
+  function mny(key, vars) { return N.t(key, vars); }
+  function mnyCat(key) { return mny('mnyCat_' + key); }
+  function mnyFmt(cents, currency) {
+    var n = Number(cents || 0), sign = n < 0 ? '-' : '', abs = Math.abs(Math.trunc(n)), whole = Math.floor(abs / 100).toLocaleString('en-US'), decimal = abs % 100;
+    var prefix = { HKD: 'HK$', USD: 'US$', TWD: 'NT$', CNY: 'RMB ' }[currency] || (currency || '---') + ' ';
+    return sign + prefix + whole + (decimal ? '.' + String(decimal).padStart(2, '0') : '');
+  }
+  function mnyCompare(cmp, prev, currency, plain) {
+    if (!cmp || cmp.pct == null) return mny('mnyVsSamePeriodAmounts', { prev: plain ? String(prev || 0) : mnyFmt(prev, currency) });
+    var diff = Number(cmp.diff || 0), shown = plain ? String(Math.abs(diff)) : mnyFmt(Math.abs(diff), currency);
+    return mny('mnyVsSamePeriod', { diff: (diff >= 0 ? '+' : '−') + shown, pct: (cmp.pct >= 0 ? '+' : '') + Math.round(cmp.pct * 100) + '%' });
+  }
+  function mnyMonth(month) { return month ? md(month + '-01').replace(/\s*1 日$/, '') : ''; }
+  function mnyBusy() { return !!V.moneyMode; }
+  function mnyShow(mode) { V.moneyMode = mode || ''; V.moneyDraw = true; render(true); }
+  function mnyPost(body) {
+    if (V.data && V.data.sample) { toast(N.ui.mnyDemo); return Promise.resolve(null); }
+    return postJSON('/api/money', body).then(function (j) {
+      toast((j && j.message) || N.ui.mnySaved); V.moneyReadAt = 0; V.moneyMode = ''; V.moneyImport = null; return load().then(function () { return j; });
+    }).catch(function (e) { toast(why(e)); throw e; });
+  }
+  function mnyRead(force) {
+    if (tab !== 'money' || V.moneyReading || (!force && Date.now() - V.moneyReadAt < 3500)) return;
+    V.moneyReading = true;
+    get('/api/money').then(function (data) {
+      V.money = data && data.ok !== false ? data : null; V.moneyReadAt = Date.now();
+      if (tab === 'money' && !mnyBusy()) { V.moneyDraw = true; render(true); }
+    }).catch(function () { if (!V.money) V.money = null; }).then(function () { V.moneyReading = false; });
+  }
+  function mnyFileData(files) {
+    return Promise.all([].slice.call(files || []).slice(0, 3).map(function (file) {
+      return new Promise(function (resolve, reject) { var reader = new FileReader(); reader.onerror = reject; reader.onload = function () { resolve({ name: file.name, data: String(reader.result || '').split(',').pop() || '' }); }; reader.readAsDataURL(file); });
+    }));
+  }
+  function mnyHeaderMetric(label, value, small, extraClass) { return h('a', { class: 'metric money' + (extraClass ? ' ' + extraClass : ''), href: '/dashboard/money', 'data-mny-header': '1' }, h('label', null, label), h('strong', null, value), h('small', null, small)); }
+  function clearMoneyHeader(metrics) { [].slice.call(metrics.querySelectorAll('[data-mny-header]')).forEach(function (item) { item.remove(); }); }
+  function syncMoneyGoal(metrics, money) {
+    var metric = metrics.querySelector('[data-metric="quarter"]'), note, bar, goal;
+    if (!metric) return;
+    note = metric.querySelector('[data-m="quarterText"]'); bar = metric.querySelector('[data-mny-goal-bar]'); goal = money && money.goal && Number(money.goal.goal) > 0 ? money.goal : null;
+    if (!goal) { if (bar) bar.remove(); if (note && metric._mnyGoalText !== undefined) { note.textContent = metric._mnyGoalText; delete metric._mnyGoalText; } return; }
+    if (note && metric._mnyGoalText === undefined) metric._mnyGoalText = note.textContent;
+    if (note) note.textContent = goal.metric === 'payers' ? N.ui.mnyPayers + ' ' + goal.current + '／' + goal.goal + ' 位' : (goal.metric === 'income' ? N.ui.mnyIncome : N.ui.mnyNet) + ' ' + mnyFmt(goal.current, money.mainCurrency) + '／' + mnyFmt(goal.goal, money.mainCurrency);
+    if (!bar) { bar = h('span', { class: 'mny-header-bar', 'data-mny-goal-bar': '1' }, h('i')); metric.append(bar); }
+    bar.querySelector('i').style.width = Math.round(goal.ratio * 100) + '%';
+  }
+  function syncMoneyHeader() {
+    var metrics = document.querySelector('#desk-head .metrics'), money = V.data && V.data.money;
+    if (!metrics) return;
+    if (!money || ['overview', 'money'].indexOf(tab) < 0) { clearMoneyHeader(metrics); syncMoneyGoal(metrics, null); metrics.classList.remove('m6'); metrics._mnyKey = ''; return; }
+    var key = JSON.stringify([money.has, money.mainCurrency, money.cur, money.cmp, money.goal]);
+    if (metrics._mnyKey === key) return;
+    metrics._mnyKey = key; clearMoneyHeader(metrics); metrics.classList.add('m6'); syncMoneyGoal(metrics, money);
+    var afterGoal = metrics.querySelector('[data-metric="quarter"]'), before = afterGoal ? afterGoal.nextSibling : metrics.firstChild;
+    var insertMetric = function (metric) { metrics.insertBefore(metric, before); };
+    if (!money.has) { insertMetric(mnyHeaderMetric(N.ui.mnyTab, N.ui.mnyNone, N.ui.mnyAdd, 'none')); return; }
+    [
+      mnyHeaderMetric(N.ui.mnyIncome, mnyFmt(money.cur.income, money.mainCurrency), mnyCompare(money.cmp.income, money.prev.income, money.mainCurrency)),
+      mnyHeaderMetric(N.ui.mnyNet, mnyFmt(money.cur.net, money.mainCurrency), mnyCompare(money.cmp.net, money.prev.net, money.mainCurrency)),
+      mnyHeaderMetric(N.ui.mnyPayers, String(money.cur.payers), mnyCompare(money.cmp.payers, money.prev.payers, money.mainCurrency, true))
+    ].forEach(insertMetric);
+  }
+  function mnyRunway(runway) {
+    var currency = runway.currency, button = runway.stale ? N.ui.mnyBalanceUpdate : runway.state === 'unset' ? N.ui.mnyBalanceSet : N.ui.mnyBalanceUpdate;
+    var body;
+    if (runway.state === 'months') {
+      var headline = runway.months >= 36 ? N.ui.mnyRunwayLong : runway.months < 1 ? N.ui.mnyRunwayShort : mny('mnyRunwayMonths', { n: runway.months });
+      body = [h('b', null, headline), h('small', null, mny('mnyRunwayBasis', { balance: mnyFmt(runway.balanceCents, currency), date: md(runway.asOf), k: runway.basisMonths.length, burn: mnyFmt(runway.burnCents, currency) }))];
+    } else if (runway.state === 'balanced') body = [h('b', null, N.ui.mnyRunwayBalanced), h('small', null, mny('mnyRunwayBalancedBasis', { k: runway.basisMonths.length, avg: mnyFmt(runway.avgNetCents, currency), balance: mnyFmt(runway.balanceCents, currency), date: md(runway.asOf) }))];
+    else if (runway.state === 'noHistory') body = [h('b', null, mnyFmt(runway.balanceCents, currency)), h('small', null, N.ui.mnyRunwayNoHistory)];
+    else if (runway.state === 'otherCurrency') body = [h('small', null, mny('mnyRunwayOtherCur', { cur: runway.currency, main: V.money && V.money.mainCurrency || '' }))];
+    else body = [h('small', null, N.ui.mnyRunwayUnsetHint)];
+    if (runway.otherCurrencies && runway.otherCurrencies.length) body.push(h('small', null, mny('mnyRunwayOtherCurNote', { cur: runway.otherCurrencies.join('、') })));
+    if (runway.stale) body.push(h('small', { class: 'stale' }, N.ui.mnyRunwayStale));
+    return h('section', { class: 'mny-runway' }, h('div', null, h('label', null, N.ui.mnyRunway), body), h('button', { type: 'button', id: 'mny-balance-open', class: 'btn small' + (runway.stale ? ' primary' : ''), onclick: function () { mnyShow('balance'); } }, button));
+  }
+  function mnyOverviewLine() {
+    var money = V.data && V.data.money; if (!money) return null;
+    var line = h('section', { class: 'panel mny-overview', id: 'mny-overview', 'data-mny': 'strip' });
+    if (!money.has) line.append(h('div', { class: 'mny-row' }, h('b', null, N.ui.mnyNone), h('span', { class: 'grow' }, N.ui.mnyNoneHint), h('button', { type: 'button', class: 'btn small primary', onclick: function () { location.href = '/dashboard/money'; } }, N.ui.mnyAdd)));
+    else {
+      var runway = money.runway || {}, runwayLine = runway.state === 'months' ? mny('mnyOverviewRunway', { n: runway.months }) : runway.state === 'balanced' ? N.ui.mnyOverviewBalanced : runway.state === 'unset' ? N.ui.mnyBalanceSet : '';
+      line.append(h('div', { class: 'mny-row' }, h('b', null, mnyMonth(money.month)), h('span', null, N.ui.mnyExpense + ' ', h('b', null, mnyFmt(money.cur.expense, money.mainCurrency))), runwayLine ? h('span', null, runwayLine, runway.stale ? '（' + N.ui.mnyOverviewStale + '）' : '') : null, money.waiting ? h('span', null, mny('mnyWaiting', { n: money.waiting })) : null, money.cur.unattributed ? h('span', null, mny('mnyUnattributed', { n: money.cur.unattributed })) : null, h('span', { class: 'grow' }), h('button', { type: 'button', class: 'btn small primary', onclick: function () { location.href = '/dashboard/money'; } }, N.ui.mnyAdd), h('a', { class: 'btn small link', href: '/dashboard/money' }, N.ui.mnyTab + ' →')));
+    }
+    return line;
+  }
+  function syncExtOverview() {
+    var el = $('#ext-overview'), ext = V.data && V.data.ext;
+    if (!el || !window.CZExt || typeof window.CZExt.overviewRows !== 'function') return;
+    var key = JSON.stringify(ext || null); if (el._extKey === key) return; el._extKey = key;
+    try { window.CZExt.overviewRows(el, ext, extContext()); } catch (error) { console.error('延伸功能摘要未能顯示', error); el.replaceChildren(h('p', { class: 'small muted' }, N.t('extBadFormat', { reason: '' }))); }
+  }
+  function extContext() { return { N: N, get: get, post: postJSON, mobile: window.innerWidth <= 700, demo: !!(V.data && V.data.sample), today: V.data && V.data.today || '', host: location.hostname, port: location.port, go: function (next) { location.href = '/dashboard/' + next; } }; }
+  function pageExt() { return h('section', { class: 'panel', id: 'ext-tab' }); }
+  function mountExtTab() {
+    var el = $('#ext-tab'); if (!el || !window.CZExt || typeof window.CZExt.mountTab !== 'function') return;
+    try { V.extMount = window.CZExt.mountTab(el, extContext()) || null; } catch (error) { console.error('延伸功能分頁未能載入', error); V.extMount = null; el.replaceChildren(h('p', { class: 'small muted' }, N.t('extBadFormat', { reason: '' }))); }
+  }
+  function mnyOpenImport(id) {
+    if (!id) { V.moneyImport = null; mnyShow('import'); return; }
+    get('/api/money/import?id=' + encodeURIComponent(id)).then(function (data) { V.moneyImport = data && data.batch || null; V.moneyImportSummary = data && data.summary || null; mnyShow('import'); }).catch(function (e) { toast(why(e)); });
+  }
+  function mnyAddForm() {
+    var money = V.money || V.data.money || {}, actors = (V.data.people && V.data.people.external || []), form = V.moneyForm || { dir: 'in', amount: '', date: V.data.today || '', payer: '', counterpartId: '', category: 'sales', what: '', list: 'name' }; V.moneyForm = form;
+    var amount = h('input', { type: 'text', inputmode: 'decimal', value: form.amount, id: 'mny-amount' });
+    var date = h('input', { type: 'date', value: form.date, id: 'mny-date' });
+    var payer = h('input', { type: 'text', value: form.payer, id: 'mny-payer' });
+    var counterpart = h('select', { id: 'mny-counterpart' }, h('option', { value: '' }, N.ui.mnyNameOnly), actors.map(function (actor) { return h('option', { value: actor.id, selected: actor.id === form.counterpartId ? true : null }, actor.name); }));
+    var category = h('select', { id: 'mny-category' });
+    function fillCategories() { category.replaceChildren.apply(category, (form.dir === 'in' ? ['sales', 'service', 'deposit', 'grant', 'funding', 'otherIn'] : ['goods', 'people', 'rent', 'marketing', 'tools', 'shipping', 'professional', 'otherOut']).map(function (key) { return h('option', { value: key, selected: key === form.category ? true : null }, mnyCat(key)); })); }
+    fillCategories();
+    var list = h('select', { id: 'mny-list' }, h('option', { value: 'name', selected: form.list === 'name' ? true : null }, N.ui.mnyNameOnly), h('option', { value: 'customer', selected: form.list === 'customer' ? true : null }, N.ui.mnyAddAndList + ' · ' + d('ppl_kind_customer')), h('option', { value: 'partner', selected: form.list === 'partner' ? true : null }, N.ui.mnyAddAndList + ' · ' + d('ppl_kind_partner')));
+    var currency = h('input', { id: 'mny-currency', value: money.mainCurrency || form.currency || 'HKD', disabled: !!money.mainCurrency });
+    var what = h('textarea', { id: 'mny-what' }, form.what), files = h('input', { type: 'file', multiple: true, class: 'mny-file', id: 'mny-files' });
+    var more = h('details', { class: 'mny-box' }, h('summary', null, N.ui.mnyMoreFields), h('div', { class: 'mny-form' }, h('label', null, N.ui.mnyFieldCurrency, currency), h('label', null, N.ui.mnyFieldCategory, category), h('label', null, N.ui.mnyFieldWhat, what), h('label', null, N.ui.mnyFieldFiles, files)));
+    var submit = h('button', { type: 'button', id: 'mny-add-submit', class: 'btn primary', onclick: function () {
+      submit.disabled = true; form.amount = amount.value; form.date = date.value; form.payer = payer.value; form.counterpartId = counterpart.value; form.currency = currency.value; form.category = category.value; form.what = what.value; form.list = list.value;
+      mnyFileData(files.files).then(function (encoded) { return mnyPost({ action: 'add', dir: form.dir, amount: form.amount, currency: money.mainCurrency || form.currency || 'HKD', date: form.date, payer: form.payer, counterpartId: form.counterpartId || '', category: form.category, what: form.what, files: encoded, ...(form.list === 'name' ? {} : { addToList: { kind: form.list } }) }); }).catch(function () { submit.disabled = false; });
+    } }, N.ui.mnyRecord);
+    var switches = ['in', 'out'].map(function (key) { return h('button', { type: 'button', class: 'btn' + (form.dir === key ? ' primary' : ''), onclick: function () { form.dir = key; form.category = key === 'in' ? 'sales' : 'goods'; fillCategories(); switches.forEach(function (button) { button.classList.toggle('primary', button === this); }, this); } }, key === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut); });
+    return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyAdd), h('button', { type: 'button', class: 'btn small', onclick: function () { V.moneyForm = null; mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('div', { class: 'mny-form' }, h('div', { class: 'mny-switch' }, switches), h('label', null, N.ui.mnyFieldAmount, amount), h('label', null, N.ui.mnyFieldDate, date), h('label', null, N.ui['mnyFieldPayer'] || N.ui.mnyFieldWho, payer), h('label', null, N.ui['mnyFieldListedCounterpart'] || N.ui.mnyFieldWho, counterpart), h('label', null, N.ui.mnyAddToList, list), more, h('div', { class: 'mny-actions' }, submit, h('button', { type: 'button', class: 'btn', onclick: function () { V.moneyForm = null; mnyShow(''); } }, N.ui.mnyBalanceCancel))));
+  }
+  function mnyGoalForm() {
+    var target = V.data.goals && V.data.goals.quarter && V.data.goals.quarter.target || {}, metric = target.metric || 'payers';
+    var pick = h('select', { id: 'mny-goal-metric' }, ['payers', 'income', 'net'].map(function (key) { return h('option', { value: key, selected: metric === key ? true : null }, N.ui['mnyGoalMetric' + key.slice(0, 1).toUpperCase() + key.slice(1)]); }));
+    var value = h('input', { type: 'text', inputmode: 'decimal', value: metric === 'payers' ? target.count || '' : target.amountCents ? (target.amountCents / 100).toFixed(2) : '' });
+    var submit = h('button', { type: 'button', class: 'btn primary', onclick: function () { submit.disabled = true; mnyPost({ action: 'goal', metric: pick.value, ...(pick.value === 'payers' ? { count: Number(value.value) } : { amount: value.value }) }).catch(function () { submit.disabled = false; }); } }, N.ui.mnyGoalSet);
+    return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyGoalSet), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('div', { class: 'mny-form' }, h('label', null, N.ui['mnyGoalMetric'] || N.ui.mnyGoalProgress, pick), h('label', null, N.ui['mnyGoalValue'] || N.ui.mnyFieldAmount, value), h('div', { class: 'mny-actions' }, submit, h('button', { type: 'button', class: 'btn', onclick: function () { mnyShow(''); } }, N.ui.mnyBalanceCancel))));
+  }
+  function mnyBalanceForm() {
+    var money = V.money || V.data.money || {}, runway = money.runway || {}, amount = h('input', { type: 'text', id: 'mny-balance-amount', inputmode: 'decimal', value: runway.balanceCents ? (runway.balanceCents / 100).toFixed(2) : '' }), asOf = h('input', { type: 'date', id: 'mny-balance-date', value: runway.asOf || V.data.today || '' }), hasMainCurrency = !!money.mainCurrency;
+    var currency = hasMainCurrency ? h('input', { value: money.mainCurrency, disabled: true }) : h('select', { id: 'mny-balance-currency' }, ['HKD', 'USD', 'TWD', 'CNY'].map(function (code) { return h('option', { value: code, selected: code === (runway.currency || 'HKD') ? true : null }, code); }));
+    var submit = h('button', { type: 'button', id: 'mny-balance-submit', class: 'btn primary', onclick: function () { submit.disabled = true; mnyPost({ action: 'balance', amount: amount.value, asOf: asOf.value, currency: currency.value }).catch(function () { submit.disabled = false; }); } }, N.ui.mnyBalanceConfirm);
+    return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, runway.balanceCents ? N.ui.mnyBalanceUpdate : N.ui.mnyBalanceSet), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('p', { class: 'small muted' }, N.ui.mnyBalanceHint), h('div', { class: 'mny-form' }, h('label', null, N.ui.mnyBalanceAmount, amount), h('label', null, N.ui.mnyBalanceAsOf, asOf), h('label', null, N.ui.mnyFieldCurrency, currency), h('div', { class: 'mny-actions' }, submit, h('button', { type: 'button', class: 'btn', onclick: function () { mnyShow(''); } }, N.ui.mnyBalanceCancel))));
+  }
+  function mnyImportForm() {
+    var batch = V.moneyImport;
+    if (!batch) {
+      var file = h('input', { type: 'file', accept: '.csv,text/csv', class: 'mny-file', id: 'mny-import-file' });
+      var open = h('button', { type: 'button', class: 'btn primary', onclick: function () { file.click(); } }, N.ui.mnyImport);
+      var kind = h('select', { id: 'mny-import-kind' }, [['shop', '網店訂單'], ['payment', '收款平台'], ['bank', '銀行月結單'], ['other', '其他']].map(function (item) { return h('option', { value: item[0] }, item[1]); }));
+      file.addEventListener('change', function () { var selected = file.files && file.files[0]; if (!selected) return; mnyFileData([selected]).then(function (files) { return mnyPost({ action: 'importUpload', name: files[0].name, data: files[0].data, kind: kind.value }); }).then(function (result) { if (result && result.id) mnyOpenImport(result.id); }).catch(function () { }); });
+      return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyImport), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('div', { class: 'mny-form' }, h('label', null, N.ui.mnyImportKind, kind)), h('div', { class: 'mny-actions' }, file, open));
+    }
+    var summary = V.moneyImportSummary || batch.summary || {}, fields = batch.map && batch.map.fields || {}, headers = batch.headers || batch.map && batch.map.headers || [], choices = function (value) { return h('select', null, h('option', { value: '' }, '—'), headers.map(function (head) { return h('option', { value: head, selected: value === head ? true : null }, head); })); };
+    var mapRows = [['date', N.ui.mnyFieldDate], ['amount', N.ui.mnyFieldAmount], ['currency', N.ui.mnyFieldCurrency], ['payer', N.ui.mnyFieldWho], ['category', N.ui.mnyFieldCategory], ['what', N.ui.mnyFieldWhat], ['orderNo', N.ui.mnyFieldOrderNo], ['status', N.ui.mnyFieldStatus], ['fee', N.ui.mnyFieldFee]].map(function (item) { var select = choices(fields[item[0]] || ''); select.setAttribute('data-mny-map', item[0]); return h('label', null, item[1], select); });
+    var next = h('button', { type: 'button', class: 'btn primary', onclick: function () { var nextFields = Object.assign({}, fields); [].forEach.call(document.querySelectorAll('[data-mny-map]'), function (select) { nextFields[select.getAttribute('data-mny-map')] = select.value; }); next.disabled = true; mnyPost({ action: 'importMap', id: batch.id, kind: batch.kind || 'other', map: { ...(batch.map || {}), fields: nextFields } }).then(function () { mnyOpenImport(batch.id); }).catch(function () { next.disabled = false; }); } }, N.ui.mnyImportMap);
+    var confirm = h('button', { type: 'button', id: 'mny-import-confirm', class: 'btn primary', disabled: Number(summary.total || 0) ? null : true, onclick: function () { confirm.disabled = true; mnyPost({ action: 'importConfirm', id: batch.id }).catch(function () { confirm.disabled = false; }); } }, N.ui.mnyImportAll);
+    var cancel = h('button', { type: 'button', class: 'btn', onclick: function () { mnyPost({ action: 'importCancel', id: batch.id }).catch(function () { }); } }, N.ui.mnyImportCancel);
+    var rows = Array.isArray(batch.rows) ? batch.rows : [];
+    var preview = h('div', { class: 'mny-import-group' }, rows.slice(0, 10).map(function (row) {
+      var selectable = row.status === 'ok' || row.status === 'dup', label = selectable ? row.draft && row.draft.dir === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut : row.status === 'seen' ? mny('mnyImportSeen', { n: row.seenCount || 1 }) : N.ui.mnyImportSkip;
+      var include = h('input', { type: 'checkbox', checked: row.include ? true : null, disabled: selectable ? null : true, onchange: function () { row.include = include.checked; var lines = Object.fromEntries(rows.filter(function (item) { return item.status === 'ok' || item.status === 'dup'; }).map(function (item) { return [String(item.line), !!item.include]; })); mnyPost({ action: 'importInclude', id: batch.id, lines: lines }).then(function () { mnyOpenImport(batch.id); }).catch(function () { include.checked = !row.include; }); } });
+      return h('div', { class: 'mny-item' }, include, h('span', null, label), h('span', { class: 'grow' }, row.draft && row.draft.payer || ''), h('span', null, row.draft ? mnyFmt(row.draft.amountCents, row.draft.currency) : ''));
+    }));
+    var summaryText = Number(summary.total || 0) === 0 && Number(summary.seen || 0) > 0 && !Number(summary.incomplete || 0) && !Number(summary.cancelled || 0) ? N.ui.mnyImportNoNew : mny('mnyImportSummary', { n: summary.total || 0, incount: summary.inN || 0, insum: mnyFmt(summary.inSum, V.money && V.money.mainCurrency || 'HKD'), outcount: summary.outN || 0, outsum: mnyFmt(summary.outSum, V.money && V.money.mainCurrency || 'HKD'), from: md(summary.from), to: md(summary.to) });
+    return h('section', { class: 'panel mny-dialog' },
+      h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyImport), h('button', { type: 'button', class: 'btn small', onclick: function () { V.moneyImport = null; mnyShow(''); } }, N.ui.mnyBalanceCancel)),
+      h('p', { class: 'small muted' }, summaryText),
+      h('div', { class: 'mny-form' }, mapRows), h('div', { class: 'mny-actions' }, next, confirm, cancel), preview);
+  }
+  function mnyGoalBox(money) {
+    if (!money.goal) return h('section', { class: 'mny-box' }, h('div', { class: 'mny-head' }, h('label', null, N.ui.mnyGoalProgress), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyShow('goal'); } }, N.ui.mnyGoalSet)));
+    var goal = money.goal, value = goal.metric === 'payers' ? String(goal.current) + '／' + String(goal.goal) : mnyFmt(goal.current, money.mainCurrency) + '／' + mnyFmt(goal.goal, money.mainCurrency);
+    return h('section', { class: 'mny-box' }, h('div', { class: 'mny-head' }, h('label', null, N.ui.mnyGoalProgress), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyShow('goal'); } }, N.ui.mnyGoalSet)), h('b', null, value), h('div', { class: 'mny-progress' }, h('i', { style: 'width:' + Math.round(goal.ratio * 100) + '%' })));
+  }
+  function mnyRecords(money) {
+    var records = (money.records || []).filter(function (record) { if (V.moneyFilter === 'in') return record.dir === 'in' && (!money.month || String(record.date || '').slice(0, 7) === money.month); if (V.moneyFilter === 'out') return record.dir === 'out' && (!money.month || String(record.date || '').slice(0, 7) === money.month); if (V.moneyFilter === 'evidence') return !record.importBatch && (!record.evidence || !record.evidence.length); if (V.moneyFilter === 'void') return record.status === 'void'; return true; });
+    var filters = [['all', N.ui.mnyRecords], ['in', N.ui.mnyIncome], ['out', N.ui.mnyExpense], ['evidence', N.ui.mnyNoEvidence], ['void', N.ui.mnyVoided]].map(function (item) { return h('button', { type: 'button', class: 'mny-chip' + (V.moneyFilter === item[0] ? ' on' : ''), onclick: function () { V.moneyFilter = item[0]; V.moneyDraw = true; render(true); } }, item[1]); });
+    return h('section', { class: 'panel' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyRecords), h('div', { class: 'mny-chips' }, filters)), h('table', { class: 'mny-table' }, h('thead', null, h('tr', null, h('th', null, N.ui.mnyFieldDate), h('th', null, N.ui.mnyDirIn), h('th', null, N.ui.mnyFieldWho), h('th', null, N.ui.mnyFieldWhat), h('th', { class: 'r' }, N.ui.mnyFieldAmount), h('th', null))), h('tbody', null, records.map(function (record) {
+      var voidIt;
+      if (V.moneyVoid && V.moneyVoid.id === record.id) {
+        var reason = h('input', { type: 'text', id: 'mny-void-reason-' + record.id, value: V.moneyVoid.reason || '', oninput: function () { V.moneyVoid.reason = reason.value; } });
+        var confirm = h('button', { type: 'button', class: 'btn small primary', onclick: function () { if (!reason.value.trim()) { toast(N.ui.mnyVoidReasonRequired); reason.focus(); return; } confirm.disabled = true; mnyPost({ action: 'void', id: record.id, reason: reason.value }).then(function () { V.moneyVoid = null; }).catch(function () { confirm.disabled = false; }); } }, N.ui.mnyBalanceConfirm);
+        voidIt = h('div', { class: 'mny-actions' }, h('label', null, N.ui.mnyVoidReason, reason), confirm, h('button', { type: 'button', class: 'btn small', onclick: function () { V.moneyVoid = null; V.moneyDraw = true; render(true); } }, N.ui.mnyBalanceCancel));
+      } else voidIt = h('button', { type: 'button', id: 'mny-void-' + record.id, class: 'btn small', onclick: function () { V.moneyVoid = { id: record.id, reason: '' }; V.moneyDraw = true; render(true); } }, N.ui.mnyVoid);
+      var evidence = h('input', { type: 'file', multiple: true, class: 'mny-file' }), attach = h('button', { type: 'button', class: 'btn small', onclick: function () { evidence.click(); } }, N.ui.mnyAddEvidence);
+      evidence.addEventListener('change', function () { mnyFileData(evidence.files).then(function (files) { return mnyPost({ action: 'evidence', id: record.id, files: files }); }).catch(function () { }); });
+      return h('tr', { class: record.status === 'void' ? 'muted' : '' }, h('td', null, md(record.date)), h('td', null, record.dir === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut), h('td', null, record.payer || N.ui.mnyNone), h('td', null, record.what), h('td', { class: 'r' }, mnyFmt(record.amountCents, record.currency)), h('td', null, record.status === 'void' ? N.ui.mnyVoided : [evidence, attach, voidIt]));
+    }))));
+  }
+  function pageMoney() {
+    mnyRead(false);
+    if (V.moneyMode === 'add') return mnyAddForm();
+    if (V.moneyMode === 'goal') return mnyGoalForm();
+    if (V.moneyMode === 'balance') return mnyBalanceForm();
+    if (V.moneyMode === 'import') return mnyImportForm();
+    var money = V.money;
+    if (!money) return h('section', { class: 'panel mny-empty' }, N.ui.mnyTab);
+    if (!money.has) return h('section', { class: 'panel mny-page' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyTab), h('div', { class: 'mny-actions' }, h('button', { type: 'button', id: 'mny-add-open', class: 'btn primary', onclick: function () { mnyShow('add'); } }, N.ui.mnyAdd), h('button', { type: 'button', id: 'mny-import-open', class: 'btn', onclick: function () { mnyShow('import'); } }, N.ui.mnyImport), h('a', { href: '/#quick-input', id: 'mny-give-receipt', class: 'btn' }, N.ui.mnyGiveReceipt))), h('div', { class: 'mny-empty' }, h('b', null, N.ui.mnyNone), h('p', null, N.ui.mnyNoneHint)), mnyRunway(money.runway));
+    var kpis = [['mnyIncome', money.cur.income, money.cmp.income, money.prev.income, false], ['mnyExpense', money.cur.expense, money.cmp.expense, money.prev.expense, false], ['mnyNet', money.cur.net, money.cmp.net, money.prev.net, false], ['mnyPayers', money.cur.payers, money.cmp.payers, money.prev.payers, true], ['mnyRepeat', money.cur.repeat, null, null, true], ['mnyAvg', money.cur.avg, null, null, false]].map(function (item) { return h('div', { class: 'mny-kpi' }, h('label', null, N.ui[item[0]]), h('b', null, item[1] == null ? '—' : item[4] ? String(item[1]) : mnyFmt(item[1], money.mainCurrency)), h('small', null, item[2] ? mnyCompare(item[2], item[3], money.mainCurrency, item[4]) : '')); });
+    var max = Math.max.apply(null, money.trend.map(function (item) { return Math.max(item.income, item.expense, 1); }).concat([1]));
+    var trend = h('section', { class: 'panel' }, h('h2', null, N.ui.mnyTrend), h('div', { class: 'mny-bars' }, money.trend.map(function (item) { return h('div', { class: 'mny-bar' }, h('i', { style: 'height:' + Math.max(3, Math.round(item.income / max * 110)) + 'px' }), h('em', { style: 'height:' + Math.max(3, Math.round(item.expense / max * 110)) + 'px' }), h('span', null, mnyMonth(item.month))); })));
+    var customers = h('section', { class: 'panel' }, h('h2', null, N.ui.mnyCustomers), h('div', { class: 'mny-list' }, money.top.map(function (payer) { return h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, payer.name), h('span', null, mnyFmt(payer.totalCents, money.mainCurrency)), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyPost({ action: 'link', payerKey: payer.payerKey, newName: payer.name, kind: 'customer' }); } }, N.ui.mnyAddToList)); })));
+    var categories = h('section', { class: 'panel' }, h('h2', null, N.ui.mnyCategories), h('div', { class: 'mny-list' }, money.categories.map(function (item) { return h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, mnyCat(item.category)), h('span', null, mnyFmt(item.totalCents, money.mainCurrency))); })));
+    var plan = h('section', { class: 'panel' }, h('h2', null, N.ui.mnyPlanVsActual), h('div', { class: 'mny-list' }, money.plan && money.plan.income ? h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, N.ui.mnyIncome + '：' + money.plan.income), h('span', null, mnyFmt(money.cur.income, money.mainCurrency))) : null, money.plan && money.plan.expense ? h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, N.ui.mnyExpense + '：' + money.plan.expense), h('span', null, mnyFmt(money.cur.expense, money.mainCurrency))) : null));
+    var todo = h('section', { class: 'panel' }, h('h2', null, N.ui.mnyTodo), h('div', { class: 'mny-list' }, money.waiting ? h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, mny('mnyWaiting', { n: money.waiting }))) : null, money.noEvidence ? h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, mny('mnyNoEvidence', { n: money.noEvidence }))) : null));
+    var batches = (money.batches || []).filter(function (batch) { return batch.state === 'confirmed' && Number(batch.summary && batch.summary.total || 0) > 0; });
+    return h('div', { class: 'mny-page' }, h('section', { class: 'panel' }, h('div', { class: 'mny-head' }, h('div', null, h('h2', null, N.ui.mnyTab), h('p', { class: 'small muted' }, mnyMonth(money.month))), h('div', { class: 'mny-actions' }, h('button', { type: 'button', id: 'mny-add-open', class: 'btn primary', onclick: function () { mnyShow('add'); } }, N.ui.mnyAdd), h('button', { type: 'button', id: 'mny-import-open', class: 'btn', onclick: function () { mnyShow('import'); } }, N.ui.mnyImport), h('a', { href: '/#quick-input', id: 'mny-give-receipt', class: 'btn' }, N.ui.mnyGiveReceipt))), h('div', { class: 'mny-kpis' }, kpis), mnyRunway(money.runway), money.cur.unattributed ? h('p', { class: 'small muted' }, mny('mnyUnattributed', { n: money.cur.unattributed })) : null, Object.keys(money.cur.other || {}).map(function (currency) { var other = money.cur.other[currency]; return h('p', { class: 'small muted' }, mny('mnyOtherCur', { cur: currency, income: mnyFmt(other.income, currency), expense: mnyFmt(other.expense, currency) })); })), mnyGoalBox(money), trend, h('div', { class: 'mny-grid' }, customers, categories), plan, todo, batches.length ? h('section', { class: 'panel' }, h('h2', null, N.ui.mnyImport), batches.map(function (batch) { var label = batch.file && batch.file.name ? batch.file.name : N.ui.mnyImport; var at = batch.confirmedAt || batch.createdAt || '', when = at ? md(at) + (hm(at) ? ' ' + hm(at) : '') : ''; return h('div', { class: 'mny-item' }, h('span', { class: 'grow' }, label + (when ? ' · ' + when : '')), h('button', { type: 'button', id: 'mny-import-undo-' + batch.id, class: 'btn small', onclick: function () { mnyPost({ action: 'importUndo', id: batch.id }); } }, N.ui.mnyImportUndo)); })) : null, mnyRecords(money));
+  }
+
   /* ---------- 畫 ---------- */
   function render(force) {
     var x = V.data;
@@ -2992,8 +3207,13 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       V.built = true;
       shell.replaceChildren(DESK.shell({ tab: tab, sub: sub ? D['brain_' + sub] : null, company: x.company, metrics: x.metrics, pending: (x.todo || []).length, work: x.workStatus, sample: x.sample, sim: x.sim ? { clock: md(x.sim.clock) + ' ' + hm(x.sim.clock) } : null, since: tab === 'overview' ? sinceLine() : null }), h('main', { id: 'app' }));
     }
+    syncMoneyHeader();
     var sb = $('#sim-badge'); if (sb && x.sim) { var st = N.ui.simBadge + ' · ' + N.ui.simClock + ' ' + md(x.sim.clock) + ' ' + hm(x.sim.clock); if (sb.textContent !== st) sb.textContent = st; }
     if (V.stale && !$('.stalebar')) $('#desk-head').append(h('div', { class: 'track off stalebar' }, h('b', null, '伺服器已重新啟動：'), '請重新載入。 ', h('button', { type: 'button', class: 'btn primary', onclick: function () { location.reload(); } }, '重新載入')));
+    if (tab === 'money' && mnyBusy() && !V.moneyDraw) return;
+    if (tab === 'ext' && V.extMount && typeof V.extMount.busy === 'function' && V.extMount.busy()) return;
+    if (tab === 'ext' && V.extMount && $('#ext-tab') && typeof V.extMount.refresh === 'function') { V.extMount.refresh(); return; }
+    V.moneyDraw = false;
     // 公司現況：就地更新（唔重畫成頁）
     if (tab === 'overview') { if (!$('#ov')) { $('#app').replaceChildren(pageOverview()); } refreshOverview(force === 'scope'); return; }
     var y = window.scrollY;
@@ -3002,7 +3222,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var rhEl = $('#rh-time'), rhFocus = rhEl && document.activeElement === rhEl, rhStart = rhFocus ? rhEl.selectionStart : null;
     var openKeep = [].slice.call(document.querySelectorAll('details[data-keep]')).filter(function (e) { return e.open; }).map(function (e) { return e.getAttribute('data-keep'); });
     var main = $('#app'); main.replaceChildren();
-    add(main, { path: pagePath, brain: pageBrain, inputs: pageInputs, team: pageTeam, log: pageLog, system: pageSystem }[tab]());
+    add(main, { path: pagePath, brain: pageBrain, inputs: pageInputs, team: pageTeam, log: pageLog, system: pageSystem, money: pageMoney, ext: pageExt }[tab]());
+    if (tab === 'ext') mountExtTab(); else V.extMount = null;
     if (tab === 'brain') flashNew();
     // 深連 #card=<卡>：第一次畫好先捲去嗰張卡
     if (sub && V.goCard && !V.goCardDone) { V.goCardDone = true; setTimeout(function () { goCard(sub, V.goCard); }, 60); }

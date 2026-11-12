@@ -2,6 +2,7 @@
 // 用法：node main-line-page-test.mjs <chrome> <輸出> <原型> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { openChrome, sleep } from '../lib/cdp-lib.mjs';
 import { certify, seedCompany, usePass } from '../lib/testkit.mjs';
@@ -10,7 +11,7 @@ const [CHROME, OUT, PROTO, ADAPTER, PORT_ARG] = process.argv.slice(2);
 const PORT = Number(PORT_ARG), BASE = 'http://127.0.0.1:' + PORT, DATA = path.join(OUT, 'data');
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const waitFor = async (fn, ms = 10000) => { const until = Date.now() + ms; while (Date.now() < until) { try { const v = await fn(); if (v) return v; } catch { } await sleep(200); } return null; };
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const server = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1' }, stdio: 'ignore', windowsHide: true });
 const pack = (id, title, extra = {}) => ({ format: 'startup-os.ask/0.1', id, title, askedBy: 'AI', askedAt: new Date().toISOString(), questions: [{ id: 'q1', ask: title + '？', kind: 'choice', options: [{ text: '甲', rec: true }, { text: '乙' }], value: '甲', priority: 1, why: '測試理由' }], ...extra });
 let c;

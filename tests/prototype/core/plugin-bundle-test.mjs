@@ -4,6 +4,7 @@
 // (3) 複製出去嘅插件資料夾，掃描本機絕對路徑同開發資料夾名，結果要係零。假 AI、零費用。
 // 用法：node plugin-bundle-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -14,7 +15,7 @@ let unpair = () => { };
 const [PROTO, OUT, PORT, FAKE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const rules = await import(pathToFileURL(path.join(PROTO, 'bundle-rules.mjs')).href);
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const sha = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
@@ -39,9 +40,10 @@ try {
   const licOk = fs.existsSync(path.join(PLUGIN_ROOT, 'LICENSE')) && sha(path.join(PLUGIN_ROOT, 'LICENSE')) === LIC_SHA, noticeOk = fs.existsSync(path.join(PLUGIN_ROOT, 'NOTICE')) && fs.readFileSync(path.join(PLUGIN_ROOT, 'NOTICE'), 'utf8').includes('由 Adam Chan 製作');
   ok('插件根目錄有 Apache-2.0 LICENSE（雜湊等於官方原文）及 NOTICE（含作者聲明），plugin.json 的 license 是 Apache-2.0', licOk && noticeOk && pj.license === 'Apache-2.0', { license: licOk, notice: noticeOk, pluginJson: pj.license });
   ok('插件資訊檔同市集檔版本一致', pj.version === mk.version && mk.plugins.every(p => p.version === pj.version), { plugin: pj.version, market: mk.version });
-  const SKILL_NAMES = ['install', 'dashboard', 'discuss', 'update'];
+  // 0.43.0 加入「加延伸功能」（extend）：規劃書 DESIGN-results-and-extensions-2026-11-10 第 316 行「插件加一個入口『加延伸功能』」
+  const SKILL_NAMES = ['install', 'dashboard', 'discuss', 'update', 'extend'];
   const skills = SKILL_NAMES.map(s => path.join(PLUGIN_SRC, 'crewzero', 'skills', s, 'SKILL.md'));
-  ok('四個指令齊（install、dashboard、discuss、update），舊的 desk 指令已移除', skills.every(f => fs.existsSync(f)) && !fs.existsSync(path.join(PLUGIN_SRC, 'crewzero', 'skills', 'desk')) && fs.readdirSync(path.join(PLUGIN_SRC, 'crewzero', 'skills')).sort().join() === [...SKILL_NAMES].sort().join(), skills.filter(f => !fs.existsSync(f)));
+  ok('五個指令齊（install、dashboard、discuss、update、extend），舊的 desk 指令已移除', skills.every(f => fs.existsSync(f)) && !fs.existsSync(path.join(PLUGIN_SRC, 'crewzero', 'skills', 'desk')) && fs.readdirSync(path.join(PLUGIN_SRC, 'crewzero', 'skills')).sort().join() === [...SKILL_NAMES].sort().join(), skills.filter(f => !fs.existsSync(f)));
   const sk = Object.fromEntries(SKILL_NAMES.map((s, i) => [s, fs.existsSync(skills[i]) ? fs.readFileSync(skills[i], 'utf8') : '']));
   ok('install 技能：安裝前講明會登記觀察資料夾，最後一步用 --dashboard --observe 登記項目根（唔使創辦人貼路徑）', /觀察資料夾/.test(sk.install) && /--dashboard --observe "<項目根>"/.test(sk.install));
   ok('update 技能：寫入前先檢查再停等創辦人答「好」、用 --apply 執行、有「還原上一個版本」、唔手改 data/', /--apply/.test(sk.update) && /還原上一個版本/.test(sk.update) && /--rollback/.test(sk.update) && /好嗎/.test(sk.update) && sk.update.includes('<安裝>/data/') && fs.existsSync(path.join(PLUGIN_SRC, 'crewzero', 'program', 'update.mjs')));

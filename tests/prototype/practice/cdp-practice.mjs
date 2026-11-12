@@ -2,6 +2,7 @@
 // 用法：node cdp-practice.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter|none> <port> [截圖資料夾]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
@@ -9,7 +10,7 @@ const [CHROME, OUT, PROTO, ADAPTER, PORT, SHOTS] = process.argv.slice(2);
 const REAL = ADAPTER === 'none';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const DATA = path.join(OUT, 'data');
 const { seedDemo } = await import(pathToFileURL(path.join(PROTO, 'demo-seed.mjs')).href);

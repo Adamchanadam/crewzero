@@ -78,4 +78,26 @@ export function parseManifest(text) {
   for (const l of String(text || '').trim().split(/\r?\n/)) { const m = l.match(/^([a-f0-9]{64})  (.+)$/); if (m) out[m[2]] = m[1]; }
   return out;
 }
+
+// 安裝資料夾內的清單只可指向程式檔；更新或還原前先拒絕可能跨出資料夾或碰到公司資料的項目。
+export function manifestEntryProblem(rel, root) {
+  if (typeof rel !== 'string' || !rel) return '項目為空白';
+  const parts = rel.split('/');
+  if (parts.some(part => part === '..')) return '項目含有不允許的路徑片段';
+  if (rel.includes('\\')) return '項目含有不允許的反斜線';
+  if (rel.includes(':') || path.isAbsolute(rel) || path.posix.isAbsolute(rel) || path.win32.isAbsolute(rel)) return '項目不是相對路徑';
+  const normalized = parts.filter(part => part !== '.');
+  if (!normalized.length || normalized.some(part => !part)) return '項目為空白';
+  const first = normalized[0].toLocaleLowerCase('en-US');
+  if (first === 'data' || first === 'demo-data') return '項目指向受保護資料夾';
+  const base = path.resolve(root), resolved = path.resolve(base, ...normalized), relative = path.relative(base, resolved);
+  if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return '項目不在安裝資料夾之內';
+  let current = base;
+  for (const part of normalized) {
+    current = path.join(current, part);
+    try { if (fs.lstatSync(current).isSymbolicLink()) return '項目經連結指向安裝資料夾外'; }
+    catch { break; }
+  }
+  return '';
+}
 export const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');

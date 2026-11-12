@@ -1,6 +1,7 @@
 // 補做測試：伺服器未開時已有回覆檔 → 起伺服器 → 應自動補做到完成
 // 用法：node catchup.mjs <原型資料夾> <adapter 檔> <port>
 import fs from 'node:fs';
+import { assertTestOut, freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { seedCompany, certifyDirect, usePass } from '../lib/testkit.mjs';
@@ -9,7 +10,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fnv = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return ('0000000' + x.toString(16)).slice(-8); };
 const data = path.join(process.env.SOS_TEST_OUT || (await import('node:os')).tmpdir(), 'catchup-data');
 process.env.SOS_DATA = data;
-fs.rmSync(data, { recursive: true, force: true });
+freshTestOut(data);
 seedCompany(data, PROTO);
 await certifyDirect(data, PROTO, ADAPTER);
 const page = JSON.parse(fs.readFileSync(path.join(data, 'company', 'page.json'), 'utf8'));
@@ -48,5 +49,5 @@ res.push(['交資料開機補做：收件匣清空', fs.readdirSync(path.join(da
 console.log(log.trim());
 for (const [n, p] of res) console.log((p ? 'PASS ' : 'FAIL ') + n);
 await sleep(500);
-fs.rmSync(data, { recursive: true, force: true });
+assertTestOut(data); fs.rmSync(data, { recursive: true, force: true });
 process.exit(0);

@@ -2,6 +2,7 @@
 // 再裝一次被拒而且全部檔案雜湊不變；以安裝咗嘅 ask.mjs --desk 開頁，資料寫入新安裝嘅 data/（唔郁原型 data/）。假 AI、零費用。
 // 用法：node install-test.mjs <原型資料夾> <輸出資料夾> <port> <假 adapter>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -11,7 +12,7 @@ let unpair = () => { };
 const [PROTO, OUT, PORT, FAKE] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const rules = await import(pathToFileURL(path.join(PROTO, 'bundle-rules.mjs')).href);
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const sha = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');

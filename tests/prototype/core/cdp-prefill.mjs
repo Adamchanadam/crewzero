@@ -2,6 +2,7 @@
 // 用法：node cdp-prefill.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,7 @@ const [CHROME, OUT, PROTO, ADAPTER, PORT] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true }); // 重試時上一次嘅 Chrome 可能未放手
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true }); // 重試時上一次嘅 Chrome 可能未放手
 const DATA = path.join(OUT, 'data');
 const BASE = `http://127.0.0.1:${PORT}/`;
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER }, stdio: ['ignore', 'pipe', 'pipe'] });

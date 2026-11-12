@@ -2,11 +2,12 @@
 // 用法：node race.mjs <原型資料夾> <輸出資料夾> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 const [PROTO, OUT, PORT] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 const DATA = path.join(OUT, 'data');
 const env = { ...process.env, SOS_DATA: DATA };
 function start() {

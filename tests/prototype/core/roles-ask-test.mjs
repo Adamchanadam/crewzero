@@ -4,6 +4,7 @@
 // 截圖：環境變數 ROLES_ASK_SHOTS 指定資料夾時，另存 1440 及 390 寬的 R1、R3、R6 全頁截圖。
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,7 +17,7 @@ const SHOTS = process.env.ROLES_ASK_SHOTS || '';
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const waitFor = async (fn, ms = 10000) => { const until = Date.now() + ms; while (Date.now() < until) { try { const v = await fn(); if (v) return v; } catch { } await sleep(200); } return null; };
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const server = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', String(PORT)], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_ADAPTER: ADAPTER, SOS_NO_OPEN: '1', CZ_NO_WELCOME: '1' }, stdio: 'ignore', windowsHide: true });
 
 /* ---------- 手造題目包（形狀照實作約定第 3 節） ---------- */

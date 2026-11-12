@@ -1,6 +1,7 @@
 // 名稱機制檢查：名稱表全部書面語；頁面唔自己寫名稱表已有嘅名；標題口語字檢查（命令入口退回、AI 流程照放並記警告）
 // 用法：node names-check.mjs <原型資料夾> <輸出資料夾>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -37,7 +38,7 @@ for (const f of ['ask.html', 'proofread.html', 'welcome.html', 'run.mjs', 'serve
 ok('舊名轉新名', N.fix('公司一頁 · 已記低你嘅答案') === '公司概覽 · 已記錄答案', N.fix('公司一頁 · 已記低你嘅答案'));
 
 // 標題檢查
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 process.env.SOS_DATA = path.join(OUT, 'data');
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const DIR = lib.dataDirs(PROTO);

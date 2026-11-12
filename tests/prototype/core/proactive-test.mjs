@@ -2,6 +2,7 @@
 // 用法：node proactive-test.mjs <chrome> <輸出> <原型> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -14,7 +15,7 @@ const PORT = Number(b || a);
 if (!CHROME || !OUT || !PROTO || !ADAPTER || !Number.isInteger(PORT)) throw new Error('缺少 Chrome、輸出、原型、假 adapter 或連接埠');
 
 const DATA = path.join(OUT, 'data');
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 process.env.SOS_DATA = DATA;
 

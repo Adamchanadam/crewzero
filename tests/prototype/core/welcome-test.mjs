@@ -1,6 +1,7 @@
 // 入門頁：首次導向、配對保護、示範入口同畫面互動。
 // 用法：node welcome-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -42,7 +43,7 @@ async function portsBefore() {
   return map;
 }
 
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const TEST_PROTO = path.join(OUT, 'prototype'); fs.cpSync(PROTO, TEST_PROTO, { recursive: true });
 const { rootId } = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const DEMO_ROOT = rootId(path.join(path.resolve(TEST_PROTO), 'demo-data'));

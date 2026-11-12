@@ -3,13 +3,14 @@
 // 用法：node cdp-ask.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <示範 14 條問題包>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { seedCompany, certify, usePass } from '../lib/testkit.mjs';
 
 const [CHROME, OUT, PROTO, ADAPTER, DEMO] = process.argv.slice(2);
 const N = createRequire(import.meta.url)(path.join(PROTO, 'names.js'));
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = [];
@@ -41,7 +42,8 @@ fs.writeFileSync(bad, JSON.stringify({ format: 'startup-os.ask/0.1', title: '壞
 const cli2 = spawnSync(process.execPath, [path.join(PROTO, 'ask.mjs'), bad, '--no-open'], { cwd: PROTO, encoding: 'utf8', env: { ...process.env, SOS_DATA: DATA, SOS_PORT: process.env.CDP_ASK_PORT || '5850' } });
 ok('命令入口：唔合規格就退回並講原因', cli2.status === 1 && /不符合規格/.test(cli2.stdout) && /缺少 Zero 建議答案/.test(cli2.stdout), cli2.stdout.trim());
 
-const cport = 9371;
+// Chrome 除錯埠：預設不變；可用 CDP_ASK_CHROME_PORT 指定，或在指定了 CDP_ASK_PORT 時用其下一個埠
+const cport = Number(process.env.CDP_ASK_CHROME_PORT) || (process.env.CDP_ASK_PORT ? Number(process.env.CDP_ASK_PORT) + 1 : 9371);
 const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--remote-debugging-port=${cport}`, `--user-data-dir=${path.join(OUT, 'profile')}`, 'about:blank'], { stdio: 'ignore' });
 async function json(u) { for (let i = 0; i < 60; i++) { try { const r = await fetch(u); if (r.ok) return await r.json(); } catch { } await sleep(250); } throw new Error('devtools'); }
 const pg = (await json(`http://127.0.0.1:${cport}/json/list`)).find(t => t.type === 'page');
@@ -94,8 +96,19 @@ try {
   ok('揀選項即算答咗', (await text('.prog-n')) === '本批已答 1／3');
   await click('#go-main');
   ok('預覽：即刻生效嘅單獨列', (await text('.modal')).includes('確認後即時生效'));
+  // C1（0.43.0 反審）：預覽及答案檔不可出現「[object Object]」，並要含所選答案文字
+  const firstQid = firstIds.split(',')[0].replace(/^q-/, '');
+  const firstPack = fs.readdirSync(path.join(DATA, 'asks')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')); } catch { return null; } }).find(p => p && (p.questions || []).some(q => String(q.id) === firstQid));
+  const firstQ = firstPack && firstPack.questions.find(q => String(q.id) === firstQid);
+  const pickedText = firstQ ? String(typeof firstQ.options[1] === 'object' ? firstQ.options[1].text : firstQ.options[1]) : '';
+  const modalText = await text('.modal');
+  ok('C1 預覽不含「[object Object]」並含所選答案', !!pickedText && !modalText.includes('[object Object]') && modalText.includes(pickedText), { pickedText, modal: modalText.slice(0, 600) });
+  await ev(`(()=>{window.__submitted=[];const f=window.fetch;window.fetch=function(u,o){if(/\\/api\\/submit/.test(String(u))&&o&&o.body)window.__submitted.push(String(o.body));return f.apply(this,arguments);};return true;})()`);
   await shot('h3-modal.png');
   await click('#do-confirm');
+  const sentBodies = await ev('window.__submitted||[]');
+  const sentText = sentBodies.map(b => { try { return JSON.parse(b).text || ''; } catch { return ''; } }).join('\n');
+  ok('C1 送出的答案文字不含「[object Object]」並含所選答案', !!sentText && !sentText.includes('[object Object]') && sentText.includes(pickedText), { pickedText, sent: sentText.slice(0, 800) });
   ok('送出後即見進度', (await waitFor(async () => (await text('#track')).includes('已收到答案'), 5000)));
   ok('AI 跟住做完', await waitFor(async () => (await text('#track')).includes('✓ 完成'), 30000), await text('#track'));
   ok('見到 AI 做咗乜', (await ev(`document.querySelectorAll('#track details.art').length`)) >= 1);

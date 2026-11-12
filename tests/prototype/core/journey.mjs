@@ -2,6 +2,7 @@
 // 用法：node journey.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port> <main|errors>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { usePass } from '../lib/testkit.mjs';
@@ -11,7 +12,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 真 AI：JOURNEY_HOST=claude、JOURNEY_SLOW=8（等候時間乘大）、adapter 參數寫 none
 const HOST = process.env.JOURNEY_HOST || 'test', SLOW = Number(process.env.JOURNEY_SLOW || 1), REAL = HOST !== 'test';
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data');
 const BASE = `http://127.0.0.1:${PORT}/`;
 const srv = spawn(process.execPath, [path.join(PROTO, 'server.mjs'), '--port', PORT], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, ...(ADAPTER !== 'none' ? { SOS_ADAPTER: ADAPTER } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });

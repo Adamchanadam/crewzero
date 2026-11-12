@@ -1,6 +1,7 @@
 // 月曆與改日期：隔離資料、假 AI；同時覆蓋資料歸納、Founder 操作及 Chrome 流程。
 // 用法：node calendar-test.mjs <Chrome> <輸出> <原型> <假AI> <埠>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -24,7 +25,7 @@ let server = null, chrome = null;
 
 try {
   // 重試用同一個輸出資料夾：夾具要由頭開始
-  fs.rmSync(DATA, { recursive: true, force: true });
+  freshTestOut(DATA);
   process.env.SOS_DATA = DATA;
   const lib = await import(pathToFileURL(path.join(PROTO, 'dash-lib.mjs')).href);
   const feb28 = new Date(2028, 1, 1), feb29 = new Date(2028, 1, 29);

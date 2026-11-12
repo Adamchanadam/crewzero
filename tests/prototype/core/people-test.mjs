@@ -2,10 +2,12 @@
 // 不開伺服器、不開 AI、不連外；pipelineOf 只讀暫存資料夾。
 // 用法：node people-test.mjs <原型資料夾> <輸出資料夾>
 import fs from 'node:fs';
+import { assertTestOut, freshTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 const [PROTO, OUTDIR] = process.argv.slice(2);
+freshTestOut(OUTDIR);
 const P = await import(pathToFileURL(path.join(PROTO, 'people-ops.mjs')).href);
 const brain = await import(pathToFileURL(path.join(PROTO, 'brain-lib.mjs')).href);
 const results = [];
@@ -192,7 +194,7 @@ ok('hasContactInfo：電郵、八位以上數字（含空格短橫）視為聯�
   ok('合併後里程碑決策者欄含輸家舊名：算到贏家，輸家不重算', (() => { const base2 = brain.deriveActors(null, [{ id: 'm1', actorName: '陳總' }, { id: 'm2', actorName: '陳經理' }], []); const merged = P.applyActorOp({ company: { actors: base2 } }, 'actorMerge', { from: base2[0].id, into: base2[1].id }).state.company.actors; const re = brain.deriveActors(null, [{ id: 'm1', actorName: '陳總' }, { id: 'm2', actorName: '陳經理' }], merged); return re.find(a => a.id === base2[1].id).fromMilestoneIds.sort().join() === 'm1,m2' && re.find(a => a.id === base2[0].id).fromMilestoneIds.length === 0; })());
 
   // pipelineOf
-  const tmp = fs.mkdtempSync(path.join(OUTDIR && fs.existsSync(OUTDIR) ? OUTDIR : os.tmpdir(), 'people-'));
+  const tmp = makeTestTemp('people-');
   const DIR = { data: tmp, sandbox: path.join(tmp, 'sandbox'), ledger: path.join(tmp, 'ledger'), company: path.join(tmp, 'company') }; fs.mkdirSync(DIR.ledger, { recursive: true }); fs.mkdirSync(DIR.company, { recursive: true });
   const st = base(); st.milestones = [{ id: 'm1', short: '農場簽約', actorName: '農場主丙', state: 'done', pathStatus: 'confirmed', doneCounterpartIds: ['pr-2'], order: 1 }, { id: 'm5', short: '餐廳試單', actorName: '陳經理', state: 'active', pathStatus: 'confirmed', order: 2 }];
   st.company.assumptions = [{ id: 'H1', text: '陳總願意試單', grade: 'said' }];
@@ -218,7 +220,7 @@ ok('hasContactInfo：電郵、八位以上數字（含空格短橫）視為聯�
     ok('十四日題以對象推進的接觸及日數為準：沒有紀錄的有格位對象不問；暫緩期內不問', (() => { const due = brain.contactDueOf(DIR, { today: TODAY, state: { ...st2, company: { ...st2.company, assumptions: [] } }, limit: 3 }); const un = brain.contactDueOf(DIR, { today: TODAY, state: st2, limit: 3 }); const sn = brain.contactDueOf(DIR, { today: TODAY, state: { ...st2, company: { ...st2.company, assumptions: [] }, interviews: { contactSnooze: { 'pr-3': '2026-11-21' } } }, limit: 3 }); return due.some(p => p.id === 'pr-3') && !un.some(p => p.id === 'pr-3') && !sn.some(p => p.id === 'pr-3'); })());
   }
   ok('S12 沒有 company.actors（舊格式）：照舊即時推出，不報錯', (() => { const s2 = { milestones: st.milestones, company: { assumptions: [] }, inputs: [], events: [], tasks: [] }; return brain.pipelineOf(DIR, { today: TODAY, state: s2 }).prospects.map(p => p.name).sort().join() === '農場主丙,陳經理'; })());
-  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { }
+  try { assertTestOut(tmp); fs.rmSync(tmp, { recursive: true, force: true }); } catch { }
 }
 
 // ---- 創辦人操作疊加（dash-lib.applyFounderOps）：本機即時，不經 Zero ----

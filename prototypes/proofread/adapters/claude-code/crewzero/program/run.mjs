@@ -29,6 +29,10 @@ import * as ROLES from './roles-ops.mjs';
 import { buildBrief, buildProofreadBrief, checkBrief, briefFailStreak } from './brief-lib.mjs';
 import { readMinutes, patchMinutes, minutesFilePath, fileNameFor, cleanTitle, sha256, sourceDir, overviewLines, termLines } from './minutes-lib.mjs';
 import { parseTurns, applyMap, unmappedIn, marks, markLegend } from './transcript-lib.mjs';
+import { moneyPaths, readMoney, readImportBatch } from './money-store.mjs';
+import { CATEGORIES, cashRunway, formatMoney, mergeMoney, monthMetrics, newMoneyId, payerKeyOf, toCents, validateRecord } from './money-lib.mjs';
+import { checkRevision, validate as validateExtension } from './ext-lib.mjs';
+import { extOverview, patchDraft, readDraft } from './ext-store.mjs';
 const U = NAMES.ui;
 const parseReply = parseFounderReply;
 
@@ -177,6 +181,16 @@ function founderEventTitle(op, st = null) {
   if (op.op === 'rolePause') return NAMES.t('founderRolePaused', { t: clip(ROLES.titleOf(ROLES.cardById(st || {}, op.target)), 20) });
   if (op.op === 'roleResume') return NAMES.t('founderRoleResumed', { t: clip(ROLES.titleOf(ROLES.cardById(st || {}, op.target)), 20) });
   if (op.op === 'rolesSync') return NAMES.t('founderRolesRequested');
+  if (op.op === 'moneyAdd') return U.mnyRecord;
+  if (op.op === 'moneyImport') return U.mnyImport;
+  if (op.op === 'moneyUndoImport') return U.mnyImportUndo;
+  if (op.op === 'moneyVoid') return U.mnyVoided;
+  if (op.op === 'moneyEvidence') return U.mnyAddEvidence;
+  if (op.op === 'moneyLink') return U.mnyListed;
+  if (op.op === 'moneyBalance') return U.mnyBalanceUpdate;
+  if (op.op === 'setGoalNumber') return U.mnyGoalSet;
+  if (op.op === 'actorAdd') return NAMES.t('peopleAdded', { n: clip(v.name, 20), k: NAMES.dash['ppl_kind_' + v.kind] || '' });
+  if (op.op === 'extEnable') return U.extEnabled;
   return U.founderUnsnoozed;
 }
 const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
@@ -199,11 +213,67 @@ function applyShellOps(state, ops, original = state) {
   }
   return s;
 }
-function mergeFounderOpsBatch(batch) {
+function replaceMoneyFile(file, value) {
+  let last = null;
+  for (let i = 0; i <= 40; i++) {
+    const tmp = `${file}.${process.pid}-${randomUUID()}.tmp`;
+    try {
+      if (fs.existsSync(file)) fs.copyFileSync(file, file + '.prev');
+      fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+      fs.renameSync(tmp, file);
+      return true;
+    } catch (error) {
+      last = error;
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error?.code) || i >= 40) break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    } finally {
+      try { if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true }); } catch { }
+    }
+  }
+  log(`業績帳本未能換入：${last && last.code || 'unknown'}`);
+  return false;
+}
+function mergeMoneyOps(pending) {
+  const types = new Set(['moneyAdd', 'moneyImport', 'moneyUndoImport', 'moneyVoid', 'moneyEvidence', 'moneyLink', 'moneyBalance']);
+  const ops = pending.filter(op => types.has(op.op));
+  if (!ops.length) return { ok: true };
+  const paths = moneyPaths(DIR);
+  let base = {};
+  if (fs.existsSync(paths.money)) {
+    try { base = JSON.parse(fs.readFileSync(paths.money, 'utf8')); }
+    catch { log('業績帳本讀不到，整批創辦人操作延後'); return { ok: false }; }
+    const read = readMoney(DIR);
+    if (read.problems.some(problem => problem.file === 'money.json')) { log('業績帳本格式不符，整批創辦人操作延後'); return { ok: false }; }
+  }
+  const wanted = new Set(ops.filter(op => op.op === 'moneyAdd').map(op => String(op.target || '')));
+  const records = [];
+  for (const id of wanted) {
+    const file = path.join(paths.pending, id + '.json');
+    const record = readJSON(file, null);
+    if (record) records.push(record);
+  }
+  const batches = [];
+  for (const op of ops) if (op.op === 'moneyImport' || op.op === 'moneyUndoImport') {
+    const loaded = readImportBatch(DIR, op.target);
+    if (loaded.batch) batches.push(loaded.batch);
+  }
+  const next = mergeMoney({ base, pending: records, batches, ops });
+  const maps = new Map((next.importMaps || []).map(map => [map.id, map]));
+  for (const batch of batches) if (batch && batch.mapId && batch.map && typeof batch.map === 'object') maps.set(batch.mapId, { id: batch.mapId, ...batch.map, savedAt: batch.confirmedAt || localIso() });
+  next.importMaps = [...maps.values()];
+  const changed = JSON.stringify({ ...base, schema: 1 }) !== JSON.stringify({ schema: 1, mainCurrency: next.mainCurrency, records: next.records, importMaps: next.importMaps, links: next.links, mergedBatches: next.mergedBatches, undoneBatches: next.undoneBatches, balance: next.balance });
+  const saved = { schema: 1, mainCurrency: next.mainCurrency, records: next.records, importMaps: next.importMaps, links: next.links, mergedBatches: next.mergedBatches, undoneBatches: next.undoneBatches, balance: next.balance };
+  if (changed && !replaceMoneyFile(paths.money, saved)) return { ok: false };
+  const ids = new Set(saved.records.map(record => record.id));
+  for (const id of wanted) if (ids.has(id)) { try { fs.rmSync(path.join(paths.pending, id + '.json'), { force: true }); } catch { } }
+  return { ok: true };
+}
+export function mergeFounderOpsBatch(batch) {
   const ops = readJSON(batch, []), before = loadState();
   if (before.demo === true || !Array.isArray(ops)) return false;
   const done = Array.isArray(before.founderOpsDone) ? before.founderOpsDone.filter(id => typeof id === 'string') : [];
   const doneSet = new Set(done), pending = ops.filter(op => op && typeof op === 'object' && (!op.id || !doneSet.has(op.id)));
+  if (!mergeMoneyOps(pending).ok) return false;
   const next = applyShellOps(applyFounderOps(before, pending), pending, before);
   next.events = Array.isArray(next.events) ? next.events : [];
   for (const op of pending) {
@@ -981,6 +1051,61 @@ function minutesDraftFailed(run, rec, reason) {
   step(run, 'ai', U.reqMinDraft, 'failed', why);
   return finish(run, 'failed', why);
 }
+function extDraftFailed(run, id, reason) {
+  if (reason) log(`延伸功能草稿核對失敗：${clip(String(reason), 300)}`);
+  const why = NAMES.ui.extDraftCheckFailed || 'Zero 交回的設定未能通過檢查，請再試或改用範本。';
+  patchDraft(DIR, id, { state: 'failed', error: why }, 'shell', { expect: 'drafting', now: localIso() });
+  step(run, 'ai', U.reqExtDraft, 'failed', why);
+  return finish(run, 'failed', why);
+}
+function extDraftOutput(sb, draft) {
+  let text = '', decl = null, sample = [];
+  try { text = fs.readFileSync(path.join(sb, 'out', 'extension.json'), 'utf8'); decl = JSON.parse(text); } catch { return { ok: false, reason: '找不到有效的延伸功能設定' }; }
+  const checked = validateExtension(decl, { fromZero: true });
+  if (!checked.ok) return { ok: false, reason: NAMES.ui.extDraftCheckFailed || 'Zero 交回的設定未能通過檢查，請再試或改用範本。', internalReason: checked.errors.join('；') };
+  if (draft.from && String(draft.from).startsWith('folder:') && draft.base) {
+    const revision = checkRevision(draft.base, decl);
+    if (!revision.ok) return { ok: false, reason: NAMES.ui.extDraftCheckFailed || 'Zero 交回的設定未能通過檢查，請再試或改用範本。', internalReason: revision.errors.join('；') };
+  }
+  try { sample = JSON.parse(fs.readFileSync(path.join(sb, 'out', 'sample.json'), 'utf8')); } catch { return { ok: false, reason: '找不到示範資料' }; }
+  if (!Array.isArray(sample) || sample.length > 5) return { ok: false, reason: '示範資料必須是最多五行的清單' };
+  return { ok: true, decl, sample };
+}
+async function handleExtDraft(run, raw) {
+  const id = String((parseReply(raw).machine || {}).draftId || '');
+  let draft = readDraft(DIR, id), label = U.reqExtDraft;
+  if (!draft) { step(run, 'ai', label, 'failed', '找不到延伸功能草稿'); return finish(run, 'failed', '找不到延伸功能草稿'); }
+  if (draft.state !== 'drafting') { step(run, 'ai', label, 'done', '草稿已不在起草中'); return finish(run, 'done'); }
+  // 錯誤欄由外殼擁有；真正開始起草才清走上一輪的失敗訊息。
+  const started = patchDraft(DIR, id, { error: '' }, 'shell', { expect: 'drafting', now: localIso() });
+  if (!started.ok) return extDraftFailed(run, id, '草稿已被其他操作更新');
+  draft = started.draft;
+  const sb = newSandbox(run), templates = path.join(ROOT, 'fixtures', 'ext-templates');
+  fs.copyFileSync(path.join(ROOT, 'ai-extension.md'), path.join(sb, 'task.md'));
+  fs.writeFileSync(path.join(sb, 'request.md'), ['# 原先要求', '', String(draft.ask || '沿用現有草稿'), ...(draft.revise ? ['', '# 這次修改', '', String(draft.revise)] : []), '', '# 現有草稿', '', JSON.stringify(draft.base || {}, null, 2)].join('\n') + '\n');
+  if (fs.existsSync(templates)) fs.cpSync(templates, path.join(sb, 'templates'), { recursive: true });
+  writeJSON(path.join(sb, 'job.json'), { type: 'ext-draft', draftId: id });
+  step(run, 'ai', label, 'running', '');
+  let result = await runAI(sb);
+  if (result.meta) run.aiCost = { usd: (run.aiCost?.usd || 0) + (result.meta.total_cost_usd || 0), ms: (run.aiCost?.ms || 0) + (result.meta.duration_ms || 0) };
+  if (!result.ok && result.waiting) { step(run, 'ai', label, 'waiting', result.reason); return finish(run, 'waiting', result.reason); }
+  let checked = result.ok ? extDraftOutput(sb, draft) : { ok: false, reason: result.reason || 'Zero 未能交回草稿' };
+  if (!checked.ok && result.ok) {
+    const repairReason = checked.internalReason || checked.reason;
+    writeJSON(path.join(sb, 'job.json'), { type: 'ext-draft-repair', draftId: id, errors: [repairReason] });
+    fs.writeFileSync(path.join(sb, 'task.md'), fs.readFileSync(path.join(ROOT, 'ai-extension.md'), 'utf8') + '\n\n## 修正一次\n\n請只修正以下問題，覆寫 `out/extension.json` 和 `out/sample.json`：\n\n' + repairReason + '\n');
+    result = await runAI(sb);
+    if (result.meta) run.aiCost = { usd: (run.aiCost?.usd || 0) + (result.meta.total_cost_usd || 0), ms: (run.aiCost?.ms || 0) + (result.meta.duration_ms || 0) };
+    if (!result.ok && result.waiting) { step(run, 'ai', label, 'waiting', result.reason); return finish(run, 'waiting', result.reason); }
+    checked = result.ok ? extDraftOutput(sb, draft) : { ok: false, reason: result.reason || 'Zero 未能完成修正' };
+  }
+  if (!checked.ok) return extDraftFailed(run, id, checked.internalReason || checked.reason);
+  const saved = patchDraft(DIR, id, { state: 'ready', base: checked.decl, baseRev: Number(draft.baseRev || 0) + 1, sample: checked.sample, error: '' }, 'shell', { expect: 'drafting', now: localIso() });
+  if (!saved.ok) return extDraftFailed(run, id, '草稿已被其他操作更新');
+  run.result = { summary: label, artifacts: [], founderNext: [] };
+  step(run, 'ai', label, 'done', '');
+  return finish(run, 'done');
+}
 async function handleMinutesDraft(run) {
   const rec = readMinutes(DIR, run.ref), label = U.reqMinDraft;
   if (!rec) { const why = minuteError('minDraftFailed', '找不到這次會議'); step(run, 'ai', label, 'failed', why); return finish(run, 'failed', why); }
@@ -1031,7 +1156,7 @@ async function handleMinutesDraft(run) {
 
 /* ---------- 創辦人交要求：登記後叫 AI 擬成問題包（未答之前乜都唔改） ---------- */
 async function handleNote(run, file) {
-  const m = /^(.*)-note-(order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate|minutes-speakers|minutes-draft)\.md$/.exec(file) || /^(.*)-(feedback)-[a-z]+\.md$/.exec(file);
+  const m = /^(.*)-note-(order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate|minutes-speakers|minutes-draft|ext-draft)\.md$/.exec(file) || /^(.*)-(feedback)-[a-z]+\.md$/.exec(file);
   run.kind = 'note'; run.ref = m[1]; run.noteType = m[2]; run.replyFiles = [file];
   if (run.noteType === 'ideate') run.ideateId = (readJSON(IDEATE, null) || {}).id;
   const raw = fs.readFileSync(path.join(DIR.inbox, file), 'utf8');
@@ -1040,7 +1165,7 @@ async function handleNote(run, file) {
   run.helpRetries = retry ? Number(retry[1]) : 0;
   run.helpForPackId = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).packId || '')) ? String(machine.context.packId) : '';
   run.helpForRunRef = run.noteType === 'help' && /^[\w-]{1,80}$/.test(String((machine.context || {}).runRef || '')) ? String(machine.context.runRef) : '';
-  step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc, ideate: U.zeroThink, 'minutes-speakers': U.reqMinSpeakers, 'minutes-draft': U.reqMinDraft }[run.noteType]);
+  step(run, 'received', U.stepReqReceived, 'done', { order: U.reqOrder, adhoc: U.reqAdhoc, help: U.reqHelp, feedback: U.brainFeedback, 'brain-decide': U.brainDecide, 'practice-prep': U.practicePrep, debrief: U.practiceDebrief, 'debate-start': U.debateReq, 'debate-action': U.debateActionReq, event: U.reqEvent, doc: U.reqDoc, ideate: U.zeroThink, 'minutes-speakers': U.reqMinSpeakers, 'minutes-draft': U.reqMinDraft, 'ext-draft': U.reqExtDraft }[run.noteType]);
   const text = raw.split(/\r?\n\r?\n/).slice(1).join('\n\n').trim();
   const said = text.replace(/\x60\x60\x60json[\s\S]*$/, '').replace(/\s+/g, ' ').trim();
   const dest = path.join(DIR.archive, `${new Date().getFullYear()}-${pad(new Date().getMonth() + 1)}`);
@@ -1056,6 +1181,7 @@ async function handleNote(run, file) {
   if (run.noteType === 'ideate') return handleIdeate(run);
   if (run.noteType === 'minutes-speakers') return handleMinutesSpeakers(run);
   if (run.noteType === 'minutes-draft') return handleMinutesDraft(run);
+  if (run.noteType === 'ext-draft') return handleExtDraft(run, raw);
   if (run.noteType === 'event' || run.noteType === 'doc') return handleEvent(run, raw, text.replace(/```json[\s\S]*$/, '').trim(), dest, meta);
   if (run.noteType === 'feedback') return handleFeedback(run, parseReply(raw).machine || {});
   if (run.noteType === 'brain-decide') return handleBrainDecide(run, parseReply(raw).machine || {});
@@ -1771,7 +1897,7 @@ function checkEvent(out, input = null, lenient = false) {
   // 新對象的名稱必須逐字出現在創辦人原話或附件文字版（event.md 的原話段、files/ 內的 md／txt／csv，含轉出的文字版）
   const sbDir = path.join(out, '..');
   let said0 = ''; try { said0 = fs.readFileSync(path.join(sbDir, 'event.md'), 'utf8').split('## 創辦人原話').pop(); } catch { }
-  const fileTexts = []; try { for (const f of fs.readdirSync(path.join(sbDir, 'files'))) if (/\.(md|txt|csv)$/i.test(f)) fileTexts.push(fs.readFileSync(path.join(sbDir, 'files', f), 'utf8')); } catch { }
+  const fileTexts = [], textByFile = new Map(); try { for (const f of fs.readdirSync(path.join(sbDir, 'files'))) if (/\.(md|txt|csv)$/i.test(f)) { const value = fs.readFileSync(path.join(sbDir, 'files', f), 'utf8'); fileTexts.push(value); textByFile.set(f, value); if (/\.md$/i.test(f)) textByFile.set(f.slice(0, -3), value); } } catch { }
   const minute = minuteContext(input), missingSpeakers = minute.text ? unmappedIn(minute.text, minute.map) : [];
   if (missingSpeakers.length) errors.push(NAMES.t('minUnmapped', { labels: missingSpeakers.join('、') }));
   if (!ev || typeof ev !== 'object') return { ok: false, errors: ['未有交出 out/event.json，或內容無法讀取'] };
@@ -1856,6 +1982,30 @@ function checkEvent(out, input = null, lenient = false) {
       items.push({ ...r.item, id: itemId, itemId, ...sourceData, ...(minuteForTerm || pnorm(said0).includes(pnorm(r.item.name)) ? {} : { fromDoc: true }) });
       return;
     }
+    if (it.kind === 'money') {
+      const amount = typeof it.amount === 'string' ? it.amount.trim() : '', currency = String(it.currency || '').trim(), payer = typeof it.payer === 'string' ? it.payer.trim() : '';
+      const what = typeof it.what === 'string' ? it.what.trim() : '', file = typeof it.file === 'string' ? it.file.trim() : '', quote = typeof it.quote === 'string' ? it.quote.trim() : '';
+      const cents = toCents(amount), originals = new Set(((input && input.files) || []).map(attachName));
+      if (!['in', 'out'].includes(it.dir) || !Number.isSafeInteger(cents) || cents <= 0 || !/^[A-Z]{3}$/.test(currency) || !validDay(String(it.date || '')) || !CATEGORIES[it.dir].includes(it.category) || !payer || !what || !file || !originals.has(file)) {
+        if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} 格式不符`); return; }
+        errors.push(at + '：業績項目的方向、金額、幣別、日期、類別、對方、內容或附件不符合格式'); return;
+      }
+      const quoteAmount = amount.replace(/[\s,]/g, '');
+      const receiptText = textByFile.get(file) || '', quoteSource = [said0, receiptText].filter(source => quote && source.includes(quote));
+      if (receiptText && (!quote || !quoteSource.length || !quote.replace(/[\s,]/g, '').includes(quoteAmount))) {
+        if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} 收據引句未能核對`); return; }
+        errors.push(at + '：收據引句未能逐字核對金額'); return;
+      }
+      const actors = ((s.company || {}).actors || []), exact = actors.find(actor => actor && payerKeyOf(actor.name) === payerKeyOf(payer));
+      const id = typeof it.id === 'string' && /^mn-\d{4}-\d{2}-\d{2}-\d{6}-\d{3}$/.test(it.id) ? it.id : newMoneyId();
+      const money = { id, dir: it.dir, amountCents: cents, currency, date: it.date, counterpartId: exact ? exact.id : '', payer, payerKey: payerKeyOf(payer), category: it.category, what, refund: false,
+        evidence: [{ inputId: input ? input.id : 'in-event', file, page: Number.isInteger(it.page) && it.page > 0 ? it.page : 1 }], source: 'receipt', importBatch: '', importKey: '', confirmedAt: '', confirmedBy: '', status: 'confirmed', voidedAt: '', voidReason: '', replaces: '', check: receiptText ? 'text' : 'image' };
+      const checked = validateRecord(money); if (!checked.ok) { errors.push(at + '：業績項目格式不符'); return; }
+      delete money.check;
+      const itemId = 'money:' + money.id;
+      if (!seen.has(itemId)) { seen.add(itemId); items.push({ kind: 'money', id: itemId, itemId, why: typeof it.why === 'string' && it.why.trim() ? it.why.trim().slice(0, 200) : U.mnyReceiptFrom, money: { ...money, check: receiptText ? 'text' : 'image' } }); }
+      return;
+    }
     for (const [field, value] of [['why', it.why], ['sourceQuote', it.sourceQuote], ['text', it.text], ['action', it.action], ['name', it.name], ['org', it.org], ['role', it.role]]) {
       if (typeof value === 'string') checkMappedText(value, `${at} 的 ${field} `);
     }
@@ -1913,7 +2063,7 @@ function checkEvent(out, input = null, lenient = false) {
       if (it.milestoneId && !(s.milestones || []).some(x => x.id === it.milestoneId)) return errors.push(at + '：找不到站 ' + it.milestoneId);
       if (((s.company || {}).nextExternalAction || {}).text === text) return;
       seen.add(itemId); items.push({ kind: 'nextAction', itemId, text, ...(it.milestoneId ? { milestoneId: it.milestoneId } : {}), why: it.why, ...sourceData });
-    } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp、newActor 或 newTerm');
+    } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp、newActor、newTerm 或 money');
   });
   // 未能讀取的附件：結構化清單（檔名必須是這次附件的檔名），摘要不再兼顧逐份列出
   let unreadable = [];
@@ -2167,6 +2317,11 @@ function eventPack(run, s, input, items) {
   };
   const qs = items.map((it, i) => {
     const qid = qidFor(it, i);
+    if (it.kind === 'money') {
+      const money = it.money;
+      return { id: qid, priority: i + 1, about: clip(money.payer || money.what, 40), ask: `${money.payer}：${money.what} ${formatMoney(money.amountCents, money.currency)}`,
+        kind: 'money', money, options: [{ text: U.mnyConfirm }, { text: U.mnyConfirmEdit }, { text: U.mnyReject }], value: U.mnyConfirm, why: it.why };
+    }
     if (it.revisionAmbiguity) {
       const ambiguity = it.revisionAmbiguity;
       const choices = it.kind === 'followUp' ? (ambiguity.choices || []).map(choice => ({ text: (choice.date ? dayText(choice.date) + '　' : '') + clip(choice.action || '', 40), apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), revisionOfTaskId: choice.revisionOfTaskId } })) : [];
@@ -2211,7 +2366,7 @@ function eventPack(run, s, input, items) {
   const iv = input.kind === 'interview';
   return { format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-ev', title: (iv ? U.interviewConfirm : U.eventConfirm) + '（' + dayText(input.eventDate) + '）',
     context: iv ? NAMES.t('interviewSaid', { d: dayText(input.eventDate), t: clip(input.title.replace(/^[^：]*：/, ''), 80) }) : '你記錄了 ' + dayText(input.eventDate) + ' 發生的一件事：「' + clip(input.title.replace(/^(?:真實事件|發生了一件事)（[^）]*）：/, ''), 80) + '」。Zero 據此擬定以下更新，每項經你確認後才會生效。',
-    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate, itemIds: items.map(item => item.itemId || item.id) }, questions: qs };
+    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate, files: Array.isArray(input.files) ? input.files.map(String) : [], itemIds: items.map(item => item.itemId || item.id) }, questions: qs };
 }
 async function finishEvent(run, sb, label, styleWarnings) {
   const out = path.join(sb, 'out');
@@ -2314,6 +2469,12 @@ function handleEventConfirm(run, pack, store) {
     const a = store.answers[q.id];
     if (!a || applied.has(q.id)) continue;
     applied.add(q.id);
+    if (q.kind === 'money') {
+      const base = q.money || {}, edited = a.value === U.mnyConfirmEdit && a.edit && Object.hasOwn(a.edit, 'amount') ? toCents(a.edit.amount) : null;
+      const amount = formatMoney(Number.isSafeInteger(edited) ? edited : base.amountCents, base.currency);
+      said.push(a.value === U.mnyReject ? U.mnyReceiptSkipped : NAMES.t('mnyReceiptDone', { amount }));
+      continue;
+    }
     const opts = q.options || [], opt = opts.find(o => o.text === a.value);
     let ap = opt ? opt.apply : null;
     const naOpt = opts.find(o => o.apply && o.apply.op === 'addActor');
@@ -2773,6 +2934,14 @@ function checkCheckup(raw, L, at) {
   if (!weak.length && !(raw.partial === true && (unseen.length || notNow.length))) return { ok: false, reason: '生意體檢未有寫出可用的環節' };
   return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_checkup, partial: raw.partial === true, weak, unseen, notNow, industryCheck } };
 }
+function zeroPerformanceSummary() {
+  try {
+    const money = readMoney(DIR), today = todayIso(), month = today.slice(0, 7);
+    const previous = new Date(`${month}-01T00:00:00`); previous.setMonth(previous.getMonth() - 1);
+    const prevMonth = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
+    return { money: { current: monthMetrics(money.records, month, money.mainCurrency, money.links), previous: monthMetrics(money.records, prevMonth, money.mainCurrency, money.links), runway: cashRunway(money.balance, money.records, today, money.mainCurrency) }, extensions: extOverview(ROOT, DIR, today) };
+  } catch { return { money: null, extensions: { rows: [], more: 0, pending: 0 } }; }
+}
 // 一次工作入面加一步生意大腦工作（唔結束成次工作）；成功回 true
 async function brainStep(run, item, opts = {}) {
   const key = 'brain-' + item, label = U['brainJob_' + item], job = BRAIN_JOBS[item];
@@ -2790,6 +2959,9 @@ async function brainStep(run, item, opts = {}) {
   for (const [id, f] of Object.entries(readJSON(path.join(DIR.ledger, 'brain-feedback.json'), {}) || {})) if (!decisions[id] && f?.item === 'opportunities' && f.verdict === 'useless' && f.text === U.oppDropNote) decisions[id] = { title: f.title || '', answer: U.oppDrop, at: f.at || '' };
   if (item === 'opportunities') L.rejectedOpportunities = rejectedOpportunities(decisions);
   writeJSON(path.join(sb, 'ledger.json'), L);
+  const performance = zeroPerformanceSummary();
+  if (performance.money && performance.money.current && (performance.money.current.income || performance.money.current.expense || performance.money.current.payers)) writeJSON(path.join(sb, 'performance.json'), performance);
+  else if ((performance.extensions.rows || []).length) writeJSON(path.join(sb, 'performance.json'), performance);
   if (item === 'opportunities') L.knownOpportunityIds = [...Object.keys(decisions), ...(prev?.list || []).map(o => o.id)];
   if (prev) writeJSON(path.join(sb, 'previous.json'), item === 'opportunities' ? { ...prev, list: (prev.list || []).map(o => ({ ...o, answer: decisions[o.id]?.answer || '' })) } : prev);
   fs.writeFileSync(path.join(sb, 'feedback.md'), '# 創辦人上次對結果卡的意見\n\n' + (fb.length ? fb.map(f => `- 「${f.card}」：${f.verdict}${f.text ? '——' + f.text : ''}`).join('\n') : '（沒有）') + '\n');

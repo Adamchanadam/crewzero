@@ -2,6 +2,7 @@
 // 用法：node founder-op-test.mjs <原型資料夾> <輸出資料夾> <port>
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { usePass, pair } from '../lib/testkit.mjs';
@@ -11,7 +12,7 @@ const DATA = path.join(OUT, 'data');
 const BASE = `http://127.0.0.1:${PORT}`;
 const results = []; const ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 process.env.SOS_DATA = DATA;
 const ask = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 const DIR = ask.dataDirs(PROTO);

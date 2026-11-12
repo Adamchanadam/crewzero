@@ -6,6 +6,7 @@
 // 用法：node brain-c2-test.mjs <chrome> <輸出資料夾> <原型資料夾> <假 adapter> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -17,7 +18,7 @@ const { SEATS } = await import(pathToFileURL(path.join(PROTO, 'debate-lib.mjs'))
 const { seedCompany } = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data');
 seedCompany(DATA, PROTO);
 // 公司概覽嘅假設先唔寫測試（體檢只填未有測試、或者上次由體檢寫嘅）

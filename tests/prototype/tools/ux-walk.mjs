@@ -2,6 +2,7 @@
 // 月曆同改日期嘅流暢度喺 dashboard/calendar-test.mjs；呢度走其餘：打字、處理中、失敗、外殼佔用、手機、伺服器中斷。
 // 用法：node ux-walk.mjs <Chrome> <輸出> <原型> <假AI> <埠>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +43,7 @@ const noOverflow = () => chrome.ev(`document.documentElement.scrollWidth<=docume
 const system = async (w = 1440, base = BASE) => { await chrome.go(base + '/dashboard/system', w, 1800); await waitFor(() => has('#sys-rhythm')); };
 
 try {
-  fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  freshTestOut(DATA);
   for (const dir of ['ledger', 'company', 'asks', 'founder/inbox', 'founder/replies', 'founder/desk', 'archive', 'work', 'sandbox']) fs.mkdirSync(path.join(DATA, dir), { recursive: true });
   seed(); write(markFile, { mode: 'server', cadence: 'daily', runTime: clockAt(180), approvedAt: new Date().toISOString(), autostart: { enabled: false } });
   server = await start(); await usePass(BASE);

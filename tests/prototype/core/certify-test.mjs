@@ -1,5 +1,6 @@
 // R1b：三種宿主轉接層同認證。全程只用假 AI，實際向未配對 CrewZero 讀／寫，唔叫任何真 AI。
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -33,7 +34,7 @@ async function runCase(name, adapter, host, port, mode = '') {
 }
 
 try {
-  fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); fs.mkdirSync(OUT, { recursive: true });
+  freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
   const AD = writeAdapters(path.join(OUT, 'adapters'));
   // 只供本測試使用的合成登入檔；絕不讀取真登入資料。
   const syntheticAuth = path.join(OUT, 'no-real-codex-auth.json'); fs.writeFileSync(syntheticAuth, '{"synthetic":true}');

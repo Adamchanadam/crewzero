@@ -1,4 +1,4 @@
-// 插件指令（技能）及創辦人看得到的說明文字：四個技能齊、desk 已移除、只用 CrewZero 一個名字；純本機檔案檢查，不啟動伺服器、瀏覽器或 AI。
+// 插件指令（技能）及創辦人看得到的說明文字：五個技能齊、desk 已移除、只用 CrewZero 一個名字；純本機檔案檢查，不啟動伺服器、瀏覽器或 AI。
 // node skills-text-test.mjs <原型資料夾> <輸出資料夾>
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,9 +8,9 @@ const SKILLS = path.join(PROTO, 'adapters', 'claude-code', 'crewzero', 'skills')
 const results = [], ok = (name, pass, info) => results.push({ name, pass: !!pass, info });
 const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
 
-const NAMES = ['install', 'dashboard', 'discuss', 'update'];
+const NAMES = ['install', 'dashboard', 'discuss', 'update', 'extend'];
 const dirs = fs.existsSync(SKILLS) ? fs.readdirSync(SKILLS, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort() : [];
-ok('四個技能齊（install、dashboard、discuss、update），沒有其他技能', dirs.join() === [...NAMES].sort().join(), dirs);
+ok('五個技能齊（install、dashboard、discuss、update、extend），沒有其他技能', dirs.join() === [...NAMES].sort().join(), dirs);
 ok('desk 技能已移除', !fs.existsSync(path.join(SKILLS, 'desk')), dirs);
 
 const text = {};
@@ -49,6 +49,9 @@ const pj = JSON.parse(read(path.join(SKILLS, '..', '.claude-plugin', 'plugin.jso
 ok('plugin.json：四個指令 install、update、dashboard、discuss，沒有 desk／Founder Desk／營運監察台／founder-desk', ['install', 'update', 'dashboard', 'discuss'].every(k => (pj.description || '').includes(k)) && !/desk|Desk|營運監察台/.test((pj.description || '') + (pj.keywords || []).join(' ')), pj.description);
 ok('dashboard：描述為打開 CrewZero，併入卡住時的 --status 與問題包做法，生意問題指向 discuss', /description:.*打開 CrewZero/.test(dash) && dash.includes('--status') && dash.includes('問題包') && dash.includes('/crewzero:discuss') && dash.includes('$crewzero:discuss') && dash.includes('/discuss') && !/需要幫助/.test(dash.replace(/唔好叫佢去頁面按「需要幫助」/, '')));
 ok('dashboard：保留示範與生意大腦試驗', dash.includes('--dashboard --demo') && dash.includes('--brain'));
+const extend = text.extend;
+ok('extend：三種工具的入口及觸發語齊全', ['加延伸功能', '加一個功能', '/crewzero:extend', '$crewzero:extend', '/extend'].every(k => extend.includes(k)));
+ok('extend：先讀 EXTENSIONS.md，完成後核對並請創辦人按「啟用」', extend.includes('EXTENSIONS.md') && extend.includes('--check-extension') && extend.includes('請創辦人到「延伸功能」頁按「啟用」'));
 
 // 創辦人看得到的文字：只用 CrewZero 一個名字、不再提 desk 指令
 const banned = [/Founder Desk/, /營運監察台/, /crewzero:desk/, /\$crewzero:desk/, /\/desk(?![A-Za-z])/];

@@ -1,0 +1,51 @@
+{
+  "decl": {
+    "format": "crewzero.extension/1",
+    "guide": 1,
+    "name": "預約與出席",
+    "about": "記錄學生或客人的預約、出席及剩餘堂數",
+    "tables": [
+      {
+        "id": "t1",
+        "label": "預約",
+        "title": "f1",
+        "due": "f3",
+        "fields": [
+          { "id": "f1", "label": "預約名稱", "type": "text", "required": true },
+          { "id": "f2", "label": "學生或客人", "type": "actor", "required": true },
+          { "id": "f3", "label": "日期", "type": "date", "required": true },
+          {
+            "id": "f4",
+            "label": "時段",
+            "type": "choice",
+            "options": [
+              { "id": "o1", "label": "上午" },
+              { "id": "o2", "label": "下午" },
+              { "id": "o3", "label": "晚上" }
+            ]
+          },
+          {
+            "id": "f5",
+            "label": "出席狀態",
+            "type": "choice",
+            "options": [
+              { "id": "o4", "label": "已預約" },
+              { "id": "o5", "label": "已出席" },
+              { "id": "o6", "label": "缺席" }
+            ]
+          },
+          { "id": "f6", "label": "剩餘堂數", "type": "number" }
+        ],
+        "summary": [
+          { "label": "七日內預約", "rule": "dueWithin", "days": 7 },
+          { "label": "未封存預約", "rule": "open" }
+        ]
+      }
+    ]
+  },
+  "sample": [
+    { "f1": "繪畫課", "f2": { "id": "pc-demo-11", "name": "李同學" }, "f3": "2026-11-13", "f4": "o2", "f5": "o4", "f6": 6 },
+    { "f1": "鋼琴課", "f2": { "id": "pc-demo-12", "name": "陳同學" }, "f3": "2026-11-15", "f4": "o1", "f5": "o5", "f6": 3 },
+    { "f1": "諮詢時段", "f2": { "id": "pc-demo-13", "name": "王女士" }, "f3": "2026-11-21", "f4": "o3", "f5": "o4", "f6": 1 }
+  ]
+}

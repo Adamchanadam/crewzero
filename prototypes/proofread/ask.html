@@ -24,6 +24,18 @@ details.layer summary{cursor:pointer;font-weight:600}
 .muted{color:var(--muted)}
 .small{font-size:var(--fs-sub)}
 .dq-body{margin-left:32px}
+.money-receipt{border:1px solid rgba(232,141,79,.35);border-left:3px solid var(--amber);border-radius:12px;padding:16px 18px;background:var(--panel)}
+.money-receipt-title{margin:6px 0 4px;font-size:var(--fs-title)}
+.money-receipt-note{margin:0;color:var(--muted);font-size:var(--fs-sub)}
+.money-receipt-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;margin-top:12px}
+.money-receipt-preview{min-height:120px;display:flex;align-items:flex-start}
+.money-receipt-img{display:block;max-width:100%;max-height:420px;object-fit:contain;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.money-receipt-file{display:grid;gap:8px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.015);font-size:var(--fs-sub)}
+.money-receipt-kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;margin:0;font-size:var(--fs-sub)}
+.money-receipt-kv dt{color:var(--muted)}.money-receipt-kv dd{margin:0;overflow-wrap:anywhere}.money-receipt-kv .big{font:500 var(--fs-page) var(--mono)}
+.money-receipt-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.money-receipt-actions .btn{min-height:42px}
+.money-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.money-edit-grid label{display:grid;gap:6px;font-size:var(--fs-label);color:var(--muted)}.money-edit-grid textarea{min-height:72px}.money-edit-grid .wide{grid-column:1/-1}
+@media (max-width:600px){.money-receipt-grid,.money-edit-grid{grid-template-columns:1fr}.money-receipt-actions .btn{flex:1 1 auto}.money-edit-grid .wide{grid-column:auto}}
 .why{font-size:var(--fs-sub);color:var(--muted);margin:4px 0 2px}
 .fb-ic.info{background:rgba(127,167,232,.14);color:#9fbcf0;border-color:rgba(127,167,232,.45)}
 .fb-body h4 small{font-weight:400;font-size:var(--fs-label);margin-left:6px}
@@ -296,7 +308,25 @@ dl.rc dd{margin:0}
   function retryCatch(e) { toast(N.ui.retryFailed + '：' + why(e)); }
   function failReason(err) { return err ? N.ui.reason + '：' + N.fix(err) : N.ui.failNoReason; }
   function head(page, st) { return DESK.header({ page: page, company: st && st.company, pending: st ? st.openAsks : 0, work: st && st.work, sim: !!(st && st.sim), sample: !!(st && st.sample) }); }
-  function showAns(q, v) { return Array.isArray(v) ? v.join('、') : (q && q.kind === 'date' ? fmtDay(v) : String(v == null ? '' : v)); }
+  function moneyValue(v) { return v && typeof v === 'object' && !Array.isArray(v) ? v.value : v; }
+  function moneyEditCents(value) {
+    var raw = String(value == null ? '' : value).trim().replace(/^(?:HK\$|US\$|NT\$|RMB\s*|[A-Z]{3}\s*)/i, '').replace(/[,$\s]/g, '');
+    return /^\d+(?:\.\d{1,2})?$/.test(raw) ? Math.round(Number(raw) * 100) : null;
+  }
+  function moneyAmount(m, edit) {
+    var cents = edit && edit.amount != null ? moneyEditCents(edit.amount) : Number(m && m.amountCents);
+    if (!Number.isFinite(cents)) return '';
+    var amount = (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), currency = String(m && m.currency || '').trim();
+    return currency === 'HKD' ? 'HK$' + amount : (currency ? currency + ' ' : '') + amount;
+  }
+  function moneyEditAmount(m) { return Number.isFinite(Number(m && m.amountCents)) ? (Number(m.amountCents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; }
+  function moneySummary(q, answer) {
+    var value = moneyValue(answer), edit = answer && typeof answer === 'object' ? answer.edit : null;
+    if (!value) return '';
+    var amount = moneyAmount(q && q.money, edit);
+    return value === N.ui.mnyReject ? N.ui.mnyReceiptSkipped : amount ? (N.t ? N.t('mnyReceiptDone', { amount: amount }) : T(N.ui.mnyReceiptDone, { amount: amount })) : N.ui.mnyAmountInvalid;
+  }
+  function showAns(q, v) { return q && q.kind === 'money' ? moneySummary(q, v) : (Array.isArray(v) ? v.join('、') : (q && q.kind === 'date' ? fmtDay(v) : String(v == null ? '' : v))); }
 
   /* ---------- 伺服器重新開過：頁面可能過時 ---------- */
   function checkInstance(st) {
@@ -1468,16 +1498,24 @@ dl.rc dd{margin:0}
   /* ---------- 答題：每次最多 3 條 ---------- */
   var P = null, A = null, S = null;
   function manualQuestion(q) { return !!(P && (P.actionConfirm || (P.acceptance && q.id === 'accept') || (!P.acceptance && q && q.acceptance))); }
-  function requiresFounderAnswer(q) { return !!(q && (P.ideate || q.effect === 'now' || q.conflict || q.bind === 'results' || manualQuestion(q))); }
+  function requiresFounderAnswer(q) { return !!(q && (q.kind === 'money' || P.ideate || q.effect === 'now' || q.conflict || q.bind === 'results' || manualQuestion(q))); }
   function cur(q) {
+    if (q && q.kind === 'money') return S.money && S.money[q.id] ? S.money[q.id].value : '';
     if (manualQuestion(q) && !Object.prototype.hasOwnProperty.call(S.edits, q.id) && !S.ok[q.id]) return '';
     return Object.prototype.hasOwnProperty.call(S.edits, q.id) ? S.edits[q.id] : q.value;
   }
   function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
-  function touched(q) { return Object.prototype.hasOwnProperty.call(S.edits, q.id) || !!S.ok[q.id]; }
+  function touched(q) { return !!(q && q.kind === 'money' && S.money && S.money[q.id]) || Object.prototype.hasOwnProperty.call(S.edits, q.id) || !!S.ok[q.id]; }
   function setAns(q, v) {
     if (same(v, q.value)) delete S.edits[q.id]; else S.edits[q.id] = v;
     S.ok[q.id] = true; S.open = null; S.allSame = false;
+    renderAsk({ sel: '#q-' + q.id });
+    var st = stats(); announce('是次已答 ' + st.done + '／' + st.total);
+  }
+  function setMoneyAnswer(q, value, edit) {
+    S.money[q.id] = { value: value };
+    if (edit) S.money[q.id].edit = edit;
+    S.moneyOpen = null; S.allSame = false;
     renderAsk({ sel: '#q-' + q.id });
     var st = stats(); announce('是次已答 ' + st.done + '／' + st.total);
   }
@@ -1499,7 +1537,7 @@ dl.rc dd{margin:0}
   }
   // 每週訪問「全部沒有變化」：一次記低所有未答、預填現值或者預設「沒有」嘅題，標明係你確認（唔係 AI 代答）；要你答實事嘅題（日期已過、目標日已過）照留
   function allSame() {
-    var same = P.questions.filter(function (q) { return !A[q.id] && q.noChange; });
+    var same = P.questions.filter(function (q) { return !A[q.id] && q.kind !== 'money' && q.noChange; });
     S.batch = same; S.rest = P.questions.filter(function (q) { return !A[q.id] && !q.noChange; }); S.extra = false; S.edits = {};
     same.forEach(function (q) { S.ok[q.id] = true; });
     S.allSame = true; renderAsk(); openModal();
@@ -1521,7 +1559,7 @@ dl.rc dd{margin:0}
         var pending = (V.status.helpInFlight || []).find(function (x) { return x && x.packId === P.id; });
         if (pending) help[q.id] = { sent: true, noteId: pending.noteId };
       });
-      S = { edits: {}, ok: {}, extra: false, open: null, drafts: {}, help: help, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
+      S = { edits: {}, ok: {}, money: {}, moneyDrafts: {}, moneyOpen: null, extra: false, open: null, drafts: {}, help: help, sent: null, batch: b.batch, rest: b.rest, shownAt: new Date() };
       DESK.title('pending', N.fix(P.title));
       renderAsk();
       window.scrollTo(0, 0);
@@ -1579,12 +1617,91 @@ dl.rc dd{margin:0}
   // 「照 Zero 建議，全部確認」：未作答的題全部採用建議，直接開預覽；已經自己改過的題不覆蓋
   function followAll() {
     var left = P.questions.filter(function (q) { return !A[q.id]; });
-    left.forEach(function (q) { if (!touched(q)) S.ok[q.id] = true; });
+    left.forEach(function (q) { if (q.kind !== 'money' && !touched(q)) S.ok[q.id] = true; });
     S.batch = left; S.rest = []; S.extra = false; S.open = null; S.allSame = false;
     renderAsk(); openModal();
   }
+  var MONEY_CATEGORIES = {
+    in: ['sales', 'service', 'deposit', 'grant', 'funding', 'otherIn'],
+    out: ['goods', 'people', 'rent', 'marketing', 'tools', 'shipping', 'professional', 'otherOut']
+  };
+  function moneySourceUrl(evidence, index) {
+    var files = P && P.realEvent && Array.isArray(P.realEvent.files) ? P.realEvent.files : [], found = files.indexOf(String(evidence && evidence.file || '')), n = found >= 0 ? found : index;
+    return '/api/input-file?id=' + encodeURIComponent(String(evidence && evidence.inputId || '')) + '&n=' + encodeURIComponent(String(Math.max(0, n)));
+  }
+  function moneySourcePreview(m) {
+    var evidence = Array.isArray(m && m.evidence) ? m.evidence[0] : null;
+    if (!evidence) return null;
+    var file = String(evidence.file || ''), url = moneySourceUrl(evidence, 0), image = /\.(?:png|jpe?g)$/i.test(file);
+    return image
+      ? h('img', { class: 'money-receipt-img', src: url, alt: N.fix(file) })
+      : h('div', { class: 'money-receipt-file' }, h('b', null, N.fix(file)), h('a', { class: 'btn', href: url, target: '_blank', rel: 'noreferrer' }, N.ui.mnyReceiptOpen));
+  }
+  function moneySourceValue(m) {
+    var evidence = Array.isArray(m && m.evidence) ? m.evidence[0] : null;
+    if (!evidence) return '';
+    return h('a', { href: moneySourceUrl(evidence, 0), target: '_blank', rel: 'noreferrer' }, N.fix(String(evidence.file || '')));
+  }
+  function moneyCategory(m) { return N.ui['mnyCat_' + String(m && m.category || '')] || ''; }
+  function moneyDraft(q) {
+    var current = S.moneyDrafts[q.id];
+    if (current) return current;
+    var m = q.money || {};
+    current = { amount: moneyEditAmount(m), date: String(m.date || ''), category: String(m.category || ''), what: String(m.what || ''), payer: String(m.payer || '') };
+    S.moneyDrafts[q.id] = current;
+    return current;
+  }
+  function moneyField(label, value, cls) { return [h('dt', null, label), h('dd', { class: cls || '' }, value)]; }
+  function moneyReceiptCard(q, i) {
+    var m = q.money || {}, answer = S.money[q.id], total = P.questions.length, number = P.questions.indexOf(q) + 1, source = moneySourcePreview(m), card = h('section', { class: 'money-receipt', id: 'q-' + q.id, tabindex: '-1' },
+      h('span', { class: 'eyebrow' }, T('mnyReceiptEyebrow', { n: number || i + 1, total: total })),
+      h('h2', { class: 'money-receipt-title' }, N.fix(q.ask)),
+      h('p', { class: 'money-receipt-note' }, N.ui.mnyReceiptFrom, m.check === 'image' ? ' ' + N.ui.mnyReceiptImageNote : ''),
+      h('div', { class: 'money-receipt-grid' },
+        h('div', { class: 'money-receipt-preview' }, source),
+        h('dl', { class: 'money-receipt-kv' },
+          moneyField(N.ui.mnyFieldDir, m.dir === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut),
+          moneyField(N.ui.mnyFieldAmount, moneyAmount(m) || N.ui.mnyAmountInvalid, 'big'),
+          moneyField(N.ui.mnyFieldDate, dayOf(m.date)),
+          moneyField(N.ui.mnyFieldWho, [N.fix(m.payer || ''), m.counterpartId ? ' ' : null, m.counterpartId ? tag(N.ui.mnyListed, 'mint') : null]),
+          moneyField(N.ui.mnyFieldCategory, moneyCategory(m)),
+          moneyField(N.ui.mnyFieldWhat, N.fix(m.what || '')),
+          moneyField(N.ui.mnyFieldSource, moneySourceValue(m))
+        )
+      )
+    );
+    if (answer) {
+      card.append(h('p', { class: 'small', id: 'money-answer-' + q.id }, moneySummary(q, answer)));
+      return card;
+    }
+    var actions = h('div', { class: 'money-receipt-actions' },
+      h('button', { type: 'button', class: 'btn primary', id: 'money-confirm-' + q.id, onclick: function () { setMoneyAnswer(q, N.ui.mnyConfirm); } }, N.ui.mnyConfirm),
+      h('button', { type: 'button', class: 'btn', id: 'money-edit-' + q.id, onclick: function () { S.moneyOpen = q.id; moneyDraft(q); renderAsk({ sel: '#money-amount-' + q.id }); } }, N.ui.mnyConfirmEdit),
+      h('button', { type: 'button', class: 'btn', id: 'money-reject-' + q.id, onclick: function () { setMoneyAnswer(q, N.ui.mnyReject); } }, N.ui.mnyReject)
+    );
+    card.append(actions);
+    if (S.moneyOpen !== q.id) return card;
+    var draft = moneyDraft(q), amount = h('input', { class: 'in', id: 'money-amount-' + q.id, inputmode: 'decimal', value: draft.amount }), date = h('input', { class: 'in', id: 'money-date-' + q.id, type: 'date', value: draft.date }), category = h('select', { class: 'in', id: 'money-category-' + q.id });
+    (MONEY_CATEGORIES[m.dir] || []).forEach(function (key) { category.append(h('option', { value: key, selected: key === draft.category ? 'selected' : null }, N.ui['mnyCat_' + key] || '')); });
+    var what = h('textarea', { class: 'in', id: 'money-what-' + q.id, rows: '2' }, draft.what), payer = h('input', { class: 'in', id: 'money-payer-' + q.id, value: draft.payer });
+    card.append(h('div', { class: 'money-edit-grid' },
+      h('label', { for: amount.id }, N.ui.mnyFieldAmount, amount), h('label', { for: date.id }, N.ui.mnyFieldDate, date),
+      h('label', { for: category.id }, N.ui.mnyFieldCategory, category), h('label', { for: payer.id }, N.ui.mnyFieldWho, payer),
+      h('label', { class: 'wide', for: what.id }, N.ui.mnyFieldWhat, what)
+    ), h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', id: 'money-edit-save-' + q.id, onclick: function () {
+      var edit = { amount: amount.value.trim(), date: date.value, category: category.value, what: what.value.trim(), payer: payer.value.trim() };
+       if (!edit.amount || !Number.isSafeInteger(moneyEditCents(edit.amount))) { toast(N.ui.mnyAmountInvalid); amount.focus(); return; }
+      if (!edit.date) { date.focus(); return; }
+      if (!edit.category) { category.focus(); return; }
+      if (!edit.what) { what.focus(); return; }
+      if (!edit.payer) { payer.focus(); return; }
+      setMoneyAnswer(q, N.ui.mnyConfirmEdit, edit);
+    } }, N.ui.mnyConfirmEdit)));
+    return card;
+  }
   function card(q, i) {
     var v = cur(q), done = touched(q), kind = q.kind || 'choice', manual = manualQuestion(q);
+    if (kind === 'money') return moneyReceiptCard(q, i);
     var c = h('div', { class: 'dq' + (done ? ' done' : ''), id: 'q-' + q.id, tabindex: '-1' },
       h('div', { class: 'dq-head' }, h('span', { class: 'dq-n' }, String(i + 1)), h('span', { class: 'dq-q' }, N.fix(q.ask)),
         q.effect === 'now' ? tag(N.ui.nowAfter, 'eff') : null, done ? tag(N.ui.answered, 'qdone') : tag(N.ui.unanswered, 'qn')));
@@ -1799,12 +1916,13 @@ dl.rc dd{margin:0}
   /* ---------- 送出前預覽、送出 ---------- */
   function buildReply(now) {
     var answers = shown().filter(function (q) { return S.batch.indexOf(q) >= 0 || touched(q); }).map(function (q) {
-      var v = cur(q);
-      return { id: q.id, value: v, ai: q.value, changed: !same(v, q.value) };
+      var v = cur(q), answer = { id: q.id, value: v, ai: q.value, changed: !same(v, q.value) }, money = q.kind === 'money' && S.money[q.id];
+      if (money && money.edit) answer.edit = money.edit;
+      return answer;
     });
     var qs = {}; P.questions.forEach(function (q) { qs[q.id] = q; });
     var L = ['# 答案：' + P.title, ''];
-    answers.forEach(function (a) { L.push('- ' + qs[a.id].ask, '  - ' + (a.changed ? '你：' : S.allSame ? N.ui.confirmedSame + '：' : qs[a.id].preset ? '採用預設：' : '採用 Zero 建議：') + showAns(qs[a.id], a.value)); });
+    answers.forEach(function (a) { var q = qs[a.id]; L.push('- ' + q.ask, '  - ' + (a.changed ? '你：' : S.allSame ? N.ui.confirmedSame + '：' : q.preset ? '採用預設：' : '採用 Zero 建議：') + showAns(q, q.kind === 'money' ? a : a.value)); });
     var leftQuestions = S.rest.filter(function (q) { return !answers.some(function (a) { return a.id === q.id; }); });
     var left = leftQuestions.length, leftNeedsFounderAnswer = leftQuestions.some(requiresFounderAnswer);
     var leftNote = '其餘 ' + left + ' 條' + (leftNeedsFounderAnswer ? '之後再詢問。' : '暫按 Zero 建議處理，之後再詢問。');
@@ -1832,7 +1950,7 @@ dl.rc dd{margin:0}
     var now = new Date(), R = buildReply(now);
     var nowItems = R.answers.filter(function (a) { return R.qs[a.id].effect === 'now'; });
     var others = R.answers.filter(function (a) { return R.qs[a.id].effect !== 'now'; });
-    function li(a) { var q = R.qs[a.id]; return h('li', null, h('b', null, q.ask + '：'), showAns(q, a.value), a.changed ? ' ' : '（' + (S.allSame ? N.ui.confirmedSame : q.preset ? N.ui.presetAdopted : N.ui.adopted) + '）'); }
+    function li(a) { var q = R.qs[a.id]; return h('li', null, h('b', null, q.ask + '：'), showAns(q, q.kind === 'money' ? a : a.value), a.changed ? ' ' : '（' + (S.allSame ? N.ui.confirmedSame : q.preset ? N.ui.presetAdopted : N.ui.adopted) + '）'); }
     // 真實事件確認、深化答案、經營節奏嘅題（暫停、試行、開第二站、每月覆核、訪問）：外殼直接套用，唔會再開 AI，掣同說明照實寫
     // 只有訪問寫咗文字答案（交 AI 擬確認題）、每月覆核揀「收窄」（交 AI 擬方案）先會開 AI
     var rk = P.rhythm && P.rhythm.kind;
@@ -1858,6 +1976,7 @@ dl.rc dd{margin:0}
       }).catch(function (e) {
         btn.disabled = false; btn.textContent = N.ui.resend;
         if (e.code === 'pack-not-here') { msg.replaceChildren(why(e) + ' ', h('a', { class: 'btn', href: '/#/' }, N.ui.backPending)); return; }
+        if (e.code === 'answered') { msg.replaceChildren(N.ui.mnyReceiptAnswered); return; }
         msg.replaceChildren(DESK.note('error', '未能送出：' + why(e)));
       });
     }

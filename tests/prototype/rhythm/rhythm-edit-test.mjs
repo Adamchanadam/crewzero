@@ -1,6 +1,7 @@
 // 系統頁自動開工設定：真時鐘、隔離資料夾、假 AI、假排程命令；唔碰真資料同真 AI。
 // 用法：node rhythm-edit-test.mjs <Chrome> <輸出> <原型> <假AI> <埠>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +37,7 @@ function seed(extra = {}) {
 }
 
 try {
-  fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 300 });
+  freshTestOut(OUT);
   for (const dir of ['ledger', 'company', 'asks', 'founder/inbox', 'founder/replies', 'archive', 'work', 'sandbox', 'founder/desk']) fs.mkdirSync(path.join(OUT, 'data', dir), { recursive: true });
   seed();
   const rules = await import(new URL('../../../prototypes/proofread/bundle-rules.mjs', import.meta.url).href);

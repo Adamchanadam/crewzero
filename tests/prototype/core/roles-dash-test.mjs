@@ -1,12 +1,13 @@
 // 0.41.0 看板（第 3 線）純函數及資料層測試：創辦人操作預覽覆蓋（六個新 op）、團隊頁／節奏／回饋卡／今日交付的畫面資料、舊資料容錯、字句風格。
 // 不開瀏覽器、不起伺服器、不連外網；只用暫存資料夾。用法：node roles-dash-test.mjs <原型資料夾> <輸出資料夾>
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 const [PROTO, OUT] = process.argv.slice(2);
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: p ? undefined : i });
-fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
+freshTestOut(OUT); fs.mkdirSync(OUT, { recursive: true });
 const DATA = path.join(OUT, 'data');
 process.env.SOS_DATA = DATA; process.env.CZ_NO_WELCOME = '1';
 const imp = f => import(pathToFileURL(path.join(PROTO, f)).href);

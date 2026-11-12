@@ -9,6 +9,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readJSON, NAMES, isInboxNote } from './ask-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
+import { readMoney } from './money-store.mjs';
+import { pipelinePaidIds } from './money-lib.mjs';
 import { listMatches, summaryOf, matchIds } from './debate-lib.mjs';
 import { readDisplay, deCode, deCodeJSON, folderAssumptions } from './plain-lib.mjs';
 import { KINDS, TEAM_TYPES, KIND_LEGACY_NAME, GAP_DAYS, kindOf, norm, hasContactInfo, hasKey, nameKeys, resolveActorId, ownerKind, peopleView, diffDays } from './people-ops.mjs';
@@ -266,6 +268,11 @@ export function pipelineOf(DIR, opts = {}) {
   const view = peopleView({ ...s, company: { ...(s.company || {}), actors: allActors } }, { today: todayStr }), vById = new Map(view.actors.map(p => [p.id, p]));
   const actors = allActors.filter(a => a && !a.mergedInto && a.status !== 'inactive' && kindOf(a) !== 'team');
   const rid = id => resolveActorId(allActors, id);
+  let paid = new Set();
+  try {
+    const money = readMoney(DIR);
+    paid = new Set([...pipelinePaidIds(money.records, money.links)].map(rid).filter(Boolean));
+  } catch { }
   const asm = (s.company || {}).assumptions || [];
   const status = ((page && page.glance && page.glance.status && page.glance.status.items) || []);
   const events = (s.events || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -286,6 +293,7 @@ export function pipelineOf(DIR, opts = {}) {
     // 0.38.0 的舊完成沒有編號，永久按現時名字計算，不回溯遷移。有編號的經合併解析（被合併者的完成算到最終對象）。
     for (const m of ms) if (m.state === 'done' && (Array.isArray(m.doneCounterpartIds) ? m.doneCounterpartIds.some(x => rid(x) === a.id) : myMs.includes(m))) stage = Math.max(stage, 2);
     for (const x of status) if (has(x.label)) stage = Math.max(stage, Math.max(0, EV.indexOf(NAMES.evKey(vals[x.id] ?? x.value))));
+    if (paid.has(a.id)) stage = Math.max(stage, 3);
     const ids = new Set([...mine.map(x => x.id), ...myMs.map(m => m.id)]);
     // 最近一件真事：只計你確認咗、改到呢個對象嘅假設或站點嗰次（唔計淨係記錄咗、未確認嘅事件）；有原本記錄就用你嘅原話
     const ev = events.find(e => e.actor === 'founder' && e.type !== 'decision' && (e.relatedIds || []).some(r => ids.has(r))); // 下一個對外動作改動唔算呢個對象嘅真事

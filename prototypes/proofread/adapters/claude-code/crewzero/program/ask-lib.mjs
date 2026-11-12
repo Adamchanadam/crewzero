@@ -50,13 +50,25 @@ export function validateAskReply(parsed, pack) {
   if (ids.size !== pack.questions.length) return { ok: false, reason: 'unknown-or-duplicate-question' };
   for (const a of parsed.machine.answers) {
     if (!a || !['string', 'number'].includes(typeof a.id) || !ids.has(String(a.id)) || seen.has(String(a.id))) return { ok: false, reason: 'unknown-or-duplicate-question' };
+    const q = pack.questions.find(item => String(item.id) === String(a.id));
+    if (q && q.kind === 'money') {
+      const allowed = [NAMES.ui.mnyConfirm, NAMES.ui.mnyConfirmEdit, NAMES.ui.mnyReject];
+      if (!allowed.includes(a.value)) return { ok: false, reason: 'invalid-money-answer' };
+      const hasEdit = Object.hasOwn(a, 'edit');
+      if (hasEdit !== (a.value === NAMES.ui.mnyConfirmEdit)) return { ok: false, reason: 'invalid-money-edit' };
+      if (hasEdit) {
+        if (!a.edit || typeof a.edit !== 'object' || Array.isArray(a.edit)) return { ok: false, reason: 'invalid-money-edit' };
+        const keys = Object.keys(a.edit), allowedKeys = ['amount', 'date', 'category', 'what', 'payer'];
+        if (!keys.length || keys.some(key => !allowedKeys.includes(key))) return { ok: false, reason: 'invalid-money-edit' };
+      }
+    }
     seen.add(String(a.id));
   }
   return { ok: true };
 }
 // Windows：另一個程序啱啱讀緊同一個檔時，改名覆蓋會暫時被拒（EPERM／EBUSY），等一陣再試
 export function writeJSON(f, obj) {
-  const tmp = f + '.tmp';
+  const tmp = `${f}.${process.pid}-${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
   for (let i = 0; ; i++) {
     try { fs.renameSync(tmp, f); return; }
@@ -78,7 +90,7 @@ export function proofreadHash(page) {
 // 收件匣檔案分類（唯一定義處）：附件存檔名是「<編號>-note-<類型>-file-NN-<原名>」「<編號>-intake-NN-<原名>」「<編號>-prefill-NN-<原名>」，原名可以是任何字（例如以 -note-event.md、-intake.md 結尾），
 // 所以「看結尾認筆記」不可靠：先排除附件（舊檔同樣適用，不用改檔名），餘下才按筆記命名規則認。
 // 0.42.0：minutes-speakers（建議講者）、minutes-draft（整理會議紀錄草稿）由伺服器寫入收件匣，外殼 run.mjs handleNote 處理
-const NOTE_TYPES_RE = 'order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate|minutes-speakers|minutes-draft';
+const NOTE_TYPES_RE = 'order|adhoc|help|feedback|brain-decide|practice-prep|debrief|debate-start|debate-action|event|doc|ideate|minutes-speakers|minutes-draft|ext-draft';
 export const isInboxAttachment = f => /-note-(?:order|adhoc|event|doc)-file-\d+-/.test(String(f)) || /-(?:intake|prefill)-\d+-/.test(String(f));
 export const isInboxNote = f => !isInboxAttachment(f) && (new RegExp('-note-(?:' + NOTE_TYPES_RE + ')\\.md$').test(String(f)) || /-feedback-[a-z]+\.md$/.test(String(f)));
 export const isInboxNoteOf = (f, type) => !isInboxAttachment(f) && String(f).endsWith('-note-' + type + '.md');
@@ -162,7 +174,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.42.1';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.43.0';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 

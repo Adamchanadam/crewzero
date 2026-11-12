@@ -1,5 +1,6 @@
 // PDF 附件轉文字測試：所有夾具由程式即場組裝；唔讀外部 PDF，唔開子程序或伺服器。
 import fs from 'node:fs';
+import { assertTestOut, makeTestTemp } from '../lib/out-guard.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -11,7 +12,7 @@ const { isPdf, pdfToText, writePdfSidecar } = await import(pathToFileURL(LIB).hr
 const results = [];
 const ok = (name, pass, info = '') => results.push({ name, pass: !!pass, info });
 const tempDirs = [];
-const mkTmp = prefix => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); tempDirs.push(dir); return dir; };
+const mkTmp = prefix => { const dir = makeTestTemp(prefix); tempDirs.push(dir); return dir; };
 const enc = s => Buffer.from(s, 'latin1');
 
 function stream(dict, data) {
@@ -296,7 +297,7 @@ const p2StartedAt = Date.now();
 // 20. 新增的真實格式反例保持快速完成。
 ok('20. 新增 PDF 反例在兩秒內完成', Date.now() - p2StartedAt < 2000, Date.now() - p2StartedAt);
 
-for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true });
+for (const dir of tempDirs) { assertTestOut(dir); fs.rmSync(dir, { recursive: true, force: true }); }
 // 21. 字型把常用字對照到康熙部首或半形句號（真實 iPhone 列印檔見過）：輸出還原為正常漢字及「。」，全形標點不變
 {
   const raw = '0:05  Speaker 1\n⼈⽣⼤⽂⼒⻄⻓⻅⻔｡（測試），完';

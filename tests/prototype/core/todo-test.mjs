@@ -2,13 +2,14 @@
 // 用法：node todo-test.mjs <原型資料夾> <輸出資料夾> <port>
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { usePass } from '../lib/testkit.mjs';
 const [PROTO, OUT, PORT] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const results = []; const ok = (n, p, i) => results.push({ name: n, pass: !!p, info: i });
-fs.rmSync(OUT, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 }); // 重試時上一次嘅 Chrome 可能未放手
+freshTestOut(OUT); // 重試時上一次嘅 Chrome 可能未放手
 const DATA = path.join(OUT, 'data');
 process.env.SOS_DATA = DATA;
 const lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);

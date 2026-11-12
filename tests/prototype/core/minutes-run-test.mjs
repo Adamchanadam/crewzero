@@ -2,6 +2,7 @@
 // 用法：node minutes-run-test.mjs <原型資料夾> <輸出資料夾> <port（不使用）>
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { freshTestOut } from '../lib/out-guard.mjs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { writeAdapters } from '../lib/adapters.mjs';
@@ -29,7 +30,7 @@ const zeroAssumptionsSection = markdown => {
 };
 let seq = 0;
 
-fs.rmSync(OUT, { recursive: true, force: true });
+freshTestOut(OUT);
 fs.mkdirSync(OUT, { recursive: true });
 const adapters = writeAdapters(path.join(OUT, 'adapters'));
 const fake = read(adapters.fake);
