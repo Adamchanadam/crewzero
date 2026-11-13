@@ -237,6 +237,7 @@ const stateSource = (state, row) => {
 };
 
 const stateMatch = (proposal, state, question) => {
+  if (question.noChange === true) return null;
   const company = (state && state.company) || {};
   if (!proposal) return null;
   if (proposal.kind === 'assumption') {

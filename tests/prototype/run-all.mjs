@@ -232,6 +232,7 @@ const TESTS = [
   // 0.44.0 名單比對（N 線；docs/evidence/people-team-2026-11-12/fable-analysis.md「回歸測試」第 1、2、4、6、9 項）；直接叫外殼，不用埠
   ['名單比對流程', 'core/people-match-flow-test.mjs', ['{proto}', '{out}', '{port}']],
   // 0.44.0 每週訪問被舊一期阻擋（docs/evidence/journey-0440/dispatch/brief-f2.md 第 4.4a 節）；直接叫外殼，不用埠
+  ['假設題收起與取回', 'core/assume-closure-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['每週訪問下一期', 'core/interview-period-test.mjs', ['{proto}', '{out}', '{port}']],
   ['每週訪問下一期（開關打開）', 'core/interview-period-test.mjs', ['{proto}', '{out}', '{port}', 'on']]
 ];

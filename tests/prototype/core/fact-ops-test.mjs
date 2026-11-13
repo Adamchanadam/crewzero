@@ -102,6 +102,14 @@ try {
   const alternatePlan = planCleanup({ packs: [pack('alternate', '2026-11-01', [alternateActor])], answers: {}, state: keyedState, today: '2026-11-12' });
   ok('PC2e 有另一個對象選項的名單題不自動收起', alternatePlan.closures.length === 0, alternatePlan);
 
+  const confirmCurrent = q('confirm-current', { op: 'setAssumptionGrade', id: 'a1', grade: 'guess' }, { bind: 'assume', noChange: true, options: [{ text: '維持假設', apply: { op: 'setAssumptionGrade', id: 'a1', grade: 'guess' } }, { text: '改為口頭表示', apply: { op: 'setAssumptionGrade', id: 'a1', grade: 'said' } }] });
+  const confirmPlan = planCleanup({ packs: [pack('confirm-pack', '2026-11-01', [confirmCurrent], { rhythm: { kind: 'interview' } })], state: state(), today: '2026-11-12' });
+  ok('PC2g 確認現況的假設題不因現行值相同而收起', confirmPlan.closures.length === 0, confirmPlan);
+  const eventAssumption = q('event-assumption', null, { options: [{ text: '改為口頭表示', apply: { op: 'setAssumptionGrade', id: 'a1', grade: 'said' } }, { text: '維持假設', apply: { op: 'keep' } }] });
+  const eventState = state({ company: { assumptions: [{ id: 'a1', grade: 'said' }], actors: [], nextExternalAction: {} } });
+  const eventPlan = planCleanup({ packs: [pack('event-pack', '2026-11-01', [eventAssumption])], state: eventState, today: '2026-11-12' });
+  ok('PC2h 事件假設題的改動已生效時照舊收起', eventPlan.closures.length === 1 && eventPlan.closures[0].status === 'applied', eventPlan);
+
   const interview = pack('interview', '2026-11-01', [{ id: 'free', effect: 'tentative', bind: 'none' }, { id: 'now', effect: 'now', bind: 'overdue' }], { rhythm: { kind: 'interview' } });
   ok('RF1 每週訪問暫按 Zero 建議不屬必答', requiresFounder(interview, interview.questions[0]) === false);
   ok('RF2 即時生效題屬必答', requiresFounder(interview, interview.questions[1]) === true);
