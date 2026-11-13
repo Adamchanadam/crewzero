@@ -41,12 +41,15 @@ function dirs(name) {
   for (const folder of Object.values(DIR)) fs.mkdirSync(folder, { recursive: true });
   return DIR;
 }
+const limits = await import(pathToFileURL(path.join(PROTO, 'limits.mjs')).href);
 function server(DIR, override = {}) {
   const context = vm.createContext({
     fs, path, crypto, process, Buffer, DIR, ROOT: PROTO, PORT: 4380, FOUNDER_OPS: path.join(DIR.ledger, 'founder-ops.json'), FOUNDER_OPS_LOCK: path.join(DIR.ledger, '.founder-ops.lock'), NAMES: ask.NAMES,
-    localIso: () => '2026-11-11T12:00:00+00:00', readJSON: ask.readJSON, writeJSON: ask.writeJSON, fnv: ask.fnv, validateAskReply: ask.validateAskReply, parseFounderReply: ask.parseFounderReply,
+    localIso: () => '2026-11-11T12:00:00+00:00', readJSON: ask.readJSON, writeJSON: ask.writeJSON, fnv: ask.fnv, packHash: ask.packHash, readListStrict: ask.readListStrict, validateAskReply: ask.validateAskReply, parseFounderReply: ask.parseFounderReply,
     ...money, ...moneyStore, ...csv, ...ext, ...store,
-    hasContactInfo: () => false, plain: value => !!value && typeof value === 'object' && !Array.isArray(value), own: (value, key) => Object.hasOwn(value || {}, key), B64: /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+    // 0.44.0 起 server.mjs 由 limits.mjs 匯入 cleanFileName、B64 及檔案上限（附件上限改動）；vm 環境放入同一組真函數
+    ...limits,
+    hasContactInfo: () => false, plain: value => !!value && typeof value === 'object' && !Array.isArray(value), own: (value, key) => Object.hasOwn(value || {}, key),
     schedule: () => {}, certInfo: () => ({ host: 'test' }), companyStatus: () => ({ confirmed: true }), receiveNote: async () => ({ ok: true }), isDemoInstance: () => false,
     ...override
   });
@@ -184,7 +187,7 @@ function server(DIR, override = {}) {
 {
   const start = runSource.indexOf("    if (q.kind === 'money') {", runSource.indexOf('function handleEventConfirm'));
   const end = runSource.indexOf('    const opts = q.options', start);
-  const said = [], context = vm.createContext({ questions: [{ kind: 'money', money: { amountCents: 10000, currency: 'HKD' } }], a: { value: ask.NAMES.ui.mnyConfirmEdit, edit: { amount: '250.00' } }, said, U: ask.NAMES.ui, NAMES: ask.NAMES, formatMoney: money.formatMoney, toCents: money.toCents, Number, Object });
+  const said = [], context = vm.createContext({ questions: [{ kind: 'money', money: { amountCents: 10000, currency: 'HKD' } }], a: { value: ask.NAMES.ui.mnyConfirmEdit, edit: { amount: '250.00' } }, said, input: { effects: [] }, U: ask.NAMES.ui, NAMES: ask.NAMES, formatMoney: money.formatMoney, toCents: money.toCents, Number, Object });
   vm.runInContext(`for (const q of questions) {${runSource.slice(start, end)}}`, context);
   check('A13 修改後收據顯示實際入帳額', said[0]?.includes('HK$250'), String(said[0]));
 }

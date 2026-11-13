@@ -10,7 +10,7 @@
 
 ## 要做
 
-寫出 `out/minutes.md`。內容必須依 `meeting-minutes-format.md`：固定結構、改動清單、日期寫法、字數限制及 `⚠️`／`✏️` 標示均要符合。
+寫出 `out/minutes.md`。內容必須依 `meeting-minutes-format.md`：十節固定結構、每節列點、議題及討論要點、待辦與決定編號、改動清單、日期寫法、字數限制及 `⚠️`／`✏️` 標示均要符合。
 
 規則：
 

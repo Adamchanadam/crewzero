@@ -50,7 +50,7 @@ try {
     const store = (() => { try { return JSON.parse(fs.readFileSync(path.join(DEMO, 'ledger', 'answers', P.id + '.json'), 'utf8')).answers || {}; } catch { return {}; } })();
     const qs = P.questions.filter(q => !store[q.id]);
     const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: qs.map(q => q.id), answers: qs.map(q => ({ id: q.id, value: q.value, ai: q.value, changed: false })) };
-    const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+    const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
     return post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
   }
   c = await openChrome(CHROME, path.join(OUT, 'profile'), Number(PORT) + 5);

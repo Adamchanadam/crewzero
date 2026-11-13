@@ -15,6 +15,141 @@ const isDay = v => {
 export const dayText = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? `${+m[2]} 月 ${+m[3]} 日` : String(d || ''); };
 const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
+// 日期先後只接受實在的曆日，避免 2 月 30 日或收件時間混入依據日期。
+const realDay = value => isDay(value) ? String(value) : '';
+
+// 只比較日期，不比較說法內容；呼叫者已先排除內容相同的項目。
+export function compareByDate({ basisDate, basisAssumed, hasCurrent, currentDate, currentAssumed, newestDate } = {}) {
+  const basis = realDay(basisDate);
+  const current = currentAssumed === true ? '' : realDay(currentDate);
+  const newest = realDay(newestDate);
+  const assumed = basisAssumed === true || !basis;
+  if (assumed) return { result: 'unknown', why: 'basisAssumed', basisDate: basis, currentDate: current };
+  if (!hasCurrent) return basis && newest && basis < newest
+    ? { result: 'olderMissing', why: '', basisDate: basis, currentDate: current }
+    : { result: 'newer', why: 'noCurrent', basisDate: basis, currentDate: current };
+  if (!current) return { result: 'unknown', why: 'currentUndated', basisDate: basis, currentDate: '' };
+  const result = basis > current ? 'newer' : basis < current ? 'olderDiffers' : 'sameDay';
+  return { result, why: '', basisDate: basis, currentDate: current };
+}
+
+// 個別說法的日期必須可由事件日期或引句支持，才可取代事件本身的日期。
+export function checkAsOf(asOf, { eventDate, dateAssumed, quote, why } = {}) {
+  const day = realDay(asOf);
+  if (!day || String(why || '').includes('換算')) return '';
+  const eventDay = realDay(eventDate);
+  if (eventDay && dateAssumed !== true) return day <= eventDay ? day : '';
+  if (dateAssumed !== true) return day;
+  const [year, monthText, dayText] = day.split('-');
+  const month = String(Number(monthText)), date = String(Number(dayText));
+  const text = String(quote || '');
+  const dateOnly = new RegExp('(?:^|[^\\d])' + month + '\\s*月\\s*' + date + '\\s*日(?!\\d)');
+  const fullChinese = new RegExp('(?:^|[^\\d])' + year + '\\s*年\\s*' + month + '\\s*月\\s*' + date + '\\s*日(?!\\d)');
+  return dateOnly.test(text) || fullChinese.test(text) || text.includes(day) ? day : '';
+}
+
+const inputDate = input => input && input.dateAssumed !== true ? realDay(input.eventDate) : '';
+
+// 讀取現有項目的依據日期；updatedAt 只是寫入時間，絕不可作日程依據。
+export function recordBasis(state, ref = {}) {
+  const company = (state && state.company) || {};
+  if (ref.kind === 'assumption') {
+    const assumption = (Array.isArray(company.assumptions) ? company.assumptions : []).find(row => row && row.id === ref.id);
+    return assumption ? { has: true, date: realDay(assumption.changedAt), assumed: assumption.changedAtAssumed === true } : { has: false, date: '', assumed: false };
+  }
+  if (ref.kind === 'nextAction') {
+    const action = company.nextExternalAction || {};
+    if (!action.text && !action.cancelledAt) return { has: false, date: '', assumed: false };
+    // 創辦人其後親自更新亦是現值依據；兩者同日以創辦人更新為準（不是假定日期）。
+    const basis = realDay(action.basisDate), founder = realDay(String(action.founderUpdatedAt || '').slice(0, 10));
+    if (founder && founder >= basis) return { has: true, date: founder, assumed: false };
+    return { has: true, date: basis, assumed: action.basisAssumed === true };
+  }
+  if (ref.kind === 'task') {
+    const task = (Array.isArray(state && state.tasks) ? state.tasks : []).find(row => row && row.id === ref.id);
+    if (!task) return { has: false, date: '', assumed: false };
+    if (task.basisDate != null && task.basisDate !== '') return { has: true, date: realDay(task.basisDate), assumed: task.basisAssumed === true };
+    const inputs = Array.isArray(state && state.inputs) ? state.inputs : [];
+    const minutesId = task.minutesSource && task.minutesSource.id;
+    const minutesInput = minutesId && inputs.find(row => row && row.minutes && row.minutes.id === minutesId);
+    const minutesDate = inputDate(minutesInput);
+    if (minutesDate) return { has: true, date: minutesDate, assumed: false };
+    const fromDate = inputDate(inputs.find(row => row && row.id === task.fromInput));
+    return { has: true, date: fromDate, assumed: false };
+  }
+  return { has: false, date: '', assumed: false };
+}
+
+// 只看已完成處理、日期明確的其他事件；未確認或假定日期不能壓過今次資料。
+export function newestEventDate(state, excludeInputId) {
+  let newest = '';
+  for (const input of (Array.isArray(state && state.inputs) ? state.inputs : [])) {
+    const day = inputDate(input);
+    if (input && input.id !== excludeInputId && input.status === 'processed' && (input.via === 'event' || input.via === 'doc') && day && day > newest) newest = day;
+  }
+  return newest;
+}
+
+const datedTarget = item => {
+  if (item.kind === 'assumption') return { kind: 'assumption', id: item.id };
+  if (item.kind === 'nextAction') return { kind: 'nextAction' };
+  return { kind: 'task', id: item.sameAsTask };
+};
+
+const recordedValue = (state, target) => {
+  const company = (state && state.company) || {};
+  if (target.kind === 'assumption') {
+    const assumption = (Array.isArray(company.assumptions) ? company.assumptions : []).find(row => row && row.id === target.id);
+    return assumption ? assumption.grade : '';
+  }
+  if (target.kind === 'nextAction') return (company.nextExternalAction || {}).text || '';
+  const task = (Array.isArray(state && state.tasks) ? state.tasks : []).find(row => row && row.id === target.id);
+  return task ? { title: task.title, dueAt: task.dueAt } : { title: '', dueAt: '' };
+};
+
+const saidValue = item => item.kind === 'assumption' ? item.grade : item.kind === 'nextAction' ? item.text : { title: item.action, dueAt: item.date };
+const sourceOfInput = input => input && input.minutes ? 'meeting' : input && input.via === 'doc' ? 'doc' : 'event';
+
+// 為事件建議加上日期裁決；不改 state 或原有項目，讓外殼可安全重試。
+export function dateGate(state, input = {}, items = []) {
+  const kept = [], notes = [], dropped = [];
+  const newestDate = newestEventDate(state, input.id);
+  // 修改版會議紀錄：上一版（及同一份紀錄的其他版本）寫入的現有資料不作日期比較，否則同日修訂會被當作「同日另一個說法」
+  const revisedInputs = new Set();
+  if (input.minutes) {
+    if (input.minutes.revisionOf) revisedInputs.add(String(input.minutes.revisionOf));
+    for (const row of (Array.isArray(state && state.inputs) ? state.inputs : [])) if (row && row.id !== input.id && row.minutes && input.minutes.id && row.minutes.id === input.minutes.id) revisedInputs.add(row.id);
+  }
+  for (const item of (Array.isArray(items) ? items : [])) {
+    // 沒有日期的事件：由相對日期換算的跟進一律丟棄，不論是否對應現有日程（DPF-7）
+    if (item && input.dateAssumed === true && item.kind === 'followUp' && String(item.why || '').includes('換算')) { dropped.push({ item, reason: 'relative' }); continue; }
+    const dated = item && (item.kind === 'assumption' || item.kind === 'nextAction' || (item.kind === 'followUp' && item.sameAsTask));
+    if (!dated) { kept.push(item); continue; }
+    const task = item.kind === 'followUp' ? (Array.isArray(state && state.tasks) ? state.tasks : []).find(row => row && row.id === item.sameAsTask) : null;
+    const company = (state && state.company) || {};
+    const currentFrom = item.kind === 'assumption' ? String(((company.assumptions || []).find(row => row && row.id === item.id) || {}).sourceId || '')
+      : item.kind === 'nextAction' ? String((company.nextExternalAction || {}).basisFrom || '') : '';
+    const exempt = item.revisionOfTaskId || item.revisionFrom || item.revisionAmbiguity || (item.kind === 'followUp' && input.minutes && input.minutes.id && task && task.minutesSource && task.minutesSource.id === input.minutes.id) || (!!currentFrom && revisedInputs.has(currentFrom));
+    if (exempt) { kept.push(item); continue; }
+    const suppliedAsOf = item.asOf != null && String(item.asOf).trim() !== '';
+    const asOf = checkAsOf(item.asOf, { eventDate: input.eventDate, dateAssumed: input.dateAssumed, quote: item.sourceQuote || item.sourceLine || item.why, why: item.why });
+    if (suppliedAsOf && !asOf) dropped.push({ item, reason: 'asOf' });
+    const basisDate = asOf || input.eventDate;
+    // 文件未載日期是逐項假定；不能令同一件文件內有日期的其他項目失去可比較的日期。
+    const assumedWhy = typeof item.basisAssumedWhy === 'string' && item.basisAssumedWhy ? item.basisAssumedWhy : '';
+    const basisAssumed = asOf ? false : !!assumedWhy || input.dateAssumed === true || !isDay(basisDate);
+    const target = datedTarget(item);
+    const current = recordBasis(state, target);
+    const compared = compareByDate({ basisDate, basisAssumed, hasCurrent: current.has, currentDate: current.date, currentAssumed: current.assumed, newestDate });
+    if (compared.result === 'olderDiffers') {
+      notes.push({ item, kind: item.kind, targetId: target.id || 'nextAction', said: saidValue(item), now: recordedValue(state, target), basisDate: compared.basisDate, currentDate: compared.currentDate, source: sourceOfInput(input) });
+      continue;
+    }
+    kept.push({ ...item, dated: { result: compared.result, why: assumedWhy || compared.why, basisDate: compared.basisDate, basisAssumed, currentDate: compared.currentDate } });
+  }
+  return { items: kept, notes, dropped };
+}
+
 // 把純函數回傳的新狀態合回呼叫者手上的同一份狀態物件（原地更新，物件身份不變：呼叫者手上的 input、假設、站等參照仍然有效）。
 export function mergeInPlace(target, source) {
   const reuse = (old, v) => (old && v && typeof old === 'object' && typeof v === 'object' && Array.isArray(old) === Array.isArray(v)) ? mergeInPlace(old, v) : v;
@@ -62,7 +197,7 @@ export function registerInput(state, ev) {
     for (const k of ['url', 'readOn', 'kind', 'convert']) if (x[k]) o[k] = x[k];
     return o;
   });
-  const input = { id: ev.id, kind: 'inbox', via: ev.via, title: ev.title, file: ev.file || '', files, ...(ev.eventDate ? { eventDate: ev.eventDate } : {}), receivedAt: ev.receivedAt, status: 'unprocessed', effects: [],
+  const input = { id: ev.id, kind: 'inbox', via: ev.via, title: ev.title, file: ev.file || '', files, ...(ev.eventDate ? { eventDate: ev.eventDate } : {}), ...(ev.dateAssumed === true ? { dateAssumed: true } : {}), receivedAt: ev.receivedAt, status: 'unprocessed', effects: [],
     ...(meta.source ? { source: meta.source } : {}), ...(fileInfo.length ? { fileInfo } : {}), ...(meta.linkErrors.length ? { linkErrors: meta.linkErrors } : {}) };
   s.inputs = (Array.isArray(s.inputs) ? s.inputs : []).filter(i => i && i.id !== ev.id);
   s.inputs.push(input);
@@ -100,7 +235,7 @@ export function addEffect(state, inputId, eff) {
 export const followUpTaskId = (inputId, qid) => 'fu-' + inputId + '-' + qid;
 
 // 創辦人答了「跟進日期」確認題。answer：'accept' 加入日程；其他（reject／keep）不寫任何行動，只記「不加入」。
-// item：{ date, action, station?, why }；today 只用來看是否已過期（過期仍可加入，由日程顯示逾期）。冪等：同一題（輸入＋題號）只加一次。
+// item：{ date, action, station?, why, basisDate?, basisAssumed?, basisFrom? }；today 只用來看是否已過期（過期仍可加入，由日程顯示逾期）。冪等：同一題（輸入＋題號）只加一次。
 export function applyFollowUp(state, { inputId, qid, answer, item, now }) {
   const s = clone(state) || {};
   const input = (s.inputs || []).find(i => i && i.id === inputId);
@@ -111,7 +246,7 @@ export function applyFollowUp(state, { inputId, qid, answer, item, now }) {
   s.tasks = Array.isArray(s.tasks) ? s.tasks : [];
   if (!s.tasks.some(t => t && t.id === taskId)) {
     const station = item.station && (s.milestones || []).some(m => m.id === item.station) ? item.station : '';
-    s.tasks.push({ id: taskId, title: label, owner: 'founder', status: 'planned', dueAt: item.date, ...(station ? { milestoneId: station } : {}), next: clip(item.why || '', 60), fromInput: inputId, updatedAt: now || '' });
+    s.tasks.push({ id: taskId, title: label, owner: 'founder', status: 'planned', dueAt: item.date, ...(station ? { milestoneId: station } : {}), next: clip(item.why || '', 60), fromInput: inputId, ...(isDay(item.basisDate) ? { basisDate: item.basisDate } : {}), ...(item.basisAssumed === true ? { basisAssumed: true } : {}), ...(typeof item.basisFrom === 'string' && item.basisFrom ? { basisFrom: item.basisFrom } : {}), updatedAt: now || '' });
   }
   return addEffect(s, inputId, { targetKind: 'followUp', targetId: taskId, change: '已加入日程：' + dayText(item.date) + '　' + label, before: '未排入日程', after: dayText(item.date), dueAt: item.date });
 }
@@ -161,9 +296,15 @@ export function checkRead(read, { delivered = [], styleIssues = () => [] } = {})
 
 export function checkReason(reason, { styleIssues = () => [] } = {}) {
   if (reason == null) return { ok: true, reason: '', errors: [] };
-  if (typeof reason !== 'string' || !reason.trim() || reason.length > 120) return { ok: false, reason: '', errors: ['reason 必須是一句（最多 120 字）'] };
-  if (styleIssues(reason).length) return { ok: false, reason: '', errors: ['reason 有內部用語、編號或口語，請改為商用書面語、不寫編號'] };
-  return { ok: true, reason: reason.trim(), errors: [] };
+  if (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 400) return { ok: false, reason: '', errors: ['reason 必須是一句（最多 120 字）'] };
+  // 稍長（121–400 字）不退回修正：外殼在 120 字內最後一個句號處截斷，沒有句號就截至 119 字加「…」（0.44.0 真實 AI 一批 R4）
+  let text = reason.trim();
+  if (text.length > 120) {
+    const head = text.slice(0, 120), stop = Math.max(head.lastIndexOf('。'), head.lastIndexOf('；'));
+    text = stop >= 20 ? head.slice(0, stop + 1) : text.slice(0, 119) + '…';
+  }
+  if (styleIssues(text).length) return { ok: false, reason: '', errors: ['reason 有內部用語、編號或口語，請改為商用書面語、不寫編號'] };
+  return { ok: true, reason: text, errors: [] };
 }
 
 // followUp 項：{ kind: 'followUp', date, action, station?, why }；日期必須合規且不早於事件日；站點必須存在；字數有上限

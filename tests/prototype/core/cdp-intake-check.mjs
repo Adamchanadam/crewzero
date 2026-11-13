@@ -26,6 +26,10 @@ try {
   await usePass(BASE, chrome);
   await chrome.go(BASE + '/#/intake');
   const ev = expression => chrome.ev(expression);
+  // 0.44.0 已批設計：沒有八題草稿時先顯示起點，按「直接填八條問題」才出八題表格
+  const FILL_GO = JSON.stringify(N.ui.jrPathFillGo);
+  await waitFor(() => ev(`!!document.querySelector('#q1')||[...document.querySelectorAll('button,a,[role=button]')].some(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0)`));
+  if (!await ev(`!!document.querySelector('#q1')`)) await ev(`[...document.querySelectorAll('button,a,[role=button]')].find(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0).click()`);
   if (!await waitFor(() => ev(`!!document.querySelector('#q1')`))) throw new Error('intake form did not appear');
   const text = sel => ev(`document.querySelector(${JSON.stringify(sel)})?.innerText || ''`);
   const set = async (sel, value) => { await ev(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});e.value=${JSON.stringify(value)};e.dispatchEvent(new Event('input',{bubbles:true}))})()`); };

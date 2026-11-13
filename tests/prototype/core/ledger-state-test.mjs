@@ -108,7 +108,8 @@ const base = () => ({ revision: 3, tasks: [{ id: 't1', title: '舊工作', owner
   ok('C 核對 read：合格', rd.ok && rd.read.highlights[0].page === 3 && rd.read.highlights[0].file === '會議紀錄.pdf', rd);
   ok('C 核對 read：檔名不是今次附件、頁碼不是數字、缺 summary 都不合格', !ops.checkRead({ summary: 'x', highlights: [{ text: 'y', file: '假的.pdf' }] }, { delivered: ['真的.pdf'] }).ok && !ops.checkRead({ summary: 'x', highlights: [{ text: 'y', page: 'p3' }] }).ok && !ops.checkRead({ highlights: [] }).ok);
   ok('C 核對 read：含編號或內部用語不合格', !ops.checkRead({ summary: '假設 H2 升級了', highlights: [] }, { styleIssues: style }).ok);
-  ok('C 核對 reason：空白、太長、含編號不合格；合格則回傳', !ops.checkReason('', {}).ok && !ops.checkReason('長'.repeat(121), {}).ok && !ops.checkReason('因為 H2 沒有變', { styleIssues: style }).ok && ops.checkReason('對方沒有做任何新的事。', { styleIssues: style }).reason === '對方沒有做任何新的事。');
+  // 0.44.0：121–400 字由外殼截短（不退回修正），超過 400 字仍不合格
+  ok('C 核對 reason：空白、超過 400 字、含編號不合格；稍長截至 120 字；合格則回傳', !ops.checkReason('', {}).ok && !ops.checkReason('長'.repeat(401), {}).ok && ops.checkReason('長'.repeat(121), {}).reason.length === 120 && !ops.checkReason('因為 H2 沒有變', { styleIssues: style }).ok && ops.checkReason('對方沒有做任何新的事。', { styleIssues: style }).reason === '對方沒有做任何新的事。');
   const fu = (it, extra = {}) => ops.checkFollowUpItem({ kind: 'followUp', why: '因為', ...it }, 'items 第 1 項', { eventDate: '2026-11-06', milestones: [{ id: 'm1' }], styleIssues: style, ...extra });
   ok('C 核對 followUp：合格', fu({ date: '2026-11-20', action: '回覆報價', station: 'm1' }).length === 0);
   ok('C 核對 followUp：日期格式、早於事件日、站點不存在、action 缺或含編號都不合格', fu({ date: '11-20', action: 'x' }).length && fu({ date: '2026-11-01', action: 'x' }).length && fu({ date: '2026-11-20', action: 'x', station: 'zz' }).length && fu({ date: '2026-11-20' }).length && fu({ date: '2026-11-20', action: '回覆 H2 的事' }).length);

@@ -34,6 +34,7 @@ Windows 電腦、[Node.js](https://nodejs.org)（免費程式），以及已安�
 | 打開 CrewZero | `/crewzero:dashboard` | `$crewzero:dashboard` | `/dashboard` |
 | 和 Zero 討論 | `/crewzero:discuss` | `$crewzero:discuss` | `/discuss` |
 | 更新 | `/crewzero:update` | `$crewzero:update` | `/update` |
+| 加延伸功能 | `/crewzero:extend` | `$crewzero:extend` | `/extend` |
 
 三種 AI 工具都可以上網研究、情景演練及紅藍對打。使用 Antigravity 時，Zero 只可網上搜尋，不能開啟網頁全文，所以引用會標明「只經搜尋摘要」。
 
@@ -58,6 +59,8 @@ CrewZero 是 startup-os 的新名字。已在用 startup-os 的話，按你的�
 ## 你的資料
 
 公司資料只存放在這部電腦。只有已配對的瀏覽器或手機可以讀取及寫入；手機配對可以隨時撤銷。手機只可在與這部電腦相同的家中或辦公室 Wi-Fi 使用；其他人要使用，請在這部電腦的瀏覽器開啟。
+
+私隱政策：[https://adamchanadam.github.io/crewzero/privacy.html](https://adamchanadam.github.io/crewzero/privacy.html)
 
 ## 授權及作者
 

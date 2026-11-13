@@ -103,7 +103,7 @@ async function world(name, { roles = false, mutate = null } = {}) {
       const done = W2.answers(pack.id);
       const list = pack.questions.filter(q => !done[q.id]).map(q => ({ q, v: pick(q) })).filter(x => x.v !== undefined).map(({ q, v }) => ({ id: q.id, value: v, ai: q.value, changed: v !== q.value }));
       const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: lib.localIso(), batch: list.map(a => a.id), answers: list };
-      const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: ' + (list.length < pack.questions.length), 'shownAt: ' + lib.localIso()];
+      const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(pack) : lib.fnv(JSON.stringify(pack))), 'batch: ' + (list.length < pack.questions.length), 'shownAt: ' + lib.localIso()];
       fs.mkdirSync(DIR.replies, { recursive: true });
       fs.writeFileSync(path.join(DIR.replies, lib.localIso().replace(/\D/g, '') + '-ask-answer-' + pack.id + '-' + (seq++) + '.md'), head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n');
       return shell();

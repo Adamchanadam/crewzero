@@ -39,7 +39,7 @@ const readState = () => JSON.parse(fs.readFileSync(stateFile, 'utf8'));
 const writeInterviewReply = (pack, answers, file) => {
   write(path.join(DIR.asks, pack.id + '.json'), pack);
   const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: '2026-11-03T10:00:00+00:00', batch: answers.map(answer => answer.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + ask.fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: 2026-11-03T10:00:00+00:00'];
+  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + (ask.packHash ? ask.packHash(pack) : ask.fnv(JSON.stringify(pack))), 'batch: false', 'shownAt: 2026-11-03T10:00:00+00:00'];
   fs.writeFileSync(path.join(DIR.replies, file), head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n');
 };
 async function ready() {
@@ -60,7 +60,7 @@ try {
   const duplicateTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '已有名稱', kind: 'product' } });
   const inListTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '名單現有名稱', kind: 'product' } });
   const contactTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '電話91234567', kind: 'product' } });
-  ok('TF-02 重名、已在名單及聯絡資料被拒而且不入隊列', duplicateTerm.code === 400 && duplicateTerm.json?.message === ask.NAMES.ui.term_errDuplicate && inListTerm.code === 400 && inListTerm.json?.message === ask.NAMES.ui.term_errInList && contactTerm.code === 400 && contactTerm.json?.message === ask.NAMES.ui.ppl_errContact && termQueueCount() === 0, { duplicateTerm, inListTerm, contactTerm, queued: termQueueCount() });
+  ok('TF-02 重名、已在名單及聯絡資料被拒而且不入隊列', duplicateTerm.code === 400 && duplicateTerm.json?.message === ask.NAMES.ui.term_errDuplicate && inListTerm.code === 400 && inListTerm.json?.message === ask.NAMES.ui.term_errInList && contactTerm.code === 400 && contactTerm.json?.message === ask.NAMES.dash.ppl_errContact && !!ask.NAMES.dash.ppl_errContact && termQueueCount() === 0, { duplicateTerm, inListTerm, contactTerm, queued: termQueueCount() });
   const full = readState(); full.company.terms = Array.from({ length: 60 }, (_, i) => ({ id: 'tn-full-' + i, name: '滿額名稱' + i, kind: 'product', aliases: [], addedAt: '2026-11-10', addedFrom: 'manual' })); write(stateFile, full);
   const fullTerm = await post('/api/founder-op', { op: 'termAdd', target: 'terms', value: { name: '第六十一個名稱', kind: 'product' } });
   ok('TF-03 已有 60 個名稱被拒而且不入隊列', fullTerm.code === 400 && fullTerm.json?.message === ask.NAMES.ui.term_errFull && termQueueCount() === 0, { fullTerm, queued: termQueueCount() });

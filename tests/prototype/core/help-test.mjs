@@ -70,7 +70,7 @@ async function answer(p, value) {
     batch: [q.id],
     answers: [{ id: q.id, value, ai: q.value, changed: value !== q.value }]
   };
-  const head = ['kind: ask-answer', 'ref: ' + p.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(p)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + p.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(p) : lib.fnv(JSON.stringify(p))), 'batch: false', 'shownAt: ' + lib.localIso()];
   return post('/api/submit', { kind: 'ask-answer', ref: p.id, text: head.join('\n') + '\n\n# 答案\n\n' + fence + 'json\n' + JSON.stringify(machine) + '\n' + fence + '\n' });
 }
 function tree(root) {

@@ -465,6 +465,22 @@
         "why": "只影響問題及例子的用字，可以更改。"
       },
       {
+        "id": "biz-goal",
+        "plan": "biz.goal",
+        "label": "想做成哪種生意",
+        "kind": "choice",
+        "value": "小而穩的生意",
+        "origin": "ai",
+        "options": [
+          { "text": "盡快有收入" },
+          { "text": "小而穩的生意", "rec": true },
+          { "text": "高速擴張" },
+          { "text": "準備融資" },
+          { "text": "未定" }
+        ],
+        "why": "影響 Zero 評估路線的標準，可以更改。"
+      },
+      {
         "id": "canvas-customer",
         "plan": "canvas.customer",
         "label": "客戶",
@@ -553,6 +569,19 @@
         "origin": "ai"
       }
     ],
+    "model": {
+      "name": "每月鮮豆訂閱",
+      "payer": "上班族按月付費收取新鮮咖啡豆。",
+      "faces": {
+        "charge": { "undecided": true, "missing": "示例沒有附模式卡引文。" },
+        "form": { "undecided": true, "missing": "示例沒有附模式卡引文。" },
+        "scale": { "undecided": true, "missing": "示例沒有附模式卡引文。" }
+      },
+      "why": "示例只展示欄位結構。",
+      "trap": { "text": "訂戶試用後未必願意續訂。", "zero": true },
+      "firstTest": { "text": "先向首批對象了解是否願意付費試訂。", "watch": "實際付款", "counts": "只計付款紀錄", "zero": true },
+      "altCharge": { "text": "可先按單次試訂收費。", "why": "先核對是否有重複需求。" }
+    },
     "missing": [
       {
         "id": "miss-1",
@@ -574,6 +603,10 @@
         "value": "尚未驗證",
         "origin": "ai",
         "kind": "text",
+        "cell": "revenue",
+        "milestoneIds": [
+          "m2"
+        ],
         "tentative": {
           "by": "ai",
           "until": "2026-10-29",

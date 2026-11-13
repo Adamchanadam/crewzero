@@ -312,15 +312,18 @@ export function checkBlue(j, { maxClaims = 12, ledger = null, access = 'search+r
   if (data.admittedWeaknesses.length < 1) w.push('藍方未有承認任何弱點');
   return result(e, w, data);
 }
-export function checkRed(j, blue, seats, actorIds = [], { allowIncomplete = false, access = 'search+read' } = {}) {
+export function checkRed(j, blue, seats, actorIds = [], { allowIncomplete = false, access = 'search+read', traps = [] } = {}) {
   const e = [], w = [];
   if (!j || typeof j !== 'object') return result(['紅方未有交出攻擊'], w, null);
   const cids = new Set(arr(blue.claims).map(c => c.id)), sids = new Set(arr(blue.strategies).map(s => s.id));
   const seen = new Set();
+  const allowedTraps = new Set(arr(traps).map(value => txt(value, 300)).filter(Boolean));
   const attacks = arr(j.attacks).filter(a => a && /^R\d{1,3}$/.test(String(a.id)) && cids.has(a.claimId) && txt(a.attack, 300) && !seen.has(a.id) && seen.add(a.id)).slice(0, 30).map(a => {
     const persona = txt(a.persona, 40) || '其他';
     if (seats && seats.length && !seats.includes(persona)) w.push(`有一條攻擊的身份不在席位內：${persona}`);
-    return { id: a.id, claimId: a.claimId, persona, attack: txt(a.attack, 300), failureScenario: txt(a.failureScenario, 300), refuteBy: txt(a.refuteBy, 300), severity: SEV.includes(a.severity) ? a.severity : '中' };
+    const trap = txt(a.trap, 300);
+    if (trap && allowedTraps.size && !allowedTraps.has(trap)) w.push(`紅方攻擊「${a.id}」的模式陷阱不是原句，已刪除。`);
+    return { id: a.id, claimId: a.claimId, persona, attack: txt(a.attack, 300), failureScenario: txt(a.failureScenario, 300), refuteBy: txt(a.refuteBy, 300), severity: SEV.includes(a.severity) ? a.severity : '中', ...(trap && allowedTraps.has(trap) ? { trap } : {}) };
   });
   if (!attacks.length) e.push('紅方沒有有效攻擊（攻擊須對準藍方論點）');
   if (arr(j.attacks).length > attacks.length) w.push(`有 ${arr(j.attacks).length - attacks.length} 條攻擊格式不正確或未對準論點，已剔除`);

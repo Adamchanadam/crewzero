@@ -36,7 +36,7 @@ details.layer summary{cursor:pointer;font-weight:600}
 .money-receipt-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.money-receipt-actions .btn{min-height:42px}
 .money-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.money-edit-grid label{display:grid;gap:6px;font-size:var(--fs-label);color:var(--muted)}.money-edit-grid textarea{min-height:72px}.money-edit-grid .wide{grid-column:1/-1}
 @media (max-width:600px){.money-receipt-grid,.money-edit-grid{grid-template-columns:1fr}.money-receipt-actions .btn{flex:1 1 auto}.money-edit-grid .wide{grid-column:auto}}
-.why{font-size:var(--fs-sub);color:var(--muted);margin:4px 0 2px}
+.why{font-size:var(--fs-sub);color:var(--muted);margin:4px 0 2px;white-space:pre-line}
 .fb-ic.info{background:rgba(127,167,232,.14);color:#9fbcf0;border-color:rgba(127,167,232,.45)}
 .fb-body h4 small{font-weight:400;font-size:var(--fs-label);margin-left:6px}
 .cmp{border:1px solid var(--line);border-left:3px solid #7fa7e8;border-radius:10px;padding:10px 12px;margin:8px 0;background:rgba(255,255,255,.015)}
@@ -83,6 +83,51 @@ details.iq-opt summary{cursor:pointer;font-weight:600}
 #intake-err{color:var(--red);margin-top:6px}
 .cert-note-error{border-left:3px solid var(--red)}.cert-note-done{border-left:3px solid var(--mint)}.tr-fix{color:var(--red)}
 #zero-think-box{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* 0.44.0 開局旅程：版面依已批原型，全部限於旅程容器內。 */
+#jr-journey{max-width:1240px;margin:0 auto}
+#jr-journey .jr-progress{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:center;padding:14px 20px}
+#jr-journey .jr-steps{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0 0;padding:0;list-style:none}
+#jr-journey .jr-steps li{display:flex;align-items:center;gap:8px;font-size:var(--fs-sub);color:var(--muted)}
+#jr-journey .jr-steps li+li:before{content:"";width:22px;height:1px;background:var(--line);margin-right:2px}
+#jr-journey .jr-steps .n{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;font:600 var(--fs-label) var(--mono);border:1px solid var(--line);color:var(--muted)}
+#jr-journey .jr-steps li.done{color:#c9ceda}#jr-journey .jr-steps li.done .n{background:rgba(153,215,188,.14);border-color:rgba(153,215,188,.6);color:var(--mint)}
+#jr-journey .jr-steps li.cur{color:var(--text);font-weight:650}#jr-journey .jr-steps li.cur .n{background:var(--amber);border-color:var(--amber);color:#1b1006}
+#jr-journey .jr-said{margin:10px 0 0;font-size:var(--fs-sub);color:var(--muted)}#jr-journey .jr-said b,#jr-journey .jr-said .jr-said-cell{color:var(--mint);font-weight:600}
+#jr-journey .jr-mini-cap{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-label);color:var(--muted);margin-bottom:5px}#jr-journey .jr-mini-cap b{color:var(--text);font-weight:600}
+#jr-journey .jr-mini{display:grid;grid-template-columns:repeat(10,1fr);grid-template-rows:26px 26px 22px;gap:3px}
+#jr-journey .jr-mini span{border:1px solid rgba(255,255,255,.08);border-radius:4px;background:rgba(255,255,255,.02);font-size:calc(var(--fs-min) - 1px);line-height:1.15;color:#6f7686;display:grid;place-items:center;text-align:center;padding:0 2px;overflow:hidden}
+#jr-journey .jr-mini span.f{background:rgba(232,141,79,.16);border-color:rgba(232,141,79,.38);color:#ffd3ae}#jr-journey .jr-mini span.new{background:rgba(153,215,188,.2);border-color:rgba(153,215,188,.7);color:#d6f3e6}#jr-journey .jr-mini span.u{border-style:dashed;border-color:rgba(239,179,127,.6);color:var(--wait);background:transparent}
+#jr-journey .jr-mini .c-pa{grid-column:1/3;grid-row:1/3}#jr-journey .jr-mini .c-ac{grid-column:3/5;grid-row:1}#jr-journey .jr-mini .c-re{grid-column:3/5;grid-row:2}#jr-journey .jr-mini .c-va{grid-column:5/7;grid-row:1/3}#jr-journey .jr-mini .c-cr{grid-column:7/9;grid-row:1}#jr-journey .jr-mini .c-ch{grid-column:7/9;grid-row:2}#jr-journey .jr-mini .c-cu{grid-column:9/11;grid-row:1/3}#jr-journey .jr-mini .c-co{grid-column:1/6;grid-row:3}#jr-journey .jr-mini .c-rv{grid-column:6/11;grid-row:3}
+#jr-journey .jr-hero{padding:22px 24px;margin-top:12px}#jr-journey .jr-hero h2{font-size:var(--fs-page);font-weight:650;margin:6px 0 0;line-height:1.35}
+#jr-journey .jr-zero-line{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:10px 12px;border-radius:12px;background:rgba(153,215,188,.05);border:1px solid rgba(153,215,188,.18)}
+#jr-journey .jr-zero-avatar{flex:none;width:34px;height:34px;object-fit:cover;border-radius:10px;border:1px solid rgba(153,215,188,.25)}
+#jr-journey .jr-zero-line p{margin:0;font-size:var(--fs-sub);line-height:1.6}#jr-journey .jr-zero-line b{color:var(--mint)}
+#jr-journey .jr-start-hero{position:relative;isolation:isolate;overflow:hidden;min-height:250px}#jr-journey .jr-start-hero .scene-bg{z-index:-1}
+#jr-journey .jr-start-body{max-width:60%}#jr-journey .jr-start-hero textarea{margin-top:14px;border-color:rgba(232,141,79,.55)}
+#jr-journey .jr-attach{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:var(--fs-sub);color:var(--muted)}
+#jr-journey .jr-section-title{margin:22px 0 0;font-size:var(--fs-title);font-weight:650}
+#jr-journey .jr-paths{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-top:16px}
+#jr-journey .jr-path{display:flex;flex-direction:column;gap:10px;padding:22px 24px;border-radius:var(--r-card);border:1px solid rgba(255,255,255,.1);background:var(--panel);background-image:var(--glass)}
+#jr-journey .jr-path.main{border-color:rgba(232,141,79,.55);background-image:linear-gradient(160deg,rgba(232,141,79,.12),rgba(232,141,79,.02) 55%)}#jr-journey .jr-path h3{margin:0;font-size:calc(var(--fs-title) + 4px);font-weight:650}#jr-journey .jr-path p{margin:0;color:#c9ceda;font-size:var(--fs-body)}
+#jr-journey .jr-trail{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:var(--fs-label);color:var(--muted)}#jr-journey .jr-trail span{border:1px solid var(--line);border-radius:999px;padding:2px 10px}#jr-journey .jr-trail i{font-style:normal;opacity:.6}
+#jr-journey .jr-path .go,#jr-journey .jr-path .tag{margin-top:auto;align-self:flex-start}#jr-journey .jr-path .tag{margin-top:0}#jr-journey .jr-path .shot{display:block;width:100%;height:118px;object-fit:cover;object-position:top left;border-radius:9px;border:1px solid var(--line);opacity:.85}#jr-journey .jr-intake-preview{display:grid;gap:4px;grid-template-columns:repeat(2,minmax(0,1fr));padding:9px;border:1px solid var(--line);border-radius:9px;background:rgba(0,0,0,.16)}#jr-journey .jr-intake-preview span{height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(153,215,188,.42) 0 22%,rgba(255,255,255,.09) 22% 100%)}#jr-journey .jr-intake-preview span:nth-child(3n+2){background:linear-gradient(90deg,rgba(232,141,79,.45) 0 34%,rgba(255,255,255,.09) 34% 100%)}#jr-journey .jr-intake-preview span:nth-child(4n){background:linear-gradient(90deg,rgba(194,214,250,.45) 0 47%,rgba(255,255,255,.09) 47% 100%)}
+#jr-journey .jr-cards3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}
+#jr-journey .jr-ccard{display:flex;flex-direction:column;gap:10px;padding:18px 20px;border-radius:var(--r-card);border:1px solid rgba(255,255,255,.09);background:var(--panel);background-image:var(--glass)}#jr-journey .jr-ccard.rec{border-color:rgba(232,141,79,.5)}#jr-journey .jr-ccard.picked{border-color:rgba(153,215,188,.75);background-image:linear-gradient(180deg,rgba(153,215,188,.08),rgba(153,215,188,.01) 60%)}
+#jr-journey .jr-ctop{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}#jr-journey .jr-ico{flex:none;display:inline-grid;place-items:center;width:42px;height:42px;border-radius:12px;font-size:calc(var(--fs-title) + 3px);background:rgba(255,255,255,.04);border:1px solid var(--line)}#jr-journey .jr-ccard h3{margin:0;font-size:var(--fs-title);font-weight:650;line-height:1.4}
+#jr-journey .jr-kv{margin:0;display:grid;gap:8px}#jr-journey .jr-kv dt{font-size:var(--fs-label);color:var(--muted);letter-spacing:.04em}#jr-journey .jr-kv dd{margin:2px 0 0;font-size:var(--fs-sub);line-height:1.6}
+#jr-journey .jr-cfoot{margin-top:auto;display:flex;gap:10px;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--line)}#jr-journey .jr-fills{font-size:var(--fs-label);color:var(--muted)}#jr-journey .jr-fills b{color:var(--mint);font-weight:600}#jr-journey .jr-alt{margin-top:12px;font-size:var(--fs-sub);color:var(--muted)}#jr-journey .jr-own{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}#jr-journey .jr-own[hidden]{display:none}#jr-journey .jr-model-rec{display:block;margin-top:6px}
+#jr-journey .jr-models{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(8,auto);column-gap:14px;margin-top:14px}
+#jr-journey .jr-mcard{grid-row:span 8;display:grid;grid-template-rows:subgrid;row-gap:0;border-radius:var(--r-card);border:1px solid rgba(255,255,255,.09);background:var(--panel);background-image:var(--glass);overflow:hidden}#jr-journey .jr-mcard>*{padding:12px 18px;border-top:1px solid var(--line)}#jr-journey .jr-mcard>:first-child{border-top:0;padding-top:16px}#jr-journey .jr-mcard.rec{border-color:rgba(232,141,79,.5)}#jr-journey .jr-mcard.picked{border-color:rgba(153,215,188,.75)}#jr-journey .jr-mcard.picked .jr-mhead{background:linear-gradient(180deg,rgba(153,215,188,.1),transparent)}
+#jr-journey .jr-mhead h3{margin:4px 0 0;font-size:calc(var(--fs-title) + 2px);font-weight:650;line-height:1.35}#jr-journey .jr-rk{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:var(--fs-label);color:var(--muted)}#jr-journey .jr-lab{display:block;font-size:var(--fs-label);color:var(--muted);letter-spacing:.04em;margin-bottom:3px}#jr-journey .jr-pay{font-size:var(--fs-body);line-height:1.6;font-weight:500}
+#jr-journey .jr-axes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#jr-journey .jr-axis{border:1px solid var(--line);border-radius:9px;padding:6px 8px;background:rgba(255,255,255,.02)}#jr-journey .jr-axis small{display:block;font-size:var(--fs-min);color:var(--muted)}#jr-journey .jr-axis b{display:block;font-size:var(--fs-sub);font-weight:600;line-height:1.35}
+#jr-journey .jr-sig{display:flex;gap:9px;align-items:flex-start;font-size:var(--fs-sub);line-height:1.6}#jr-journey .jr-sig i{flex:none;font-style:normal;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:var(--fs-label);margin-top:2px}#jr-journey .jr-sig.ok i{background:rgba(153,215,188,.14);color:var(--mint)}#jr-journey .jr-sig.risk i{background:rgba(242,162,158,.14);color:var(--red)}#jr-journey .jr-sig.test i{background:rgba(232,141,79,.14);color:var(--amber)}
+#jr-journey .jr-mfoot{display:flex;gap:10px;align-items:center;justify-content:space-between;background:rgba(255,255,255,.015)}#jr-journey .jr-swipe{display:none}
+#jr-journey .jr-two{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}#jr-journey .jr-panel{margin-top:0;padding:16px 18px}#jr-journey .jr-sec{margin:0;font-size:var(--fs-title);font-weight:650}#jr-journey .jr-sec-n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.07);font:600 var(--fs-label) var(--mono);color:var(--muted);margin-right:8px;vertical-align:2px}
+#jr-journey .jr-goals{display:grid;gap:8px;margin-top:10px}#jr-journey .jr-goal{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 14px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.015);cursor:pointer;text-align:left;color:var(--text)}#jr-journey .jr-goal .r{width:18px;height:18px;border-radius:50%;border:2px solid #5d6473}#jr-journey .jr-goal b{display:block;font-size:var(--fs-body);font-weight:600}#jr-journey .jr-goal small{display:block;font-size:var(--fs-sub);color:var(--muted);line-height:1.5}#jr-journey .jr-goal.on{border-color:rgba(153,215,188,.75);background:rgba(153,215,188,.06)}#jr-journey .jr-goal.on .r{border-color:var(--mint);background:radial-gradient(circle,var(--mint) 0 4px,transparent 5px)}
+#jr-journey .jr-echo{margin-top:10px;font-size:var(--fs-sub);padding:9px 12px;border-left:3px solid var(--mint);background:rgba(153,215,188,.05);border-radius:0 8px 8px 0}#jr-journey .jr-test-card{border:1px solid rgba(232,141,79,.4);border-radius:12px;padding:14px 16px;background:rgba(232,141,79,.04);margin-top:10px}#jr-journey .jr-test-card .tag{margin-bottom:8px}#jr-journey .jr-test-card p{margin:0;font-size:var(--fs-body);line-height:1.65}#jr-journey .jr-test-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;margin:12px 0 0;font-size:var(--fs-sub)}#jr-journey .jr-test-meta dt{color:var(--muted)}#jr-journey .jr-test-meta dd{margin:0}#jr-journey .jr-test-foot{margin-top:14px;padding:14px 18px}#jr-journey .jr-test-foot h3{margin:0;font-size:var(--fs-body)}#jr-journey .jr-test-foot p{margin:6px 0 0;font-size:var(--fs-sub);line-height:1.6}
+#jr-journey .jr-faces{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}#jr-journey .jr-face{display:inline-flex;gap:8px;align-items:baseline;border:1px solid var(--line);border-radius:9px;padding:6px 12px;background:rgba(255,255,255,.02);font-size:var(--fs-sub)}#jr-journey .jr-face small{color:var(--muted);font-size:var(--fs-label)}#jr-journey #jr-canvas{margin-top:14px}
+#jr-journey .jr-bar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(9,10,14,.96);border-top:1px solid var(--line)}#jr-journey .jr-bar-in{max-width:1312px;margin:0 auto;padding:12px 36px 14px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}#jr-journey .jr-bar-l{display:flex;flex-direction:column;gap:6px;flex:1 1 260px;min-width:0;font-size:var(--fs-sub)}#jr-journey .jr-bar-l b{font-weight:650}#jr-journey .jr-prog{height:4px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden;max-width:560px}#jr-journey .jr-prog i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),#ffc18e);border-radius:2px}#jr-journey .jr-bar-r{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media (max-width:760px){#jr-journey .jr-progress{grid-template-columns:1fr;gap:12px;padding:12px 14px}#jr-journey .jr-steps li+li:before{width:8px}#jr-journey .jr-steps li .t{display:none}#jr-journey .jr-steps li.cur .t{display:inline}#jr-journey .jr-hero{padding:18px 16px}#jr-journey .jr-hero h2{font-size:calc(var(--fs-title) + 3px)}#jr-journey .jr-start-hero{min-height:0}#jr-journey .jr-start-hero .scene-bg{display:none}#jr-journey .jr-start-body{max-width:none}#jr-journey .jr-paths,#jr-journey .jr-cards3,#jr-journey .jr-two{grid-template-columns:1fr}#jr-journey .jr-path h3{font-size:calc(var(--fs-title) + 2px)}#jr-journey .jr-path .shot{height:96px}#jr-journey .jr-models{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:12px -16px 0;padding:0 16px 6px;scrollbar-width:none}#jr-journey .jr-models::-webkit-scrollbar{display:none}#jr-journey .jr-mcard{flex:0 0 84%;scroll-snap-align:center;display:flex;flex-direction:column}#jr-journey .jr-mcard .jr-mfoot{margin-top:auto}#jr-journey .jr-swipe{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:var(--fs-sub);color:var(--muted)}#jr-journey .jr-pager{display:flex;gap:6px}#jr-journey .jr-pager i{width:18px;height:4px;border-radius:2px;background:rgba(255,255,255,.14)}#jr-journey .jr-pager i.on{background:var(--amber)}#jr-journey .jr-bar-in{padding:10px 16px 12px}#jr-journey .jr-bar-r{width:100%}#jr-journey .jr-bar-r .btn{flex:1}}
 #quick-types .btn.cur{border-color:var(--mint);color:var(--mint)}
 #next-action .foot .in{width:auto;flex:0 1 170px}
 #next-action #next-text{flex:1 1 240px}
@@ -231,6 +276,8 @@ dl.rc dd{margin:0}
 @media (max-width:600px){.min-speaker,.min-editor{grid-template-columns:1fr}.min-side{order:-1}.min-text{min-height:420px}.desktop-only{display:none!important}}
 </style>
 <script src="names.js"></script>
+<script src="canvas-lib.js"></script>
+<script src="canvas.js"></script>
 <script src="pair.js"></script>
 <script src="desk.js"></script>
 <script src="/celebration.js"></script>
@@ -294,6 +341,12 @@ dl.rc dd{margin:0}
   function hm(iso) { var m = /T(\d{2}:\d{2})/.exec(String(iso || '')); return m ? m[1] : ''; }
   function dayOf(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? (+m[2]) + ' 月 ' + (+m[3]) + ' 日' : ''; }
   function fnv(str) { var x = 0x811c9dc5; for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return ('0000000' + x.toString(16)).slice(-8); }
+  // 與 ask-lib.mjs 的 packHash 同一算法（後備）：保留全部題目，只去掉 closed／reopened 標記；正常以伺服器交來的 hash 為準
+  function packHash(pack) {
+    var qs = pack && Array.isArray(pack.questions) ? pack.questions : null;
+    if (!qs || !qs.some(function (q) { return q && typeof q === 'object' && ('closed' in q || 'reopened' in q); })) return fnv(JSON.stringify(pack));
+    return fnv(JSON.stringify(Object.assign({}, pack, { questions: qs.map(function (q) { if (!q || typeof q !== 'object') return q; var r = {}; Object.keys(q).forEach(function (k) { if (k !== 'closed' && k !== 'reopened') r[k] = q[k]; }); return r; }) })));
+  }
   var toastTimer = null;
   function toast(t) { var el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 4000); }
   function announce(t) { var l = $('#live'); l.textContent = ''; setTimeout(function () { l.textContent = t; }, 30); }
@@ -338,8 +391,10 @@ dl.rc dd{margin:0}
     var app = $('#app'); app.insertBefore(bar, app.firstChild);
   }
   /* ---------- 路由 ---------- */
-  var V = { status: null, pollTimer: null };
+  var V = { status: null, pollTimer: null, routeGen: 0 };
   function route() {
+    // 每次轉頁遞增代號：轉頁前已開始的首頁讀取及輪詢，完成後見代號已變就作廢，不會把首頁蓋回題目頁（0.44.0 重現的「作答時跳回首頁」）
+    V.routeGen++;
     clearTimeout(V.pollTimer);
     clearTimeout(V.minutesTimer);
     clearTimeout(V.ideateTimer);
@@ -706,7 +761,9 @@ dl.rc dd{margin:0}
       Object.keys(buttons).forEach(function (k) { buttons[k].className = 'intent' + (k === kind ? ' cur' : ''); buttons[k].setAttribute('aria-pressed', k === kind ? 'true' : 'false'); });
       form.hidden = !kind; if (!kind) return;
       var t = TELL[kind]; label.textContent = U[t[3]]; text.placeholder = U[t[4]]; after.textContent = U[t[5]]; text.setAttribute('aria-label', U[t[3]]); dateRow.hidden = kind !== 'event';
-      drawMinutes();
+      // 轉入「發生了一件事」而已有附件但未檢查講者：重新檢查附件；其他情況照舊畫講者區。之後一律重算送出鍵（ARL 反審第二節問題 5）
+      if (kind === 'event' && files.length && !V.minutesTell) minutePreflight(); else drawMinutes();
+      syncMinuteSend();
     }
     Object.keys(TELL).forEach(function (k) {
       var t = TELL[k];
@@ -740,7 +797,8 @@ dl.rc dd{margin:0}
         text.value = ''; V.quickText = ''; V.quickKind = ''; V.quickDate = ''; V.tellFiles = []; V.tellLinks = []; V.hubDirty = false; send.disabled = false;
         files.length = 0; links.length = 0; drawFiles(); drawLinks(); choose('');
         V.hubWatching = Date.now() + 20000;
-        note.replaceChildren(U.tellReceived, ' ', h('a', { class: 'btn link', id: 'quick-track', href: '#/feedback/' + 'in-' + result.id }, U.inFeedback));
+        // 短時間內重複交出同一件事：伺服器回同一件（duplicate），畫面如實說明沒有重複記錄（覆核第 8 項）
+        note.replaceChildren(result && result.duplicate === true ? U.tellDupSame : U.tellReceived, ' ', h('a', { class: 'btn link', id: 'quick-track', href: '#/feedback/' + 'in-' + result.id }, U.inFeedback));
       }).catch(function (e) { send.disabled = false; note.textContent = why(e); });
     } }, U.tellSend);
     var cancel = h('button', { type: 'button', class: 'btn', id: 'quick-cancel', onclick: function () { text.value = ''; V.quickText = ''; linkIn.value = ''; V.tellLinkDraft = ''; files.length = 0; links.length = 0; V.minutesTell = null; minuteStopPoll(); minutesSlot.replaceChildren(); drawFiles(); drawLinks(); dirty(); choose(''); } }, U.tellCancel);
@@ -766,7 +824,7 @@ dl.rc dd{margin:0}
     lines.push(r.next ? T(r.unread ? 'runPreviewDaily' : 'runPreviewDailyOnly', { t: r.next }) : U[r.unread ? 'runPreviewGeneric' : 'runPreviewGenericOnly']);
     var btn = h('button', { type: 'button', class: 'btn primary', id: 'run-now', disabled: r.canRun ? null : true, onclick: function () {
       btn.disabled = true;
-      post('/api/setup', { action: 'runNow' }).then(function () { toast(U.runNowSent); V.hubWatching = Date.now() + 8000; setTimeout(showHub, 1200); }, function (e) { btn.disabled = false; toast(why(e)); });
+      post('/api/setup', { action: 'runNow' }).then(function () { toast(U.runNowSent); V.hubWatching = Date.now() + 8000; var g0 = V.routeGen; setTimeout(function () { if (g0 === V.routeGen) showHub(); }, 1200); }, function (e) { btn.disabled = false; toast(why(e)); });
     } }, U.runNow);
     return h('div', { class: 'run-preview', id: 'run-preview' }, h('b', null, U.runPreviewTitle), h(lines.length > 1 ? 'ol' : 'ul', null, lines.map(function (x) { return h('li', null, x); })),
       h('div', { class: 'foot' }, btn, h('span', { class: 'small muted', id: 'run-now-note' }, r.stopped || (r.busy ? U.runNowBusy : r.noAI ? N.dash.blockNoAI : U.runNowNote))));
@@ -777,10 +835,11 @@ dl.rc dd{margin:0}
     return h('li', { 'data-input': v.id, 'data-state': s.code }, DESK.inputTag(v), h('div', { class: 'tt' }, h('b', null, DESK.inputTitle(v), v.source === 'chat' ? [' ', tag(N.ui.inFromChat, 'mine')] : null), h('small', null, DESK.inputLine(v))), acts);
   }
   // 輪詢重畫前先檢查：輸入中、有未送出內容或等待回覆時不重畫，否則會清走正在輸入的字及等待狀態
-  function hubPoll() {
+  function hubPoll(gen) {
+    if (gen != null && gen !== V.routeGen) return;
     var a = document.activeElement;
     var draft = V.nextDraft || {}, hasNextDraft = !!(String(draft.text || '').trim() || String(draft.date || '').trim() || String(draft.newDate || '').trim() || draft.rescheduleOpen);
-    if (V.hubDirty || hasNextDraft || V.hubWatching && Date.now() < V.hubWatching || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) { V.pollTimer = setTimeout(hubPoll, 3000); return; }
+    if (V.hubDirty || hasNextDraft || V.hubWatching && Date.now() < V.hubWatching || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) { var keep = V.routeGen; V.pollTimer = setTimeout(function () { hubPoll(keep); }, 3000); return; }
     showHub();
   }
   // 摺疊區標題寫出實際內容：名稱不重複，太長就截短
@@ -798,10 +857,11 @@ dl.rc dd{margin:0}
   }
   function showHub() {
     // 只有頁面第一次載入待決事項先算「打開」（記低時間）；輪詢同返回唔算
-    var seen = !V.homeSeen; V.homeSeen = true;
+    var seen = !V.homeSeen, gen = V.routeGen; V.homeSeen = true;
     Promise.all([get('/api/status'), get('/api/asks'), get('/api/home' + (seen ? '?seen=1' : '')).catch(function () { return null; }), get('/api/dashboard?lite=1').catch(function () { return null; }), get('/api/minutes').catch(function (e) { if (e.status === 409) return { items: [] }; throw e; })]).then(function (r) {
-      var st = r[0], asks = r[1], home = r[2] || V.home, minutes = r[4] || { items: [] }, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), todo = (asks.todo || []).filter(function (t) { return t.kind !== 'overview'; }), snoozed = asks.snoozed || [], byId = {}, c = asks.company || st.company || {};
-      open.forEach(function (p) { byId[p.id] = p; }); V.home = home; V.status = st; checkInstance(st);
+      if (gen !== V.routeGen) return;
+      var st = r[0], asks = r[1], home = r[2] || V.home, minutes = r[4] || { items: [] }, open = asks.packs.filter(function (p) { return p.open && !p.isHelp; }), helpReplies = asks.packs.filter(function (p) { return p.open && p.isHelp; }), closedPacks = asks.packs.filter(function (p) { return Array.isArray(p.closed) && p.closed.length; }), todo = (asks.todo || []).filter(function (t) { return t.kind !== 'overview'; }), snoozed = asks.snoozed || [], byId = {}, c = asks.company || st.company || {};
+      asks.packs.forEach(function (p) { byId[p.id] = p; }); V.home = home; V.status = st; checkInstance(st);
       // 第一次打開（未有公司概覽）：直接去交資料
       if ((!st.company || !st.company.ready) && !open.length && !helpReplies.length) { location.replace('#/intake'); return; }
       // 0.41.1 只放要你做的事：求助回覆配回原題；配不到的求助回覆、Zero 未能處理的交辦、生意大腦待處理，都成為「接下來」的一列
@@ -830,6 +890,18 @@ dl.rc dd{margin:0}
       var shown = rows.slice(0, 3), rest = rows.slice(3);
       var next = shown.length ? h('section', { class: 'layer', id: 'next-list' }, h('span', { class: 'eyebrow' }, N.ui.nextList), shown.map(function (x) { return x.el; })) : null;
       var others = rest.length ? h('details', { class: 'layer', id: 'other-pending' }, h('summary', null, N.t('otherPendingN', { n: rest.length }), sumLine(rest)), rest.map(function (x) { return x.el; })) : null;
+      var closedItems = closedPacks.reduce(function (all, pack) { return all.concat((pack.closed || []).map(function (q) { return { pack: pack, q: q }; })); }, []);
+      function closedReason(q) {
+        var closed = q.closed || {}, why = closed.reasonKey === 'interview' ? N.ui.factWhyInterview : closed.status === 'applied' ? N.ui.factWhyApplied : N.ui.factWhySuperseded;
+        var by = closed.by || {}, from = by.ask || by.value || '';
+        if (!from) return h('p', { class: 'small muted' }, why);
+        var source = by.from === 'state' && by.source ? h('div', { class: 'small muted' }, N.t('factNowSource', { s: by.source })) : null;
+        return h('div', null, h('p', { class: 'small muted' }, why), h('p', { class: 'small muted' }, N.t('factWhyFrom', { t: from })), source);
+      }
+      var closedCard = closedItems.length ? h('details', { class: 'layer', id: 'fact-closed' }, h('summary', null, N.t('factClosedTitle', { n: closedItems.length })), h('p', { class: 'small muted' }, N.ui.factClosedNote), closedItems.map(function (item) {
+        var reopen = h('button', { type: 'button', class: 'btn small', onclick: function () { reopen.disabled = true; post('/api/asks/reopen', { packId: item.pack.id, qId: item.q.id }).then(function (result) { toast(result.message || N.ui.factReopened); showHub(); }).catch(function (e) { reopen.disabled = false; toast(why(e)); }); } }, N.ui.factReopen);
+        return h('div', { class: 'row', 'data-fact-closed': item.q.id }, h('div', null, h('div', { class: 't' }, N.fix(item.q.ask || '')), closedReason(item.q)), reopen);
+      })) : null;
       var snoozedCard = snoozed.length ? h('details', { class: 'layer', id: 'snoozed' }, h('summary', null, N.t('snoozedN', { n: snoozed.length }), sumLine(snoozed.map(function (t) { return { title: N.fix(byId[t.id] ? byId[t.id].title : t.text) }; }))), snoozed.map(function (t) { return todoRow(t, byId, true, help); })) : null;
       var dvBlock = c.confirmed ? deliveriesBlock(r[3] && r[3].deliveries, shown.filter(function (x) { return x.todo; }).map(function (x) { return x.todo; })) : null;
       var inPerson = h('section', { class: 'layer', id: 'in-person', hidden: !(V.inPerson && V.inPerson.length) }, h('span', { class: 'eyebrow' }, N.ui.inPersonTitle), h('div', { id: 'in-person-rows' }, inPersonRows(V.inPerson || [])));
@@ -847,7 +919,7 @@ dl.rc dd{margin:0}
       var foot = h('div', { class: 'desk-foot' }, h('a', { href: '#/practice', id: 'foot-practice' }, N.ui.practice), h('a', { href: '#/debate', id: 'foot-debate' }, N.ui.debate), h('a', { href: '#/setup' }, N.ui.setup));
       var kept = [].map.call(document.querySelectorAll('#app details[id][open]'), function (d) { return d.id; });
       V.hubDirty = !!String(V.quickText || '').trim(); V.hubWatching = false;
-      setApp(head('pending', st), aiBlock(st), main, next, inPerson, dvBlock, quietToday, others, snoozedCard, tellBox(st, c, home), DESK.feedbackPrompt(st, asks), intakeLink, runStrip, foot);
+      setApp(head('pending', st), aiBlock(st), main, next, inPerson, dvBlock, quietToday, others, closedCard, snoozedCard, tellBox(st, c, home), DESK.feedbackPrompt(st, asks), intakeLink, runStrip, foot);
       // 慶祝只是加分項：讀不到慶祝程式也要照常顯示頁面
       if (window.SOS_CELEBRATE) window.SOS_CELEBRATE.handle(st, { allowed: function () { return location.hash === '#/' || location.hash === ''; } });
       kept.forEach(function (id) { var d = document.getElementById(id); if (d) d.open = true; });
@@ -855,8 +927,8 @@ dl.rc dd{margin:0}
       var jump = /^#(next-action|quick-input)$/.exec(location.hash);
       if (!jump) V.hubJumped = ''; else if (V.hubJumped !== jump[1]) { V.hubJumped = jump[1]; var jumpTo = document.getElementById(jump[1]); if (jumpTo) jumpTo.scrollIntoView({ block: 'start' }); }
       DESK.title('pending', todo.length ? '（' + todo.length + '）' : '');
-      V.pollTimer = setTimeout(hubPoll, st.busy ? 3000 : 8000);
-    }).catch(function (e) { fail(e); });
+      V.pollTimer = setTimeout(function () { hubPoll(gen); }, st.busy ? 3000 : 8000);
+    }).catch(function (e) { if (gen === V.routeGen) fail(e); });
   }
 
   /* ---------- 0.42.0 會議紀錄草稿 ---------- */
@@ -1071,6 +1143,7 @@ dl.rc dd{margin:0}
       }
       rows.push(fbStep(++n, s.code === 'working' ? 'now' : s.code === 'failed' ? 'bad' : 'done', U.fbS2, body));
     }
+    if (v.moneyNotRecorded && s.steps.indexOf('why') < 0) rows.push(fbStep(++n, 'done', U.fbMoneyTitle, [h('p', { id: 'fb-money' }, U.mnyNotRecorded), h('p', null, h('a', { class: 'btn', id: 'fb-go-money', href: '/dashboard/money' }, U.fbGoMoney))]));
     // 只在第二步讀完後顯示；這是參考資料，不佔回饋步驟編號。
     if (s.steps.indexOf('read') >= 0 && s.code !== 'working' && s.code !== 'failed' && Array.isArray(v.compare) && v.compare.length) {
       rows.push(fbInfoStep(U.contextCompareTitle, U.contextCompareNotice, v.compare.map(function (item) {
@@ -1097,7 +1170,9 @@ dl.rc dd{margin:0}
       var items = changed.map(function (e) {
         return h('li', { class: e.before && e.after ? 'chg' : null }, N.fix(e.text), e.before && e.after ? [': ', h('s', null, e.before), ' → ', h('em', null, e.after)] : null, e.href ? [' ', h('a', { class: 'link', href: e.href }, U.fbOnPath)] : null);
       }).concat(follow.map(function (e) { return h('li', { class: 'chg', 'data-followup': e.targetId }, T('fbFollowUp', { d: dayOf(e.dueAt), t: N.fix(e.text) }), e.targetId ? [' ', h('a', { class: 'link', href: '#/change/task/' + e.targetId }, N.t('minCorrectSchedule'))] : null); }));
-      rows.push(fbStep(++n, 'done', U.fbS4, [h('ul', { id: 'fb-changes' }, items), h('p', null, U.fbRecorded)]));
+      // 「已寫入決定紀錄」只在真有寫入時顯示；只有當日說法或對照（沒有改動）時不寫（截圖 p6）
+      var wrote = follow.length || v.effects.some(function (e) { return e && e.targetKind !== 'dated' && e.targetKind !== 'overview'; });
+      rows.push(fbStep(++n, 'done', U.fbS4, [h('ul', { id: 'fb-changes' }, items), wrote ? h('p', null, U.fbRecorded) : null]));
     }
     // 5 沒有影響的原因
     if (s.steps.indexOf('why') >= 0) {
@@ -1111,7 +1186,9 @@ dl.rc dd{margin:0}
           .then(function (j) { V.sent = { id: 'in-' + j.id, type: v.via === 'doc' ? 'event' : v.via, text: extra, files: [], at: localIso(new Date()) }; location.hash = '#/feedback/in-' + j.id; }, function (e) { go.disabled = false; msg.textContent = why(e); });
       });
       var lnk = h('button', { type: 'button', class: 'btn link', id: 'fb-miss-open', onclick: function () { miss.hidden = false; lnk.hidden = true; ta.focus(); } }, U.fbMissed);
-      rows.push(fbStep(++n, 'done', U.fbS5, [h('p', { id: 'fb-reason' }, h('b', null, U.fbReason.replace('{r}', '')), v.reason || U.eventNoChange), lnk, miss]));
+      rows.push(v.moneyNotRecorded
+        ? fbStep(++n, 'done', U.fbMoneyTitle, [h('p', { id: 'fb-money' }, U.mnyNotRecorded), h('p', null, h('a', { class: 'btn', id: 'fb-go-money', href: '/dashboard/money' }, U.fbGoMoney)), lnk, miss])
+        : fbStep(++n, 'done', U.fbS5, [h('p', { id: 'fb-reason' }, h('b', null, U.fbReason.replace('{r}', '')), v.reason || U.eventNoChange), lnk, miss]));
     }
     return h('section', { class: 'layer accent' + (s.code === 'updated' ? ' ok' : ''), id: 'fb-card', 'data-input': v.id, 'data-state': s.code }, h('span', { class: 'eyebrow' }, U.fbEyebrow), h('h2', { class: 'layer-title' }, title), head2,
       h('ol', { class: 'fb-steps' }, rows), h('div', { class: 'foot' }, h('a', { class: 'btn', id: 'fb-back', href: '#/' }, U.fbBack)));
@@ -1552,7 +1629,7 @@ dl.rc dd{margin:0}
   }
   function showAsk(id) {
     Promise.all([get('/api/ask?id=' + encodeURIComponent(id)), get('/api/status')]).then(function (r) {
-      P = r[0].pack; A = r[0].answers || {}; V.status = r[1]; checkInstance(r[1]);
+      P = r[0].pack; A = r[0].answers || {}; V.askHash = typeof r[0].hash === 'string' ? r[0].hash : ''; V.status = r[1]; checkInstance(r[1]);
       var b = pickBatch();
       var help = {};
       P.questions.forEach(function (q) {
@@ -1660,7 +1737,7 @@ dl.rc dd{margin:0}
       h('div', { class: 'money-receipt-grid' },
         h('div', { class: 'money-receipt-preview' }, source),
         h('dl', { class: 'money-receipt-kv' },
-          moneyField(N.ui.mnyFieldDir, m.dir === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut),
+          moneyField(N.ui.mnyFieldDir, [m.dir === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut, m.refund === true ? [' ', tag(N.ui.mnyRefundTag, 'amber')] : null]),
           moneyField(N.ui.mnyFieldAmount, moneyAmount(m) || N.ui.mnyAmountInvalid, 'big'),
           moneyField(N.ui.mnyFieldDate, dayOf(m.date)),
           moneyField(N.ui.mnyFieldWho, [N.fix(m.payer || ''), m.counterpartId ? ' ' : null, m.counterpartId ? tag(N.ui.mnyListed, 'mint') : null]),
@@ -1673,6 +1750,17 @@ dl.rc dd{margin:0}
     if (answer) {
       card.append(h('p', { class: 'small', id: 'money-answer-' + q.id }, moneySummary(q, answer)));
       return card;
+    }
+    if (Array.isArray(q.dup) && q.dup.length) {
+      var dupDate = function (value) { var found = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '')); return found ? (+found[1]) + ' 年 ' + (+found[2]) + ' 月 ' + (+found[3]) + ' 日' : ''; };
+      var dupWhy = function (row) { return row.why === 'number' ? T('mnyDupWhyNumber', { no: String(row.noShown || row.no || '') }) : row.why === 'amount' ? N.ui.mnyDupWhyAmount : N.ui.mnyDupWhyPayer; };
+      card.append(DESK.note('warn', [
+        h('span', null, N.ui.mnyDupLead),
+        h('ul', { class: 'm-sum dup-list', style: 'margin:6px 0 4px;padding:0;list-style:none;display:grid;gap:6px' }, q.dup.map(function (row) {
+          return h('li', { style: 'display:grid;gap:2px' }, h('span', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:baseline' }, h('span', null, dupDate(row.date)), h('span', null, N.fix(row.payer || '')), h('span', { style: 'font-family:var(--mono)' }, moneyAmount(row)), h('span', { class: 'tag' }, row.where === 'waiting' ? N.ui.mnyDupWhereWaiting : N.ui.mnyDupWhereLedger)), h('span', { class: 'small muted' }, dupWhy(row)));
+        })),
+        h('span', null, N.ui.mnyDupReceiptHint)
+      ]));
     }
     var actions = h('div', { class: 'money-receipt-actions' },
       h('button', { type: 'button', class: 'btn primary', id: 'money-confirm-' + q.id, onclick: function () { setMoneyAnswer(q, N.ui.mnyConfirm); } }, N.ui.mnyConfirm),
@@ -1713,9 +1801,9 @@ dl.rc dd{margin:0}
       var oldMeta = [dayOf(old.date), old.from ? T('contextTaskFrom', { f: N.fix(old.from) }) : ''].filter(Boolean).join(' · ');
       var nowMeta = now.date ? T('contextTaskBy', { d: dayOf(now.date) }) : '';
       body.append(h('div', { class: 'pair', id: 'pair-' + q.id },
-        h('div', { class: 'box' }, h('small', null, N.ui.contextTaskOld), h('b', null, N.fix(old.title || '')), h('small', null, oldMeta)),
+        h('div', { class: 'box' }, h('small', null, pair.oldLabel ? N.fix(pair.oldLabel) : N.ui.contextTaskOld), h('b', null, N.fix(old.title || '')), h('small', null, oldMeta)),
         h('div', { class: 'arrow', 'aria-hidden': 'true' }, '→'),
-        h('div', { class: 'box' }, h('small', null, N.ui.contextTaskNow), h('b', null, N.fix(now.text || '')), h('small', null, nowMeta))));
+        h('div', { class: 'box' }, h('small', null, pair.nowLabel ? N.fix(pair.nowLabel) : N.ui.contextTaskNow), h('b', null, N.fix(now.text || '')), h('small', null, nowMeta))));
     }
     var whyEl = !manual && q.why ? h('div', { class: 'why' }, h('b', null, (q.preset ? N.ui.presetWhy : N.ui.why) + '：'), N.fix(q.why)) : null;
     if (whyEl && !q.roleCard) body.append(whyEl);
@@ -1930,7 +2018,7 @@ dl.rc dd{margin:0}
     var machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: localIso(now), batch: S.batch.map(function (q) { return q.id; }), answers: answers };
     if (S.allSame) machine.allSame = true;
     L.push('', '## 機器讀取部分（供 CrewZero 使用，毋須查閱）', '```json', JSON.stringify(machine, null, 2), '```');
-    var head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
+    var head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (V.askHash || packHash(P)), 'batch: false', 'shownAt: ' + localIso(S.shownAt)];
     return { text: head.join('\n') + '\n\n' + L.join('\n') + '\n', answers: answers, qs: qs, left: Math.max(0, left), leftNote: leftNote };
   }
   var lastFocus = null;
@@ -2144,7 +2232,9 @@ dl.rc dd{margin:0}
   function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(b / 1024)) + 'KB'; }
   function showIntake() {
     clearTimeout(V.ideateTimer);
+    var gen = V.routeGen; // 讀取期間已轉頁就作廢，不把資料頁蓋回其他頁（覆核第 4 項）
     Promise.all([get('/api/status'), get('/api/intake')]).then(function (r) {
+      if (gen !== V.routeGen) return;
       var st = r[0]; IN.meta = r[1]; V.status = st; checkInstance(st);
       var it = st.intake, final = it && (it.state === 'done' || it.state === 'failed');
       if (it && !final) { try { sessionStorage.setItem('crewzero-overview-watching', '1'); } catch (e) {} }
@@ -2153,7 +2243,14 @@ dl.rc dd{margin:0}
         setApp(head('intake', st), h('section', { class: 'layer block', id: 'intake-setup-first' }, h('span', { class: 'eyebrow' }, N.ui.aiNotSet), h('h2', { class: 'layer-title' }, '先設定 AI 工具'), h('p', { class: 'guide' }, '設定完成後，Zero 才會整理你交出的資料。'), h('div', { class: 'foot' }, h('a', { class: 'btn primary big', href: '#/setup', id: 'intake-go-setup' }, N.ui.goSetup), h('a', { class: 'btn', href: '#/intake-anyway', id: 'intake-anyway' }, '先填寫資料（設定 AI 工具後才會處理）'))));
         DESK.title('intake'); return;
       }
-      var parts = [head('intake', st), aiBlock(st)], form = false;
+      var parts = [head('intake', st), aiBlock(st)], form = false, journey = IN.meta.ideate;
+      // 未有八題草稿時，開局一律先進入逐步旅程；舊 ready 仍照原有八題預填。
+      if (!it && !(st.company && st.company.ready) && !hasDraft && !IN.open && (!journey || journey.v === 2 || journey.reason === 'upgraded')) {
+        parts.push(journeyRender(journey));
+        setApp(parts); $('#cbar').hidden = true; document.body.style.paddingBottom = journey && journey.state === 'choose' ? '96px' : '24px'; DESK.title('intake');
+        if (journey && journey.state === 'running') V.ideateTimer = setTimeout(showIntake, 2000);
+        return;
+      }
       // 失敗要一直見到（重新打開頁面都係），否則創辦人只見到空白表格，唔知上次失敗咗、亦冇求助入口
       if (it && (!final || it.state === 'failed' || IN.sent || IN.watching)) {
         parts.push(intakeTrack(st));
@@ -2172,7 +2269,7 @@ dl.rc dd{margin:0}
         IN.sent = null; IN.watching = false;
         if (!document.hidden) V.pollTimer = setTimeout(function () { location.href = '/proofread.html'; }, 1500);
       }
-    }).catch(function (e) { fail(e); });
+    }).catch(function (e) { if (gen === V.routeGen) fail(e); });
   }
   function intakeTrack(st) {
     var it = st.intake, r = it.runId ? st.runs.filter(function (x) { return x.id === it.runId; })[0] : null;
@@ -2202,6 +2299,140 @@ dl.rc dd{margin:0}
         h('a', { class: 'btn primary', href: '/proofread.html' }, N.ui.goCompany)),
       IN.open ? null : h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn', id: 'reintake', onclick: function () { IN.open = true; showIntake(); } }, N.ui.reIntake)));
   }
+  /* ---------- 開局旅程：五步選卡；狀態唯一來自 /api/intake 的 v:2 ideate ---------- */
+  // 格內「自己寫」／改格：儲存成功才重畫；失敗時提示原因並拋出，令編輯框及內容保留（主線全面審查：九格丟失輸入）
+  function jrPostCell(key, text) { var gen = V.routeGen; return post('/api/ideate', { action: 'setCell', key: key, text: text }).then(function () { IN.err = ''; if (gen === V.routeGen) showIntake(); }, function (e) { toast(why(e)); throw e; }); }
+  function jrPost(body) { var gen = V.routeGen; return post('/api/ideate', body).then(function () { IN.err = ''; if (gen === V.routeGen) showIntake(); }).catch(function (e) { toast(why(e)); if (gen === V.routeGen) showIntake(); }); }
+  function jrStepIndex(state) { return state && state.step === 'who' ? 2 : state && state.step === 'model' ? 3 : state && state.step === 'goal' ? 4 : state && state.step === 'canvas' ? 5 : 1; }
+  function jrStepName(step) { return N.ui[step === 'who' ? 'jrS2' : step === 'model' ? 'jrS3' : step === 'goal' ? 'jrS4' : 'jrS5']; }
+  function jrCellName(key) { return N.ui['cell_' + key]; }
+  function jrChosenModel(state) { return state && state.model && state.model.options && state.model.options[state.model.pick] || {}; }
+  function jrWhoName(state) { var who = state && state.who || {}, option = who.options && who.options[who.pick]; return who.pick === -1 ? who.own || '' : option && option.who || ''; }
+  function jrFace(model, face) { var value = model && model.faces && model.faces[face], item = Array.isArray(value) ? value[0] : value; return item && item.name || ''; }
+  function jrFaces(model, goal) {
+    var box = h('div', { class: 'jr-faces' });
+    ['charge', 'form', 'scale'].forEach(function (face) { var name = jrFace(model, face); if (name) box.append(h('span', { class: 'jr-face' }, h('small', null, N.ui['face_' + face]), name)); });
+    if (goal) box.append(h('span', { class: 'jr-face' }, h('small', null, N.ui.face_goal), N.ui['goal_' + goal]));
+    return box;
+  }
+  function jrCanvasValue(state, key) {
+    var cells = state && state.canvas && state.canvas.cells || {}, sub = /^customer\.(problem|alternatives)$/.exec(key);
+    if (sub) return cells.customer && cells.customer.sub && cells.customer.sub[sub[1]] || cells[sub[1]] || {};
+    return cells[key] || {};
+  }
+  function jrCanvasCount(state, open) { return ['partners', 'activities', 'resources', 'value', 'relationship', 'channel', 'customer', 'cost', 'revenue'].filter(function (key) { var value = jrCanvasValue(state, key); return open ? value.tag === 'open' || !value.text : !!value.text && value.tag !== 'open'; }).length; }
+  function jrMiniState(state, key) {
+    var step = jrStepIndex(state), model = jrChosenModel(state), canvas = jrCanvasValue(state, key), hasCanvas = state && state.state === 'choose' && step === 5;
+    if (hasCanvas) return canvas.text && canvas.tag !== 'open' ? (['value', 'customer', 'partners', 'channel', 'revenue'].indexOf(key) >= 0 ? 'f' : 'new') : 'u';
+    if (key === 'value' && state && state.who && state.who.value) return step > 2 ? 'f' : 'new';
+    if (key === 'customer' && step >= 3 && (state.who && (state.who.own || (state.who.options || [])[state.who.pick]))) return step > 3 ? 'f' : 'new';
+    if (['partners', 'channel', 'revenue'].indexOf(key) >= 0 && step >= 4 && model && model.name) return step > 4 ? 'f' : 'new';
+    return '';
+  }
+  function jrProgress(state) {
+    var step = jrStepIndex(state), names = ['jrS1', 'jrS2', 'jrS3', 'jrS4', 'jrS5'], cells = [['partners', 'pa'], ['activities', 'ac'], ['resources', 're'], ['value', 'va'], ['relationship', 'cr'], ['channel', 'ch'], ['customer', 'cu'], ['cost', 'co'], ['revenue', 'rv']], filled = 0, open = 0;
+    var mini = h('div'), cap = h('div', { class: 'jr-mini-cap' }, h('span', null, N.ui.jrVCanvasProgress));
+    // 可見標題照原型寫「生意模式圖」；讀屏標籤保留「生意模式圖進度」，說明這是進度縮圖
+    var grid = h('div', { class: 'jr-mini', 'aria-label': N.ui.jrMiniLabel });
+    cells.forEach(function (item) { var status = jrMiniState(state, item[0]); if (status === 'f' || status === 'new') filled++; if (status === 'u') open++; grid.append(h('span', { class: 'c-' + item[1] + (status ? ' ' + status : '') }, jrCellName(item[0]))); });
+    cap.append(h('span', null, T('jrMiniCap', { n: filled })));
+    if (open) cap.lastChild.append(document.createTextNode(T('jrMiniUnd', { u: open })));
+    mini.append(cap, grid);
+    return h('section', { class: 'layer jr-progress', id: 'jr-progress' }, h('div', null, h('span', { class: 'eyebrow' }, T('jrStepOf', { n: step })), h('ol', { class: 'jr-steps' }, names.map(function (key, i) { return h('li', { class: i + 1 === step ? 'cur' : i + 1 < step ? 'done' : '' }, h('span', { class: 'n' }, i + 1 < step ? '✓' : String(i + 1)), h('span', { class: 't' }, N.ui[key])); })), h('p', { class: 'jr-said' }, jrSaid(state))), mini);
+  }
+  function jrSaid(state) {
+    var step = jrStepIndex(state), cells = step === 2 ? [jrCellName('value')] : step === 3 ? [jrCellName('customer')] : step === 4 ? ['revenue', 'channel', 'partners'].map(jrCellName) : ['activities', 'resources'].map(jrCellName), key = step === 1 ? 'jrSaidStart' : step === 2 ? 'jrSaidIdea' : step === 3 ? 'jrSaidWho' : step === 4 ? 'jrSaidModel' : 'jrSaidCanvas';
+    if (step === 1) return N.ui[key];
+    var parts = String(N.ui[key] || '').split('{cells}'), copy = h('span');
+    copy.append(document.createTextNode(parts[0] || ''));
+    cells.forEach(function (cell, index) { if (index) copy.append(document.createTextNode('、')); copy.append(h('b', { class: 'jr-said-cell' }, cell)); });
+    copy.append(document.createTextNode(parts[1] || ''));
+    if (step === 5) { var open = ['relationship', 'cost'].filter(function (cell) { return jrMiniState(state, cell) === 'u'; }).length; copy.append(document.createTextNode(open ? T('jrSaidUndecided', { n: open }) : '。')); }
+    return copy;
+  }
+  function jrZeroLine(text) { var zero = String(N.ui.jrZeroRec).split(/\s+/)[0]; return h('div', { class: 'jr-zero-line' }, h('img', { class: 'jr-zero-avatar', src: 'assets/crew-role-lead.webp', alt: N.ui.jrZeroRec }), h('p', null, h('b', null, zero + '：'), text)); }
+  function jrFills(cells) { var parts = String(N.ui.jrFills || '').split('{cells}'); return h('span', { class: 'jr-fills' }, parts[0] || '', h('b', null, cells), parts[1] || ''); }
+  function jrBar(state, left, options) {
+    var step = jrStepIndex(state), percent = Math.max(Math.round((step - 1) / 4 * 100), 4), right = h('div', { class: 'jr-bar-r' });
+    right.append(h('button', { type: 'button', class: 'btn', disabled: !options.previous, onclick: options.previous || null }, N.ui.jrPrev));
+    if (options.zero) right.append(h('button', { type: 'button', class: 'btn zero', onclick: options.zero }, N.ui.jrFollowZero));
+    if (options.primary) right.append(h('button', { type: 'button', class: 'btn' + (options.disabled ? '' : options.big ? ' primary big' : ' primary'), disabled: !!options.disabled, onclick: options.primary }, options.primaryLabel || N.ui.jrNext));
+    return h('div', { class: 'jr-bar' }, h('div', { class: 'jr-bar-in' }, h('div', { class: 'jr-bar-l' }, h('span', null, h('b', null, T('jrBarStep', { n: step })), '　', left), h('div', { class: 'jr-prog' }, h('i', { style: 'width:' + percent + '%' }))), right));
+  }
+  function jrWait(state) {
+    var key = state.step === 'who' ? 'jrWaitWho' : state.step === 'model' ? 'jrWaitModel' : 'jrWaitCanvas';
+    return h('section', { class: 'track with-scene', 'aria-live': 'polite' }, scene('empty'), h('span', { class: 'eyebrow' }, T('jrStepAi', { step: jrStepName(state.step) })), h('h3', null, N.ui[key]), h('p', { class: 'small muted' }, N.ui.jrResume));
+  }
+  // 起點附件清單：就地重畫已加入的檔案及拒收原因，不重畫整頁，已寫的構思不會被清走（主線全面審查 02#A2）
+  function jrFilesInto(box) {
+    box.replaceChildren();
+    IN.files.forEach(function (f) { box.append(h('div', { class: 'file-row' }, f.name, h('button', { type: 'button', class: 'btn small', onclick: function () { IN.files.splice(IN.files.indexOf(f), 1); IN.err = ''; jrFilesInto(box); } }, N.ui.removeFile))); });
+    if (IN.err) box.append(DESK.note('warn', IN.err));
+  }
+  function jrIntakePreview() { return h('img', { class: 'shot', src: 'assets/crew-step-intake.webp', alt: N.ui.jrPathFill }); }
+  function jrStart(old) {
+    var text = h('textarea', { id: 'jr-say', rows: '3', placeholder: N.ui.jrStartPlaceholder }); text.value = old && old.say || '';
+    var input = h('input', { type: 'file', multiple: true, hidden: true, id: 'jr-files', accept: IN.meta.limits.exts.map(function (x) { return '.' + x; }).join(',') });
+    input.addEventListener('change', function () { addFiles(input.files); input.value = ''; });
+    var files = h('div', { id: 'jr-file-list' }); jrFilesInto(files);
+    var go = h('button', { type: 'button', class: 'btn primary big go', onclick: function () { var say = text.value.trim(); if (!say) { toast(N.ui.jrStartEmpty); return; } readFiles(IN.files).then(function (filesOut) { return jrPost({ action: 'start', text: say, files: filesOut }); }); } }, N.ui.jrPathThinkGo);
+    return h('div', { class: 'jr-screen' }, h('section', { class: 'layer with-scene jr-hero jr-start-hero' }, h('div', { class: 'scene-bg', 'aria-hidden': 'true', style: "background-image:url('/assets/crew-welcome-questions.webp')" }), h('div', { class: 'jr-start-body' }, h('span', { class: 'eyebrow' }, N.ui.jrS1), h('h2', null, N.ui.jrStartHead), h('p', { class: 'sub' }, N.ui.jrStartSub), text, h('div', { class: 'jr-attach' }, h('button', { type: 'button', class: 'btn small', onclick: function () { input.click(); } }, N.ui.jrAttach), h('span', null, N.ui.jrAttachNote), input), files)), old && old.reason === 'upgraded' ? DESK.note('warn', N.ui.jrUpgraded) : null, h('h3', { class: 'jr-section-title' }, N.ui.jrPickPath), h('div', { class: 'jr-paths' }, h('section', { class: 'jr-path main' }, h('span', { class: 'tag amber' }, N.ui.jrPathThinkTag), h('h3', null, N.ui.jrVPathThinkTitle), h('p', null, N.ui.jrPathThinkNote), h('div', { class: 'jr-trail' }, h('span', null, N.ui.jrS2), h('i', null, '→'), h('span', null, N.ui.jrS3), h('i', null, '→'), h('span', null, N.ui.jrS4), h('i', null, '→'), h('span', null, N.ui.jrS5)), go), h('section', { class: 'jr-path' }, h('h3', null, N.ui.jrPathFill), h('p', null, N.ui.jrPathFillNote), jrIntakePreview(), h('button', { type: 'button', class: 'btn big go', onclick: function () { IN.open = true; showIntake(); } }, N.ui.jrPathFillGo))));
+  }
+  function jrWho(state) {
+    var options = state.who && state.who.options || [], cards = h('div', { class: 'jr-cards3' }), own = h('input', { class: 'in', maxlength: '500', placeholder: N.ui.jrOwnWhoPlaceholder }), ownBox = h('div', { class: 'jr-own', hidden: true });
+    ownBox.append(own, h('button', { type: 'button', class: 'btn link', onclick: function () { jrPost({ action: 'pickWho', own: own.value }); } }, N.ui.jrOwnWhoGo));
+    options.slice(0, 3).forEach(function (item, i) { cards.append(h('article', { class: 'jr-ccard' + (item.rec ? ' rec' : '') + (state.who.pick === i && state.model && state.model.options && state.model.options.length ? ' picked' : '') }, h('div', { class: 'jr-ctop' }, h('span', { class: 'jr-ico', 'aria-hidden': 'true' }, ['◉', '◇', '◆'][i]), item.rec ? tag(N.ui.jrZeroRec, 'ai') : null), h('h3', null, item.who), h('dl', { class: 'jr-kv' }, h('div', null, h('dt', null, N.ui.jrPain), h('dd', null, item.pain)), h('div', null, h('dt', null, N.ui.jrNow), h('dd', null, item.now))), h('div', { class: 'jr-cfoot' }, jrFills(jrCellName('customer')), h('button', { type: 'button', class: 'btn' + (item.rec ? ' primary' : ''), onclick: function () { jrPost({ action: 'pickWho', pick: i }); } }, N.ui.jrPick)))); });
+    var rec = options.findIndex(function (item) { return item.rec; });
+    return h('div', { class: 'jr-screen' }, h('section', { class: 'layer jr-hero' }, h('span', { class: 'eyebrow' }, N.ui.jrS2), h('h2', null, N.ui.jrWhoHead), state.who && state.who.said ? jrZeroLine(state.who.said) : null), cards, h('div', { class: 'jr-alt' }, N.ui.jrOwnWho, h('button', { type: 'button', class: 'btn link', onclick: function () { ownBox.hidden = false; own.focus(); } }, N.ui.jrOwnWhoBtn), ownBox), jrBar(state, N.ui.jrBarWho, { previous: function () { jrPost({ action: 'back' }); }, zero: rec >= 0 ? function () { jrPost({ action: 'pickWho', pick: rec }); } : null, primary: function () { if (state.who.pick >= 0) jrPost({ action: 'pickWho', pick: state.who.pick }); }, disabled: state.who.pick < 0 }));
+  }
+  function jrModelNotes(cards) {
+    if (!cards || !cards.length) return null;
+    var d = h('details', { class: 'cv-model-notes' }, h('summary', null, N.ui.cvModelNotes)); cards.forEach(function (c) { var name = c.en ? T('cvModelNameEn', { name: c.name, en: c.en }) : c.name; d.append(h('p', null, name + (c.logic ? '：' + c.logic : ''))); }); return d;
+  }
+  function jrModel(state) {
+    var models = state.model && state.model.options || [], cards = h('div', { class: 'jr-models' }), picked = Number(state.model && state.model.pick), more = Number(state.model && state.model.asked || 1) < 3, rec = models.findIndex(function (item) { return item.rec; });
+    if (!Number.isInteger(picked) || !models[picked]) picked = -1;
+    var followPick = rec >= 0 ? rec : models.length ? 0 : -1;
+    models.slice(0, 3).forEach(function (model, i) { var axes = h('div', { class: 'jr-axes' }); ['charge', 'form', 'scale'].forEach(function (face) { axes.append(h('div', { class: 'jr-axis' }, h('small', null, N.ui['face_' + face]), h('b', jrFace(model, face) ? null : { class: 'muted' }, jrFace(model, face) || N.ui.jrFaceOpen))); }); cards.append(h('article', { class: 'jr-mcard' + (model.rec ? ' rec' : '') + (i === picked ? ' picked' : '') }, h('div', { class: 'jr-mhead' }, h('div', { class: 'jr-rk' }, h('span', null, N.ui.jrModelKicker), i === picked ? tag(N.ui.jrPicked, 'ok') : model.rec ? tag(N.ui.jrZeroRec, 'ai') : null), h('h3', null, model.name), model.rec && i === picked ? h('span', { class: 'jr-model-rec' }, tag(N.ui.jrZeroRec, 'ai')) : null), h('div', null, h('span', { class: 'jr-lab' }, N.ui.jrPayer), h('div', { class: 'jr-pay' }, model.payer)), axes, h('div', { class: 'jr-sig ok' }, h('i', null, '✓'), h('span', null, h('span', { class: 'jr-lab' }, N.ui.jrWhy), model.why)), h('div', { class: 'jr-sig risk' }, h('i', null, '!'), h('span', null, h('span', { class: 'jr-lab' }, N.ui.jrTrap), model.trap && model.trap.text)), h('div', { class: 'jr-sig test' }, h('i', null, '▶'), h('span', null, h('span', { class: 'jr-lab' }, N.ui.jrTest, ' ', tag(N.ui.origin_zero, 'ai')), model.firstTest && model.firstTest.text)), jrModelNotes(model.cards || state.model.cards), h('div', { class: 'jr-mfoot' }, jrFills(['revenue', 'channel', 'partners'].map(jrCellName).join('、')), h('button', { type: 'button', class: 'btn', onclick: function () { jrPost({ action: 'pickModel', pick: i }); } }, i === picked ? N.ui.jrRepick : N.ui.jrPick)))); });
+    return h('div', { class: 'jr-screen' }, h('section', { class: 'layer jr-hero' }, h('span', { class: 'eyebrow' }, N.ui.jrS3), h('h2', null, N.ui.jrModelHead), h('p', { class: 'sub' }, T('jrModelSub', { who: jrWhoName(state) })), state.model && state.model.said ? jrZeroLine(state.model.said) : null), h('div', { class: 'jr-swipe' }, h('span', null, N.ui.jrSwipe), h('span', { class: 'jr-pager' }, h('i', { class: 'on' }), h('i'), h('i'))), cards, h('p', { class: 'jr-alt' }, more ? [N.ui.jrMoreModels, h('button', { type: 'button', class: 'btn link', onclick: function () { jrPost({ action: 'moreModels' }); } }, N.ui.jrMoreModelsBtn)] : N.ui.jrMoreLimit), jrBar(state, picked < 0 ? N.ui.jrBarModel : T('jrBarPicked', { name: models[picked].name || '' }), { previous: function () { jrPost({ action: 'back' }); }, zero: followPick >= 0 ? function () { jrPost({ action: 'pickModel', pick: followPick }); } : null, primary: function () { if (picked >= 0) jrPost({ action: 'pickModel', pick: picked }); }, disabled: picked < 0 }));
+  }
+  function jrIdeaMentionsGoal(state) {
+    var sentence = String(state && (state.say || state.text || state.idea) || '');
+    return [N.ui.goal_fast, N.ui.goal_steady, N.ui.goal_scale, N.ui.goal_raise, '收入', '賺錢', '穩定', '擴張', '融資', '投資者'].some(function (term) { return term && sentence.indexOf(term) >= 0; });
+  }
+  function jrGoal(state) {
+    var picked = jrChosenModel(state), selected = state.goal, goals = h('div', { class: 'jr-goals' }), echo = h('div', { class: 'jr-echo' }), test = h('textarea', { rows: '4', maxlength: '1000' }), testEdit = h('div'), first = picked.firstTest || {}, suggestion = state.model && state.model.goal && state.model.goal.suggest || 'open', buttons = {};
+    test.value = state.test && state.test.text || '';
+    testEdit.append(test); testEdit.hidden = !(state.test && state.test.edited);
+    function select(goal) { selected = goal; Object.keys(buttons).forEach(function (key) { buttons[key].className = 'jr-goal' + (key === selected ? ' on' : ''); buttons[key].setAttribute('aria-checked', key === selected ? 'true' : 'false'); }); var goalParts = String(N.ui.jrGoalEcho || '').split('{goal}'), howParts = String(goalParts[1] || '').split('{how}'); echo.replaceChildren(document.createTextNode(goalParts[0] || ''), h('b', null, N.ui['goal_' + selected]), document.createTextNode(howParts[0] || ''), document.createTextNode(N.ui['goalHow_' + selected] || ''), document.createTextNode(howParts[1] || '')); }
+    ['fast', 'steady', 'scale', 'raise', 'open'].forEach(function (key) { var button = h('button', { type: 'button', class: 'jr-goal', role: 'radio', onclick: function () { select(key); } }, h('span', { class: 'r' }), h('span', null, h('b', null, N.ui['goal_' + key]), h('small', null, N.ui['goalNote_' + key])), key === suggestion ? tag(N.ui.origin_zero, 'ai') : h('span')); buttons[key] = button; goals.append(button); });
+    select(selected);
+    function commit(goal, text) { jrPost({ action: 'setGoal', goal: goal, test: { text: text } }); }
+    return h('div', { class: 'jr-screen' }, h('section', { class: 'layer jr-hero' }, h('span', { class: 'eyebrow' }, N.ui.jrS4), h('h2', null, N.ui.jrGoalHead), h('p', { class: 'sub' }, T('jrGoalSub', { name: picked.name || '', faces: ['charge', 'form', 'scale'].map(function (face) { return jrFace(picked, face); }).filter(Boolean).join('、') }))), h('div', { class: 'jr-two' }, h('section', { class: 'layer jr-panel' }, h('h3', { class: 'jr-sec' }, h('span', { class: 'jr-sec-n' }, '1'), N.ui.jrGoalQ), h('p', { class: 'sub small' }, N.ui.jrGoalNote, jrIdeaMentionsGoal(state) ? '' : N.ui.jrGoalNoClue), goals, echo), h('section', { class: 'layer jr-panel' }, h('h3', { class: 'jr-sec' }, h('span', { class: 'jr-sec-n' }, '2'), N.ui.jrTestQ), h('p', { class: 'sub small' }, N.ui.jrTestNote), h('div', { class: 'jr-test-card' }, tag(N.ui.origin_zero, 'ai'), h('p', null, first.text), h('dl', { class: 'jr-test-meta' }, h('dt', null, N.ui.jrWatch), h('dd', null, state.test && state.test.watch), h('dt', null, N.ui.jrCounts), h('dd', null, state.test && state.test.counts), h('dt', null, N.ui.jrTrapGuard), h('dd', null, state.test && state.test.trap))), testEdit, h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { test.value = first.text || ''; testEdit.hidden = true; } }, N.ui.jrAdoptTest), h('button', { type: 'button', class: 'btn', onclick: function () { testEdit.hidden = false; test.focus(); } }, N.ui.jrEditTest)))), jrBar(state, N.ui.jrBarGoal, { previous: function () { jrPost({ action: 'back' }); }, zero: function () { commit(suggestion, first.text || ''); }, primary: function () { commit(selected, test.value); } }));
+  }
+  function jrCanvasData(state) {
+    var cells = Object.assign({}, state.canvas && state.canvas.cells || {}), customer = cells.customer || {};
+    customer.sub = customer.sub || { problem: cells.problem || { text: '', tag: 'open' }, alternatives: cells.alternatives || { text: '', tag: 'open' } }; cells.customer = customer;
+    return { view: { cells: cells, suggestions: [] }, model: state.model && state.model.options && state.model.options[state.model.pick], goal: state.goal, cards: state.model && state.model.cards || [] };
+  }
+  function jrCanvas(state) {
+    var box = h('div', { id: 'jr-canvas' }), model = jrChosenModel(state), first = model.firstTest || {}, trap = model.trap && model.trap.text || '';
+    window.SOS_CANVAS_UI.render(box, jrCanvasData(state), { mode: 'journey', onZero: function (key) { jrPost({ action: 'zeroCell', key: key }); }, onOwn: function (key, text) { return jrPostCell(key, text); }, onEdit: function (key, value, text) { return jrPostCell(key, text); } });
+    var filled = jrCanvasCount(state, false), open = jrCanvasCount(state, true), barText = T('jrBarCanvas', { n: filled }) + (open ? T('jrVBarCanvasUndecided', { u: open }) : '');
+    return h('div', { class: 'jr-screen' }, h('section', { class: 'layer jr-hero' }, h('span', { class: 'eyebrow' }, N.ui.jrS5), h('h2', null, N.ui.jrCanvasHead), h('p', { class: 'sub' }, N.ui.jrCanvasSub), jrFaces(model, state.goal)), box, h('section', { class: 'layer jr-test-foot' }, h('h3', null, N.ui.jrTestFootTitle, ' ', tag(N.ui.jrTestAdopted, 'ok')), h('p', null, first.text || '', trap ? (/[。！？]\s*$/.test(first.text || '') ? '' : ' ') + T('jrTestFoot', { trap: trap }) : '')), jrBar(state, barText, { previous: function () { jrPost({ action: 'back' }); }, primary: function () { jrPost({ action: 'submit' }); }, primaryLabel: N.ui.jrSubmit, big: true }));
+  }
+  function journeyRender(state) {
+    var content;
+    if (!state || state.state === 'closed') content = jrStart(state);
+    else if (state.state === 'failed') content = h('div', { class: 'jr-screen' }, DESK.note('error', state.reason || N.ui.jrBadCanvas), h('div', { class: 'foot' }, h('button', { type: 'button', class: 'btn primary', onclick: function () { jrPost({ action: 'retry' }); } }, N.ui.ideateRetry)));
+    else if (state.state === 'running') content = jrWait(state);
+    else if (state.state === 'ready') content = h('div', { class: 'jr-screen' }, DESK.note('done', N.ui.jrSubmitted));
+    else if (state.step === 'who') content = jrWho(state);
+    else if (state.step === 'model') content = jrModel(state);
+    else if (state.step === 'goal') content = jrGoal(state);
+    else content = jrCanvas(state);
+    return h('div', { id: 'jr-journey' }, jrProgress(state), content);
+  }
   function intakeForm() {
     var d = draftLoad(), qs = intakeQuestionsNow(), lim = IN.meta.limits;
     function qBlock(q) {
@@ -2226,7 +2457,6 @@ dl.rc dd{margin:0}
       h('span', { class: 'eyebrow' }, N.ui.intake),
       h('h2', { class: 'layer-title' }, N.ui.intakeTitle),
       h('p', { class: 'guide' }, N.ui.intakeGuide),
-      h('div', { class: 'iq', id: 'zero-think-box' }),
       h('h3', { class: 'iq-sec' }, N.ui.files),
       drop, h('div', { id: 'file-list' }), h('div', { id: 'doc-check', role: 'status', hidden: true }), h('div', { id: 'intake-err' }), h('div', { class: 'pf-box', id: 'pf-box' }),
       h('details', null, h('summary', null, N.ui.intakeDetails), DESK.note('tip', N.ui.intakeOnline, { id: 'drop-online-note' }), h('div', { class: 'iq', id: 'intake-template' }, h('p', { class: 'small muted' }, N.ui.intakeTemplateNote),
@@ -2238,7 +2468,9 @@ dl.rc dd{margin:0}
       h('h3', { class: 'iq-sec' }, N.ui.required + '（' + req.length + ' 條）'), req.map(qBlock),
       h('h3', { class: 'iq-sec' }, N.ui.intakeOptionalHead), opt.map(qBlock));
     if (!PF.id && d._prefill && d._prefill.id) { PF.id = d._prefill.id; PF.state = 'running'; }
-    setTimeout(function () { renderFiles(); pfBox(); pfAll(); intakeBar(); zeroThinkRender(true); if (PF.id && !PF.data) pfPoll(); }, 0);
+    var legacyJourney = IN.meta.ideate;
+    if (legacyJourney && legacyJourney.legacy && legacyJourney.state === 'ready' && legacyJourney.prefillId && PF.id !== legacyJourney.prefillId) PF = { id: legacyJourney.prefillId, data: null, err: '' };
+    setTimeout(function () { renderFiles(); pfBox(); pfAll(); intakeBar(); if (PF.id && !PF.data) pfPoll(); }, 0);
     return form;
   }
   function zeroThinkRender(skipPrefill) {
@@ -2360,7 +2592,8 @@ dl.rc dd{margin:0}
     renderFiles();
   }
   function renderFiles() {
-    var box = $('#file-list'); if (!box) return;
+    var box = $('#file-list');
+    if (!box) { var jr = $('#jr-file-list'); if (jr) jrFilesInto(jr); return; }
     box.replaceChildren();
     IN.files.forEach(function (f, i) {
       box.append(h('div', { class: 'file-row' }, h('span', null, f.name), h('span', { class: 'small muted' }, fmtSize(f.size)),

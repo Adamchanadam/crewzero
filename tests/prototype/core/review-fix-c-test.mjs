@@ -17,6 +17,8 @@ const csv = await load('money-import.mjs');
 const dash = await load('dash-lib.mjs');
 const people = await load('people-ops.mjs');
 const ask = await load('ask-lib.mjs');
+// 0.44.0 起 server.mjs 由 limits.mjs 匯入 cleanFileName、B64、檔案上限等（附件上限改動）；vm 環境放入同一組真函數
+const limits = await load('limits.mjs');
 const serverSource = fs.readFileSync(path.join(PROTO, 'server.mjs'), 'utf8');
 const runSource = fs.readFileSync(path.join(PROTO, 'run.mjs'), 'utf8');
 const askSource = fs.readFileSync(path.join(PROTO, 'ask.html'), 'utf8');
@@ -44,9 +46,9 @@ function dirs(name) {
 function server(DIR, override = {}) {
   const context = vm.createContext({
     fs, path, crypto, process, Buffer, DIR, ROOT: PROTO, PORT: 4380, FOUNDER_OPS: path.join(DIR.ledger, 'founder-ops.json'), FOUNDER_OPS_LOCK: path.join(DIR.ledger, '.founder-ops.lock'), NAMES: ask.NAMES,
-    localIso: () => '2026-11-11T12:00:00+00:00', readJSON: ask.readJSON, writeJSON: ask.writeJSON, fnv: ask.fnv, validateAskReply: ask.validateAskReply, parseFounderReply: ask.parseFounderReply,
-    ...money, ...moneyStore, ...csv, ...people,
-    hasContactInfo: people.hasContactInfo, plain: value => !!value && typeof value === 'object' && !Array.isArray(value), own: (value, key) => Object.hasOwn(value || {}, key), B64: /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+    localIso: () => '2026-11-11T12:00:00+00:00', readJSON: ask.readJSON, writeJSON: ask.writeJSON, fnv: ask.fnv, packHash: ask.packHash, readListStrict: ask.readListStrict, validateAskReply: ask.validateAskReply, parseFounderReply: ask.parseFounderReply,
+    ...money, ...moneyStore, ...csv, ...people, ...limits,
+    hasContactInfo: people.hasContactInfo, plain: value => !!value && typeof value === 'object' && !Array.isArray(value), own: (value, key) => Object.hasOwn(value || {}, key),
     schedule: () => {}, certInfo: () => ({ host: 'test' }), companyStatus: () => ({ confirmed: true }), receiveNote: async () => ({ ok: true }), isDemoInstance: () => false, say: () => {},
     ...override
   });

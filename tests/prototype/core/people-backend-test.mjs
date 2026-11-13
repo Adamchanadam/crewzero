@@ -63,7 +63,7 @@ try {
     const P = packs().find(p => p.rhythm && p.rhythm.kind === 'interview'), lib = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
     const answers = P.questions.map(q => ({ id: q.id, value: q.bind === 'contact' ? q.options[pickIdx].text : q.value, ai: q.value, changed: false }));
     const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: P.questions.map(q => q.id), answers };
-    const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+    const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
     const r = await post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
     await sleep(3500); shell('--type', 'rhythm', '--trigger', 'manual');
     return { r, P };

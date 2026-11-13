@@ -15,13 +15,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { receiveAttachments, collectLinks, convertInboundText, rereadLink, rehomeInterruptedUploads } from './inbound-lib.mjs';
 import { ROLES_OPS, ROLES_OP_NAMES, checkRolesOp } from './ledger-ops.mjs';
 import { PACE_KEYS, timeoutOf } from './pace-lib.mjs';
-import { applyActorOp, ACTOR_OPS, hasContactInfo, ownerKind, duplicateActor, MAX_ACTIVE, liveActors } from './people-ops.mjs';
+import { applyActorOp, ACTOR_OPS, hasContactInfo, ownerKind, duplicateActor, MAX_ACTIVE, liveActors, ROLE_MAX, TEAM_TYPES } from './people-ops.mjs';
 import { applyTermOp } from './terms-ops.mjs';
 import { parseGoogleLink } from './link-fetch.mjs';
 import { hosts,version, clearCliTrust, certified, certCurrent, cleanEnv, resolveCommand, preparedAdapter, restrictions } from './host-lib.mjs';
 import { rhythmOf, nextRunAt, ymd, scheduleEligibility } from './rhythm-lib.mjs';
 import { provenanceOf, provenanceLine, unconfirmed, loadPrefills } from './prefill-lib.mjs';
-import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply, fnv } from './ask-lib.mjs';
+import { isInboxNote, isInboxNoteOf, isInboxIntake, isInboxPrefill, confirmedDigest, confirmedSnapshot, NAMES, localIso, clockNow, isSim, writeJSON, readJSON, readListStrict, packHash, dataDirs, listPacks, loadPack, loadAnswers, readLog, rootId, legacyRootId, ownsServerPort as ownsPort, serverOwnership, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, bizTypeLabel, SERVER_VERSION, BASE_PORT as DEFAULT_PORT, parseFounderReply, validateAskReply, fnv } from './ask-lib.mjs';
 import { dashboardState, touchLastSeen, pendingTodo, pendingSnoozed, guideCard, companyLogo, LOGO_EXTS, workStatus, readFounderOpsSnapshot, applyFounderOps, overviewIsCurrent, inputList, inputView, runNowPreview, resolveDataFile, moneyView } from './dash-lib.mjs';
 import { listScenarios, loadScenario, listSessions, loadSession, startSession, say as practiceSay, undo as practiceUndo, finish as practiceFinish, stopAll as practiceStop } from './practice-lib.mjs';
 import { TOPIC_TYPES, SEATS, LEVELS, formatFor, passesFor, listMatches, loadMatch, summaryOf, pendingMatches } from './debate-lib.mjs';
@@ -29,11 +29,15 @@ import { brainSource, counterpartsOf } from './brain-lib.mjs';
 import { folderHash } from './folder-hash.mjs';
 import { cleanTitle, createMinutes, fileNameFor, listOpen, minutesFilePath, minutesShown, overviewLines, patchMinutes, readMinutes, reserveMinutesId, sha256, sourceDir } from './minutes-lib.mjs';
 import { detect, formatMap, gate, marks, samples, unmappedIn } from './transcript-lib.mjs';
-import { CATEGORIES, toCents, validateBalance, validateRecord, newMoneyId, payerKeyOf, mapIdFor, classifyImportRows, recordsFromBatch } from './money-lib.mjs';
-import { moneyPaths, readImportBatch, readMoney } from './money-store.mjs';
+import { CATEGORIES, toCents, validateBalance, validateRecord, newMoneyId, payerKeyOf, mapIdFor, classifyImportRows, duplicateHints, recordsFromBatch } from './money-lib.mjs';
+import { dupPool, moneyPaths, readImportBatch, readMoney } from './money-store.mjs';
+import { B64, cleanFileName, FILE_MAX_BYTES, FILE_MAX_MB, tellDuplicateKey, tellDuplicateWithin, TELL_DUP_WINDOW_MS, TOTAL_FILE_MAX_BYTES } from './limits.mjs';
 import { parseCsv, guessMap, draftsFrom, storeImportOriginal } from './money-import.mjs';
 import { extensionsDir, folderNameFor, validate, applyEdits, newDraftId } from './ext-lib.mjs';
 import { listExtensions, listDrafts, readDraft, createDraft, patchDraft, templateDraft, createExtension, registerExtension, writeExtension, revisionCheck, rowWrite, archiveDone, readExtensionRows, extOverview, markHanded, readRegistry, writeRegistry, extensionPaths } from './ext-store.mjs';
+import { readCanvas } from './canvas-store.mjs';
+import { loadModelCards } from './model-cards-lib.mjs';
+import { factMergeOn } from './features.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // 模擬／測試資料夾一定要同預設 data/ 係兩個實體位置。path.resolve() 睇唔到 Windows
@@ -249,7 +253,7 @@ function refuse(req, res, url, why) {
 }
 // Founder Desk（首頁等你決定、問題包、決定紀錄）係 ask.html；公司概覽係 proofread.html
 // 頁面同共用檔（名稱、版面、Markdown）：只准呢幾個檔，加共用檔就加入 SHARED
-const SHARED = ['md.js', 'names.js', 'desk.js', 'orbit.js', 'pair.js', 'celebration.js', 'ext-view.js', 'drag.js'];
+const SHARED = ['md.js', 'names.js', 'desk.js', 'orbit.js', 'pair.js', 'celebration.js', 'ext-view.js', 'drag.js', 'canvas-lib.js', 'canvas.js'];
 const FILES = { '/': 'ask.html', '/ask.html': 'ask.html', '/proofread.html': 'proofread.html', '/startup-background-template.md': 'startup-background-template.md', '/ext-style.css': 'ext-style.css', ...Object.fromEntries(SHARED.map(f => ['/' + f, f])) };
 // 營運監察台：/dashboard（公司現況）、/dashboard/<分頁> 同 /dashboard/brain/<項目>，同一個頁面檔
 const DASH_TABS = ['path', 'brain', 'inputs', 'team', 'money', 'ext', 'log', 'system'];
@@ -491,26 +495,44 @@ function simSetAI(mode) {
 }
 const pendingFiles = () => [...fs.readdirSync(DIR.replies).filter(f => f.endsWith('.md')), ...fs.readdirSync(DIR.inbox).filter(f => isInboxIntake(f) || isInboxPrefill(f) || isInboxNote(f))].sort();
 const EXTS = ['md', 'txt', 'csv', 'pdf', 'docx', 'pptx', 'xlsx', 'png', 'jpg', 'jpeg'];
-const limits = { files: 20, fileMB: 10, totalMB: 50, exts: EXTS };
-const B64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const limits = { files: 20, fileMB: FILE_MAX_MB, totalMB: 50, exts: EXTS };
+const tellDuplicates = new Map(), tellInFlight = new Map();
+const pruneTellDuplicates = now => {
+  for (const [key, entry] of tellDuplicates) if (!tellDuplicateWithin(tellDuplicates, key, now, TELL_DUP_WINDOW_MS)) tellDuplicates.delete(key);
+  while (tellDuplicates.size > 200) tellDuplicates.delete(tellDuplicates.keys().next().value);
+};
+const rememberTellDuplicate = (key, result, now) => { pruneTellDuplicates(now); tellDuplicates.set(key, { at: now, result }); pruneTellDuplicates(now); };
+const logServerError = error => {
+  const raw = String(error?.stack || error).slice(0, 4000), file = path.join(path.dirname(DIR.data), 'logs', 'server-errors.log');
+  // 上限 1MB：超過就把現有紀錄改名為 server-errors.old.log（只保留上一份），避免紀錄無限增長（覆核第 6 項）
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    try { if (fs.statSync(file).size > 1024 * 1024) fs.renameSync(file, file.replace(/\.log$/, '.old.log')); } catch { }
+    fs.appendFileSync(file, `[${localIso()}] ${raw}\n\n`);
+  } catch { }
+};
 // 附件核對（交資料、真實事件證明共用）：回 { files } 或 { error }
 function takeFiles(list) {
+  if (!Array.isArray(list)) return { error: '附件格式不正確，請重新選擇。' };
   if (list.length > 20) return { error: '附件最多 20 份，請移除部分文件後再送出。' };
   const files = []; let total = 0;
   for (const f of list) {
     const who = f && typeof f.name === 'string' && f.name ? '「' + f.name.slice(0, 80) + '」' : '其中一份附件';
-    if (!f || typeof f.name !== 'string' || typeof f.data !== 'string' || !f.name || !B64.test(f.data)) return { error: who + '無法讀取，可能已損壞，請重新選擇。' };
+    let bytes = null;
+    try { bytes = Buffer.isBuffer(f && f.bytes) ? f.bytes : typeof f?.data === 'string' && B64.test(f.data) ? Buffer.from(f.data, 'base64') : null; }
+    catch { return { error: who + '無法讀取，可能已損壞，請重新選擇。' }; }
+    if (!f || typeof f.name !== 'string' || !f.name || !bytes) return { error: who + '無法讀取，可能已損壞，請重新選擇。' };
     const ext = path.extname(f.name).slice(1).toLowerCase();
     if (!EXTS.includes(ext)) return { error: who + '的檔案類型未能接收，請另存為 PDF 或 Word 文件後再加入。' };
-    const bytes = Buffer.from(f.data, 'base64'); total += bytes.length;
-    if (bytes.length > 10 * 1024 * 1024) return { error: who + '太大，每份須在 10MB 以內。請改選較小的檔案，或把文件分拆後再加入。' };
-    if (total > 50 * 1024 * 1024) return { error: '附件合共太大，須在 50MB 以內。請移除部分文件後再送出。' };
-    files.push({ name: f.name.replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 80), bytes });
+    total += bytes.length;
+    if (bytes.length > FILE_MAX_BYTES) return { error: NAMES.t('fileTooLarge', { who, mb: FILE_MAX_MB }) };
+    if (total > TOTAL_FILE_MAX_BYTES) return { error: '附件合共太大，須在 50MB 以內。請移除部分文件後再送出。' };
+    files.push({ name: cleanFileName(f.name), bytes });
   }
   return { files };
 }
 
-async function receiveIntake(body) {
+async function receiveIntake(body, options = {}) {
   const fail = message => ({ error: 'invalid', message });
   if (!body || !body.fields || typeof body.fields !== 'object' || Array.isArray(body.fields) || !Array.isArray(body.files)) return fail('請填寫資料並檢查附件。');
   const bizType = typeof body.bizType === 'string' ? body.bizType : '';
@@ -533,20 +555,45 @@ async function receiveIntake(body) {
   // 由文件預填（規劃書 3.1）：只喺答案同已核對嘅預填逐字一樣先記「你確認的文件原句」；同預填一樣嘅答案永遠唔記成「你寫的」
   const prefillId = /^[\w-]{1,40}$/.test(String(body.prefillId || '')) ? body.prefillId : '';
   const prefill = prefillId ? readJSON(path.join(DIR.ledger, 'prefill', prefillId + '.json'), null) : null;
-  const provenance = provenanceOf(fields, body.provenance, loadPrefills(path.join(DIR.ledger, 'prefill'), prefillId));
-  if (unconfirmed(provenance, body.provenance).length) return fail(NAMES.ui.prefillUnconfirmed);
+  const journeyProvenance = options && options.journeyProvenance && typeof options.journeyProvenance === 'object' && !Array.isArray(options.journeyProvenance) ? options.journeyProvenance : null;
+  const provenance = journeyProvenance || provenanceOf(fields, body.provenance, loadPrefills(path.join(DIR.ledger, 'prefill'), prefillId));
+  if (!journeyProvenance && unconfirmed(provenance, body.provenance).length) return fail(NAMES.ui.prefillUnconfirmed);
   for (const q of Object.keys(provenance)) if (provenance[q].kind !== 'founder' && !provenance[q].moved) provenance[q].confirmed = true;
-  const machine = { format: 'startup-os.intake/0.1', id, ...(bizType ? { bizType, bizOther: bizType === 'other' ? bizOther : '' } : {}), fields, files: records, ...(prefill ? { prefillId } : {}), provenance };
+  const machine = { format: 'startup-os.intake/0.1', id, ...(bizType ? { bizType, bizOther: bizType === 'other' ? bizOther : '' } : {}), fields, files: records, ...(prefill ? { prefillId } : {}), ...(body.journey ? { journey: body.journey } : {}), provenance };
   const text = '# ' + NAMES.ui.intake + '\n\n' + (bizType ? '生意類別：' + bizTypeLabel(bizType, bizOther) + '\n\n' : '') + intakeQuestions(bizType).map(q => `## ${q.n}. ${q.ask}\n\n${fields['q' + q.n]}\n${fields['q' + q.n].trim() ? '\n' + provenanceLine(provenance['q' + q.n]) + '\n' : ''}`).join('\n') + '\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
-  const created = [];
+  const created = []; let journeyStateAfter = null;
   try {
     await receiveAttachments({ id, type: 'intake', base: `${id}-intake-`, metaName: `${id}-meta-intake.json`, attachments: files, text: Object.values(fields).join('\n'), links: Array.isArray(body.links) ? body.links.filter(u => typeof u === 'string' && u.length <= 2048).slice(0, 10) : [], inboxDir: DIR.inbox, fetchImpl: FETCH_IMPL, created });
-    const p = path.join(DIR.inbox, `${id}-intake.md`); fs.writeFileSync(p, text, { flag: 'wx' }); created.push(p);
+    const p = path.join(DIR.inbox, `${id}-intake.md`);
+    // 旅程交出要在同一把鎖內核對目前步驟、寫入正式收件及改為 ready，避免第二次加鎖把剛寫好的收件誤判為 busy。
+    if (body.journey) {
+      journeyStateAfter = withFounderOpsLock(() => {
+        const latest = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+        if (!latest || latest.v !== 2 || latest.state !== 'choose' || latest.step !== 'canvas') return null;
+        const next = { ...latest, state: 'ready', intakeId: id, updatedAt: localIso() };
+        writeJSON(path.join(DIR.ledger, 'ideate.json'), next);
+        try { fs.writeFileSync(p, text, { flag: 'wx' }); created.push(p); }
+        catch (e) { writeJSON(path.join(DIR.ledger, 'ideate.json'), latest); throw e; }
+        return next;
+      });
+      if (!journeyStateAfter) { const error = new Error('journey-busy'); error.code = 'journey-busy'; throw error; }
+    } else { fs.writeFileSync(p, text, { flag: 'wx' }); created.push(p); }
     if (bizType && !fs.existsSync(path.join(DIR.company, 'biz.json'))) writeJSON(path.join(DIR.company, 'biz.json'), { type: bizType, other: bizType === 'other' ? bizOther : '' });
-    const ideate = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
-    if (ideate) writeJSON(path.join(DIR.ledger, 'ideate.json'), { ...ideate, state: 'closed', reason: '', updatedAt: localIso() });
-  } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch {} throw e; }
-  return { ok: true, id, receivedAt: localIso() };
+    if (!body.journey) {
+      const ideate = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+      if (ideate) withFounderOpsLock(() => {
+        const latest = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+        if (!latest) return false;
+        writeJSON(path.join(DIR.ledger, 'ideate.json'), { ...latest, state: 'closed', reason: '', updatedAt: localIso() });
+        return true;
+      });
+    }
+  } catch (e) {
+    for (const p of created) try { fs.unlinkSync(p); } catch {}
+    if (e && e.code === 'journey-busy') return { error: 'busy', message: NAMES.ui.founderOpBusy };
+    throw e;
+  }
+  return { ok: true, id, receivedAt: localIso(), ...(journeyStateAfter ? { state: journeyStateAfter } : {}) };
 }
 
 /* ---------- 由文件預填（規劃書 3.1）：只有附件，唔含答案；AI 只讀文件交返八條預填，唔擬公司概覽、唔建任何紀錄 ---------- */
@@ -570,10 +617,294 @@ async function receivePrefill(body) {
   return { ok: true, id, receivedAt: localIso() };
 }
 // 預填進度：外殼核對好嘅結果喺 ledger/prefill/<id>.json；未有就睇嗰次 AI 工作嘅狀態
+function journeyModelCards(model) {
+  if (!model || typeof model !== 'object' || !model.faces || typeof model.faces !== 'object') return [];
+  const lib = loadModelCards(ROOT), cards = [];
+  for (const face of ['charge', 'form', 'scale']) {
+    const picks = Array.isArray(model.faces[face]) ? model.faces[face] : [];
+    for (const pick of picks) {
+      const card = lib.byId && lib.byId[pick && pick.card];
+      if (card && !cards.some(item => item.id === card.id)) cards.push({ id: card.id, face, name: card.name, en: card.en || '', logic: card.logic || card.desc || '' });
+    }
+  }
+  return cards;
+}
+function journeyFailureReason(step) {
+  return step === 'who' ? NAMES.ui.jrBadWho : step === 'model' ? NAMES.ui.jrBadModel : NAMES.ui.jrBadCanvas;
+}
+function journeyRunActive() {
+  const status = readJSON(path.join(DIR.ledger, 'status.json'), { runs: [] }) || {};
+  // 只計 25 分鐘內開始的紀錄：程序中斷後遺留的「進行中」紀錄不可令旅程永遠停在等候（驗收閘 OPUS-15p）
+  const recent = run => { const t = Date.parse(run.startedAt || run.updatedAt || ''); return Number.isFinite(t) && Date.now() - t < 25 * 60000; };
+  return Array.isArray(status.runs) && status.runs.some(run => run && run.kind === 'note' && run.noteType === 'ideate' && ['running', 'waiting'].includes(run.state) && recent(run));
+}
+function staleJourney(state) {
+  const updated = Date.parse(state && state.updatedAt || '');
+  return state && state.v === 2 && state.state === 'running' && Number.isFinite(updated) && Date.now() - updated > 20 * 60000 && !journeyRunActive();
+}
+function ideateFilesForPage(files) {
+  return (Array.isArray(files) ? files : []).map(file => ({
+    name: typeof file?.name === 'string' ? file.name : '',
+    stored: typeof file?.stored === 'string' ? file.stored : '',
+    bytes: Number.isSafeInteger(file?.bytes) && file.bytes >= 0 ? file.bytes : 0
+  })).filter(file => file.name && file.stored);
+}
 function ideateStatus() {
-  const s = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+  let s = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
   if (!s) return null;
-  return { state: s.state, round: s.round, packId: ((s.rounds || []).find(r => r.round === s.round) || {}).packId || '', prefillId: s.prefillId || '', reason: s.reason || '' };
+  if (staleJourney(s)) {
+    const recovered = withFounderOpsLock(() => {
+      const latest = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+      if (!staleJourney(latest)) return latest;
+      const next = { ...latest, state: 'failed', reason: journeyFailureReason(latest.step), updatedAt: localIso() };
+      writeJSON(path.join(DIR.ledger, 'ideate.json'), next);
+      return next;
+    });
+    if (recovered) s = recovered;
+  }
+  if (s.v === 2) {
+    const { exclude, files, ...safe } = s, model = safe.model, safeFiles = ideateFilesForPage(files);
+    if (!model || typeof model !== 'object') return { ...safe, files: safeFiles };
+    const safeModel = { ...model }, options = safeModel.options; delete safeModel.exclude;
+    return { ...safe, files: safeFiles, model: { ...safeModel, options: Array.isArray(options) ? options.map(option => option && typeof option === 'object' ? { ...option, cards: journeyModelCards(option) } : option) : [] } };
+  }
+  // 舊「一起想」問題包一律收回；只有 ready 沿用原本八題預填流程。
+  if (s.state === 'ready') { const { files, ...safe } = s; return { ...safe, files: ideateFilesForPage(files), legacy: true }; }
+  return { v: 2, state: 'closed', reason: 'upgraded', say: s.say || '', updatedAt: s.updatedAt || '' };
+}
+function journeyState() {
+  const state = readJSON(path.join(DIR.ledger, 'ideate.json'), null);
+  return state && state.v === 2 ? state : null;
+}
+function ideateNote(next, action) {
+  const noteId = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
+  const note = `kind: note\ntype: ideate\naction: ${action}\nat: ${next.updatedAt}\n\n\`\`\`json\n${JSON.stringify({ action, ideateId: next.id })}\n\`\`\`\n`;
+  fs.writeFileSync(path.join(DIR.inbox, `${noteId}-note-ideate.md`), note, { flag: 'wx' });
+}
+function writeJourneyAction(next, action, prior) {
+  const stateFile = path.join(DIR.ledger, 'ideate.json');
+  writeJSON(stateFile, next);
+  try { ideateNote(next, action); }
+  catch (e) {
+    if (prior && prior.v === 2) writeJSON(stateFile, prior); else fs.rmSync(stateFile, { force: true });
+    throw e;
+  }
+}
+async function storeIdeateFiles(id, attachments) {
+  const dir = path.join(DIR.ledger, 'ideate-files', id), created = [];
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    const jobs = [], records = attachments.map((file, index) => {
+      const storedName = `${pad(index + 1)}-${file.name}`, full = path.join(dir, storedName);
+      fs.writeFileSync(full, file.bytes, { flag: 'wx' }); created.push(full);
+      if (['.pdf', '.docx', '.pptx', '.xlsx'].includes(path.extname(file.name).toLowerCase())) jobs.push({ full });
+      return { name: file.name, stored: path.posix.join('ideate-files', id, storedName), bytes: file.bytes.length };
+    });
+    // 與收附件相同：原檔存好後才轉文字版；轉換失敗不影響原檔及旅程。
+    const converted = await Promise.all(jobs.map(job => convertInboundText(job.full)));
+    for (const result of converted) if (result && result.ok && result.sidecar) created.push(result.sidecar);
+    return { records, created };
+  } catch (e) {
+    for (const file of created) try { fs.unlinkSync(file); } catch {}
+    throw e;
+  }
+}
+function ideateLegacyFile(stateFile) {
+  let target = path.join(DIR.ledger, 'ideate-legacy.json');
+  if (fs.existsSync(target)) {
+    const stamp = fileStamp(); target = path.join(DIR.ledger, `ideate-legacy-${stamp}.json`);
+    for (let n = 2; fs.existsSync(target); n++) target = path.join(DIR.ledger, `ideate-legacy-${stamp}-${n}.json`);
+  }
+  fs.renameSync(stateFile, target);
+}
+async function startJourney(next, attachments) {
+  let stored;
+  try {
+    stored = await storeIdeateFiles(next.id, attachments);
+    const result = withFounderOpsLock(() => {
+      const stateFile = path.join(DIR.ledger, 'ideate.json'), old = readJSON(stateFile, null);
+      if (old && old.v === 2 && !['closed', 'failed'].includes(old.state)) return { ok: true, state: old };
+      if (old && old.v !== 2) ideateLegacyFile(stateFile);
+      const state = { ...next, files: stored.records };
+      writeJourneyAction(state, 'journey-who', old && old.v === 2 ? old : null);
+      return { ok: true, state };
+    });
+    if (result && result.ok && result.state && result.state.id === next.id) return result;
+    for (const file of stored.created) try { fs.unlinkSync(file); } catch {}
+    return result || { error: 'busy', message: NAMES.ui.founderOpBusy };
+  } catch (e) {
+    if (stored) for (const file of stored.created) try { fs.unlinkSync(file); } catch {}
+    throw e;
+  }
+}
+function readIdeateFiles(state) {
+  const id = String(state && state.id || ''), prefix = `ideate-files/${id}/`, dir = path.resolve(DIR.ledger, 'ideate-files', id);
+  if (!/^[\w-]{1,80}$/.test(id) || !Array.isArray(state.files)) return null;
+  const files = [];
+  for (const file of state.files) {
+    const name = typeof file?.name === 'string' ? file.name : '', stored = String(file?.stored || '').replace(/\\/g, '/');
+    if (!name || !stored.startsWith(prefix) || !Number.isSafeInteger(file?.bytes) || file.bytes < 0) return null;
+    const full = path.resolve(DIR.ledger, stored), stat = (() => { try { return fs.statSync(full); } catch { return null; } })();
+    if (!stat || !stat.isFile() || !full.startsWith(dir + path.sep) || stat.size !== file.bytes) return null;
+    files.push({ name, bytes: fs.readFileSync(full) });
+  }
+  return files;
+}
+function journeyJob(current, action, patch = {}) {
+  const result = withFounderOpsLock(() => {
+    const latest = journeyState() || (current && current.v === 2 ? current : null);
+    if (!latest) return { error: 'stale', message: NAMES.ui.jrUpgraded };
+    const changes = typeof patch === 'function' ? patch(latest) : patch;
+    if (!changes) return { error: 'stale', message: NAMES.ui.errGeneric };
+    const next = { ...latest, ...changes, state: 'running', reason: '', updatedAt: localIso() };
+    writeJourneyAction(next, action, latest);
+    return { ok: true, state: next };
+  });
+  return result || { error: 'busy', message: NAMES.ui.founderOpBusy };
+}
+function journeyOwner(state) {
+  if (state.who && state.who.pick === -1) return state.who.own || '';
+  const option = state.who && state.who.options && state.who.options[state.who.pick];
+  return option && option.who || '';
+}
+function ideateAdopted() { return { kind: 'adopted', from: 'ideate', source: NAMES.ui.ideateSource }; }
+function journeyProvenance(state) {
+  const cells = state.canvas && state.canvas.cells || {}, whoIsOwn = state.who && state.who.pick === -1;
+  return {
+    q1: { kind: 'founder' },
+    q2: whoIsOwn ? { kind: 'founder' } : ideateAdopted(),
+    q3: whoIsOwn ? { kind: 'founder' } : ideateAdopted(),
+    q4: cells.revenue && cells.revenue.tag === 'mine' ? { kind: 'founder' } : ideateAdopted(),
+    q5: { kind: 'founder' },
+    q6: state.test && state.test.edited ? { kind: 'founder' } : ideateAdopted(),
+    q7: cells.partners && cells.partners.tag === 'mine' ? { kind: 'founder' } : ideateAdopted(),
+    q8: ideateAdopted()
+  };
+}
+async function receiveJourney(body) {
+  const fail = message => ({ error: 'invalid', message });
+  const action = body && body.action;
+  if (!['start', 'pickWho', 'pickModel', 'moreModels', 'setGoal', 'setCell', 'zeroCell', 'back', 'retry', 'submit'].includes(action)) return fail('操作不正確。');
+  if (action === 'start') {
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    // 三種拒絕各給對應字句：空白、超過 1000 字、已有公司概覽（覆核第 7 項）
+    if (!text) return fail(NAMES.ui.jrStartEmpty);
+    if (text.length > 1000) return fail(NAMES.ui.jrStartTooLong);
+    if (companyStatus().ready) return fail(NAMES.ui.ideateHasOverview);
+    const checked = certified(ROOT, DIR.ledger); if (!checked.host) return { error: 'ai', message: NAMES.ui.err_ai };
+    const uploaded = Array.isArray(body.files) ? body.files : null, got = uploaded && takeFiles(uploaded);
+    if (!uploaded || got.error) return fail(got && got.error || NAMES.ui.errGeneric);
+    const next = { v: 2, id: fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0'), state: 'running', step: 'who', reason: '', updatedAt: localIso(), say: text, files: [], who: { said: '', value: '', options: [], pick: 0, own: '' }, model: { said: '', options: [], pick: 0, asked: 1, exclude: [], goal: { suggest: 'open', why: '' } }, goal: 'open', goalBy: 'pick', test: { text: '', watch: '', counts: '', trap: '', edited: false }, canvas: { cells: {}, said: '' }, intakeId: '' };
+    return await startJourney(next, got.files);
+  }
+  const state = journeyState();
+  if (!state) return { error: 'stale', message: NAMES.ui.jrUpgraded };
+  if (action === 'submit') {
+    if (state.state !== 'choose' || state.step !== 'canvas') return { error: 'stale', message: NAMES.ui.errGeneric };
+    const model = state.model && state.model.options && state.model.options[state.model.pick];
+    if (!model) return { error: 'invalid', message: NAMES.ui.errGeneric };
+    const who = state.who.pick === -1 ? { who: state.who.own, pain: '', now: '' } : state.who.options[state.who.pick] || {};
+    const files = readIdeateFiles(state);
+    if (!files) return { error: 'invalid', message: NAMES.ui.errGeneric };
+    const cells = state.canvas && state.canvas.cells || {};
+    const customer = cells.customer || {}, partners = cells.partners || {}, revenue = cells.revenue || {};
+    const fields = { q1: state.say || '', q2: who.who || '', q3: who.pain || '', q4: revenue.text || '', q5: '', q6: state.test.text || model.firstTest && model.firstTest.text || '', q7: partners.tag === 'mine' ? partners.text || '' : '', q8: state.test.trap || model.trap && model.trap.text || '' };
+    return receiveIntake({ fields, files, journey: { say: state.say, who, model, goal: state.goal, test: state.test, canvas: state.canvas, customer } }, { journeyProvenance: journeyProvenance(state) }).then(result => result.ok ? { ok: true, state: result.state } : result);
+  }
+  if (action === 'pickWho') {
+    if (state.state !== 'choose' || state.step !== 'who') return { error: 'stale', message: NAMES.ui.errGeneric };
+    if (typeof body.own === 'string' && body.own.trim().length > 500) return fail(NAMES.ui.errGeneric);
+    const pickedOwn = typeof body.own === 'string' && body.own.trim(), pickedIndex = Number.isInteger(body.pick) && state.who.options && state.who.options[body.pick] ? body.pick : null;
+    if (!pickedOwn && pickedIndex == null) return { error: 'stale', message: NAMES.ui.errGeneric };
+    const unchanged = pickedOwn ? state.who.pick === -1 && state.who.own === body.own.trim() : state.who.pick === pickedIndex;
+    // 回到對象步再選同一項時，只重開下一個已完成的選擇畫面，保留其後成果。
+    if (unchanged && state.model && Array.isArray(state.model.options) && state.model.options.length) {
+      const wrote = withFounderOpsLock(() => {
+        const fresh = journeyState();
+        if (!fresh || fresh.state !== 'choose' || fresh.step !== 'who') return null;
+        const same = pickedOwn ? fresh.who.pick === -1 && fresh.who.own === body.own.trim() : fresh.who.pick === pickedIndex;
+        if (!same || !(fresh.model && Array.isArray(fresh.model.options) && fresh.model.options.length)) return null;
+        const next = { ...fresh, state: 'choose', step: 'model', reason: '', updatedAt: localIso() };
+        writeJSON(path.join(DIR.ledger, 'ideate.json'), next); return next;
+      });
+      return wrote ? { ok: true, state: wrote } : { error: 'busy', message: NAMES.ui.founderOpBusy };
+    }
+    return journeyJob(state, 'journey-model', latest => {
+      if (latest.state !== 'choose' || latest.step !== 'who') return null;
+      const who = { ...latest.who };
+      if (typeof body.own === 'string' && body.own.trim()) { who.pick = -1; who.own = body.own.trim(); }
+      else if (Number.isInteger(body.pick) && who.options && who.options[body.pick]) { who.pick = body.pick; who.own = ''; } else return null;
+      return { who, step: 'model', model: { ...latest.model, said: '', options: [], pick: 0, asked: 1, exclude: [], goal: { suggest: 'open', why: '' } }, goal: 'open', goalBy: 'pick', test: { text: '', watch: '', counts: '', trap: '', edited: false }, canvas: { cells: {}, said: '' } };
+    });
+  }
+  if (action === 'moreModels') {
+    if (state.state !== 'choose' || state.step !== 'model' || Number(state.model.asked || 1) >= 3) return { error: 'stale', message: NAMES.ui.jrMoreLimit };
+    return journeyJob(state, 'journey-model', latest => {
+      if (latest.state !== 'choose' || latest.step !== 'model' || Number(latest.model.asked || 1) >= 3) return null;
+      const exclude = (latest.model.options || []).map(item => item && item.name).filter(Boolean);
+      return { model: { ...latest.model, pick: -1, asked: Number(latest.model.asked || 1) + 1, exclude }, test: { text: '', watch: '', counts: '', trap: '', edited: false }, canvas: { cells: {}, said: '' } };
+    });
+  }
+  if (action === 'pickModel') {
+    if (state.state !== 'choose' || state.step !== 'model' || !Number.isInteger(body.pick) || !(state.model.options || [])[body.pick]) return { error: 'stale', message: NAMES.ui.errGeneric };
+    const wrote = withFounderOpsLock(() => {
+      const fresh = journeyState(); if (!fresh || fresh.state !== 'choose' || fresh.step !== 'model' || !(fresh.model.options || [])[body.pick]) return null;
+      const picked = fresh.model.options[body.pick], first = picked.firstTest || {}, trap = picked.trap || {};
+      const prior = Number.isInteger(fresh.model.pick) ? fresh.model.options[fresh.model.pick] : null;
+      const hasTest = !!(fresh.test && (fresh.test.text || fresh.test.watch || fresh.test.counts || fresh.test.trap));
+      const unchanged = !!(prior && prior.name && picked.name && prior.name === picked.name && hasTest);
+      const next = unchanged
+        ? { ...fresh, state: 'choose', step: 'goal', reason: '', model: { ...fresh.model, pick: body.pick }, updatedAt: localIso() }
+        : { ...fresh, state: 'choose', step: 'goal', reason: '', model: { ...fresh.model, pick: body.pick }, goal: fresh.model.goal && fresh.model.goal.suggest || 'open', goalBy: 'pick', test: { text: first.text || '', watch: first.watch || '', counts: first.counts || '', trap: trap.text || '', edited: false }, canvas: { cells: {}, said: '' }, updatedAt: localIso() };
+      writeJSON(path.join(DIR.ledger, 'ideate.json'), next); return next;
+    });
+    return wrote ? { ok: true, state: wrote } : { error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  if (action === 'setGoal') {
+    if (state.state !== 'choose' || state.step !== 'goal' || !['fast', 'steady', 'scale', 'raise', 'open'].includes(body.goal)) return { error: 'stale', message: NAMES.ui.errGeneric };
+    const text = body.test && typeof body.test.text === 'string' ? body.test.text.trim() : state.test.text;
+    if (!text || text.length > 1000) return fail(NAMES.ui.errGeneric);
+    const hasCanvas = state.canvas && (state.canvas.said || Object.keys(state.canvas.cells || {}).length);
+    if (state.goal === body.goal && state.test && state.test.text === text && hasCanvas) {
+      const wrote = withFounderOpsLock(() => {
+        const fresh = journeyState();
+        if (!fresh || fresh.state !== 'choose' || fresh.step !== 'goal' || fresh.goal !== body.goal || !fresh.test || fresh.test.text !== text || !(fresh.canvas && (fresh.canvas.said || Object.keys(fresh.canvas.cells || {}).length))) return null;
+        const next = { ...fresh, state: 'choose', step: 'canvas', reason: '', updatedAt: localIso() };
+        writeJSON(path.join(DIR.ledger, 'ideate.json'), next); return next;
+      });
+      return wrote ? { ok: true, state: wrote } : { error: 'busy', message: NAMES.ui.founderOpBusy };
+    }
+    return journeyJob(state, 'journey-canvas', latest => {
+      if (latest.state !== 'choose' || latest.step !== 'goal' || !latest.model.goal) return null;
+      const model = latest.model.options && latest.model.options[latest.model.pick] || {}, first = model.firstTest || {};
+      return { goal: body.goal, goalBy: body.goal === latest.model.goal.suggest ? 'pick' : 'own', test: { ...latest.test, text, edited: text !== String(first.text || '') }, canvas: { cells: {}, said: '' }, step: 'canvas' };
+    });
+  }
+  if (action === 'setCell' || action === 'zeroCell') {
+    const key = String(body.key || '');
+    if (state.state !== 'choose' || state.step !== 'canvas' || !/^(partners|activities|resources|value|relationship|channel|customer|cost|revenue|customer\.(problem|alternatives))$/.test(key)) return { error: 'stale', message: NAMES.ui.errGeneric };
+    if (action === 'setCell' && (typeof body.text !== 'string' || !body.text.trim() || body.text.trim().length > 1000)) return fail(NAMES.ui.errGeneric);
+    const wrote = withFounderOpsLock(() => {
+      const fresh = journeyState(); if (!fresh || fresh.state !== 'choose' || fresh.step !== 'canvas') return null;
+      const old = fresh.canvas && fresh.canvas.cells || {}, customerSub = /^customer\.(problem|alternatives)$/.exec(key), item = customerSub ? ((old.customer || {}).sub || {})[customerSub[1]] || old[customerSub[1]] || {} : old[key] || {}, text = action === 'zeroCell' ? String(item.suggest || '').trim() : typeof body.text === 'string' ? body.text.trim() : '';
+      if (!text || text.length > 1000) return null;
+      const nextCells = customerSub ? { ...old, customer: { ...(old.customer || {}), sub: { ...((old.customer || {}).sub || {}), [customerSub[1]]: { ...item, text, tag: action === 'zeroCell' ? 'zero' : 'mine' } } } } : { ...old, [key]: { ...item, text, tag: action === 'zeroCell' ? 'zero' : 'mine' } };
+      const next = { ...fresh, canvas: { ...fresh.canvas, cells: nextCells }, updatedAt: localIso() };
+      writeJSON(path.join(DIR.ledger, 'ideate.json'), next); return next;
+    });
+    return wrote ? { ok: true, state: wrote } : { error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  if (action === 'back') {
+    if (state.state !== 'choose' || !['model', 'goal', 'canvas'].includes(state.step)) return { error: 'stale', message: NAMES.ui.errGeneric };
+    const wrote = withFounderOpsLock(() => {
+      const fresh = journeyState(); if (!fresh || fresh.state !== 'choose' || !['model', 'goal', 'canvas'].includes(fresh.step)) return null;
+      const step = fresh.step === 'canvas' ? 'goal' : fresh.step === 'goal' ? 'model' : 'who';
+      const next = { ...fresh, step, updatedAt: localIso() }; writeJSON(path.join(DIR.ledger, 'ideate.json'), next); return next;
+    });
+    return wrote ? { ok: true, state: wrote } : { error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  if (action === 'retry') { if (state.state !== 'failed') return { error: 'stale', message: NAMES.ui.errGeneric }; return journeyJob(state, 'journey-' + state.step, { step: state.step }); }
+  return fail(NAMES.ui.errGeneric);
 }
 function prefillStatus(id) {
   if (!/^[\w-]{1,40}$/.test(String(id || ''))) return null;
@@ -584,7 +915,6 @@ function prefillStatus(id) {
   if (run) return { state: run.state === 'waiting' ? 'waiting' : 'failed', error: run.error || '' };
   return null;
 }
-
 /* ---------- 創辦人交要求（「我想改次序／加一站」「交一件臨時工作」）：寫入收件匣，交外殼叫 AI 擬成問題包 ---------- */
 // 同交資料一樣只新增檔案，AI 寫唔到 founder 資料夾，所以 AI 冒充唔到創辦人嘅要求；真正改路線或開工要等創辦人答咗問題包先生效。
 const NOTE_TYPES = ['order', 'adhoc', 'help', 'feedback', 'brain-decide', 'practice-prep', 'debrief', 'debate-start', 'debate-action', 'event', 'doc', 'ideate'];
@@ -695,8 +1025,33 @@ async function receiveWork(body, opts = {}) {
     if (type === 'event' && !['chat', 'extension'].includes(opts.source) && !body.date) return fail('請選擇事件日期。');
   if (body.date != null && body.date !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.date)) || isNaN(new Date(body.date + 'T00:00:00')))) return fail('請選擇事件日期。');
   const date = body.date ? String(body.date) : localIso().slice(0, 10);
+  // 對話未有交日期及會議日期待定都只以收件日暫代；延伸功能代交不屬假定。
+  const dateAssumed = type === 'event' && opts.source !== 'extension' && (opts.dateAssumed === true || !body.date);
   const got = takeFiles(list);
   if (got.error) return fail(got.error);
+  const now = Date.now(), duplicateKey = tellDuplicateKey({ type, text, date, files: got.files });
+  pruneTellDuplicates(now);
+  const previous = tellDuplicates.get(duplicateKey);
+  if (previous && tellDuplicateWithin(tellDuplicates, duplicateKey, now, TELL_DUP_WINDOW_MS)) return { ...previous.result, duplicate: true };
+  // 同一份交出仍在處理中（例如附件轉文字未完成）時，後到的一份等它完成：成功就回傳同一件，失敗才照常處理
+  const inFlight = tellInFlight.get(duplicateKey);
+  if (inFlight) {
+    const first = await inFlight.catch(() => null);
+    if (first && first.ok) return { ...first, duplicate: true };
+  }
+  let settle;
+  const pending = new Promise(resolve => { settle = resolve; });
+  tellInFlight.set(duplicateKey, pending);
+  try {
+    const result = await receiveWorkOnce({ body, opts, type, text, links, date, dateAssumed, got, duplicateKey, now });
+    settle(result);
+    return result;
+  } catch (e) { settle(null); throw e; }
+  finally { if (tellInFlight.get(duplicateKey) === pending) tellInFlight.delete(duplicateKey); }
+}
+
+async function receiveWorkOnce({ opts, type, text, links, date, dateAssumed, got, duplicateKey, now }) {
+  const fail = message => ({ error: 'invalid', message });
   const id = fileStamp() + '-' + String(Date.now() % 1000).padStart(3, '0');
   const created = [];
   try {
@@ -718,10 +1073,12 @@ async function receiveWork(body, opts = {}) {
     }
     // 只貼連結、沒有寫字也沒有附件，而連結全部讀不到：沒有東西可交給 Zero，清掉說明檔並告訴創辦人怎樣做
     if (!text && !records.length) { for (const p of created) try { fs.unlinkSync(p); } catch { } return fail(NAMES.ui.linkNotShared); }
-    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records, ...(opts.minutes ? { minutes: opts.minutes } : {}), ...(opts.source === 'extension' ? { source: 'extension', extensionName: String(opts.extensionName || '') } : {}) })}\n\`\`\`\n` : `${text}\n`;
+    const body2 = type === 'event' || type === 'doc' ? `${text || '（沒有補充）'}\n\n\`\`\`json\n${JSON.stringify({ date, files: records, ...(dateAssumed ? { dateAssumed: true } : {}), ...(opts.minutes ? { minutes: opts.minutes } : {}), ...(opts.source === 'extension' ? { source: 'extension', extensionName: String(opts.extensionName || '') } : {}) })}\n\`\`\`\n` : `${text}\n`;
     const p = path.join(DIR.inbox, `${id}-note-${type}.md`);
     fs.writeFileSync(p, `kind: note\ntype: ${type}\nat: ${localIso()}\n\n${body2}`, { flag: 'wx' }); created.push(p);
-    return { ok: true, id, receivedAt: localIso(), ...(meta.linkErrors.length ? { linkErrors: meta.linkErrors } : {}) };
+    const result = { ok: true, id, receivedAt: localIso(), ...(meta.linkErrors.length ? { linkErrors: meta.linkErrors } : {}) };
+    rememberTellDuplicate(duplicateKey, result, now);
+    return result;
   } catch (e) { for (const p of created) try { fs.unlinkSync(p); } catch { } throw e; }
 }
 
@@ -780,7 +1137,7 @@ async function minuteSources(files) {
       let text = '';
       if (['.pdf', '.docx', '.pptx', '.xlsx'].includes(ext)) {
         const result = await convertInboundText(tempFile);
-        if (!result.ok) throw new Error('minutes conversion failed');
+        if (!result.ok) throw Object.assign(new Error('minutes conversion failed'), { unreadable: file.name });
         text = fs.readFileSync(result.sidecar, 'utf8');
       } else text = file.bytes.toString('utf8');
       sources.push({ name: file.name, bytes: file.bytes, text });
@@ -807,7 +1164,10 @@ async function preflightMinutes(body) {
   if (!Array.isArray(body.files) || !body.files.length) return [400, { error: 'invalid', message: '請先加入逐字稿。' }];
   const checked = takeFiles(body.files);
   if (checked.error) return [400, { error: 'invalid', message: checked.error }];
-  const sources = await minuteSources(checked.files);
+  let sources;
+  // 損壞、掃描版或加密的文件轉不到文字：回中文原因，不當作伺服器出錯
+  try { sources = await minuteSources(checked.files); }
+  catch (error) { if (error && error.unreadable) return [400, { error: 'invalid', message: NAMES.t('minFileUnreadable', { name: error.unreadable }) }]; throw error; }
   const text = sources.map(source => source.text).filter(Boolean).join('\n\n');
   const transcript = detect(text);
   if (!transcript.transcript) return [200, { ok: true, transcript: false }];
@@ -982,7 +1342,7 @@ async function receiveMinutesOnce(body) {
       files.push({ name: '會議紀錄.md', data: Buffer.from(text, 'utf8').toString('base64') });
       const date = rec.meetingDate || localIso().slice(0, 10);
       const summary = '會議紀錄：' + (rec.title || '會議紀錄') + '\n' + formatMap(minutesNames(rec.speakers)) + (rec.meetingDate ? '' : '\n日期待定');
-      const result = await receiveWork({ type: 'event', text: summary, date, files }, { minutes: { id: rec.id, version, revisionOf: wasDraft ? '' : rec.inputId || '' } });
+      const result = await receiveWork({ type: 'event', text: summary, date, files }, { minutes: { id: rec.id, version, revisionOf: wasDraft ? '' : rec.inputId || '' }, dateAssumed: !rec.meetingDate });
       if (!result.ok) { removeMinuteFiles(created); return [400, result]; }
       // 刪草稿前再核對一次：交出期間如有人在本機改過草稿，保留草稿檔，不刪走新內容
       if (wasDraft) { let now = null; try { now = fs.readFileSync(draftFile, 'utf8'); } catch { } if (now === text) fs.unlinkSync(draftFile); }
@@ -1254,10 +1614,23 @@ function withFounderOpsLock(fn) {
   }
   try { return fn(); } finally { fs.rmSync(FOUNDER_OPS_LOCK, { force: true }); }
 }
+function reopenFactQuestion(body) {
+  const packId = String(body && body.packId || ''), qId = String(body && body.qId || '');
+  if (!factMergeOn() || !/^[\w-]{1,80}$/.test(packId) || !/^[\w-]{1,80}$/.test(qId)) return { ok: false, error: 'invalid', message: NAMES.ui.errGeneric };
+  const reopened = withFounderOpsLock(() => {
+    const pack = loadPack(DIR, packId), index = pack && (pack.questions || []).findIndex(q => q && String(q.id) === qId);
+    if (!pack || index < 0 || !pack.questions[index].closed) return { ok: false, error: 'stale', message: NAMES.ui.factClosedStale };
+    const questions = pack.questions.slice(), question = questions[index];
+    const { closed, ...open } = question;
+    questions[index] = { ...open, reopened: { at: localIso() } };
+    writeJSON(path.join(DIR.asks, pack.id + '.json'), { ...pack, questions });
+    return { ok: true, message: NAMES.ui.factReopened };
+  });
+  return reopened || { ok: false, error: 'busy', message: NAMES.ui.factReopenBusy };
+}
 function appendFounderOp(op) {
   return withFounderOpsLock(() => {
-    const prior = readJSON(FOUNDER_OPS, []);
-    const list = Array.isArray(prior) ? prior : [];
+    const list = readListStrict(FOUNDER_OPS); if (!list) return false; // 讀不到就回忙碌，不蓋掉未合併的更正
     list.push(op);
     writeJSON(FOUNDER_OPS, list);
     return true;
@@ -1265,9 +1638,40 @@ function appendFounderOp(op) {
 }
 function appendFounderOps(ops) {
   return withFounderOpsLock(() => {
-    const prior = readJSON(FOUNDER_OPS, []), list = Array.isArray(prior) ? prior : [];
+    const list = readListStrict(FOUNDER_OPS); if (!list) return false;
     list.push(...ops); writeJSON(FOUNDER_OPS, list); return true;
   });
+}
+function canvasAction(body) {
+  const invalid = () => ({ ok: false, error: 'invalid', message: NAMES.ui.errGeneric });
+  if (!body || typeof body !== 'object') return invalid();
+  if (body.action === 'edit') {
+    const cell = String(body.cell || ''), text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!/^(partners|activities|resources|value|relationship|channel|customer|cost|revenue|customer\.(problem|alternatives))$/.test(cell) || !text || text.length > 300 || !Number.isInteger(body.forRev)) return invalid();
+    const result = withFounderOpsLock(() => {
+      if (!overviewCurrent()) return { ok: false, error: 'stale', message: NAMES.ui.err_invalid };
+      const canvas = readCanvas(DIR, { proto: ROOT });
+      if (!canvas.view || canvas.view.rev !== body.forRev) return { ok: false, error: 'stale', message: NAMES.ui.err_invalid };
+      const list = readListStrict(FOUNDER_OPS); if (!list) return null;
+      list.push(founderOperation('canvasEdit', cell, { text, forRev: body.forRev }));
+      writeJSON(FOUNDER_OPS, list);
+      return { ok: true };
+    });
+    return result || { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  if (body.action === 'suggestion') {
+    const id = String(body.id || ''), choice = body.choice, text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!/^[\w-]{1,80}$/.test(id) || !['adopt', 'reject', 'edit'].includes(choice) || (choice === 'edit' && (!text || text.length > 300))) return invalid();
+    const result = withFounderOpsLock(() => {
+      if (!overviewCurrent()) return { ok: false, error: 'stale', message: NAMES.ui.err_invalid };
+      const list = readListStrict(FOUNDER_OPS); if (!list) return null;
+      list.push(founderOperation('canvasSugAnswer', id, { action: choice, text }));
+      writeJSON(FOUNDER_OPS, list);
+      return { ok: true };
+    });
+    return result || { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
+  }
+  return invalid();
 }
 const opId = () => 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex');
 const founderOperation = (op, target, value = {}) => ({ id: opId(), at: localIso(), op, target, value });
@@ -1275,7 +1679,6 @@ const moneyInvalid = () => ({ ok: false, error: 'invalid', message: NAMES.ui.mny
 const moneyImportInvalid = () => ({ ok: false, error: 'invalid', message: NAMES.ui.mnyErrImportRecord || NAMES.ui.mnyErrInvalid });
 const extInvalid = reason => ({ ok: false, error: 'invalid', message: String(NAMES.ui.extErrInvalid || '').replace('{reason}', reason || '') });
 const moneyBatchId = () => newMoneyId().replace(/^mn-/, 'mb-');
-const cleanFileName = name => String(name || '').replace(/[^\p{L}\p{N}._-]/gu, '_').slice(0, 80);
 function atomicReplace(file, value, { create = false } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (create && fs.existsSync(file)) throw new Error('exists');
@@ -1293,7 +1696,7 @@ function moneyAttachments(id, list) {
   if (!Array.isArray(list) || list.length > 3) return { error: NAMES.ui.mnyErrInvalid };
   const got = takeFiles(list); if (got.error) return { error: got.error };
   const total = got.files.reduce((sum, item) => sum + item.bytes.length, 0);
-  if (total > 45 * 1024 * 1024) return { error: NAMES.ui.mnyErrInvalid };
+  if (total > TOTAL_FILE_MAX_BYTES) return { error: NAMES.ui.mnyErrInvalid };
   const folder = path.join(moneyPaths(DIR).evidence, id), created = [];
   try {
     fs.mkdirSync(folder, { recursive: true });
@@ -1372,6 +1775,8 @@ function receiveMoney(body) {
     if (!validateRecord(record).ok || (record.counterpartId && !(readJSON(path.join(DIR.ledger, 'state.json'), {})?.company?.actors || []).some(actor => actor?.id === record.counterpartId)) || (addKind != null && !['customer', 'partner'].includes(addKind)) || (addKind && record.counterpartId)) return moneyInvalid();
     const actor = addKind ? newMoneyActor(record.payer, addKind, record.id) : null; if (addKind && !actor) return moneyInvalid();
     if (actor) record.counterpartId = actor.id;
+    const dup = duplicateHints(record, dupPool(DIR));
+    if (dup.length && body.allowDup !== true) return { ok: false, error: 'dup', dup };
     const files = moneyAttachments(record.id, Array.isArray(body.files) ? body.files : []); if (files.error) return { ok: false, error: 'invalid', message: files.error };
     record.evidence = files.files.map(file => ({ store: 'money', file }));
     const pending = writePendingMoney(record); if (!pending.ok) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
@@ -1469,7 +1874,7 @@ function receiveMoney(body) {
         const ops = [founderOperation('moneyImport', latest.id)];
         const actors = readJSON(path.join(DIR.ledger, 'state.json'), {})?.company?.actors || [], linked = readMoney(DIR).links || {};
         for (const row of currentRows) if (row.include && row.draft?.payer) { const key = payerKeyOf(row.draft.payer), actor = actors.find(item => payerKeyOf(item?.name) === key); if (actor && !linked[key] && !ops.some(op => op.op === 'moneyLink' && op.target === key)) ops.push(founderOperation('moneyLink', key, { counterpartId: actor.id })); }
-        const list = readJSON(FOUNDER_OPS, []); if (!Array.isArray(list)) return null; list.push(...ops); writeJSON(FOUNDER_OPS, list); atomicReplace(batchFile, next); return next;
+        const list = readListStrict(FOUNDER_OPS); if (!list) return null; list.push(...ops); writeJSON(FOUNDER_OPS, list); atomicReplace(batchFile, next); return next;
       });
     } catch (error) {
       if (retryableFileError(error)) return { ok: false, error: 'busy', message: NAMES.ui.founderOpBusy };
@@ -1600,7 +2005,7 @@ function receiveExt(body) {
 const plain = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
 function receiptMoney(reply, pack) {
-  if (!pack || reply?.head?.hash !== fnv(JSON.stringify(pack))) return { ok: false, error: 'stale', message: NAMES.ui.mnyPackChanged || '問題包已經更改，請重新開啟頁面再作答。' };
+  if (!pack || reply?.head?.hash !== packHash(pack)) return { ok: false, error: 'stale', message: NAMES.ui.mnyPackChanged || '問題包已經更改，請重新開啟頁面再作答。' };
   const answers = reply.machine?.answers, questions = new Map((pack.questions || []).map(question => [String(question.id), question]));
   if (!Array.isArray(answers) || new Set(answers.map(answer => String(answer?.id))).size !== answers.length) return moneyInvalid();
   const confirm = NAMES.ui.mnyConfirm, confirmEdit = NAMES.ui.mnyConfirmEdit, reject = NAMES.ui.mnyReject;
@@ -1661,7 +2066,7 @@ function founderOp(body) {
   if (!body || typeof body !== 'object' || !['reschedule', 'cancelNext', 'setNext', 'snooze', 'unsnooze', 'setTarget', 'setTaskDue', 'peopleSync', ...ROLES_OP_NAMES, ...ACTOR_OPS.filter(op => op !== 'actorAdd'), 'termAdd', 'termRename', 'termRemove'].includes(body.op) || typeof body.target !== 'string' || body.target.length > 120) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   const ds = dashboardState(DIR), all = ([]).concat(ds.todo || [], ds.brainTodo || [], ds.snoozed || []), byId = Object.fromEntries(all.map(item => [item.id, item]));
   const value = body.value && typeof body.value === 'object' && !Array.isArray(body.value) ? body.value : {};
-  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], ...ROLES_OPS, actorRename: ['name'], actorKind: ['kind'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'], termAdd: ['name', 'kind'], termRename: ['name'], termRemove: [] }[body.op];
+  const keys = { reschedule: ['date'], cancelNext: [], setNext: ['text', 'date', 'milestoneId'], snooze: ['until'], unsnooze: [], setTarget: ['date'], setTaskDue: ['date'], peopleSync: [], ...ROLES_OPS, actorRename: ['name'], actorKind: ['kind', 'role', 'teamType'], actorMerge: ['into'], actorStatus: ['status'], actorTeam: ['team'], taskOwner: ['owner'], termAdd: ['name', 'kind'], termRename: ['name'], termRemove: [] }[body.op];
   if (Object.keys(value).some(key => keys.indexOf(key) < 0) || Object.values(value).some(value => typeof value === 'string' && value.length > 200)) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   let opValue = value;
   const opId = 'fo-' + Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex');
@@ -1692,11 +2097,22 @@ function founderOp(body) {
     const task = (Array.isArray(state.tasks) ? state.tasks : []).find(item => item && item.id === body.target);
     if (!isDay(value.date) || value.date < localIso().slice(0, 10) || !task || ownerKind(task.owner) === 'ai' || task.status === 'done' || task.status === 'cancelled' || task.column === 'done' || task.column === 'cancelled') return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
   }
+  else if (body.op === 'actorKind') {
+    if (value.kind === 'team') {
+      const role = typeof value.role === 'string' ? value.role.trim() : '';
+      // 名單對話框字句在 NAMES.dash（覆核 K1）；每種拒絕各有代碼，網頁按代碼顯示（覆核 K2、K4）
+      if (!role) return { ok: false, error: 'needRole', message: NAMES.dash.ppl_errNeedRole };
+      if (role.length > ROLE_MAX) return { ok: false, error: 'roleTooLong', message: NAMES.dash.ppl_errRoleTooLong };
+      if (hasContactInfo(role)) return { ok: false, error: 'roleContact', message: NAMES.dash.ppl_errRoleContact };
+      if (!TEAM_TYPES.includes(value.teamType)) return { ok: false, error: 'needTeamType', message: NAMES.dash.ppl_errNeedTeamType };
+      opValue = { kind: 'team', role, teamType: value.teamType, basisDate: localIso().slice(0, 10), basisFrom: 'founder' };
+    } else if ('role' in value || 'teamType' in value) return { ok: false, error: 'invalid', message: NAMES.ui.founderOpInvalid };
+  }
   // 名單改正（改名、類別、合併、不再接觸、成員狀態、工作負責人）：欄位白名單已在上面核對；這裏在「已疊加未合併操作」的帳本上試套一次，
   // 找不到對象、重名、聯絡方式（電郵／長串數字）、已合併、非在職成員等一律拒絕，不入隊列。隊列內只存整理過的欄位。
   if (ACTOR_OPS.includes(body.op)) {
     const eff = applyFounderOps(state, pending);
-    const trial = applyActorOp({ company: eff.company || {}, tasks: eff.tasks || [], milestones: eff.milestones || [] }, body.op, { ...value, id: body.target, from: body.target });
+    const trial = applyActorOp({ company: eff.company || {}, tasks: eff.tasks || [], milestones: eff.milestones || [] }, body.op, { ...opValue, id: body.target, from: body.target });
     if (!trial.ok) return { ok: false, error: 'invalid', message: NAMES.ui['pbErr_' + trial.error] || NAMES.ui.founderOpInvalid };
     if (body.op === 'actorTeam') { const t = value.team && typeof value.team === 'object' ? value.team : {}; opValue = { team: Object.fromEntries(['type', 'state', 'owns'].filter(k => k in t).map(k => [k, t[k]])) }; }
   }
@@ -1704,12 +2120,12 @@ function founderOp(body) {
     // 常用名稱表同樣先在已疊加的帳本試套；公司概覽只在新增時用來避免重複記錄。
     const eff = applyFounderOps(state, pending);
     const page = readJSON(path.join(DIR.company, 'page.json'), null), confirmed = readJSON(path.join(DIR.ledger, 'confirmed.json'), null);
-    const trial = applyTermOp({ company: eff.company || {}, termSync: eff.termSync || {} }, body.op, { ...value, id: body.target }, { today: localIso().slice(0, 10), opId, overview: overviewLines(page, confirmed) });
+    const trial = applyTermOp({ company: eff.company || {}, termSync: eff.termSync || {} }, body.op, { ...value, id: body.target }, { today: localIso().slice(0, 10), opId, overview: overviewLines(page, confirmed, readCanvas(DIR, { proto: ROOT })) });
     if (!trial.ok) {
       const message = trial.reason === 'inList' ? NAMES.ui.term_errInList
         : trial.reason === 'full' ? NAMES.ui.term_errFull
           : ['duplicateName', 'companyName'].includes(trial.reason) ? NAMES.ui.term_errDuplicate
-            : hasContactInfo(value.name) ? NAMES.ui.ppl_errContact : NAMES.ui.founderOpInvalid;
+            : hasContactInfo(value.name) ? NAMES.dash.ppl_errContact : NAMES.ui.founderOpInvalid;
       return { ok: false, error: 'invalid', message };
     }
   }
@@ -2032,6 +2448,7 @@ const handler = async (req, res) => {
         return send(res, 200, { ok: true, items: listOpen(DIR) });
       }
       if (p === '/api/intake') return send(res, 200, { ok: true, questions: INTAKE_QUESTIONS, questionsByBizType: Object.fromEntries(Object.keys(BIZ_TYPES).map(type => [type, intakeQuestions(type)])), bizTypes: Object.entries(BIZ_TYPES).map(([id, x]) => ({ id, label: x.label, example: x.example })), limits, ideate: ideateStatus() });
+      if (p === '/api/canvas') return send(res, 200, { ok: true, ...readCanvas(DIR, { proto: ROOT }) });
       if (p === '/api/prefill') { const r = prefillStatus(url.searchParams.get('id')); return r ? send(res, 200, { ok: true, ...r }) : send(res, 404, { error: 'not found' }); }
        if (p === '/api/setup') return send(res, 200, { ok: true, hosts: hostList(), cert: certInfo(), aiStale: certStale(), certify: certifyState(), devices: deviceList(pass), phone: phoneInfo() });
       if (p === '/api/status') return send(res, 200, statusPayload());
@@ -2109,7 +2526,8 @@ const handler = async (req, res) => {
       if (p === '/api/asks') { const ds = dashboardState(DIR); return send(res, 200, { ok: true, packs: listPacks(DIR), company: companyStatus(), todo: pendingTodo(DIR), snoozed: pendingSnoozed(DIR), brainPending: (ds.brainTodo || []).length, helpInFlight: helpInFlight() }); }
       if (p === '/api/ask') {
         const pack = loadPack(DIR, url.searchParams.get('id'));
-        return pack ? send(res, 200, { ok: true, pack, answers: loadAnswers(DIR, pack.id).answers }) : send(res, 404, { error: 'not found' });
+        const shown = pack && factMergeOn() ? { ...pack, questions: (pack.questions || []).filter(question => !question.closed) } : pack;
+        return shown ? send(res, 200, { ok: true, pack: shown, hash: packHash(pack), answers: loadAnswers(DIR, shown.id).answers }) : send(res, 404, { error: 'not found' });
       }
       if (p === '/api/log') return send(res, 200, { ok: true, entries: readLog(DIR, 500) });
       // 情景演練：場景、練習紀錄、可以練嘅現實行動
@@ -2154,7 +2572,7 @@ const handler = async (req, res) => {
       if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
       const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
       if (isDemoInstance()) return send(res, 409, { error: 'demo', message: NAMES.ui.mnyDemo });
-      const body = JSON.parse(await readBody(req, 45 * 1024 * 1024) || '{}');
+      const body = JSON.parse(await readBody(req, 75 * 1024 * 1024) || '{}');
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       const result = receiveMoney(body), code = result.ok ? 202 : ['busy', 'stale'].includes(result.error) ? 409 : 400;
       return send(res, code, result);
@@ -2171,20 +2589,23 @@ const handler = async (req, res) => {
       const result = await receiveExt(body), code = result.ok ? 202 : ['busy', 'stale', 'noAi'].includes(result.error) ? 409 : 400;
       return send(res, code, result);
     }
-    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/input-reread' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/source-url' || p === '/api/celebrations/seen' || (p === '/api/sim' && SIM))) {
+    if (req.method === 'POST' && (p === '/api/submit' || p === '/api/retry' || p === '/api/setup' || p === '/api/intake' || p === '/api/ideate' || p === '/api/canvas' || p === '/api/input-reread' || p === '/api/practice' || p === '/api/logo' || p === '/api/founder-op' || p === '/api/source-url' || p === '/api/celebrations/seen' || (p === '/api/asks/reopen' && factMergeOn()) || (p === '/api/sim' && SIM))) {
       // 本機專用操作不能靠 LAN Origin 或手機通行證升格：三個條件缺一不可。
       const loopback = pass.kind === 'browser' && LOOPBACK.includes(req.socket.remoteAddress) && loopbackOrigin(req.headers.origin);
       const phone = pass.kind === 'phone' && !!phoneMode && privateIPv4(req.socket.remoteAddress) && req.socket.localAddress?.replace(/^::ffff:/, '') === phoneMode.address && okOrigin(req.headers.origin);
       if (!loopback && !phone) return refuse(req, res, url, 'origin');
       if (!/^application\/json/.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'type' });
       const phoneGate = phone ? { hash: passFromCookie(req)?.hash || '', generation: phoneMode?.generation } : null;
-      const body = JSON.parse(await readBody(req, (p === '/api/intake' ? 75 * 1024 * 1024 : p === '/api/logo' ? 1.5 * 1024 * 1024 : 32 * 1024)) || '{}');
+      const body = JSON.parse(await readBody(req, (p === '/api/intake' || p === '/api/ideate' ? 75 * 1024 * 1024 : p === '/api/logo' ? 2 * 1024 * 1024 : 32 * 1024)) || '{}');
       // 半截手機請求在讀 body 期間可被撤銷；讀完後、套用任何動作前必須以同一代手機模式重驗。
       if (phone && !currentPhonePass(req, phoneGate)) return send(res, 403, { error: 'pass' });
       if (p === '/api/celebrations/seen') return send(res, ...claimCelebration(body.id));
+      if (p === '/api/asks/reopen') { const result = reopenFactQuestion(body); return send(res, result.ok ? 200 : result.error === 'busy' || result.error === 'stale' ? 409 : 400, result); }
       if (phone && (p === '/api/setup' || p === '/api/retry' || p === '/api/sim')) return send(res, 403, { error: 'local' });
       if (p === '/api/source-url') { if (phone) return send(res, 403, { error: 'local' }); const result = fixSourceUrl(body); return send(res, result.ok ? 200 : result.error === 'stale' ? 409 : 400, result); }
       if (p === '/api/founder-op') { const result = founderOp(body); return send(res, result.ok ? 202 : result.error === 'busy' ? 409 : 400, result); }
+      if (p === '/api/canvas') { const result = canvasAction(body); return send(res, result.ok ? 202 : ['busy', 'stale'].includes(result.error) ? 409 : 400, result); }
+      if (p === '/api/ideate') { const result = await receiveJourney(body); if (!result.ok) return send(res, result.error === 'busy' || result.error === 'stale' ? 409 : 400, result); schedule(200); return send(res, 202, result); }
       if (p === '/api/input-reread') return send(res, ...await rereadInput(body));
       if (p === '/api/practice') return send(res, ...await practiceAction(body));
       if (p === '/api/logo') return send(res, ...saveLogo(body));
@@ -2239,6 +2660,7 @@ const handler = async (req, res) => {
       const askPack = body.kind === 'ask-answer' ? loadPack(DIR, body.ref) : null;
       if (body.kind === 'ask-answer' && !askPack) return send(res, 404, { error: 'pack-not-here', message: '此問題包已不在此處，可能是舊分頁。請返回待決事項查看最新問題。' });
       if (body.kind === 'ask-answer') {
+        // 已收起的題：不整份拒收，由外殼逐題不套用並回覆 factClosedStale，其餘答案照常（brief-f2 4.3；答案不會被吞）
         const v = validateAskReply(reply, askPack); if (!v.ok) { say('拒收問題包答案：' + v.reason); return send(res, 400, { error: 'answer-identity', message: NAMES.ui.errAnswerIdentity }); }
         const receipt = receiptMoney(reply, askPack); if (!receipt.ok) return send(res, ['busy', 'demo', 'answered', 'stale'].includes(receipt.error) ? 409 : 400, receipt);
       }
@@ -2260,6 +2682,7 @@ const handler = async (req, res) => {
       : e instanceof SyntaxError ? ['bad-body', 400, 'err_badBody']
       : raw === 'body timeout' || raw === 'request aborted' ? ['cut', 400, 'err_cut']
       : ['server', 500, 'err_server'];
+    if (status >= 500) logServerError(e); // 只記伺服器自身出錯；過大、格式錯、中斷屬請求問題，不寫入錯誤紀錄
     say(`請求出錯（${req.method} ${String(req.url || '').split('?')[0].slice(0, 80)}）：${raw.slice(0, 300)}`);
     if (res.headersSent) { try { res.end(); } catch { } return; }
     if (code === 'too-large') res.setHeader('Connection', 'close');

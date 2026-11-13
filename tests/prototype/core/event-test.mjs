@@ -33,7 +33,7 @@ const pack = id => JSON.parse(fs.readFileSync(path.join(DATA, 'asks', id + '.jso
 function answer(P, pick) {
   const answers = P.questions.map(q => { const v = pick ? pick(q) : q.value; return { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; });
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: P.questions.map(q => q.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
   return post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
 }
 function proofread(edits) {
@@ -243,7 +243,9 @@ try {
   const actorQ = P => P && P.questions.find(q => (q.options || []).some(o => o.apply && o.apply.op === 'addActor'));
   const runActor = async (text, modes) => {
     mode(modes.join(String.fromCharCode(10))); seen = await seenIds();
-    const sub = await post('/api/intake', { kind: 'note', type: 'event', text, date: '2026-11-11' });
+    // 0.44.0 按日期逐項判斷：同日兩件事沒有建議；每件事用原話寫的日期（11 月 11 日起逐日遞增）
+    const md = /^(\d+) 月 (\d+) 日/.exec(text), date = md ? `2026-${md[1].padStart(2, '0')}-${md[2].padStart(2, '0')}` : '2026-11-11';
+    const sub = await post('/api/intake', { kind: 'note', type: 'event', text, date });
     const run = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
     const inp = state().inputs.find(i => i.id === 'in-' + sub.j.id);
     return { sub, run, inp, P: inp && inp.packId ? pack(inp.packId) : null };
@@ -264,12 +266,17 @@ try {
   ok('N3 與名單同名：靜默丟棄、不出新對象題、日誌有記錄', NA2.run && NA2.run.state === 'done' && !actorQ(NA2.P) && /名稱已在名單內/.test(fs.readFileSync(path.join(DATA, 'ledger', 'runs.log'), 'utf8')));
   // 疑似變體 → 三選項；選記為別名
   const known = actorsNow().find(a => a.name === '黃小姐');
-  const NA3 = await runActor('11 月 13 日 ' + known.name + ' 來電，提到下星期。', ['event:event-actor-similar']);
+  // 0.44.0 共用比對 matchActorName：一個字的名稱（假 AI 模式 event-actor-similar 交現有名稱的首字）不再作包含比對。
+  // 改用重播（<SOS_DATA>/replay-event.json）交「乙餐廳黃小姐」：包含現有名稱「黃小姐」、雙方至少兩字、只對上唯一一個 → 疑似變體。重播檔用完即刪，免得影響之後的事件。
+  const VARIANT = '乙餐廳黃小姐', replayFile = path.join(DATA, 'replay-event.json');
+  fs.writeFileSync(replayFile, JSON.stringify({ summary: '測試重播：疑似變體。', grade: 'said', read: { summary: 'Zero 讀了創辦人原話，對照了現有名單。', highlights: [] }, contrasts: [], items: [{ kind: 'newActor', name: VARIANT, actorKind: 'customer', why: '原話提到乙餐廳黃小姐來電。' }] }, null, 2));
+  let NA3;
+  try { NA3 = await runActor('11 月 13 日 ' + VARIANT + ' 來電，提到下星期。', []); } finally { fs.rmSync(replayFile, { force: true }); }
   const nq3 = actorQ(NA3.P);
-  ok('N4 名稱是現有名稱的子字串：三選項（記為別名／另一個對象／不加入）', nq3 && nq3.options.length === 3 && /本人，記為別名/.test(nq3.options[0].text) && nq3.options[0].rec, nq3 && nq3.options.map(o => o.text));
+  ok('N4 名稱包含現有名稱（至少兩字、唯一）：三選項（記為別名／另一個對象／不加入）', nq3 && nq3.options.length === 3 && /本人，記為別名/.test(nq3.options[0].text) && nq3.options[0].rec, nq3 && nq3.options.map(o => o.text));
   if (nq3) { seen = await seenIds(); await answer(NA3.P, q => q.id === nq3.id ? nq3.options[0].text : q.value); await newRun(seen, x => x.kind === 'ask' && x.ref === NA3.P.id); }
-  { const t = actorsNow().find(a => a.id === known.id), first = Array.from(known.name)[0];
-    ok('N4 記為別名：目標對象的別名加了新稱呼，名稱與類別不變，名單沒有新增人', t && t.aliases.includes(first) && t.name === known.name && t.kind === known.kind && actorsNow().length === nA0 + 1, t); }
+  { const t = actorsNow().find(a => a.id === known.id);
+    ok('N4 記為別名：目標對象的別名加了新稱呼，名稱與類別不變，名單沒有新增人', t && t.aliases.includes(VARIANT) && t.name === known.name && t.kind === known.kind && actorsNow().length === nA0 + 1, t); }
   // 不加入
   const NA4 = await runActor('11 月 14 日 乙餐廳的黃小姐 的同事 林師傅 也來電。', ['event:event-actor-team']);
   const nq4 = actorQ(NA4.P), nn4 = actorsNow().length;
@@ -291,9 +298,12 @@ try {
 
   /* ---- TB1–TB10、TB13：常用名稱表事件鏈（全部使用假 AI） ---- */
   const termQ = P => P && P.questions.find(q => (q.options || []).some(o => o.apply && o.apply.op === 'addTerm'));
+  let termDay = 0;
   const runTerm = async (text, modes) => {
     mode(modes.join(String.fromCharCode(10))); seen = await seenIds();
-    const sub = await post('/api/intake', { kind: 'note', type: 'event', text, date: '2026-11-18' });
+    // 0.44.0 按日期逐項判斷：同日多件事會令同一項沒有建議；每次遞增一日（由 11 月 18 日起），先後清楚
+    const date = new Date(Date.UTC(2026, 10, 18 + termDay++)).toISOString().slice(0, 10);
+    const sub = await post('/api/intake', { kind: 'note', type: 'event', text, date });
     const run = await newRun(seen, x => x.kind === 'note' && x.noteType === 'event');
     const inp = state().inputs.find(i => i.id === 'in-' + sub.j.id);
     return { sub, run, inp, P: inp && inp.packId ? pack(inp.packId) : null };

@@ -1,7 +1,8 @@
 // 業績檔案位置及唯一的容錯讀取入口；只讀檔案。
 import fs from 'node:fs';
 import path from 'node:path';
-import { mergeMoney, validateBalance, validateRecord } from './money-lib.mjs';
+import { listPacks, loadAnswers, loadPack } from './ask-lib.mjs';
+import { duplicateSourceOf, mergeMoney, validateBalance, validateRecord } from './money-lib.mjs';
 
 const plain = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const asArray = value => Array.isArray(value) ? value : [];
@@ -99,4 +100,24 @@ export function readMoney(DIR) {
     else problem(problems, rejected.id || 'money', rejected.reason || '紀錄格式不符');
   }
   return { mainCurrency: merged.mainCurrency, records: merged.records, importMaps: merged.importMaps, links: merged.links, balance: merged.balance, problems };
+}
+
+// 收集已入帳及仍待創辦人確認的業績紀錄，供可能重複提示使用。
+export function dupPool(DIR) {
+  const pool = readMoney(DIR).records.filter(record => record?.status === 'confirmed').map(record => ({ record, where: 'ledger', source: duplicateSourceOf(record) }));
+  let packs = [];
+  try { packs = listPacks(DIR).map(summary => loadPack(DIR, summary.id)).filter(Boolean); } catch { return pool; }
+  const latestByInput = new Map();
+  for (const pack of packs) {
+    const inputId = String(pack?.realEvent?.inputId || ''); if (!inputId) continue;
+    const prior = latestByInput.get(inputId), rank = `${pack.askedAt || ''}\u0000${pack.id || ''}`;
+    if (!prior || rank > prior.rank) latestByInput.set(inputId, { id: pack.id, rank });
+  }
+  for (const pack of packs) {
+    const inputId = String(pack?.realEvent?.inputId || '');
+    if (inputId && latestByInput.get(inputId)?.id !== pack.id) continue;
+    const answers = loadAnswers(DIR, pack.id)?.answers || {};
+    for (const question of asArray(pack.questions)) if (question?.kind === 'money' && !answers[question.id] && plain(question.money)) pool.push({ record: question.money, where: 'waiting', source: duplicateSourceOf(question.money) });
+  }
+  return pool;
 }

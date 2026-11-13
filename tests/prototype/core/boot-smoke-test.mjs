@@ -30,6 +30,8 @@ const SERVER_SOURCE = fs.readFileSync(path.join(PROTO, 'server.mjs'), 'utf8');
 const MONEY_ACTIONS = ['add', 'void', 'evidence', 'link', 'balance', 'goal', 'importUpload', 'importMap', 'importInclude', 'importCancel', 'importUndo', 'importConfirm'];
 const EXT_ACTIONS = ['draftTemplate', 'draftSentence', 'draftEdit', 'draftRevise', 'draftRetry', 'draftCancel', 'enable', 'enablePending', 'modifyStart', 'apply', 'disable', 'enableAgain', 'row', 'archiveDone', 'handoff'];
 const OTHER_ACTIONS = [
+  ...['start', 'pickWho', 'pickModel', 'moreModels', 'setGoal', 'setCell', 'zeroCell', 'back', 'retry', 'submit'].map(action => ({ route: '/api/ideate', action, mode: 'blank' })),
+  ...['edit', 'suggestion'].map(action => ({ route: '/api/canvas', action, mode: 'blank' })),
   { route: '/api/minutes', action: 'preflight', mode: 'send' },
   ...['speakers', 'draft', 'save', 'open', 'submit', 'revise'].map(action => ({ route: '/api/minutes', action, mode: 'blank' })),
   ...['start', 'undo', 'say', 'end'].map(action => ({ route: '/api/practice', action, mode: 'blank' })),
@@ -44,7 +46,7 @@ const OTHER_ACTIONS = [
 /* ---------- 讀取端點表：blank 不帶參數；minimal 由 ids 產生（帶真實編號） ---------- */
 const GET_ROUTES = [
   ['/api/health'], ['/api/probe', () => '?t=' + 'a'.repeat(36)], ['/api/minutes', ids => ids.minutes ? '?id=' + encodeURIComponent(ids.minutes) : ''],
-  ['/api/intake'], ['/api/prefill'], ['/api/setup'], ['/api/status'], ['/api/dashboard', () => '?lite=1'], ['/api/money'],
+  ['/api/intake'], ['/api/canvas'], ['/api/prefill'], ['/api/setup'], ['/api/status'], ['/api/dashboard', () => '?lite=1'], ['/api/money'],
   ['/api/money/import', ids => ids.batch ? '?id=' + encodeURIComponent(ids.batch) : ''], ['/api/ext'],
   ['/api/ext/rows', ids => ids.folder ? `?folder=${encodeURIComponent(ids.folder)}&table=t1` : ''], ['/api/shell'], ['/api/home', () => '?seen=1'],
   ['/api/input', () => '?id=in-receipt-1'], ['/api/input-file', () => '?id=in-receipt-1&n=0'], ['/api/source-file'], ['/api/asks'],
@@ -52,7 +54,7 @@ const GET_ROUTES = [
   ['/api/practice/scenario'], ['/api/practice/session'], ['/api/run'], ['/api/sim']
 ];
 // 只接受 POST（或只在特定實例開）的端點：空白內容各發一次
-const POST_ROUTES = ['/api/submit', '/api/retry', '/api/setup', '/api/intake', '/api/input-reread', '/api/practice', '/api/logo', '/api/founder-op', '/api/source-url', '/api/celebrations/seen', '/api/sim', '/api/minutes', '/api/money', '/api/ext', '/api/tell', '/api/pass/open', '/api/pair'];
+const POST_ROUTES = ['/api/submit', '/api/retry', '/api/setup', '/api/intake', '/api/ideate', '/api/canvas', '/api/input-reread', '/api/asks/reopen', '/api/practice', '/api/logo', '/api/founder-op', '/api/source-url', '/api/celebrations/seen', '/api/sim', '/api/minutes', '/api/money', '/api/ext', '/api/tell', '/api/pass/open', '/api/pair'];
 
 /* ---------- 原始碼核對：動作及端點都在表內 ---------- */
 const actionsIn = text => [...new Set([...text.matchAll(/\baction\s*===\s*['"]([^'"]+)['"]/g)].map(m => m[1]))];
@@ -186,7 +188,7 @@ try {
   await step('延伸功能', 'apply', { id: modify?.json?.id || '' }, 202, ext);
 
   /* ---------- 題目答案：一份含收據題及普通題的答案 ---------- */
-  const { fnv } = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+  const { fnv, packHash } = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
   const receiptId = 'mn-2026-11-07-143005-123';
   const pack = { id: 'ask-smoke', open: true, title: '收據及一般問題', askedBy: 'Zero', askedAt: '2026-11-11T10:00:00+08:00', questions: [
     { id: 'q-money', kind: 'money', ask: '工房乙發票：咖啡豆 HK$2,350', why: '核對收據。', money: { id: receiptId, dir: 'out', amountCents: 235000, currency: 'HKD', date: '2026-11-07', payer: '工房乙', payerKey: '工房乙', counterpartId: '', category: 'goods', what: '咖啡豆 3 公斤', refund: false, evidence: [{ inputId: 'in-receipt-1', file: 'receipt-1.png', page: 1 }], check: 'image' },
@@ -200,7 +202,7 @@ try {
     { id: 'q-money', value: '確認入帳', ai: '', changed: true },
     { id: 'q-plain', value: '辦公室', ai: '咖啡店', changed: true }
   ] };
-  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + fnv(JSON.stringify(served)), 'batch: false', 'shownAt: 2026-11-11T10:04:00+08:00'];
+  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + packHash(served), 'batch: false', 'shownAt: 2026-11-11T10:04:00+08:00'];
   const replyText = head.join('\n') + '\n\n# 答案：收據及一般問題\n\n- 工房乙發票：咖啡豆 HK$2,350\n  - 你：已入帳 HK$2,350.00\n- 先推廣哪類客戶？\n  - 你：辦公室\n\n## 機器讀取部分（供 CrewZero 使用，毋須查閱）\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
   const blankSubmit = await call('POST', '/api/submit', {}, { label: 'submit-blank' });
   ok('POST /api/submit：空白內容不回 500 以上', under500(blankSubmit), brief(blankSubmit));

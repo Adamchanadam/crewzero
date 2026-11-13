@@ -32,6 +32,40 @@ export function toCents(value) {
   return Number.isSafeInteger(cents) && cents > 0 && cents <= MAX_CENTS ? cents : null;
 }
 
+// 核對 AI 從收據提出的一項入帳建議；只整理輸入，不讀寫檔案。
+export function eventMoneyItem(it, attachmentNames) {
+  const item = plain(it) ? it : {};
+  const names = Array.isArray(attachmentNames) ? attachmentNames.filter(name => typeof name === 'string') : [];
+  const errors = [];
+  const dir = item.dir;
+  if (dir !== 'in' && dir !== 'out') errors.push('dir 只可寫 in（收入）或 out（支出）');
+
+  let amountText = '';
+  if (typeof item.amount === 'number' && Number.isFinite(item.amount)) amountText = String(item.amount);
+  else if (typeof item.amount === 'string') amountText = item.amount.trim();
+  amountText = amountText.replace(/[\s,]/g, '').replace(/^(?:HK\$|US\$|NT\$|RMB\s*|[A-Z]{3}\s*)/i, '');
+  const amountCents = amountText ? toCents(amountText) : null;
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) errors.push('amount 要寫大於 0 的金額，例如 1293.50；不加幣別符號，最多兩位小數');
+
+  const currency = typeof item.currency === 'string' ? item.currency.trim() : '';
+  if (!/^[A-Z]{3}$/.test(currency)) errors.push('currency 要寫三個英文大寫字母的幣別代號，例如 HKD');
+  const date = typeof item.date === 'string' ? item.date.trim() : '';
+  if (!validDate(date)) errors.push('date 要寫收據上的日期，格式 YYYY-MM-DD，例如 2026-11-06');
+  const payer = typeof item.payer === 'string' ? item.payer.trim() : '';
+  if (!payer) errors.push('payer 要寫對方名稱，不可留空');
+  const what = typeof item.what === 'string' ? item.what.trim() : '';
+  if (!what) errors.push('what 要寫內容，不可留空');
+  const file = typeof item.file === 'string' ? item.file.trim() : '';
+  if (!file || !names.includes(file)) errors.push('file 要寫今次附件的檔名，可用：' + (names.length ? names.join('、') : '（今次沒有附件）'));
+  if (errors.length) return { ok: false, errors };
+
+  const proposedCategory = typeof item.category === 'string' ? item.category.trim() : '';
+  const categoryGuessed = !CATEGORIES[dir].includes(proposedCategory);
+  return { ok: true, dir, amountText, amountCents, currency, date, payer, what, file,
+    quote: typeof item.quote === 'string' ? item.quote.trim() : '',
+    category: categoryGuessed ? (dir === 'in' ? 'otherIn' : 'otherOut') : proposedCategory, categoryGuessed };
+}
+
 // 核對創辦人確認的現金結餘；金額可以是零，但不可為負數。
 export function validateBalance(balance) {
   const errors = [];
@@ -48,6 +82,99 @@ export function validateBalance(balance) {
 export function payerKeyOf(value) {
   return String(value ?? '').normalize('NFKC').toLocaleLowerCase('en-US')
     .replace(/[\s\u3000\p{P}\p{S}]/gu, '');
+}
+
+// 擷取寫在內容內、帶標籤的單據號碼；不把日期、金額或一般數字當成單據號碼。
+export function docNumbersOf(text) {
+  const found = new Set(), source = String(text ?? '');
+  const take = value => {
+    const no = String(value || '').toUpperCase().replace(/[\s\-/]/g, '');
+    if (/^[A-Z0-9]{3,30}$/.test(no) && /\d/.test(no)) found.add(no);
+  };
+  const chinese = /(?:單據|發票|收據|訂單|帳單)(?:號碼|編號|號)[\s：:]*(?<no>[A-Za-z0-9][A-Za-z0-9/-]{2,29})/gu;
+  const english = /(?:\b(?:Invoice|Receipt|Order|Inv)\b(?:\s+No\.?)?|(?<![A-Za-z])No\.(?![A-Za-z])|#)[\s：:]*(?<no>[A-Za-z0-9][A-Za-z0-9/-]{2,29})/giu;
+  for (const match of source.matchAll(chinese)) take(match.groups?.no);
+  for (const match of source.matchAll(english)) take(match.groups?.no);
+  return [...found];
+}
+
+// 找出內容內正規化後等於 norm 的單據號碼的原本寫法；找不到回傳空字串。
+export function docNumberShown(text, norm) {
+  const source = String(text ?? ''), want = String(norm || '');
+  const chinese = /(?:單據|發票|收據|訂單|帳單)(?:號碼|編號|號)[\s：:]*(?<no>[A-Za-z0-9][A-Za-z0-9/-]{2,29})/gu;
+  const english = /(?:\b(?:Invoice|Receipt|Order|Inv)\b(?:\s+No\.?)?|(?<![A-Za-z])No\.(?![A-Za-z])|#)[\s：:]*(?<no>[A-Za-z0-9][A-Za-z0-9/-]{2,29})/giu;
+  for (const re of [chinese, english]) for (const match of source.matchAll(re)) {
+    const raw = String(match.groups?.no || '');
+    if (raw.toUpperCase().replace(/[\s\-/]/g, '') === want) return raw;
+  }
+  return '';
+}
+
+const daysApart = (left, right) => {
+  const a = dateNumber(left), b = dateNumber(right);
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) / 86400000 : Infinity;
+};
+const unknownPayer = record => String(record?.payer || '').trim() === UNATTRIBUTED;
+const dupPayerKey = record => unknownPayer(record) ? '' : payerKeyOf(record?.payerKey || record?.payer);
+const hasCounterpart = record => !unknownPayer(record) && !!(String(record?.counterpartId || '') || dupPayerKey(record));
+const sameCounterpart = (left, right) => {
+  if (unknownPayer(left) || unknownPayer(right)) return false;
+  const leftId = String(left?.counterpartId || ''), rightId = String(right?.counterpartId || '');
+  if (leftId && rightId && leftId === rightId) return true;
+  const leftKey = dupPayerKey(left), rightKey = dupPayerKey(right);
+  return !!leftKey && leftKey === rightKey;
+};
+
+// 「金額日期相近」：收據重複提示的金額層及 CSV 匯入的重複判斷共用同一條規則（同方向、同幣別、同金額、相隔不超過 days 日）。
+export function sameAmountNear(candidate, record, days = 3) {
+  return !!record && !!candidate && record.status === 'confirmed' && record.dir === candidate.dir && record.currency === candidate.currency &&
+    record.amountCents === candidate.amountCents && daysApart(candidate.date, record.date) <= days;
+}
+
+// 收據紀錄已在 evidence 保存輸入編號及附件識別；此處整理為比對來源，避免同一事件（同一次交出）的各項互相提示。
+// 附件識別只在同一次交出內有效：不同次交出的同一份檔案（例如同一張付款證明交兩次）正是要提示的情況，所以附件鍵連同輸入編號。
+export function duplicateSourceOf(record) {
+  const inputs = new Set(), attachments = new Set();
+  if (typeof record?.fromInput === 'string' && record.fromInput) inputs.add(record.fromInput);
+  for (const item of asArray(record?.evidence)) {
+    const inputId = typeof item?.inputId === 'string' ? item.inputId : '';
+    if (inputId) inputs.add(inputId);
+    const attachment = typeof item?.hash === 'string' && item.hash ? item.hash : typeof item?.file === 'string' && item.file ? item.file : typeof item?.name === 'string' ? item.name : '';
+    if (attachment && inputId) attachments.add(inputId + ':' + attachment);
+  }
+  return { inputs: [...inputs], attachments: [...attachments] };
+}
+const sourceOverlap = (left, right) => {
+  const current = left || { inputs: [], attachments: [] }, prior = right || { inputs: [], attachments: [] };
+  return asArray(current.inputs).some(value => asArray(prior.inputs).includes(value)) || asArray(current.attachments).some(value => asArray(prior.attachments).includes(value));
+};
+
+// 為一筆候選紀錄找出最多三筆相近紀錄；只回傳創辦人需要判斷的資料。
+export function duplicateHints(candidate, pool, { limit = 3 } = {}) {
+  const current = plain(candidate) ? candidate : {}, candidateNos = new Set(docNumbersOf(current.what));
+  const currentSource = duplicateSourceOf(current);
+  const max = Number.isSafeInteger(limit) && limit >= 0 ? limit : 3;
+  const hints = [];
+  for (const entry of asArray(pool)) {
+    const record = plain(entry?.record) ? entry.record : null;
+    if (!record || record.status !== 'confirmed' || (current.id && current.id === record.id)) continue;
+    if (record.dir !== current.dir || record.currency !== current.currency) continue;
+    if (!!record.refund !== !!current.refund || sourceOverlap(currentSource, entry?.source || duplicateSourceOf(record))) continue;
+    const distance = daysApart(current.date, record.date), same = sameCounterpart(current, record);
+    const matchedNo = [...candidateNos].find(no => docNumbersOf(record.what).includes(no));
+    let why = '', no = '';
+    if (matchedNo && (same || !hasCounterpart(current) || !hasCounterpart(record))) { why = 'number'; no = matchedNo; }
+    else if (record.amountCents === current.amountCents && same && String(record.what || '').includes('單據未顯示已付款') && distance <= 60) why = 'payer';
+    else if (record.amountCents === current.amountCents && same && distance <= 14) why = 'payer';
+    // 剛好一方是收據時（另一方是月結單匯入或手動紀錄），銀行描述與收據店名通常寫法不同，對方名稱不同亦提示（主線全面審查 M1；只是提示，創辦人可仍要入帳）
+    else if (sameAmountNear(current, record, 3) && (!hasCounterpart(current) || !hasCounterpart(record) || (current.source === 'receipt') !== (record.source === 'receipt'))) why = 'amount';
+    if (!why) continue;
+    // 畫面顯示單據上原本的寫法（例如 INV-2026-0187），比對仍用正規化號碼
+    const shownNo = no ? docNumberShown(record.what, no) || docNumberShown(current.what, no) || no : '';
+    hints.push({ date: String(record.date || ''), amountCents: record.amountCents, currency: String(record.currency || ''), payer: String(record.payer || ''), where: entry.where === 'waiting' ? 'waiting' : 'ledger', why, ...(no ? { no, noShown: shownNo } : {}), distance });
+  }
+  return hints.sort((left, right) => (left.why === 'number' ? 0 : 1) - (right.why === 'number' ? 0 : 1) || left.distance - right.distance || left.date.localeCompare(right.date))
+    .slice(0, max).map(({ distance, ...hint }) => hint);
 }
 
 // 產生手動或收據業績紀錄的編號；同一處理內時鐘相同或倒退時，仍以毫秒遞增避免兩筆收據撞號。
@@ -438,9 +565,9 @@ export function classifyImportRows(drafts, existing, { mapId } = {}) {
       else if (seen.has(importKey)) { status = 'seen'; seenCount = seen.get(importKey); reason = `已匯入過 ${seenCount} 筆`; }
     }
     if (status === 'ok') {
+      // CSV 匯入規則維持 0.43.0（規格 9.1「CSV 匯入不變」）：金額日期相近（與收據重複提示的金額層同一條 sameAmountNear），而雙方對方不衝突
       const duplicate = all.some(record => {
-        if (!record || record.status !== 'confirmed' || record.dir !== draft.dir || record.amountCents !== draft.amountCents || record.currency !== draft.currency) return false;
-        if (Math.abs(dateNumber(record.date) - dateNumber(draft.date)) > 3 * 86400000) return false;
+        if (!sameAmountNear(draft, record, 3)) return false;
         const oldOrder = /^([^|]+)\|o\|(.+)$/.exec(String(record.importKey || ''));
         const newOrder = String(draft.orderNo || '').trim();
         if (oldOrder && oldOrder[1] === String(mapId) && newOrder && oldOrder[2] !== newOrder) return false;

@@ -26,7 +26,7 @@ const post = async (base, body) => { const r = await fetch(base + '/api/intake',
 const status = async base => (await fetch(base + '/api/status')).json();
 const submitAsk = async (base, pack, answers) => {
   const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: lib.localIso(), batch: answers.map(a => a.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(pack) : lib.fnv(JSON.stringify(pack))), 'batch: false', 'shownAt: ' + lib.localIso()];
   return fetch(base + '/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ kind: 'ask-answer', ref: pack.id, text: head.join('\n') + '\n\n# 答案\n\n' + fence + 'json\n' + JSON.stringify(machine) + '\n' + fence + '\n' }) });
 };
 const resultAsk = {
@@ -52,6 +52,11 @@ try {
   await usePass(base, chrome);
   await chrome.go(base + '/#/intake');
   if (await chrome.ev(`!!document.querySelector('#intake-anyway')`)) await chrome.click('#intake-anyway');
+  // 0.44.0 已批設計：沒有八題草稿時先顯示起點，按「直接填八條問題」才出八題表格
+  { const FILL_GO = JSON.stringify(lib.NAMES.ui.jrPathFillGo);
+    await waitFor(() => chrome.ev(`!!document.querySelector('#q1')||[...document.querySelectorAll('button,a,[role=button]')].some(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0)`));
+    if (!await chrome.ev(`!!document.querySelector('#q1')`)) await chrome.ev(`[...document.querySelectorAll('button,a,[role=button]')].find(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0).click()`);
+    await waitFor(() => chrome.ev(`!!document.querySelector('#q1')`)); }
   ok('交資料頁毋須選類別，八題用字及例子來自 API', await chrome.ev(`!document.querySelector('input[name="biz-type"]')&&${JSON.stringify(spec.questions)}.every(q=>document.querySelector('label[for="q'+q.n+'"]').textContent.includes(q.ask)&&document.querySelector('#q'+q.n).placeholder===(q.example?'例：'+q.example:''))`));
   await chrome.type('#q1', '用 AI 幫傳統小生意');
   ok('八題直接顯示，只有一題必填標記', await chrome.ev(`document.querySelectorAll('#intake-form .iq-q').length===8&&document.querySelectorAll('#intake-form .iq-q .qn').length===1`));
@@ -78,7 +83,10 @@ try {
   // 即使資料指定這些欄位為決定題，首屏也要排除。
   page.decide = { items: fields }; write(pageFile, page);
   await chrome.go(base + '/proofread.html');
-  ok('生意模式十二欄存在詳情，biz.type、canvas.* 不進首屏決定題', reading.length === 12 && await chrome.ev(`${JSON.stringify(fields)}.every(id=>!document.getElementById('dq-'+id.replace(/[^a-zA-Z0-9_-]/g,'-')))&&document.body.innerText.includes(${JSON.stringify(lib.NAMES.ui.readingTitle)})`));
+  // 0.44.0：生意模式改為十三項（加 biz.goal「想做成哪種生意」），畫面由十二行清單改為九格全圖（#canvas-confirmed 內 .cv-cell，類型及目標在九格頂部標籤）
+  await waitFor(() => chrome.ev(`document.querySelectorAll('#canvas-confirmed .cv-cell').length===9`), 15000);
+  const readingView = await chrome.ev(`({decide:${JSON.stringify(fields)}.filter(id=>!!document.getElementById('dq-'+id.replace(/[^a-zA-Z0-9_-]/g,'-'))),cells:document.querySelectorAll('#canvas-confirmed .cv-cell').length,title:document.body.innerText.includes(${JSON.stringify(lib.NAMES.ui.readingTitle)})})`);
+  ok('生意模式十三項（含 biz.goal）存在詳情，九格全圖顯示；biz.type、biz.goal、canvas.* 不進首屏決定題', reading.length === 13 && reading.some(x => x.plan === 'biz.goal') && readingView.decide.length === 0 && readingView.cells === 9 && readingView.title, { reading: reading.map(x => x.plan), view: readingView });
   // 恢復預設決定題後，經正常確認介面產出的相同契約修改類別。
   delete page.decide; write(pageFile, page);
   const f = reading.find(x => x.plan === 'biz.type');

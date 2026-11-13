@@ -45,7 +45,7 @@ function proofread(edits, kinds, kindsChanged) {
 function answer(P, pick) {
   const answers = P.questions.map(q => { const v = pick ? pick(q) : q.value; return { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; });
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: P.questions.map(q => q.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
   return post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
 }
 const packs = () => fs.readdirSync(path.join(DATA, 'asks')).map(f => JSON.parse(fs.readFileSync(path.join(DATA, 'asks', f), 'utf8')));

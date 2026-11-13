@@ -79,7 +79,8 @@ ok('第一星期指引的新舊標題均可讀取', guide?.button === N.ui.intak
 const plain = fs.readFileSync(path.join(PROTO, 'ai-plain.md'), 'utf8');
 ok('ai-plain 稱呼規則保留創辦人 AI 生意，轉述不改 Zero', plain.includes('Zero 只指正在替創辦人工作的隊員') && plain.includes('用 AI 幫傳統小生意') && plain.includes('轉述時也不可改成 Zero'));
 const ideate = fs.readFileSync(path.join(PROTO, 'ai-ideate.md'), 'utf8');
-ok('ideate 第一步提供三個對象，只有親身經歷可用不知道', ideate.includes('第一題必須列出三個可選對象') && ideate.includes('沒有線索就用常見的小生意類別') && ideate.includes('只有創辦人親身經歷的題才可建議'));
+// 0.44.0 開局旅程：對象一步改為三張卡（不再是問題包），保留「沒有線索就用常見的小生意類別」及不虛構規則
+ok('ideate 對象一步提供三個對象，沒有線索用常見小生意類別，不虛構', ideate.includes('剛好三個選項') && ideate.includes('沒有線索就用常見的小生意類別') && ideate.includes('不虛構事實'));
 fs.mkdirSync(OUT, { recursive: true });
 const work = fs.mkdtempSync(path.join(OUT, 'voice-'));
 const original = '用 AI 幫傳統小生意';

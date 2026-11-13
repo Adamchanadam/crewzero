@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { certified, execute, modelCandidates, webAccess } from './host-lib.mjs';
 import { checkCompanyPage, normalizePage, validDay, openingFields, ROW_PLANS, RULE_PLANS, CELLS } from './company-page-check.mjs';
 import { scanOutput, fixOutput } from './style-check.mjs';
@@ -15,29 +16,38 @@ import { MACHINE, ORIGINAL, sha, scanJSON, scanText, sameShape, headings, mergeR
 import { formatFor, passesFor, LEVELS, HARD_CAP, ADOPT_OPTS, SEATS, listMatches, readMatchFile, matchDir, isLegacy, pendingMatches, checkBlue, checkRed, checkRebuttal, checkJudge, checkRejudge, checkStrengthen, checkReattackRed, checkReattackJudge, responsePack, adoptionPacks, evidencePack } from './debate-lib.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkLinks } from './link-check.mjs';
-import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId, kindOf, founderNamesIn, checkPeopleSync, applyKindFix, peopleSyncDue, nextActorId, duplicateActor, mixSpace } from './people-ops.mjs';
+import { ownerKind, checkNewActorItem, applyNewActor, orderEventItems, ownershipOf, applyActorOp, nameKeys, norm as pnorm, resolveActorId, kindOf, founderNamesIn, checkPeopleSync, applyKindFix, peopleSyncDue, nextActorId, duplicateActor, matchActorName, mixSpace } from './people-ops.mjs';
 import { checkNewTermItem, applyNewTerm } from './terms-ops.mjs';
 import { buildMeetingContext, contextQuoteSources, contextTasks } from './context-lib.mjs';
-import { pad, localIso, stamp, readJSON, writeJSON, fnv, proofreadHash, proofreadHashMatches, isInboxNote, isInboxIntake, isInboxPrefill, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply } from './ask-lib.mjs';
+import { pad, localIso, stamp, readJSON, readListStrict, packHash, writeJSON, fnv, proofreadHash, proofreadHashMatches, isInboxNote, isInboxIntake, isInboxPrefill, dataDirs, appendLog, preparePacks, placePacks, loadPack, loadAnswers, listPacks, readLog, openUnknowns, sameThing, UNKNOWN_DAYS, MAX_PER_PACK, clockNow, isSim, INTAKE_QUESTIONS, BIZ_TYPES, intakeQuestions, NAMES, parseFounderReply, validateAskReply, requiresFounder } from './ask-lib.mjs';
+import { factMergeOn, JIA_IN_RELEASE } from './features.mjs';
+import { factKey, openByFact, mergeProposal, closeQuestion, planCleanup } from './fact-ops.mjs';
 import { rhythmOf, rhythmFromText, addDays, nextWeekday, isWeekday } from './rhythm-lib.mjs';
 import { listScenarios } from './practice-lib.mjs';
 import { PREFILL_Q, docTexts, checkPrefill, matchDelivered } from './prefill-lib.mjs';
 import { milestonesFromPage, assumptionsFromPage, depthOf, dashboardState, guideCard, applyFounderOps, overviewIsCurrent } from './dash-lib.mjs';
-import { registerInput, recordReading, addEffect, applyFollowUp, refreshSnapshot, mergeInPlace, followUpTaskId, checkRead, checkReason, checkFollowUpItem, cleanMeta, checkSourceUrls, blankBadSourceUrls, fullTextSuffix, annotateBrokenLinks, dayText as opsDayText } from './ledger-ops.mjs';
+import { loadModelCards, checkModelPick, CARD_ID } from './model-cards-lib.mjs';
+import { readCanvas, buildCanvasBase } from './canvas-store.mjs';
+import { registerInput, recordReading, addEffect, applyFollowUp, refreshSnapshot, mergeInPlace, followUpTaskId, checkRead, checkReason, checkFollowUpItem, cleanMeta, checkSourceUrls, blankBadSourceUrls, fullTextSuffix, annotateBrokenLinks, dayText as opsDayText, compareByDate, recordBasis, newestEventDate, dateGate } from './ledger-ops.mjs';
 import * as PACE from './pace-lib.mjs';
 import * as ROLES from './roles-ops.mjs';
 import { buildBrief, buildProofreadBrief, checkBrief, briefFailStreak } from './brief-lib.mjs';
-import { readMinutes, patchMinutes, minutesFilePath, fileNameFor, cleanTitle, sha256, sourceDir, overviewLines, termLines } from './minutes-lib.mjs';
-import { parseTurns, applyMap, unmappedIn, marks, markLegend } from './transcript-lib.mjs';
-import { moneyPaths, readMoney, readImportBatch } from './money-store.mjs';
-import { CATEGORIES, cashRunway, formatMoney, mergeMoney, monthMetrics, newMoneyId, payerKeyOf, toCents, validateRecord } from './money-lib.mjs';
+import { readMinutes, patchMinutes, minutesFilePath, fileNameFor, cleanTitle, sha256, sourceDir, overviewLines, termLines, isRealInstance } from './minutes-lib.mjs';
+import { parseTurns, applyMap, unmappedIn, marks } from './transcript-lib.mjs';
+import { checkMinutes, fixMinutes, isMinutesFileName } from './minutes-check.mjs';
+import { moneyPaths, readMoney, readImportBatch, dupPool } from './money-store.mjs';
+import { cashRunway, duplicateHints, duplicateSourceOf, eventMoneyItem, formatMoney, mergeMoney, monthMetrics, newMoneyId, payerKeyOf, toCents, validateRecord } from './money-lib.mjs';
 import { checkRevision, validate as validateExtension } from './ext-lib.mjs';
 import { extOverview, patchDraft, readDraft } from './ext-store.mjs';
 const U = NAMES.ui;
+const CANVAS = createRequire(import.meta.url)('./canvas-lib.js');
+const CANVAS_KEYS = CANVAS.CELLS.map(cell => cell.key);
 const parseReply = parseFounderReply;
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DIR = dataDirs(ROOT);
+// 真實走查確認有價值前，不把卡片陷阱接入預設辯論流程；測試亦不可在真實實例開啟。
+const MODEL_TRAPS_IN_DEBATE = process.env.SOS_TEST_MODEL_TRAPS === '1' && !isRealInstance(ROOT, DIR);
 const STATUS = path.join(DIR.ledger, 'status.json');
 const CONFIRMED = path.join(DIR.ledger, 'confirmed.json');
 const IDEATE = path.join(DIR.ledger, 'ideate.json');
@@ -100,7 +110,7 @@ function step(run, key, label, state, detail) {
 function finish(run, state, error) {
   if (run.ideateId && (state === 'failed' || state === 'waiting')) {
     const s = readJSON(IDEATE, null);
-    if (s && s.id === run.ideateId) updateIdeate(s, { state: 'failed', reason: error || (run.steps.find(x => x.key === 'ai') || {}).detail || U.ideateFailed });
+    if (s && s.id === run.ideateId) markIdeateFailed(s, error || (run.steps.find(x => x.key === 'ai') || {}).detail || U.ideateFailed);
   }
   run.state = state; run.endedAt = localIso();
   if (error) run.error = error;
@@ -114,8 +124,30 @@ function archive(files) {
 }
 
 /* ---------- 帳本（原型）：工作、事件 ---------- */
-function loadState() { return readJSON(STATE, null) || { schemaVersion: 1, tasks: [], events: [] }; }
-function saveState(s) { s.revision = (s.revision || 0) + 1; s.updatedAt = localIso(); s.updatedBy = 'shell'; writeJSON(STATE, s); }
+// 帳本只在檔案不存在時才由空白開始。讀不到（例如防毒或同步軟件暫時鎖住）或內容損壞時短暫重試；仍失敗就拋錯停止今次處理，
+// 絕不當作空白帳本再整份寫回（主線全面審查 2026-11-12 06-architecture 第 1 項；測試 state-guard-test）。
+const pauseMs = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function loadState() {
+  let last = null;
+  for (let i = 0; i < 20; i++) {
+    let raw;
+    try { raw = fs.readFileSync(STATE, 'utf8'); }
+    catch (e) { if (e && e.code === 'ENOENT') return { schemaVersion: 1, tasks: [], events: [] }; last = e; pauseMs(150); continue; }
+    try { const s = JSON.parse(raw); if (s && typeof s === 'object' && !Array.isArray(s)) return s; last = new Error('not an object'); }
+    catch (e) { last = e; }
+    pauseMs(150);
+  }
+  throw new Error('帳本 state.json 讀不到或內容損壞，今次停止處理，沒有改動帳本：' + String(last && (last.code || last.message) || '').slice(0, 120));
+}
+// 寫入前把現有帳本複製為 state.json.prev，留一步復原；複製不到時記錄後照常寫入，不丟失今次的改動。
+function saveState(s) {
+  s.revision = (s.revision || 0) + 1; s.updatedAt = localIso(); s.updatedBy = 'shell';
+  for (let i = 0; ; i++) {
+    try { fs.copyFileSync(STATE, STATE + '.prev'); break; }
+    catch (e) { if (e && e.code === 'ENOENT') break; if (i >= 5) { log('未能保留上一版帳本：' + (e && e.code || e)); break; } pauseMs(100); }
+  }
+  writeJSON(STATE, s);
+}
 function upsertTask(t) {
   const s = loadState(); s.tasks = s.tasks || [];
   const i = s.tasks.findIndex(x => x.id === t.id);
@@ -155,6 +187,147 @@ function founderOpsLockCanRecover() {
     return ownerGone || age > 60000;
   } catch { return false; }
 }
+
+// 資訊模型第一期：所有收起寫入均在與取回共用的短鎖內重新讀取問題包，避免舊記憶覆蓋新標記。
+function factPacks() {
+  return listPacks(DIR).map(row => loadPack(DIR, row.id)).filter(pack => pack && Array.isArray(pack.questions));
+}
+function factAnswers(packs) {
+  // 收件中、未處理的作答亦當作已答：啟動清理不可收起創辦人剛答的題，否則同一次處理會把他的答案逐題跳過
+  const pending = {};
+  try {
+    for (const f of fs.readdirSync(DIR.replies).filter(name => name.endsWith('.md'))) {
+      const parsed = parseReply(fs.readFileSync(path.join(DIR.replies, f), 'utf8'));
+      if (!parsed || !parsed.head || parsed.head.kind !== 'ask-answer') continue;
+      const ref = String(parsed.head.ref || ''), list = parsed.machine && Array.isArray(parsed.machine.answers) ? parsed.machine.answers : [];
+      for (const a of list) if (a && a.id != null && a.value != null && String(a.value).trim() !== '') (pending[ref] = pending[ref] || {})[String(a.id)] = a.value;
+    }
+  } catch { }
+  return Object.fromEntries((packs || []).map(pack => {
+    const store = loadAnswers(DIR, pack.id) || {}, extra = pending[pack.id];
+    return [pack.id, extra ? { ...store, answers: { ...extra, ...(store.answers || {}) } } : store];
+  }));
+}
+function writeFactClosures(closures) {
+  if (!factMergeOn() || !closures || !closures.length) return [];
+  return withFounderOpsLock(() => {
+    const written = [];
+    for (const closure of closures) {
+      const pack = loadPack(DIR, closure.packId);
+      const question = pack && (pack.questions || []).find(q => q && String(q.id) === String(closure.qId));
+      if (!question || question.closed || question.reopened) continue;
+      const target = closure.by && closure.by.qId ? loadPack(DIR, closure.by.packId) : null;
+      const targetQuestion = target && (target.questions || []).find(q => q && String(q.id) === String(closure.by.qId));
+      const by = targetQuestion && !closure.by.ask ? { ...closure.by, ask: targetQuestion.ask } : closure.by;
+      const next = closeQuestion(pack, closure.qId, { ...closure, ...(by ? { by } : {}) });
+      if (next !== pack) { writeJSON(path.join(DIR.asks, pack.id + '.json'), next); written.push(closure); }
+    }
+    return written;
+  }) || [];
+}
+function writeFactSources(updates) {
+  if (!factMergeOn() || !updates || !updates.length) return;
+  withFounderOpsLock(() => {
+    for (const update of updates) {
+      const pack = loadPack(DIR, update.packId);
+      const index = pack && (pack.questions || []).findIndex(q => q && String(q.id) === String(update.qId));
+      if (!pack || index < 0 || pack.questions[index].closed || !update.inputId) continue;
+      const question = pack.questions[index], sources = [...new Set([...(Array.isArray(question.factSources) ? question.factSources : []), update.inputId])];
+      if (sources.length === (Array.isArray(question.factSources) ? question.factSources.length : 0)) continue;
+      const questions = pack.questions.slice(); questions[index] = { ...question, factSources: sources };
+      writeJSON(path.join(DIR.asks, pack.id + '.json'), { ...pack, questions });
+    }
+  });
+}
+function appendPackQuestion(pack, question) {
+  if (!pack || !question) return pack;
+  const append = current => {
+    if (!current || (current.questions || []).some(q => q && q.id === question.id) || (current.questions || []).length >= 3) return current;
+    const next = { ...current, questions: [...current.questions, question] };
+    writeJSON(path.join(DIR.asks, next.id + '.json'), next);
+    return next;
+  };
+  return factMergeOn() ? (withFounderOpsLock(() => append(loadPack(DIR, pack.id))) || pack) : append(pack);
+}
+function appendPackQuestions(pack, questions) {
+  const additions = (questions || []).filter(Boolean);
+  if (!pack || !additions.length) return pack;
+  const append = current => {
+    if (!current) return current;
+    const ids = new Set((current.questions || []).map(q => q && q.id));
+    const fresh = additions.filter(q => !ids.has(q.id));
+    if (!fresh.length) return current;
+    const next = { ...current, questions: [...current.questions, ...fresh] };
+    writeJSON(path.join(DIR.asks, next.id + '.json'), next);
+    return next;
+  };
+  return factMergeOn() ? (withFounderOpsLock(() => append(loadPack(DIR, pack.id))) || pack) : append(pack);
+}
+function factMergeItems(state, input, items) {
+  if (!factMergeOn()) return { items, removedIds: [], sources: [], replacements: [] };
+  const packs = factPacks(), open = openByFact(packs, factAnswers(packs), state), kept = [], removedIds = [], sources = [], replacements = [];
+  for (const item of items || []) {
+    const key = factKey(item, state);
+    if (!key) { kept.push(item); continue; }
+    const result = mergeProposal(item, open.get(key) || [], state, { eventDate: input.eventDate, dateAssumed: input.dateAssumed === true });
+    if (result.action === 'older') {
+      const change = NAMES.t('dpOlderNote', { d: dayText(input.eventDate), where: eventDateWhere(input), x: datedItemValue(item), now: '較新的待確認建議', c: '' });
+      mergeInPlace(state, addEffect(state, input.id, { targetKind: 'dated', targetId: key, change }));
+      if (item.itemId) removedIds.push(item.itemId);
+    } else if (result.action === 'sameAsOpen') {
+      sources.push({ ...result.keep, inputId: result.addSource || input.id });
+      if (item.itemId) removedIds.push(item.itemId);
+    } else {
+      kept.push(item);
+      for (const closure of result.closes || []) replacements.push({ ...closure, key });
+    }
+  }
+  return { items: kept, removedIds, sources, replacements };
+}
+function closeFactReplacements(pack, state, replacements) {
+  if (!factMergeOn() || !pack || !replacements || !replacements.length) return [];
+  const nextByFact = new Map();
+  for (const question of pack.questions || []) {
+    const key = factKey(question, state);
+    if (key && !nextByFact.has(key)) nextByFact.set(key, question.id);
+  }
+  const closures = replacements.map(closure => {
+    const qId = nextByFact.get(closure.key);
+    return qId ? { ...closure, by: { packId: pack.id, qId } } : null;
+  }).filter(Boolean);
+  return writeFactClosures(closures);
+}
+function backupFactCleanup(relative) {
+  const target = path.join(DIR.data, relative);
+  fs.mkdirSync(target, { recursive: true });
+  if (fs.existsSync(DIR.asks)) fs.cpSync(DIR.asks, path.join(target, 'asks'), { recursive: true });
+  if (fs.existsSync(DIR.answers)) fs.cpSync(DIR.answers, path.join(target, 'answers'), { recursive: true });
+  if (fs.existsSync(STATE)) fs.copyFileSync(STATE, path.join(target, 'state.json'));
+}
+function startupFactCleanup() {
+  if (!factMergeOn()) return null;
+  const before = factPacks(), firstPlan = planCleanup({ packs: before, answers: factAnswers(before), state: loadState(), today: todayIso() });
+  if (!firstPlan.closures.length) return null;
+  const relative = path.join('backups', 'fact-cleanup-' + localIso().replace(/[^0-9]/g, '')).replace(/\\/g, '/');
+  // 備份複製不持鎖；真正讀、改、寫在鎖內重新計劃。
+  backupFactCleanup(relative);
+  return withFounderOpsLock(() => {
+    const packs = factPacks(), state = loadState(), plan = planCleanup({ packs, answers: factAnswers(packs), state, today: todayIso() });
+    if (!plan.closures.length) return null;
+    for (const closure of plan.closures) {
+      const pack = loadPack(DIR, closure.packId);
+      if (!pack) continue;
+      const target = closure.by && closure.by.qId ? loadPack(DIR, closure.by.packId) : null;
+      const targetQuestion = target && (target.questions || []).find(q => q && String(q.id) === String(closure.by.qId));
+      const by = targetQuestion && !closure.by.ask ? { ...closure.by, ask: targetQuestion.ask } : closure.by;
+      const next = closeQuestion(pack, closure.qId, { ...closure, ...(by ? { by } : {}) });
+      if (next !== pack) writeJSON(path.join(DIR.asks, pack.id + '.json'), next);
+    }
+    state.factCleanup = { at: localIso(), closed: plan.closures.length, backup: relative };
+    saveState(state);
+    return { closed: plan.closures.length, backup: relative };
+  });
+}
 function founderEventTitle(op, st = null) {
   const v = op && op.value || {};
   // 名單改正的標題要帶名稱：從套用前的帳本查（查不到就用較短的句）
@@ -191,6 +364,8 @@ function founderEventTitle(op, st = null) {
   if (op.op === 'setGoalNumber') return U.mnyGoalSet;
   if (op.op === 'actorAdd') return NAMES.t('peopleAdded', { n: clip(v.name, 20), k: NAMES.dash['ppl_kind_' + v.kind] || '' });
   if (op.op === 'extEnable') return U.extEnabled;
+  if (op.op === 'canvasEdit') return U.cvEditSaved;
+  if (op.op === 'canvasSugAnswer') return v.action === 'reject' ? U.cvSugKept : U.cvSugDone;
   return U.founderUnsnoozed;
 }
 const founderOpsBatchTime = file => Number((/\.founder-ops-\d+-(\d+)\.json$/.exec(file) || [])[1]) || 0;
@@ -233,6 +408,64 @@ function replaceMoneyFile(file, value) {
   log(`業績帳本未能換入：${last && last.code || 'unknown'}`);
   return false;
 }
+function canvasFile() { return path.join(DIR.ledger, 'canvas.json'); }
+function replaceCanvasFile(file, value) {
+  let last = null;
+  for (let i = 0; i <= 40; i++) {
+    const tmp = `${file}.${process.pid}-${randomUUID()}.tmp`;
+    try {
+      if (fs.existsSync(file)) fs.copyFileSync(file, file + '.prev');
+      fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+      fs.renameSync(tmp, file);
+      return true;
+    } catch (error) {
+      last = error;
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error?.code) || i >= 40) break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    } finally { try { if (fs.existsSync(tmp)) fs.rmSync(tmp, { force: true }); } catch { } }
+  }
+  log(`生意模式圖未能換入：${last && last.code || 'unknown'}`);
+  return false;
+}
+function removeCanvasSuggestionPack(suggestion) {
+  const packId = String(suggestion && suggestion.packId || '');
+  if (!/^[\w-]{1,80}$/.test(packId)) return;
+  try { fs.rmSync(path.join(DIR.asks, packId + '.json'), { force: true }); } catch { }
+}
+function ensureCanvasBase(page, confirmed) {
+  if (!page || !confirmed || confirmed.pageId !== page.page?.id) return false;
+  const file = canvasFile(), prior = readJSON(file, null);
+  if (prior && prior.pageId === confirmed.pageId) return true;
+  if (prior && prior.pageId !== confirmed.pageId) for (const suggestion of prior.suggestions || []) if (suggestion && suggestion.state === 'open') removeCanvasSuggestionPack(suggestion);
+  return replaceCanvasFile(file, buildCanvasBase(page, confirmed.values || {}, confirmed.pageId, prior, localIso()));
+}
+function mergeCanvasOps(pending) {
+  const ops = pending.filter(op => op && (op.op === 'canvasEdit' || op.op === 'canvasSugAnswer'));
+  if (!ops.length) return { ok: true, skipped: [] };
+  const page = loadPage(), confirmed = readJSON(CONFIRMED, null);
+  if (!page || !confirmed || confirmed.pageId !== page.page?.id) {
+    log('生意模式圖操作未有已確認公司概覽，已略過模式圖操作');
+    return { ok: true, skipped: ops.map(op => String(op.id || '')).filter(Boolean) };
+  }
+  const file = canvasFile();
+  let base = readJSON(file, null);
+  if (!base || base.pageId !== confirmed.pageId) base = buildCanvasBase(page, confirmed.values || {}, confirmed.pageId, base, localIso());
+  const view = CANVAS.canvasView(base, ops);
+  const saved = { pageId: confirmed.pageId, at: localIso(), ...view, history: (view.history || []).slice(0, 20) };
+  if (!replaceCanvasFile(file, saved)) return { ok: false };
+  for (const op of ops.filter(op => op.op === 'canvasSugAnswer')) {
+    const suggestion = (saved.suggestions || []).find(item => item && item.id === op.target);
+    if (!suggestion || !suggestion.packId) continue;
+    const pack = loadPack(DIR, suggestion.packId);
+    if (!pack || !Array.isArray(pack.questions)) continue;
+    const question = pack.questions.find(item => item && item.canvasSug && item.canvasSug.id === suggestion.id);
+    if (!question) continue;
+    const action = op.value && op.value.action;
+    const value = action === 'adopt' ? U.cvAdopt : action === 'reject' ? U.cvReject : String(op.value && op.value.text || '');
+    writeJSON(path.join(DIR.answers, pack.id + '.json'), { answers: { ...(loadAnswers(DIR, pack.id).answers || {}), [question.id]: { value, changed: action === 'edit', at: op.at || localIso(), by: 'canvas' } } });
+  }
+  return { ok: true, skipped: [] };
+}
 function mergeMoneyOps(pending) {
   const types = new Set(['moneyAdd', 'moneyImport', 'moneyUndoImport', 'moneyVoid', 'moneyEvidence', 'moneyLink', 'moneyBalance']);
   const ops = pending.filter(op => types.has(op.op));
@@ -269,16 +502,22 @@ function mergeMoneyOps(pending) {
   return { ok: true };
 }
 export function mergeFounderOpsBatch(batch) {
-  const ops = readJSON(batch, []), before = loadState();
-  if (before.demo === true || !Array.isArray(ops)) return false;
+  // 批次檔讀不到就保留它下次再合併，不可當空清單處理後刪檔
+  const ops = readListStrict(batch); if (!ops) { log('創辦人操作批次暫時讀不到，留待下次合併：' + path.basename(batch)); return false; }
+  const before = loadState();
+  if (before.demo === true) return false;
   const done = Array.isArray(before.founderOpsDone) ? before.founderOpsDone.filter(id => typeof id === 'string') : [];
   const doneSet = new Set(done), pending = ops.filter(op => op && typeof op === 'object' && (!op.id || !doneSet.has(op.id)));
   if (!mergeMoneyOps(pending).ok) return false;
+  const canvas = mergeCanvasOps(pending);
+  if (!canvas.ok) return false;
+  const skippedCanvas = new Set(canvas.skipped || []);
   const next = applyShellOps(applyFounderOps(before, pending), pending, before);
   next.events = Array.isArray(next.events) ? next.events : [];
   for (const op of pending) {
     if (!op.op) continue;
-    next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title: founderEventTitle(op, before), relatedIds: [], moduleIds: ['now', 'inputs'] });
+    const title = skippedCanvas.has(String(op.id || '')) ? NAMES.ui.founderNewerNext : founderEventTitle(op, before);
+    next.events.push({ id: 'e' + stamp() + '-' + next.events.length, at: op.at || localIso(), actor: 'founder', type: 'founder-op', title, relatedIds: [], moduleIds: ['now', 'inputs'] });
   }
   next.founderOpsDone = [...new Set(done.concat(pending.map(op => typeof op.id === 'string' ? op.id : '').filter(Boolean)))].slice(-Math.max(200, ops.length));
   saveState(next);
@@ -347,18 +586,26 @@ const MS_KEEP = ['state', 'doneAt', 'doneEvidence', 'doneInputId', 'doneCounterp
 const AS_KEEP = ['grade', 'status', 'sourceId', 'changedAt'];
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 function syncLedger() {
-  const page = loadPage(), c = readJSON(CONFIRMED, null);
-  if (!page || !c || c.pageId !== page.page.id) return false;
-  const s = loadState(), same = s.ledgerFrom === page.page.id;
+  const s = loadState(), page = loadPage(), c = readJSON(CONFIRMED, null);
+  // 0.44.0 前的新對象自訂答案曾以名稱永久封鎖；升級時只清名稱鍵，保留改類別題及其他 peopleSync 紀錄。
+  let clearedLegacyNameBlocks = false;
+  if (s.peopleSync && s.peopleSync.reasked && typeof s.peopleSync.reasked === 'object') {
+    // 只清舊版的永久封鎖（名稱鍵值為 2 或以上）；值為 1 是「已問過一次」，要保留，否則第二次自訂答案永遠當作第一次（N 線驗收缺陷甲）
+    const kept = Object.fromEntries(Object.entries(s.peopleSync.reasked).filter(([key, value]) => key.startsWith('kind:') || Number(value) === 1));
+    clearedLegacyNameBlocks = Object.keys(kept).length !== Object.keys(s.peopleSync.reasked).length;
+    if (Object.keys(kept).length) s.peopleSync.reasked = kept; else delete s.peopleSync.reasked;
+  }
+  if (!page || !c || c.pageId !== page.page.id) { if (clearedLegacyNameBlocks) saveState(s); return clearedLegacyNameBlocks; }
+  const same = s.ledgerFrom === page.page.id;
   // 唔係由公司概覽同步嚟嘅帳本（例如示範帳本，有試行、已撤、觀察項）唔郁
-  if (s.demo === true || ((s.milestones || []).length && !s.ledgerFrom)) return false;
+  if (s.demo === true || ((s.milestones || []).length && !s.ledgerFrom)) { if (clearedLegacyNameBlocks) saveState(s); return clearedLegacyNameBlocks; }
   const oldMs = Object.fromEntries((s.milestones || []).map(m => [m.id, m]));
   const keepOf = m => { const o = oldMs[m.id]; return o && (same || o.short === m.short) ? o : null; };
   // 你答過嘅深化答案（founderText）保留，深度按規則重算（3.3）；真事／工作以你成頁確認時嘅判斷為準
   const founder = {};
   for (const pm of page.path.milestones) { const o = keepOf(pm); if (o) founder[pm.id] = (o.depthAnswers || []).map(a => a && typeof a === 'object' ? { text: a.founderText || '', adopted: !!a.adopted } : { text: '' }); }
   const kinds = c.kinds || {};
-  const before = JSON.stringify([s.milestones || [], (s.company || {}).assumptions || [], (s.company || {}).actors || [], s.intake || {}, s.tasks || [], (s.company || {}).nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]);
+  const before = JSON.stringify([s.milestones || [], (s.company || {}).assumptions || [], (s.company || {}).actors || [], s.intake || {}, s.tasks || [], (s.company || {}).nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}, s.peopleSync || {}]);
   const ms = milestonesFromPage(page, c, { founder }).map(m => { const o = keepOf(m), kind = kinds[m.id] || m.kind || 'real'; return o ? { ...m, kind, ...pick(o, MS_KEEP) } : { ...m, kind }; });
   // 經試行採用、唔喺公司概覽嘅站（3.12）：同步時照留
   for (const o of s.milestones || []) if (o.trial && !ms.some(m => m.id === o.id)) ms.push(o);
@@ -433,7 +680,7 @@ function syncLedger() {
   s.milestones = ms;
   s.intake = { ...(s.intake || {}), state: missing.length ? 'incomplete' : 'complete', confirmedAt: c.confirmedAt, answers, missing };
   s.ledgerFrom = page.page.id;
-  if (before === JSON.stringify([ms, as, s.company.actors, s.intake, tasks, s.company.nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}]) && same && !seeded) return false;
+  if (before === JSON.stringify([ms, as, s.company.actors, s.intake, tasks, s.company.nextExternalAction || null, s.targetOverride || {}, s.targetOverrideBase || {}, s.targetOverrideAt || {}, s.peopleSync || {}]) && same && !seeded && !clearedLegacyNameBlocks) return false;
   saveState(s);
   log(`帳本已按公司概覽同步：${ms.length} 個站、${as.length} 條假設、未答齊 ${missing.length} 欄`);
   return true;
@@ -572,6 +819,28 @@ function confirmedMarkdown(page, reg, values, c) {
   const st = readJSON(STATE, null), first = ((st && st.tasks) || []).filter(t => t.firstBatch && t.status !== 'done');
   if (first.length) { L.push('', '## 首批工作：缺少的資料（你要先處理：自己查得到就查；要問創辦人就出問題，附「不知道／稍後提供」選項）'); for (const t of first) L.push(`- ${t.title}（${t.next}）`); }
   if (c.note) L.push('', '## 創辦人備註', c.note);
+  const canvas = readCanvas(DIR, { proto: ROOT });
+  if (canvas.confirmed && canvas.view) {
+    const labelOf = Object.fromEntries((page.detail?.reading || []).filter(field => field && typeof field.plan === 'string').map(field => [field.plan, field.label]));
+    const namesByFace = new Map((canvas.cards || []).map(card => [card.face, card.name]));
+    const faceLine = face => namesByFace.get(face) || '未定';
+    L.push('', '## ' + U.readingTitle);
+    if (canvas.type) L.push('- 生意類型：' + canvas.type);
+    if (canvas.goal && canvas.goal !== 'open') L.push('- 想做成哪種生意：' + U['goal_' + canvas.goal]);
+    if (canvas.model) L.push('- 收錢／形態／擴大：' + [faceLine('charge'), faceLine('form'), faceLine('scale')].join('；'));
+    for (const key of CANVAS_KEYS) {
+      const field = key === 'customer' ? labelOf['canvas.customer'] : labelOf['canvas.' + key];
+      const cell = canvas.view.cells[key];
+      if (field && cell && cell.text) L.push('- ' + field + '：' + cell.text);
+    }
+    for (const key of ['problem', 'alternatives']) {
+      const field = labelOf['canvas.' + key], cell = canvas.view.cells.customer?.sub?.[key] || canvas.view.cells[key];
+      if (field && cell && cell.text) L.push('- ' + field + '：' + cell.text);
+    }
+    const picked = canvas.model && (canvas.model.firstTest || null);
+    if (picked && picked.text) L.push('- 第一個驗證：' + picked.text);
+    if (canvas.model?.altCharge?.text) L.push('- ' + U.cvAltCharge + '：' + canvas.model.altCharge.text);
+  }
   return L.join('\n') + '\n';
 }
 function writeConfirmedPage(sb) {
@@ -701,7 +970,14 @@ async function runAIStep(run, sb, label, allowEmpty) {
   if (r.meta) run.aiCost = { usd: ((run.aiCost && run.aiCost.usd) || 0) + (r.meta.total_cost_usd || 0), ms: ((run.aiCost && run.aiCost.ms) || 0) + (r.meta.duration_ms || 0) };
   if (r.waiting) { run.waitingFor = 'ai-setup'; step(run, 'ai', label, 'waiting', r.reason); return finish(run, 'waiting'); }
   if (r.ok && run.noteType === 'practice-prep') return finishPracticePrep(run, sb, label);
-  if (!r.ok) { if (run.taskId) upsertTask({ id: run.taskId, status: 'blocked', waitingFor: 'Zero 工作未完成，可在 CrewZero 按「重試」' }); step(run, 'ai', label, 'failed', r.reason); return finish(run, 'failed', r.reason); }
+  if (!r.ok) {
+    if (run.ideateId) {
+      const ideate = readJSON(IDEATE, null), reason = journeyReason(ideate && ideate.step);
+      if (ideate && ideate.id === run.ideateId) markIdeateFailed(ideate, reason);
+      step(run, 'ai', label, 'failed', reason); return finish(run, 'failed', reason);
+    }
+    if (run.taskId) upsertTask({ id: run.taskId, status: 'blocked', waitingFor: 'Zero 工作未完成，可在 CrewZero 按「重試」' }); step(run, 'ai', label, 'failed', r.reason); return finish(run, 'failed', r.reason);
+  }
   if (run.kind === 'intake') return finishIntake(run, sb, label);
   if (run.kind === 'prefill') return finishPrefill(run, sb, label);
   if (run.ideateId) {
@@ -811,9 +1087,38 @@ function jsonStillOk(out) {
   }
   return true;
 }
+function restoreModelMachineFields(original, rewritten) {
+  const before = original?.detail?.model, after = rewritten?.detail?.model;
+  if (!before || !after || !rewritten?.detail) return rewritten;
+  const model = JSON.parse(JSON.stringify(before));
+  const copy = (target, source, keys) => {
+    if (!target || !source) return;
+    for (const key of keys) if (typeof source[key] === 'string') target[key] = source[key];
+  };
+  copy(model, after, ['name', 'payer', 'why']);
+  copy(model.trap, after.trap, ['text']);
+  copy(model.firstTest, after.firstTest, ['text', 'watch', 'counts']);
+  copy(model.altCharge, after.altCharge, ['text', 'why']);
+  rewritten.detail.model = model;
+  return rewritten;
+}
 async function rewriteOnce(sb, run) {
   const out = path.join(sb, 'out');
-  const hits = scanOutput(out);
+  let hits = scanOutput(out);
+  // 開局旅程：命中的字若出自創辦人原話（構思一句、自己寫的對象），屬原話，不叫 AI 改寫
+  if (run.ideateId && hits.length) {
+    const s = readJSON(IDEATE, null) || {};
+    const own = [s.say, s.who && s.who.pick === -1 ? s.who.own : ''].map(text => String(text || '')).filter(Boolean);
+    // 按位置判斷：命中字的前後文落在原話內（或原話整句在前後文內）才放過；Zero 自己寫的同一個字照常改寫
+    hits = hits.filter(h => {
+      const term = String(h.term || '').trim(), ctx = String(h.context || '');
+      const at = term ? ctx.indexOf(term) : -1;
+      if (at < 0) return true;
+      // 命中字連左邊或右邊最少三個字都出自同一句原話，視為原話內的字
+      const left = ctx.slice(Math.max(0, at - 6), at + term.length), right = ctx.slice(at, at + term.length + 6);
+      return !own.some(text => (left.length >= term.length + 3 && text.includes(left)) || (right.length >= term.length + 3 && text.includes(right)));
+    });
+  }
   if (!hits.length) return [];
   log(`${run.id} 用字命中 ${hits.length} 處，叫 AI 改寫一次`);
   const snap = snapshotOut(out);
@@ -834,7 +1139,12 @@ async function rewriteOnce(sb, run) {
     let now; try { now = fs.readFileSync(p, 'utf8'); } catch { continue; }
     if (now === orig) continue;
     if (f.endsWith('.md')) fs.writeFileSync(p, headings(now) === headings(orig) ? mergeRewriteMd(orig, now, rctx).text : orig);
-    else { try { const a = JSON.parse(orig), b = JSON.parse(now); fs.writeFileSync(p, JSON.stringify(mergeRewriteJSON(a, b, rctx).value, null, 2)); } catch { fs.writeFileSync(p, orig); } }
+    else {
+      try {
+        const a = JSON.parse(orig), b = JSON.parse(now), merged = mergeRewriteJSON(a, b, rctx).value;
+        fs.writeFileSync(p, JSON.stringify(f === 'company-page.json' ? restoreModelMachineFields(a, merged) : merged, null, 2));
+      } catch { fs.writeFileSync(p, orig); }
+    }
   }
   const left = scanOutput(out);
   if (!left.length) return [];
@@ -852,17 +1162,79 @@ function datedTask(sb, src) {
   const t = todayIso(), wd = WEEK[new Date(t + 'T12:00:00').getDay()];
   fs.writeFileSync(path.join(sb, 'task.md'), `> 今日日期：${t}（星期${wd}）\n\n` + fs.readFileSync(path.join(ROOT, src), 'utf8'));
 }
-function intakeTask(sb) {
+function intakeTask(sb, journey = null) {
   datedTask(sb, 'ai-intake.md');
   fs.copyFileSync(path.join(ROOT, 'company-page-format.md'), path.join(sb, 'company-page-format.md'));
   fs.copyFileSync(path.join(ROOT, 'fixtures', 'example-company-page-full.json'), path.join(sb, 'example-company-page.json'));
-  writeJSON(path.join(sb, 'job.json'), { type: 'intake', today: todayIso() });
+  fs.copyFileSync(path.join(ROOT, 'model-cards.md'), path.join(sb, 'model-cards.md'));
+  if (journey) writeJSON(path.join(sb, 'journey.json'), journey);
+  writeJSON(path.join(sb, 'job.json'), { type: 'intake', today: todayIso(), ...(journey ? { journey: true } : {}) });
 }
-function checkDraft(out, run, ready) {
+function checkDraft(out, run, ready, modelOptions = null) {
   const page = readJSON(path.join(out, 'company-page.json'), null);
   if (!page) return { ok: false, errors: ['Zero 未有交出公司概覽，或內容無法讀取'], warnings: [] };
   const revision = fs.existsSync(path.join(DIR.company, 'history')) ? fs.readdirSync(path.join(DIR.company, 'history')).filter(f => f.startsWith('page-')).length + 2 : (fs.existsSync(path.join(DIR.company, 'page.json')) ? 2 : 1);
-  return checkCompanyPage(page, { id: 'intake-' + run.ref, revision, preparedAt: localIso().slice(0, 10), ready: !!ready, newDraft: true });
+  const checked = checkCompanyPage(page, { id: 'intake-' + run.ref, revision, preparedAt: localIso().slice(0, 10), ready: !!ready, newDraft: true });
+  if (!checked.ok || run.journey || !modelOptions) return checked;
+  const model = checked.page && checked.page.detail && checked.page.detail.model;
+  const modelCheck = checkModelPick(model, loadModelCards(ROOT), modelOptions);
+  checked.modelCheck = modelCheck;
+  if (!modelCheck.ok) { checked.errors.push(...modelCheck.problems.map(problem => problem.why)); checked.ok = false; }
+  return checked;
+}
+function intakeAnswers(sb) {
+  const machine = parseFounderReply(fs.readFileSync(path.join(sb, 'intake.md'), 'utf8')).machine || {};
+  const fields = machine && typeof machine.fields === 'object' ? machine.fields : {};
+  return Object.fromEntries(Array.from({ length: 8 }, (_, index) => {
+    const key = 'q' + (index + 1);
+    return [key, String(fields[key] || '')];
+  }));
+}
+function journeyCellOrigin(cell) {
+  if (!cell || cell.tag === 'open' || !String(cell.text || '').trim()) return 'missing';
+  return cell.tag === 'mine' ? 'doc' : 'ai';
+}
+function applyJourneyFirstTest(page, journey) {
+  const test = journey && journey.test || {}, first = page && page.path && page.path.milestones && page.path.milestones[0];
+  if (!first || !test.text) return;
+  if (first.event) { first.event.value = String(test.text); first.event.origin = 'ai'; }
+  const action = (page.glance && page.glance.rows || []).find(field => field && field.plan === 'G5');
+  if (action) { action.value = String(test.text); action.origin = 'ai'; action.flagTo = first.id; }
+}
+function applyJourneyDraft(page, journey) {
+  if (!page || !journey || typeof journey !== 'object') return page;
+  const reading = Array.isArray(page.detail?.reading) ? page.detail.reading : [];
+  const byPlan = new Map(reading.map(field => [field && field.plan, field]));
+  const cells = journey.canvas && journey.canvas.cells || {};
+  for (const key of CANVAS_KEYS.concat(['problem', 'alternatives'])) {
+    const field = byPlan.get('canvas.' + key), cell = key === 'problem' || key === 'alternatives' ? cells.customer?.sub?.[key] || cells[key] : cells[key];
+    if (!field || !cell) continue;
+    field.value = cell && (cell.tag === 'open' || !String(cell.text || '').trim()) ? '待你補充' : String(cell.text || '');
+    field.origin = journeyCellOrigin(cell);
+    field.picked = cell.tag === 'pick';
+    // 原話一定要附出處，否則公司概覽核對會把它改為「Zero 建議」（截圖 j5c → j7）
+    if (field.origin === 'doc') field.src = [{ from: U.journeySrcFrom, at: U.journeySrcAt }];
+    else delete field.src;
+  }
+  const goal = byPlan.get('biz.goal');
+  if (goal && ['fast', 'steady', 'scale', 'raise', 'open'].includes(journey.goal)) {
+    goal.value = U['goal_' + journey.goal]; goal.origin = 'ai'; goal.picked = true;
+  }
+  page.detail = page.detail || {};
+  if (journey.model) page.detail.model = journey.model;
+  const test = journey.test || {}, first = page.path && page.path.milestones && page.path.milestones[0];
+  applyJourneyFirstTest(page, journey);
+  const trap = String(test.trap || journey.model?.trap?.text || '').trim();
+  if (trap) {
+    const faces = journey.model?.faces || {};
+    const card = journey.model?.trap?.card;
+    const face = Object.keys(faces).find(key => Array.isArray(faces[key]) && faces[key].some(pick => pick && pick.card === card));
+    const cell = ({ charge: 'revenue', form: 'value', scale: 'activities' })[face] || 'value';
+    const assumptions = Array.isArray(page.detail.assumptions) ? page.detail.assumptions : [];
+    if (!assumptions.some(item => item && String(item.label || item.value || '') === trap)) assumptions.push({ id: 'journey-trap', label: trap, value: '尚未驗證', origin: 'ai', kind: 'text', cell, milestoneIds: first ? [first.id] : [], tentative: { by: 'ai', until: localIso().slice(0, 10), test: String(test.text || '') } });
+    page.detail.assumptions = assumptions;
+  }
+  return page;
 }
 function installPage(page) {
   const hist = path.join(DIR.company, 'history');
@@ -885,7 +1257,8 @@ function intakeSourceCheck(sb, page) {
 }
 async function finishIntake(run, sb, label) {
   const out = path.join(sb, 'out');
-  let chk = checkDraft(out, run, true);
+  const modelOptions = run.journey ? null : { answers: intakeAnswers(sb), needDiagnosis: true };
+  let chk = checkDraft(out, run, true, modelOptions);
   if (!chk.ok) {
     log(`${run.id} 公司概覽格式唔完整：${chk.errors.join('；')}；叫 AI 修正一次`);
     writeJSON(path.join(sb, 'job.json'), { type: 'intake-repair', errors: chk.errors });
@@ -894,7 +1267,17 @@ async function finishIntake(run, sb, label) {
       ...chk.errors.map((e, i) => `${i + 1}. ${e}`), '', '改完覆寫 `out/company-page.json`。只可以寫 `out/`。'].join('\n') + '\n');
     const r = await runAI(sb);
     if (r.meta && run.aiCost) run.aiCost.usd = (run.aiCost.usd || 0) + (r.meta.total_cost_usd || 0);
-    chk = r.ok ? checkDraft(out, run, true) : chk;
+    chk = r.ok ? checkDraft(out, run, true, modelOptions) : chk;
+  }
+  // 直接填的選卡第二次仍不合格時，只保留機械核對過的部分，不把不合格卡帶到校對頁。
+  if (!chk.ok && chk.modelCheck && chk.modelCheck.cleaned) {
+    const candidate = readJSON(path.join(out, 'company-page.json'), null);
+    if (candidate && candidate.detail) {
+      candidate.detail.model = chk.modelCheck.cleaned;
+      writeJSON(path.join(out, 'company-page.json'), candidate);
+      const revision = fs.existsSync(path.join(DIR.company, 'history')) ? fs.readdirSync(path.join(DIR.company, 'history')).filter(f => f.startsWith('page-')).length + 2 : (fs.existsSync(path.join(DIR.company, 'page.json')) ? 2 : 1);
+      chk = checkCompanyPage(candidate, { id: 'intake-' + run.ref, revision, preparedAt: localIso().slice(0, 10), ready: !!true, newDraft: true });
+    }
   }
   // 就緒清單或者四格修正後仍缺：唔阻你校對，加空欄（未知）同首批工作，校對頁列出「尚未問齊」
   if (!chk.ok) { const loose = checkDraft(out, run, false); if (loose.ok) { log(`${run.id} 修正後仍未齊：${chk.errors.join('；')}；已加空欄`); chk = loose; } }
@@ -921,12 +1304,15 @@ async function finishIntake(run, sb, label) {
     log(`${run.id} 來源網址仍未能核對，已留空：${urlCheck.bad.map(b => b.url).join('、')}`);
   }
   if (Array.isArray(chk.page.sources)) chk.page.sources = await markBrokenLinks(chk.page.sources, 'note');
+  if (run.journey) applyJourneyDraft(chk.page, run.journey);
   writeJSON(path.join(out, 'company-page.json'), chk.page);
   const styleWarnings = await rewriteOnce(sb, run);
   // 改寫之後再核對一次；改壞咗就用返改寫前嗰版
   let page = chk.page;
   const again = checkDraft(out, run);
   if (again.ok) page = again.page; else log(`${run.id} 改寫後格式唔啱，用返改寫前嘅公司概覽`);
+  if (run.journey) applyJourneyFirstTest(page, run.journey);
+  writeJSON(path.join(out, 'company-page.json'), page);
   fixSourceFiles(page, run.ref);
   installPage(page);
   const bizFile = path.join(DIR.company, 'biz.json');
@@ -1020,26 +1406,9 @@ async function handleMinutesSpeakers(run) {
   step(run, 'ai', label, 'done', '');
   finish(run, 'done');
 }
-const MINUTES_HEADINGS = ['參加者', '已發生的事實', '對方的說法及承諾', '雙方決定', '待辦', '未定事項', '改動清單'];
-function rewriteMinutesLegend(text) {
-  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
-    .filter(line => !/^>\s*⚠️?\s*不肯定/.test(line) && line.trim() !== '逐字稿聲音不清的地方較多，建議先核對講者及數字。');
-  const titleAt = lines.findIndex(line => /^#\s+\S/.test(line));
-  if (titleAt < 0) return String(text || '');
-  const body = lines.join('\n'), count = marks(body).length, extra = count > 20 ? ['逐字稿聲音不清的地方較多，建議先核對講者及數字。'] : [];
-  lines.splice(titleAt + 1, 0, markLegend(body), ...extra);
-  return lines.join('\n').replace(/\n+$/g, '') + '\n';
-}
-function checkMinutesDraft(text, map) {
-  const errors = [];
-  if (!text || text.length > 60000) errors.push('草稿內容不完整或過長');
-  const lines = String(text || '').split(/\r?\n/);
-  for (const heading of MINUTES_HEADINGS) if (!lines.some(line => new RegExp('^##\\s+' + heading + '\\s*$').test(line))) errors.push('缺少「' + heading + '」');
-  const changeAt = lines.findIndex(line => /^##\s+改動清單\s*$/.test(line));
-  if (changeAt >= 0 && !lines.slice(changeAt + 1).some(line => line.trim() && !/^##\s+/.test(line))) errors.push('改動清單沒有內容');
-  const missing = unmappedIn(text, map);
-  if (missing.length) errors.push('仍有未對照講者：' + missing.join('、'));
-  return { ok: !errors.length, errors };
+function checkMinutesDraft(text, rec, transcript, map) {
+  const speakers = new Set(parseTurns(transcript).map(turn => turn.speaker).filter(Boolean)).size || Object.keys((rec && rec.speakers) || {}).length;
+  return checkMinutes(text, { transcript, speakers, map });
 }
 function minutesDraftTitle(text, fallback) {
   const found = /^#\s*會議紀錄\s*[:：]\s*([^（(\r\n]+)/m.exec(String(text || ''));
@@ -1118,7 +1487,7 @@ async function handleMinutesDraft(run) {
   }).join('、') || '沒有'), '', '## 已換名逐字稿', '', applyMap(source, map)].join('\n') + '\n');
   fs.copyFileSync(path.join(ROOT, 'meeting-minutes-format.md'), path.join(sb, 'meeting-minutes-format.md'));
   const terms = termLines((((loadState().company || {}).terms) || []));
-  const companyNames = overviewLines(loadPage(), readJSON(CONFIRMED, null));
+  const companyNames = overviewLines(loadPage(), readJSON(CONFIRMED, null), readCanvas(DIR, { proto: ROOT }));
   const nameSections = [];
   if (terms.length) nameSections.push(['# ' + U.minReadTerms, ...terms].join('\n'));
   if (companyNames.length) nameSections.push(['# ' + U.minReadOverview, ...companyNames].join('\n'));
@@ -1129,7 +1498,7 @@ async function handleMinutesDraft(run) {
   let result = await runAI(sb); minuteAICost(run, result);
   if (!result.ok && result.waiting) { step(run, 'ai', label, 'waiting', result.reason || '等待 Zero 設定'); return finish(run, 'waiting', result.reason); }
   let text = result.ok ? fs.existsSync(path.join(sb, 'out', 'minutes.md')) ? fs.readFileSync(path.join(sb, 'out', 'minutes.md'), 'utf8') : '' : '';
-  let normalized = rewriteMinutesLegend(text), checked = result.ok ? checkMinutesDraft(normalized, map) : { ok: false, errors: [result.reason || 'Zero 未能交回草稿'] };
+  let checked = result.ok ? checkMinutesDraft(text, rec, source, map) : { ok: false, errors: [result.reason || 'Zero 未能交回草稿'] };
   if (!checked.ok && result.ok) {
     log(`${run.id} 會議草稿核對不通過：${checked.errors.join('；')}；叫 AI 修正一次`);
     writeJSON(path.join(sb, 'job.json'), { type: 'minutes-draft-repair', mid: rec.id, errors: checked.errors });
@@ -1137,8 +1506,11 @@ async function handleMinutesDraft(run) {
     result = await runAI(sb); minuteAICost(run, result);
     if (!result.ok && result.waiting) { step(run, 'ai', label, 'waiting', result.reason || '等待 Zero 設定'); return finish(run, 'waiting', result.reason); }
     text = result.ok && fs.existsSync(path.join(sb, 'out', 'minutes.md')) ? fs.readFileSync(path.join(sb, 'out', 'minutes.md'), 'utf8') : '';
-    normalized = rewriteMinutesLegend(text); checked = result.ok ? checkMinutesDraft(normalized, map) : { ok: false, errors: [result.reason || 'Zero 未能完成修正'] };
+    checked = result.ok ? checkMinutesDraft(text, rec, source, map) : { ok: false, errors: [result.reason || 'Zero 未能完成修正'] };
   }
+  if (!result.ok) return minutesDraftFailed(run, rec, checked.errors.join('；'));
+  const normalized = fixMinutes(text, { transcript: source, speakers: new Set(parseTurns(source).map(turn => turn.speaker).filter(Boolean)).size || Object.keys(rec.speakers || {}).length });
+  checked = checkMinutesDraft(normalized, rec, source, map);
   if (!checked.ok) return minutesDraftFailed(run, rec, checked.errors.join('；'));
   const title = minutesDraftTitle(normalized, rec.title || '會議紀錄');
   let file;
@@ -1448,13 +1820,19 @@ function finishCelebration(s, batch) {
   s.celebrations.entries.push({ id: 'cele-' + stamp() + '-' + randomUUID(), level: winner.level, kind: winner.kind, title: winner.title, grade, gradeName: NAMES.evName(grade), nextGradeName: NAMES.EV_KEYS[rank + 1] ? NAMES.evName(NAMES.EV_KEYS[rank + 1]) : '', stage: m ? m.short : '', nextStage: next ? next.short : '', at: localIso(), ...(also.length ? { also } : {}) });
   s.celebrations.entries = s.celebrations.entries.slice(-50);
 }
-// CrewZero 整理的會議紀錄定稿：附件名為「會議紀錄.md」，而且（網頁路徑）事件帶會議資料，或（對話路徑）內容有格式規定的標示說明行
+// CrewZero 整理的會議紀錄定稿：附件名為「會議紀錄.md」或以它結尾，而且（網頁路徑）事件帶會議資料，或（對話路徑）內容有格式規定的標示說明行
 // 「> ⚠️ 不肯定，請核對（共 N 處）」。創辦人自己同名的筆記檔沒有這行，照一般附件處理，不套用會議紀錄的引句及標示規則
 const MINUTE_LEGEND = /^>\s*⚠️?\s*不肯定，請核對（共\s*\d+\s*處）/m;
+// 會議紀錄附件的取捨次序：檔名完全是「會議紀錄.md」的排先（網頁路徑的定稿一定是這個名），其餘以「會議紀錄.md」結尾的按較後交入的排先。
+// 免得創辦人自己的「11月5日會議紀錄.md」逐字稿被當作定稿（Opus 覆核第 1 項）
+function minuteCandidates(list, nameOf = x => x) {
+  const all = (list || []).filter(item => isMinutesFileName(nameOf(item)));
+  // 有完全相同的「會議紀錄.md」一律以它為準；沒有才按原本次序取以「會議紀錄.md」結尾的檔（第一份當會議紀錄，其餘當普通附件）
+  return all.filter(item => nameOf(item) === '會議紀錄.md').concat(all.filter(item => nameOf(item) !== '會議紀錄.md'));
+}
 function minuteAttachment(input) {
   const hasInfo = !!(input && input.minutes && typeof input.minutes === 'object' && input.minutes.id);
-  for (const rel of (input && input.files) || []) {
-    if (attachName(rel) !== '會議紀錄.md') continue;
+  for (const rel of minuteCandidates((input && input.files) || [], attachName)) {
     const file = minuteDataPath(rel);
     if (file && fs.existsSync(file)) {
       try { const text = fs.readFileSync(file, 'utf8'); if (hasInfo || MINUTE_LEGEND.test(text)) return { rel, text }; } catch { }
@@ -1766,7 +2144,9 @@ function rememberPreviousMinute(input) {
 }
 async function handleEvent(run, raw, text, dest, meta = null) {
   const mac = parseReply(raw).machine || {};
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(mac.date || '')) ? mac.date : localIso().slice(0, 10);
+  const suppliedDate = validDay(String(mac.date || '')) ? String(mac.date) : '';
+  const date = suppliedDate || localIso().slice(0, 10);
+  const dateAssumed = mac.dateAssumed === true || !suppliedDate;
   // 證明文件同筆記一齊封存（永不刪除）；文字版（.md）一併封存但不算附件，由 registerInput 分開
   // 放入文件（doc）同真實事件同一條路；文件名前綴唔同
   const isDoc = run.noteType === 'doc', pre = run.ref + '-note-' + (isDoc ? 'doc' : 'event') + '-file-';
@@ -1780,10 +2160,10 @@ async function handleEvent(run, raw, text, dest, meta = null) {
   const names = files.map(f => f.slice(pre.length).replace(/^\d+-/, '').replace(/\.[A-Za-z0-9]{1,5}$/, '')).join('、');
   const said0 = text.replace(/\s+/g, ' '), label = said0 && said0 !== '（沒有補充）' ? said0 : names;
   const title = clip(isDoc ? '文件（' + dayText(date) + '）：' + names : U.reqEvent + '（' + dayText(date) + '）：' + label, 50);
-  const s = registerInput(loadState(), { id: inputId, via: isDoc ? 'doc' : 'event', title, file: rel(run.replyFiles[0]), dir: path.relative(DIR.data, dest).replace(/\\/g, '/'), names: allNames, eventDate: date, receivedAt: localIso(), meta });
+  const s = registerInput(loadState(), { id: inputId, via: isDoc ? 'doc' : 'event', title, file: rel(run.replyFiles[0]), dir: path.relative(DIR.data, dest).replace(/\\/g, '/'), names: allNames, eventDate: date, ...(dateAssumed ? { dateAssumed: true } : {}), receivedAt: localIso(), meta });
   const input = (s.inputs || []).find(x => x.id === inputId);
   const rawMinutes = mac.minutes && typeof mac.minutes === 'object' ? mac.minutes : null;
-  if (input && (rawMinutes || (input.files || []).some(file => attachName(file) === '會議紀錄.md'))) {
+  if (input && (rawMinutes || (input.files || []).some(file => isMinutesFileName(attachName(file))))) {
     input.minutes = rawMinutes ? {
       ...(typeof rawMinutes.id === 'string' ? { id: rawMinutes.id } : {}),
       ...(Number.isInteger(rawMinutes.version) ? { version: rawMinutes.version } : {}),
@@ -1798,7 +2178,7 @@ async function handleEvent(run, raw, text, dest, meta = null) {
   if (!(s.milestones || []).length && !((s.company || {}).assumptions || []).length) { step(run, 'ai', U.stepEventAI, 'failed', U.eventNeedOverview); return finish(run, 'failed', U.eventNeedOverview); }
   const sb = newSandbox(run);
   const rows = attachmentRows(s.inputs.find(i => i.id === inputId));
-  eventTask(sb, s, { text: text || '（沒有補充）', date, files: rows.map(r => r.abs), rows, ref: run.ref, pre, minutes: input && input.minutes || null, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
+  eventTask(sb, s, { text: text || '（沒有補充）', date, dateAssumed, files: rows.map(r => r.abs), rows, ref: run.ref, pre, minutes: input && input.minutes || null, ...(isDoc ? { heading: '# 創辦人放入的文件（只按文件寫明、公司以外已發生的事擬確認題；文件沒有寫的不要推斷）' } : {}) });
   await runAIStep(run, sb, U.stepEventAI, true);
 }
 // 附件檔名清單：逐份列出（不能列資料夾的 AI 工具，例如 Antigravity，不用再猜檔名）
@@ -1818,17 +2198,19 @@ function writeAttachments(sb, rows) {
   if (!rows.length) return [];
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   const lines = [];
+  const minute = minuteCandidates(rows, row => row.name)[0] || null;
   for (const r of rows) {
-    fs.copyFileSync(r.abs, path.join(sb, 'files', r.name));
-    lines.push(`  - files/${r.name}`);
-    if (r.textName && fs.existsSync(r.textAbs)) { fs.copyFileSync(r.textAbs, path.join(sb, 'files', r.textName)); lines.push('    - ' + NAMES.t('textSidecarNote', { f: 'files/' + r.textName })); }
+    const name = r === minute ? '會議紀錄.md' : r.name;
+    fs.copyFileSync(r.abs, path.join(sb, 'files', name));
+    lines.push(`  - files/${name}`);
+    if (r.textName && fs.existsSync(r.textAbs)) { fs.copyFileSync(r.textAbs, path.join(sb, 'files', name + '.md')); lines.push('    - ' + NAMES.t('textSidecarNote', { f: 'files/' + name + '.md' })); }
     if (r.url) lines.push('    - ' + NAMES.t('googleNote', { u: r.url, d: dayText(r.readOn) }));
   }
   return lines;
 }
 // 修改版會議紀錄：告訴 AI 這是第幾版、創辦人改了哪幾行，改動行以修改後內容為準（外殼另有 revisionBackstop 保底）
 function minuteRevisionLines(ev, rows) {
-  const info = ev && ev.minutes, row = (rows || []).find(r => r.name === '會議紀錄.md');
+  const info = ev && ev.minutes, row = minuteCandidates(rows || [], r => r.name)[0];
   if (!info || !Number.isInteger(info.version) || info.version < 2 || !row) return [];
   let text = '';
   try { text = fs.readFileSync(row.abs, 'utf8'); } catch { return []; }
@@ -1842,12 +2224,13 @@ function founderTextForContext(input) {
   if (!file || !fs.existsSync(file)) return '';
   try {
     const raw = fs.readFileSync(file, 'utf8'), at = raw.search(/\r?\n\r?\n/);
-    return (at < 0 ? raw : raw.slice(at).trim()).slice(0, 4000);
+    // 只取創辦人的文字：去掉末尾的機讀區（```json …），否則日期等數字會被聯絡資料檢查誤當電話，整件事被略去
+    return (at < 0 ? raw : raw.slice(at).trim()).replace(/\x60\x60\x60json[\s\S]*$/, '').trim().slice(0, 4000);
   } catch { return ''; }
 }
 function contextMinutesInput(input) {
   if (!input) return null;
-  const row = attachmentRows(input).find(item => item.name === '會議紀錄.md');
+  const row = minuteCandidates(attachmentRows(input), item => item.name)[0];
   if (!row || !row.abs || !fs.existsSync(row.abs)) return null;
   let text = '';
   try { text = fs.readFileSync(row.abs, 'utf8'); } catch { return null; }
@@ -1864,7 +2247,7 @@ function meetingContextData(s, ev) {
   return {
     demo: s.demo === true,
     actors: ((s.company || {}).actors) || [], tasks: s.tasks || [], milestones: s.milestones || [], inputs: s.inputs || [],
-    current: { inputId: input && input.id || '', meetingId: currentMeeting && currentMeeting.id || '', text: currentMeeting && currentMeeting.text || '', founderText: ev.text || '', speakers: currentMeeting && currentMeeting.speakers || {}, speakerCounts: currentMeeting && currentMeeting.speakerCounts || {} },
+    current: { inputId: input && input.id || '', meetingId: currentMeeting && currentMeeting.id || '', text: currentMeeting && currentMeeting.text || '', founderText: ev.text || '', speakers: currentMeeting && currentMeeting.speakers || {}, speakerCounts: currentMeeting && currentMeeting.speakerCounts || {}, dateAssumed: !!ev.dateAssumed, ...(ev.dateAssumed ? {} : { date: ev.date }) },
     meetings,
     events: (s.inputs || []).filter(item => item && item.via === 'event' && item.id !== (input && input.id)).map(item => ({ id: item.id, title: item.title, eventDate: item.eventDate, receivedAt: item.receivedAt, founderText: founderTextForContext(item) }))
   };
@@ -1872,8 +2255,9 @@ function meetingContextData(s, ev) {
 function eventTask(sb, s, ev) {
   const rows = ev.rows || ev.files.map(f => ({ name: path.basename(f).slice((ev.pre || ev.ref + '-note-event-file-').length).replace(/^\d+-/, ''), abs: f }));
   const listing = writeAttachments(sb, rows);
-  const hasMinutes = rows.some(row => row.name === '會議紀錄.md');
-  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', `- 事件日期：${ev.date}`, `- 證明文件：${rows.length ? rows.length + ' 份（在 files/）' : '沒有'}`, ...(hasMinutes ? ['- 會議紀錄：`files/會議紀錄.md` 是主要來源；其中 ⚠️ 內容只可成為確認題，✏️ 欄位必須當作未知。'] : []), ...minuteRevisionLines(ev, rows), ...listing, '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
+  const hasMinutes = rows.some(row => isMinutesFileName(row.name));
+  const eventDateLine = ev.dateAssumed ? `- 事件日期：沒有提供（今次以收到當日 ${ev.date} 暫代，不可用作換算相對日期，亦不可據此填 asOf）` : `- 事件日期：${ev.date}`;
+  fs.writeFileSync(path.join(sb, 'event.md'), [ev.heading || '# 創辦人記錄的真實事件', '', eventDateLine, `- 證明文件：${rows.length ? rows.length + ' 份（在 files/）' : '沒有'}`, ...(hasMinutes ? ['- 會議紀錄：`files/會議紀錄.md` 是主要來源；其中 ⚠️ 內容只可成為確認題，✏️ 欄位必須當作未知。'] : []), ...minuteRevisionLines(ev, rows), ...listing, '', '## 創辦人原話', '', ev.text].join('\n') + '\n');
   writeJSON(path.join(sb, 'ledger.json'), {
     milestones: (s.milestones || []).filter(m => m.pathStatus !== 'retired').sort((a, b) => (a.order || 0) - (b.order || 0)).map(m => ({ id: m.id, name: m.short, event: m.event || '', witness: m.witness || '', proof: m.evidence || '', deliveryCondition: m.deliveryCondition || '', done: m.state === 'done' })),
     assumptions: ((s.company || {}).assumptions || []).map(a => ({ id: a.id, text: a.text, grade: a.grade || 'guess', cheapestTest: a.cheapestTest || '' })),
@@ -1894,10 +2278,31 @@ function eventTask(sb, s, ev) {
 // out/event.json 核對：每項只可指向帳本已有嘅假設（級別要變）或者未完成嘅站；最多三項（即時生效題每包最多三條）
 function checkEvent(out, input = null, lenient = false) {
   const ev = readJSON(path.join(out, 'event.json'), null), s = loadState(), errors = [];
+  let droppedMoney = 0, droppedFollowUp = 0;
   // 新對象的名稱必須逐字出現在創辦人原話或附件文字版（event.md 的原話段、files/ 內的 md／txt／csv，含轉出的文字版）
   const sbDir = path.join(out, '..');
   let said0 = ''; try { said0 = fs.readFileSync(path.join(sbDir, 'event.md'), 'utf8').split('## 創辦人原話').pop(); } catch { }
   const fileTexts = [], textByFile = new Map(); try { for (const f of fs.readdirSync(path.join(sbDir, 'files'))) if (/\.(md|txt|csv)$/i.test(f)) { const value = fs.readFileSync(path.join(sbDir, 'files', f), 'utf8'); fileTexts.push(value); textByFile.set(f, value); if (/\.md$/i.test(f)) textByFile.set(f.slice(0, -3), value); } } catch { }
+  const docDateInText = day => {
+    if (!validDay(day)) return false;
+    const [year, month0, date0] = String(day).split('-'), month = String(Number(month0)), date = String(Number(date0));
+    const forms = [String(day), `${month} 月 ${date} 日`, `${year} 年 ${month} 月 ${date} 日`];
+    return fileTexts.some(text => forms.some(form => text.includes(form)));
+  };
+  // 文件的日期不是整件收件的屬性：每一項必須有文件內逐字日期，或有創辦人逐字的「現行」說明。
+  const datedFields = it => {
+    if (!it || !['assumption', 'nextAction', 'followUp'].includes(it.kind)) return {};
+    const asOf = typeof it.asOf === 'string' ? it.asOf.trim() : '';
+    const currentQuote = typeof it.currentQuote === 'string' ? it.currentQuote.trim() : '';
+    if (input && input.via === 'doc') {
+      if (validDay(asOf) && docDateInText(asOf)) return { asOf, ...(it.current === true ? { current: true } : {}), ...(currentQuote ? { currentQuote } : {}) };
+      if (asOf) log(NAMES.t('dpAsOfDropped', { r: '文件內找不到這個日期' }));
+      // currentQuote 已逐字核對即屬創辦人明說的現行資料；兼容較早的 AI 格式沒有寫 current 的情況。
+      if (currentQuote && said0.includes(currentQuote)) return { current: true, currentQuote };
+      return { basisAssumedWhy: 'docUndated' };
+    }
+    return { ...(asOf ? { asOf } : {}), ...(it.current === true ? { current: true } : {}), ...(currentQuote ? { currentQuote } : {}) };
+  };
   const minute = minuteContext(input), missingSpeakers = minute.text ? unmappedIn(minute.text, minute.map) : [];
   if (missingSpeakers.length) errors.push(NAMES.t('minUnmapped', { labels: missingSpeakers.join('、') }));
   if (!ev || typeof ev !== 'object') return { ok: false, errors: ['未有交出 out/event.json，或內容無法讀取'] };
@@ -1924,10 +2329,9 @@ function checkEvent(out, input = null, lenient = false) {
           return;
         }
       }
-      // 新名稱的來源規則只在這裏判斷：只要附件名為「會議紀錄.md」，不論有沒有頂部說明或登記資料，便只可使用其未標示的正文行。
+      // 新名稱的來源規則只在這裏判斷：只要附件名為「會議紀錄.md」或以它結尾，不論有沒有頂部說明或登記資料，便只可使用其未標示的正文行。
       let minuteForTerm = null;
-      for (const rel of (input && input.files) || []) {
-        if (attachName(rel) !== '會議紀錄.md') continue;
+      for (const rel of minuteCandidates((input && input.files) || [], attachName)) {
         const file = minuteDataPath(rel);
         if (!file || !fs.existsSync(file)) continue;
         try {
@@ -1958,7 +2362,7 @@ function checkEvent(out, input = null, lenient = false) {
         terms: ((s.company || {}).terms) || [],
         actors: ((s.company || {}).actors) || [],
         companyName: ((loadPage() || {}).company || {}).name || '',
-        overview: overviewLines(loadPage(), readJSON(CONFIRMED, null)),
+        overview: overviewLines(loadPage(), readJSON(CONFIRMED, null), readCanvas(DIR, { proto: ROOT })),
         declined: ((s.termSync || {}).declined) || {}
       });
       if (r.status !== 'ok') {
@@ -1983,24 +2387,30 @@ function checkEvent(out, input = null, lenient = false) {
       return;
     }
     if (it.kind === 'money') {
-      const amount = typeof it.amount === 'string' ? it.amount.trim() : '', currency = String(it.currency || '').trim(), payer = typeof it.payer === 'string' ? it.payer.trim() : '';
-      const what = typeof it.what === 'string' ? it.what.trim() : '', file = typeof it.file === 'string' ? it.file.trim() : '', quote = typeof it.quote === 'string' ? it.quote.trim() : '';
-      const cents = toCents(amount), originals = new Set(((input && input.files) || []).map(attachName));
-      if (!['in', 'out'].includes(it.dir) || !Number.isSafeInteger(cents) || cents <= 0 || !/^[A-Z]{3}$/.test(currency) || !validDay(String(it.date || '')) || !CATEGORIES[it.dir].includes(it.category) || !payer || !what || !file || !originals.has(file)) {
-        if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} 格式不符`); return; }
-        errors.push(at + '：業績項目的方向、金額、幣別、日期、類別、對方、內容或附件不符合格式'); return;
+      const originals = new Set(((input && input.files) || []).map(attachName));
+      const m = eventMoneyItem(it, [...originals]);
+      if (!m.ok) {
+        if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} ${m.errors.join('；')}`); droppedMoney += 1; return; }
+        errors.push(...m.errors.map(e => `${at}（業績項目）：${e}`)); return;
       }
-      const quoteAmount = amount.replace(/[\s,]/g, '');
-      const receiptText = textByFile.get(file) || '', quoteSource = [said0, receiptText].filter(source => quote && source.includes(quote));
-      if (receiptText && (!quote || !quoteSource.length || !quote.replace(/[\s,]/g, '').includes(quoteAmount))) {
-        if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} 收據引句未能核對`); return; }
-        errors.push(at + '：收據引句未能逐字核對金額'); return;
+      const file = m.file;
+      const receiptText = textByFile.get(file) || '', quoteSource = [said0, receiptText].filter(source => m.quote && source.includes(m.quote));
+      if (receiptText && (!m.quote || !quoteSource.length || !m.quote.replace(/[\s,]/g, '').includes(m.amountText))) {
+        if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} 收據引句未能核對`); droppedMoney += 1; return; }
+        errors.push(`${at}（業績項目）：quote 要逐字抄自收據文字版，並包含金額 ${m.amountText}`); return;
       }
-      const actors = ((s.company || {}).actors || []), exact = actors.find(actor => actor && payerKeyOf(actor.name) === payerKeyOf(payer));
+      const actors = ((s.company || {}).actors || []), companyName = String(((loadPage() || {}).company || {}).name || '').trim();
+      const ownPayers = new Set([companyName, '創辦人', ...actors.filter(actor => actor && kindOf(actor) === 'team').map(actor => actor.name)].map(payerKeyOf).filter(Boolean));
+      const payerNote = `（${NAMES.ui.mnyPayerNote}）`;
+      if (m.dir === 'out' && ownPayers.has(payerKeyOf(m.payer))) {
+        m.payer = NAMES.ui.mnyPayerUnknown;
+        if (!m.what.includes(payerNote)) m.what = m.what.slice(0, Math.max(0, 120 - payerNote.length)) + payerNote;
+      }
+      const exact = actors.find(actor => actor && payerKeyOf(actor.name) === payerKeyOf(m.payer));
       const id = typeof it.id === 'string' && /^mn-\d{4}-\d{2}-\d{2}-\d{6}-\d{3}$/.test(it.id) ? it.id : newMoneyId();
-      const money = { id, dir: it.dir, amountCents: cents, currency, date: it.date, counterpartId: exact ? exact.id : '', payer, payerKey: payerKeyOf(payer), category: it.category, what, refund: false,
+      const money = { id, dir: m.dir, amountCents: m.amountCents, currency: m.currency, date: m.date, counterpartId: exact ? exact.id : '', payer: m.payer, payerKey: payerKeyOf(m.payer), category: m.category, what: m.what, refund: it.refund === true,
         evidence: [{ inputId: input ? input.id : 'in-event', file, page: Number.isInteger(it.page) && it.page > 0 ? it.page : 1 }], source: 'receipt', importBatch: '', importKey: '', confirmedAt: '', confirmedBy: '', status: 'confirmed', voidedAt: '', voidReason: '', replaces: '', check: receiptText ? 'text' : 'image' };
-      const checked = validateRecord(money); if (!checked.ok) { errors.push(at + '：業績項目格式不符'); return; }
+      const checked = validateRecord(money); if (!checked.ok) { if (lenient) { log(`真實事件建議的業績項目已丟棄：${at} ${checked.errors.join('；')}`); droppedMoney += 1; return; } errors.push(`${at}（業績項目）：${checked.errors.join('；')}`); return; }
       delete money.check;
       const itemId = 'money:' + money.id;
       if (!seen.has(itemId)) { seen.add(itemId); items.push({ kind: 'money', id: itemId, itemId, why: typeof it.why === 'string' && it.why.trim() ? it.why.trim().slice(0, 200) : U.mnyReceiptFrom, money: { ...money, check: receiptText ? 'text' : 'image' } }); }
@@ -2014,7 +2424,6 @@ function checkEvent(out, input = null, lenient = false) {
     if (!source.ok) return errors.push(at + '：' + source.error);
     const sourceData = source.value;
     if (it.kind === 'newActor') {
-      if ((((s.peopleSync || {}).reasked) || {})[pnorm(it.name)] >= 2) { log(`真實事件建議的新對象已丟棄（已再問兩次）：${clip(it.name, 20)}`); return; }
       // 已答「不加入」兩次的名稱及創辦人本人（公司概覽「我自己（X）」）一律丟棄（設計狀態表第 5 行）
       const r = checkNewActorItem(it, { actors: (s.company || {}).actors || [], texts: [said0, ...fileTexts], at, declined: ((s.peopleSync || {}).declined) || {}, founderNames: founderNamesIn(peopleSyncG6(loadPage(), readJSON(CONFIRMED, null), s)) });
       if (r.status === 'drop') { log(`真實事件建議的新對象已丟棄（${({ full: '名單已滿', declined: '創辦人已答不加入', founder: '創辦人本人' })[r.reason] || '名稱已在名單內'}）：${clip(it.name, 20)}`); return; }
@@ -2022,6 +2431,11 @@ function checkEvent(out, input = null, lenient = false) {
       if (r.status === 'error') { if (lenient) { log(`真實事件建議的新對象修正後仍不合格，已丟棄：${clip(it.name, 20)}（${r.errors[0]}）`); return; } return errors.push(...r.errors); }
       const itemId = 'newActor:' + pnorm(r.item.name);
       if (seen.has(itemId)) return;
+      // 同一批已收的新對象也視為名單：同一人只問一次；若命中既有名單，保留唯一相似者供三選項題使用。
+      const batchActors = items.filter(item => item && item.kind === 'newActor').map((item, index) => ({ id: 'batch-new-actor-' + index, name: item.name, aliases: [] }));
+      const matched = matchActorName([ ...((s.company || {}).actors || []), ...batchActors ], r.item.name);
+      if (matched && batchActors.some(actor => actor.id === matched.id)) return;
+      if (matched) { r.item.similarTo = matched.id; r.item.similarHow = matched.how; } else { delete r.item.similarTo; delete r.item.similarHow; }
       seen.add(itemId); items.push({ ...r.item, id: itemId, itemId, ...sourceData, ...(pnorm(said0).includes(pnorm(r.item.name)) ? {} : { fromDoc: true }) });
       return;
     }
@@ -2029,7 +2443,11 @@ function checkEvent(out, input = null, lenient = false) {
       const itemId = 'followUp:' + it.date + ':' + String(it.action || '').trim();
       if (seen.has(itemId)) return;
       const bad = checkFollowUpItem(it, at, { eventDate: input && input.eventDate, milestones: s.milestones || [], styleIssues: NAMES.styleIssues });
-      if (bad.length) return errors.push(...bad);
+      if (bad.length) {
+        const onlyPast = bad.every(reason => reason.includes('date 不可早於事件日期'));
+        if (lenient && onlyPast) { log(`真實事件建議的跟進項目已丟棄：${at} ${bad.join('；')}`); droppedFollowUp += 1; return; }
+        return errors.push(...bad);
+      }
       if (!txt(it.why, 200)) return errors.push(at + '缺少理由 why（一句，最多 200 字）');
       const sameAsTask = typeof it.sameAsTask === 'string' ? it.sameAsTask.trim() : '';
       const task = sameAsTask && (s.tasks || []).find(row => row && row.id === sameAsTask);
@@ -2037,7 +2455,7 @@ function checkEvent(out, input = null, lenient = false) {
       const acceptedSame = !!(task && related && !usedContextTasks.has(sameAsTask) && !['done', 'cancelled'].includes(task.status) && task.owner !== 'ai' && !task.firstBatch);
       if (sameAsTask && !acceptedSame) log(NAMES.t('contextSameTaskDropped', { r: !related ? '不在 context.md' : !task ? '找不到日程' : usedContextTasks.has(sameAsTask) ? '同一日程已使用' : '日程不適用' }));
       if (acceptedSame) usedContextTasks.add(sameAsTask);
-      seen.add(itemId); items.push({ kind: 'followUp', id: itemId, itemId, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why, ...sourceData, ...(acceptedSame ? { sameAsTask, sameTaskFrom: related.from } : {}) });
+      seen.add(itemId); items.push({ kind: 'followUp', id: itemId, itemId, date: it.date, action: it.action.trim(), ...(it.station ? { station: it.station } : {}), why: it.why, ...sourceData, ...datedFields(it), ...(acceptedSame ? { sameAsTask, sameTaskFrom: related.from } : {}) });
       return;
     }
     if (it.kind === 'assumption') {
@@ -2047,7 +2465,7 @@ function checkEvent(out, input = null, lenient = false) {
       if (!a) return errors.push(at + '：找不到假設 ' + it.id);
       if (!NAMES.EV_KEYS.includes(it.grade)) return errors.push(at + '：grade 必須是 guess、said、did、paid、stuck 之一');
       if ((a.grade || 'guess') === it.grade) return; // 級別冇變：唔使問
-      seen.add(itemId); items.push({ kind: 'assumption', id: it.id, itemId, grade: it.grade, why: it.why, ...sourceData });
+      seen.add(itemId); items.push({ kind: 'assumption', id: it.id, itemId, grade: it.grade, why: it.why, ...sourceData, ...datedFields(it) });
     } else if (it.kind === 'milestone') {
       const itemId = 'milestone:' + it.id;
       if (seen.has(itemId)) return;
@@ -2062,7 +2480,7 @@ function checkEvent(out, input = null, lenient = false) {
       if (seen.has(itemId)) return;
       if (it.milestoneId && !(s.milestones || []).some(x => x.id === it.milestoneId)) return errors.push(at + '：找不到站 ' + it.milestoneId);
       if (((s.company || {}).nextExternalAction || {}).text === text) return;
-      seen.add(itemId); items.push({ kind: 'nextAction', itemId, text, ...(it.milestoneId ? { milestoneId: it.milestoneId } : {}), why: it.why, ...sourceData });
+      seen.add(itemId); items.push({ kind: 'nextAction', itemId, text, ...(it.milestoneId ? { milestoneId: it.milestoneId } : {}), why: it.why, ...sourceData, ...datedFields(it) });
     } else return errors.push(at + '：kind 必須是 assumption、milestone、nextAction、followUp、newActor、newTerm 或 money');
   });
   // 未能讀取的附件：結構化清單（檔名必須是這次附件的檔名），摘要不再兼顧逐份列出
@@ -2097,11 +2515,25 @@ function checkEvent(out, input = null, lenient = false) {
   const onlyDroppedTerms = Array.isArray(ev.items) && ev.items.length > 0 && ev.items.every(item => item && item.kind === 'newTerm');
   if (!items.length && !rs.reason && !rs.errors.length && !lenient && !onlyDroppedTerms) errors.push('沒有任何確認項目時，reason 必須填寫：一句講清楚為甚麼這件事沒有影響（最多 120 字）');
   if (errors.length) return { ok: false, errors };
+  // 價錢、規模及人物角色只作對照：AI 不可藉此改公司概覽或名單。
+  const overviewNotes = [], confirmedPage = (() => { try { return fs.readFileSync(path.join(sbDir, 'confirmed-page.md'), 'utf8'); } catch { return ''; } })();
+  const overviewRows = Array.isArray(ev.overviewNotes) ? ev.overviewNotes : [];
+  for (const row of overviewRows.slice(0, 6)) {
+    const topic = row && row.topic, said = row && typeof row.said === 'string' ? row.said.trim() : '', current = row && typeof row.current === 'string' ? row.current.trim() : '', who = row && typeof row.who === 'string' ? row.who.trim() : '', asOf = row && typeof row.asOf === 'string' ? row.asOf.trim() : '';
+    const dropped = reason => log(NAMES.t('dpOverviewDropped', { r: reason }));
+    if (!['price', 'scale', 'role'].includes(topic) || !said || ![said0, ...fileTexts].some(text => text.includes(said))) { dropped('說法或主題未能核對'); continue; }
+    if (asOf && !validDay(asOf)) { dropped('日期格式不正確'); continue; }
+    if (topic === 'role') {
+      const actor = ((s.company || {}).actors || []).find(item => item && item.name === who);
+      if (!who || current !== String(actor && actor.role || '')) { dropped('人物角色未能核對'); continue; }
+    } else if (current && !confirmedPage.includes(current)) { dropped('公司概覽現值未能核對'); continue; }
+    overviewNotes.push({ topic, said, current, ...(who ? { who } : {}), ...(asOf ? { asOf } : {}) });
+  }
   // 次序：假設 ＞ 站點 ＞ 新對象 ＞ 跟進日期 ＞ 下一個對外動作 ＞ 新名稱；每包由 finishEvent 分成最多三題，不能因為第四項而丟失。
   const kept = orderEventItems(items, Number.MAX_SAFE_INTEGER);
   const contrasts = contextCompareItems(ev, minute, sbDir);
 
-  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason, minute, contrasts };
+  return { ok: true, ev, items: kept, unreadable: unreadList(unreadable), read: rd.read, reason: rs.reason, minute, contrasts, overviewNotes, droppedMoney, droppedFollowUp };
 }
 // 新對象確認題（真實事件及 Zero 整理名單共用）：二選項，或疑似變體時三選項；askKey 決定問句（這件事提到／公司概覽提到）
 function newActorQuestion(s, it, i, askKey, qid = 'q' + (i + 1)) {
@@ -2112,10 +2544,44 @@ function newActorQuestion(s, it, i, askKey, qid = 'q' + (i + 1)) {
   let options;
   if (sim) {
     const alias = { text: NAMES.t('newActorAlias', { n: sim.name }), apply: { op: 'addActor', mode: 'alias', aliasOf: sim.id, item } }, other = { text: NAMES.t('newActorOther', { k: kn }), apply: { op: 'addActor', mode: 'add', item } };
-    (nameKeys(sim).some(x => x !== me && (x.includes(me) || me.includes(x))) ? alias : other).rec = true;
+    (nameKeys(sim).some(x => x.includes(me) || me.includes(x)) ? alias : other).rec = true;
     options = [alias, other, no];
   } else { add.rec = true; options = [add, no]; }
   return { id: qid, priority: i + 1, about: clip(it.name, 30), ask: mixSpace(NAMES.t(askKey, { who })), judge: NAMES.t('newActorSug', { k: kn }) + '。' + U.newActorSugNote + U.newActorJudge, kind: 'choice', effect: 'now', options, value: options.find(o => o.rec).text, why: clip(it.why, 200) };
+}
+// 擱置項目重新放出前，以當時名單重算；舊的 similarTo 不能當作仍然有效。
+function rematchNewActorItems(s, items) {
+  const actors = ((s.company || {}).actors || []);
+  return (items || []).map(item => {
+    if (!item || item.kind !== 'newActor') return item;
+    const hit = matchActorName(actors, item.name), next = { ...item };
+    if (hit) { next.similarTo = hit.id; next.similarHow = hit.how; } else { delete next.similarTo; delete next.similarHow; }
+    return next;
+  });
+}
+// 同一人已加入後，其他未答包的二選一「加入」題重組為既有三選項題；原來已有三選項者保留「另一個對象，加入」的明確選擇。
+function rematchOpenActorQuestions(s, addedActorId, currentPackId) {
+  const rematch = () => {
+    const actors = ((s.company || {}).actors || []);
+    for (const listed of listPacks(DIR)) {
+      if (!listed.open || listed.id === currentPackId) continue;
+      const pack = loadPack(DIR, listed.id), answers = pack && loadAnswers(DIR, listed.id).answers;
+      if (!pack || !answers) continue;
+      let changed = false;
+      pack.questions = pack.questions.map((question, index) => {
+        if (!question || answers[question.id] || factMergeOn() && question.closed) return question;
+        const options = question.options || [], add = options.find(option => option.apply && option.apply.op === 'addActor' && option.apply.mode === 'add');
+        if (!add || options.some(option => option.apply && option.apply.op === 'addActor' && option.apply.mode === 'alias')) return question;
+        const hit = matchActorName(actors, add.apply.item && add.apply.item.name);
+        if (!hit || hit.id !== addedActorId) return question;
+        changed = true;
+        const rebuilt = newActorQuestion(s, { ...add.apply.item, similarTo: hit.id, similarHow: hit.how, why: question.why }, Math.max(0, Number(question.priority || index + 1) - 1), pack.peopleSync ? 'peopleSyncAsk' : 'newActorAsk', question.id);
+        return { ...rebuilt, priority: question.priority };
+      });
+      if (changed) writeJSON(path.join(DIR.asks, pack.id + '.json'), pack);
+    }
+  };
+  if (factMergeOn()) withFounderOpsLock(rematch); else rematch();
 }
 // 新名稱確認題：加入為預設；名稱與現有正式名稱互為子字串時，先建議記為該名稱的另一個寫法。
 function newTermQuestion(s, it, i, qid = 'q' + (i + 1)) {
@@ -2154,11 +2620,11 @@ function peopleSyncG6(page, c, s) {
 }
 function placePeopleSyncBatch(s) {
   const ps = s.peopleSync || {}, actors = ((s.company || {}).actors || []).filter(Boolean), declined = ps.declined || {};
-  // 擱置項目放出前重新核對：名字已在名單（含別名、已合併、不再接觸）或已答「不加入」的不再問；改類別對象已不在、類別已相同或已答「維持」的不再問
+  // 擱置項目放出前重新核對：名字已在名單（含別名、已合併、不再接觸）或已答「不加入」的不再問；自訂答案不會封鎖日後同名事件。
   const live = (ps.pending || []).filter(it => {
     if (!it) return false;
     const re = ps.reasked || {};
-    if (it.kind === 'newActor') return !duplicateActor(actors, it.name) && !declined[pnorm(it.name)] && re[pnorm(it.name)] !== 2;
+    if (it.kind === 'newActor') return !duplicateActor(actors, it.name) && !declined[pnorm(it.name)];
     const a = actors.find(x => x.id === it.id && !x.mergedInto); return !!a && kindOf(a) !== it.actorKind && !declined['kind:' + it.id + ':' + it.actorKind] && re['kind:' + it.id + ':' + it.actorKind] !== 2;
   });
   const items = live.slice(0, PEOPLE_SYNC_MAX), rest = live.slice(PEOPLE_SYNC_MAX);
@@ -2246,11 +2712,14 @@ async function peopleSyncStep(run, due, key = 'people') {
   run.result = { summary: NAMES.t('peopleSyncDone', { n: placed.count }), artifacts: [], founderNext: [], asks: [placed] };
   return true;
 }
-// 自訂答案（答案不在選項內）：不算「不加入」／「維持」。同一項第一次：記下原話、放回擱置清單，下一批再問一次；第二次仍是自訂答案：記下原話，不再問。回傳要顯示的一句。
+// 自訂答案（答案不在選項內）：不算「不加入」／「維持」。同一項第一次：記下原話、放回擱置清單，下一批再問一次；第二次結束這一題。新對象名稱不會留下永久封鎖。
 function customAnswered(s, ps, key, item, name, words) {
   ps.reasked = ps.reasked || {};
   const w = clip(String(words == null ? '' : words).replace(/\s+/g, ' ').trim(), 40);
-  if (ps.reasked[key] || !item) { ps.reasked[key] = 2; return mixSpace(NAMES.t('peopleCustomClosed', { n: clip(name, 20), s: w })); }
+  if (ps.reasked[key] || !item) {
+    if (key.startsWith('kind:')) ps.reasked[key] = 2; else delete ps.reasked[key];
+    return mixSpace(NAMES.t('peopleCustomClosed', { n: clip(name, 20), s: w }));
+  }
   ps.reasked[key] = 1;
   ps.pending = Array.isArray(ps.pending) ? ps.pending : [];
   if (!ps.pending.some(x => x && (item.kind === 'newActor' ? x.kind === 'newActor' && pnorm(x.name) === key : x.kind === 'actorKind' && ('kind:' + x.id + ':' + x.actorKind) === key))) ps.pending.push(item);
@@ -2280,6 +2749,10 @@ function handlePeopleSyncAnswer(run, pack, store) {
       if (!sel) { ps.declined[pnorm(it.name)] = (ps.declined[pnorm(it.name)] || 0) + 1; said.push(mixSpace(NAMES.t('peopleSkipped', { n: it.name }))); continue; }
       // 名字其間已在名單（答題前另一條路加入了）：純函數原樣返回，不寫「已加入名單」事件
       if (before === JSON.stringify((s.company || {}).actors || [])) { log(`${run.id} 整理名單：「${clip(it.name, 20)}」已在名單，沒有再加入`); continue; }
+      if (sel.mode === 'add') {
+        const added = (s.company.actors || []).find(actor => actor && actor.id === nextActorId(pack.id, q.id));
+        if (added) rematchOpenActorQuestions(s, added.id, pack.id);
+      }
       const t = mixSpace(sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(x => x.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] }));
       // 事件只連問題包，不連對象編號：加入名單或改類別不是與他的「接觸」（peopleView 以創辦人事件的 relatedIds 計最近接觸）
       ev(t, [pack.id]); said.push(t);
@@ -2306,6 +2779,44 @@ function handlePeopleSyncAnswer(run, pack, store) {
   step(run, 'applied', U.stepAppliedAns, 'done', said.join('；') || U.peopleSyncNoted);
   return finish(run, 'done');
 }
+const eventDateSource = input => input && input.minutes ? 'meeting' : input && input.via === 'doc' ? 'doc' : 'event';
+const eventDateSourceName = input => NAMES.ui[eventDateSource(input) === 'meeting' ? 'dpSrcMeeting' : eventDateSource(input) === 'doc' ? 'dpSrcDoc' : 'dpSrcEvent'];
+const eventDateWhere = input => NAMES.ui[eventDateSource(input) === 'meeting' ? 'dpWhereMeeting' : eventDateSource(input) === 'doc' ? 'dpWhereDoc' : 'dpWhereEvent'];
+const datedValue = (kind, value) => kind === 'assumption' ? NAMES.evName(value) : kind === 'nextAction' ? String(value || '') : `${String((value || {}).title || '')}（${dayText((value || {}).dueAt || '')}）`;
+const datedItemValue = item => item.kind === 'assumption' ? NAMES.evName(item.grade) : item.kind === 'nextAction' ? item.text : `${item.action}（${dayText(item.date)}）`;
+
+// 較舊不同的項目只留下可讀回的「當日說法」；被丟棄的相對日期及不合格 asOf 都不可再進入問題包。
+function gateEventItems(s, input, items) {
+  const gated = dateGate(s, input, items);
+  for (const row of gated.dropped) if (row.reason === 'asOf') log(NAMES.t('dpAsOfDropped', { r: '日期未能核對' }));
+  for (const note of gated.notes) {
+    const change = NAMES.t('dpOlderNote', { d: dayText(note.basisDate), where: eventDateWhere(input), x: datedValue(note.kind, note.said), now: datedValue(note.kind, note.now), c: dayText(note.currentDate) });
+    mergeInPlace(s, addEffect(s, input.id, { targetKind: 'dated', targetId: note.targetId, change }));
+  }
+  // 只丟棄 asOf 的項目仍照常出題（按事件日期或假定日期），不可整項移走（DPF-7）
+  return { ...gated, removedIds: [...gated.notes.map(note => note.item && note.item.itemId), ...gated.dropped.filter(row => row.reason !== 'asOf').map(row => row.item && row.item.itemId)].filter(Boolean) };
+}
+
+function recordOverviewNotes(s, input, notes) {
+  const confirmed = readJSON(CONFIRMED, null) || {}, confirmedDate = String(confirmed.confirmedAt || '').slice(0, 10);
+  for (const note of notes || []) {
+    if (!note || note.said === note.current) continue;
+    const actor = note.topic === 'role' ? ((s.company || {}).actors || []).find(row => row && row.name === note.who) : null;
+    const current = note.topic === 'role' ? String(actor && actor.role || '') : String(note.current || '');
+    const currentDate = note.topic === 'role' ? String(actor && actor.addedAt || confirmedDate).slice(0, 10) : confirmedDate;
+    const basisDate = note.asOf || input.eventDate;
+    const compared = compareByDate({ basisDate, basisAssumed: !note.asOf && input.dateAssumed === true, hasCurrent: !!current, currentDate, newestDate: newestEventDate(s, input.id) });
+    const said = (NAMES.ui['dpTopic_' + note.topic] || '') + '：' + note.said;
+    const values = { d: dayText(compared.basisDate || basisDate), where: eventDateWhere(input), x: said, now: current, c: dayText(compared.currentDate || currentDate) };
+    const change = compared.result === 'olderDiffers' ? NAMES.t('dpOlderNote', values)
+      : !current ? NAMES.t('dpOverviewMissing', values)
+        : compared.result === 'newer' ? NAMES.t('dpOverviewNewer', values)
+          : NAMES.t('dpOverviewUnclear', values);
+    const targetId = note.topic + (note.who ? ':' + note.who : '');
+    mergeInPlace(s, addEffect(s, input.id, { targetKind: 'overview', targetId, change }));
+  }
+}
+
 function eventPack(run, s, input, items) {
   const usedQids = new Set();
   const qidFor = (item, index) => {
@@ -2315,49 +2826,100 @@ function eventPack(run, s, input, items) {
     usedQids.add(qid);
     return qid;
   };
+  const pool = dupPool(DIR), earlierMoney = [];
+  const datedQuestion = (question, item) => {
+    const known = item.dated || {};
+    const basisDate = known.basisDate || (validDay(item.asOf) ? item.asOf : input.eventDate);
+    // 文件內寫明的日期（asOf）不受「輸入日期是假定」影響；只有沿用輸入日期時才算假定（覆核疑點 keepDatedWrite）
+    const basisAssumed = known.basisAssumed === true || (!known.basisDate && (!!item.basisAssumedWhy || (!validDay(item.asOf) && input.dateAssumed === true)));
+    const writeOps = new Set(['setAssumptionGrade', 'setNextExternalAction', 'addFollowUp']);
+    let q = { ...question, options: (question.options || []).map(option => {
+      if (!option.apply || !writeOps.has(option.apply.op)) return option;
+      return { ...option, apply: { ...option.apply, basisDate, ...(basisAssumed ? { basisAssumed: true } : {}), basisFrom: input.id } };
+    }) };
+    if (!item.dated) return q;
+    const current = item.kind === 'assumption'
+      ? (s.company.assumptions || []).find(row => row.id === item.id)
+      : item.kind === 'nextAction' ? ((s.company || {}).nextExternalAction || {})
+        : (s.tasks || []).find(row => row && row.id === item.sameAsTask) || {};
+    const oldText = item.kind === 'assumption' ? NAMES.evName(current.grade || 'guess') : item.kind === 'nextAction' ? String(current.text || '') : String(current.title || '');
+    const nowText = item.kind === 'assumption' ? NAMES.evName(item.grade) : item.kind === 'nextAction' ? String(item.text || '') : String(item.action || '');
+    const oldLabel = known.currentDate ? NAMES.t('dpPairOldDated', { c: dayText(known.currentDate) }) : U.dpPairOld;
+    const nowLabel = basisAssumed ? U.dpPairNowUndated : NAMES.t('dpPairNow', { d: dayText(basisDate), src: eventDateSourceName(input) });
+    q.pair = item.kind === 'followUp' && q.pair
+      ? { ...q.pair, oldLabel, nowLabel }
+      : { old: { title: oldText, date: '', from: '' }, now: { text: nowText, date: '' }, oldLabel, nowLabel };
+    let basis = '';
+    if (known.result === 'newer') basis = known.why === 'noCurrent'
+      ? NAMES.t('dpBasisNoCurrent', { d: dayText(basisDate), src: eventDateSourceName(input) })
+      : NAMES.t('dpBasisNewer', { d: dayText(basisDate), src: eventDateSourceName(input), c: dayText(known.currentDate) });
+    else if (known.result === 'unknown') basis = known.why === 'docUndated' ? U.dpBasisDocUndated
+      : known.why === 'basisAssumed' ? U.dpBasisAssumed
+        : NAMES.t('dpBasisUndated', { d: dayText(basisDate), src: eventDateSourceName(input) });
+    else if (known.result === 'sameDay') basis = NAMES.t('dpBasisSameDay', { d: dayText(basisDate), src: eventDateSourceName(input), c: dayText(known.currentDate) });
+    else if (known.result === 'olderMissing') basis = NAMES.t('dpBasisNoCurrent', { d: dayText(basisDate), src: eventDateSourceName(input) });
+    if (basis) q.judge = [q.judge, basis].filter(Boolean).join('\n');
+    // 同日：沒有建議，所以亦不顯示「Zero 建議理由」（截圖 p2）
+    if (known.result === 'sameDay') { q = { ...q, options: q.options.map(option => { const { rec, ...rest } = option; return rest; }), value: '' }; delete q.why; }
+    // 較舊而缺項：現有紀錄沒有這一項，並列框左邊會是空白，所以不放並列框（截圖 p5）
+    if (known.result === 'olderMissing') delete q.pair;
+    if (known.result === 'unknown' && (known.why === 'basisAssumed' || known.why === 'docUndated')) {
+      q = { ...q, options: q.options.map(option => { const { rec, ...rest } = option; return option.apply && option.apply.op === 'keep' ? { ...rest, rec: true } : rest; }) };
+      const kept = q.options.find(option => option.rec);
+      if (kept) q.value = kept.text;
+    }
+    return q;
+  };
   const qs = items.map((it, i) => {
     const qid = qidFor(it, i);
     if (it.kind === 'money') {
       const money = it.money;
+      const dup = duplicateHints(money, pool.concat(earlierMoney));
+      earlierMoney.push({ record: money, where: 'waiting', source: duplicateSourceOf(money) });
       return { id: qid, priority: i + 1, about: clip(money.payer || money.what, 40), ask: `${money.payer}：${money.what} ${formatMoney(money.amountCents, money.currency)}`,
-        kind: 'money', money, options: [{ text: U.mnyConfirm }, { text: U.mnyConfirmEdit }, { text: U.mnyReject }], value: U.mnyConfirm, why: it.why };
+        kind: 'money', money, ...(dup.length ? { dup } : {}), options: [{ text: U.mnyConfirm }, { text: U.mnyConfirmEdit }, { text: U.mnyReject }], value: U.mnyConfirm, why: it.why };
     }
     if (it.revisionAmbiguity) {
       const ambiguity = it.revisionAmbiguity;
       const choices = it.kind === 'followUp' ? (ambiguity.choices || []).map(choice => ({ text: (choice.date ? dayText(choice.date) + '　' : '') + clip(choice.action || '', 40), apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), revisionOfTaskId: choice.revisionOfTaskId } })) : [];
-      return { id: qid, priority: i + 1, about: clip(it.action || it.text || it.sourceLine || '', 40), ask: NAMES.t('minRevGenericAsk', { n: ambiguity.sourceLineNo || '', a: clip(ambiguity.before || '', 80), b: clip(ambiguity.after || it.sourceLine || '', 80) }), ...(it.kind === 'followUp' ? { judge: U.followUpJudge } : {}), kind: 'choice', effect: 'now', revisionAmbiguity: true,
-        options: choices.concat([{ text: U.followUpNo, rec: true, apply: { op: 'keep' } }]), value: U.followUpNo, why: it.why };
+      return datedQuestion({ id: qid, priority: i + 1, about: clip(it.action || it.text || it.sourceLine || '', 40), ask: NAMES.t('minRevGenericAsk', { n: ambiguity.sourceLineNo || '', a: clip(ambiguity.before || '', 80), b: clip(ambiguity.after || it.sourceLine || '', 80) }), ...(it.kind === 'followUp' ? { judge: U.followUpJudge } : {}), kind: 'choice', effect: 'now', revisionAmbiguity: true,
+        options: choices.concat([{ text: U.followUpNo, rec: true, apply: { op: 'keep' } }]), value: U.followUpNo, why: it.why }, it);
     }
     if (it.kind === 'assumption') {
       const a = s.company.assumptions.find(x => x.id === it.id), from = a.grade || 'guess';
       const yes = U.evChange + '「' + NAMES.evName(it.grade) + '」', keep = U.evKeep + '「' + NAMES.evName(from) + '」';
-      return { id: qid, priority: i + 1, about: a.text, ask: '「' + a.text + '」現在到了哪個程度？', judge: U.evJudge, kind: 'choice', effect: 'now',
-        options: [{ text: yes, rec: true, apply: { op: 'setAssumptionGrade', id: a.id, grade: it.grade } }, { text: keep, apply: { op: 'keep', id: a.id } }], value: yes, why: it.why };
+      return datedQuestion({ id: qid, priority: i + 1, about: a.text, ask: '「' + a.text + '」現在到了哪個程度？', judge: U.evJudge, kind: 'choice', effect: 'now',
+        options: [{ text: yes, rec: true, apply: { op: 'setAssumptionGrade', id: a.id, grade: it.grade } }, { text: keep, apply: { op: 'keep', id: a.id } }], value: yes, why: it.why }, it);
     }
     if (it.kind === 'nextAction') {
       const cur = ((s.company || {}).nextExternalAction || {}).text || '';
       const revised = it.revisionFrom && it.revisionFrom.text && it.revisionFrom.text !== it.text;
       const ask = revised ? `下一個對外動作由「${clip(it.revisionFrom.text, 60)}」改為「${clip(it.text, 60)}」，同步更新嗎？` : U.nextActionAsk;
-      return { id: qid, priority: i + 1, about: U.nextActionAsk, ask, kind: 'choice', effect: 'now',
-        options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why };
+      if (it.dated && it.dated.result === 'olderMissing') {
+        const yes = NAMES.t('dpMissingYes', { d: dayText(it.dated.basisDate) });
+        return datedQuestion({ id: qid, priority: i + 1, about: U.nextActionAsk, ask: NAMES.t('dpMissingAsk', { d: dayText(it.dated.basisDate), x: clip(it.text.trim(), 120) }), kind: 'choice', effect: 'now',
+          options: [{ text: yes, rec: true, apply: { op: 'setNextExternalAction', missing: true, text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } }, { text: U.dpMissingNo, apply: { op: 'keep' } }], value: yes, why: it.why }, it);
+      }
+      return datedQuestion({ id: qid, priority: i + 1, about: U.nextActionAsk, ask, kind: 'choice', effect: 'now',
+        options: [{ text: clip(it.text.trim(), 120), rec: true, apply: { op: 'setNextExternalAction', text: clip(it.text.trim(), 120), milestoneId: it.milestoneId || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } }].concat(cur ? [{ text: clip(NAMES.t('nextActionKeep', { t: clip(cur, 60) }), 100), apply: { op: 'keep' } }] : []), value: clip(it.text.trim(), 120), why: it.why }, it);
     }
     if (it.kind === 'newActor') return newActorQuestion(s, it, i, 'newActorAsk', qid);
     if (it.kind === 'newTerm') return newTermQuestion(s, it, i, qid);
     if (it.kind === 'followUp') {
       const sameTask = it.sameAsTask && (s.tasks || []).find(task => task && task.id === it.sameAsTask);
-      if (sameTask) return { id: qid, priority: i + 1, about: clip(it.action, 40), ask: NAMES.t('contextTaskAsk', { a: it.action }), judge: NAMES.t('contextTaskJudge'), kind: 'choice', effect: 'now',
+      if (sameTask) return datedQuestion({ id: qid, priority: i + 1, about: clip(it.action, 40), ask: NAMES.t('contextTaskAsk', { a: it.action }), judge: NAMES.t('contextTaskJudge'), kind: 'choice', effect: 'now',
         pair: { old: { title: sameTask.title, date: sameTask.dueAt || '', from: it.sameTaskFrom || '' }, now: { text: it.action, date: it.date } },
         options: [
           { text: NAMES.t('contextTaskUpdateOption', { d: dayText(it.date) }), rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), revisionOfTaskId: sameTask.id } },
           { text: NAMES.t('contextTaskAddOption'), apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}) } },
           { text: NAMES.t('contextTaskSkipOption'), apply: { op: 'keep' } }
-        ], value: NAMES.t('contextTaskUpdateOption', { d: dayText(it.date) }), why: it.why };
+        ], value: NAMES.t('contextTaskUpdateOption', { d: dayText(it.date) }), why: it.why }, it);
       const revised = it.revisionFrom && (it.revisionFrom.date !== it.date || it.revisionFrom.action !== it.action);
       const ask = revised && it.revisionFrom.date !== it.date
         ? NAMES.t('minRevDateAsk', { a: dayText(it.revisionFrom.date), b: dayText(it.date) })
         : revised ? NAMES.t('minRevTextAsk', { a: clip(it.revisionFrom.action, 40), b: clip(it.action, 40) }) : NAMES.t('followUpAsk', { d: dayText(it.date), a: it.action });
-      return { id: qid, priority: i + 1, about: clip(it.action, 40), ask, judge: U.followUpJudge, kind: 'choice', effect: 'now',
-        options: [{ text: U.followUpYes, rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), ...(it.revisionOfTaskId ? { revisionOfTaskId: it.revisionOfTaskId } : {}) } }, { text: U.followUpNo, apply: { op: 'keep' } }], value: U.followUpYes, why: it.why };
+      return datedQuestion({ id: qid, priority: i + 1, about: clip(it.action, 40), ask, judge: U.followUpJudge, kind: 'choice', effect: 'now',
+        options: [{ text: U.followUpYes, rec: true, apply: { op: 'addFollowUp', date: it.date, action: it.action, station: it.station || '', ...(it.sourceLine ? { sourceLine: it.sourceLine } : {}), ...(it.revisionOfTaskId ? { revisionOfTaskId: it.revisionOfTaskId } : {}) } }, { text: U.followUpNo, apply: { op: 'keep' } }], value: U.followUpYes, why: it.why }, it);
     }
     const m = s.milestones.find(x => x.id === it.id);
     return { id: qid, priority: i + 1, about: m.short, ask: '「' + m.short + '」這一站是否已經完成？', judge: NAMES.t('msJudge', { c: String(m.deliveryCondition || m.event || m.short).trim().replace(/[。.]+$/, '') }), kind: 'choice', effect: 'now',
@@ -2365,8 +2927,8 @@ function eventPack(run, s, input, items) {
   });
   const iv = input.kind === 'interview';
   return { format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-ev', title: (iv ? U.interviewConfirm : U.eventConfirm) + '（' + dayText(input.eventDate) + '）',
-    context: iv ? NAMES.t('interviewSaid', { d: dayText(input.eventDate), t: clip(input.title.replace(/^[^：]*：/, ''), 80) }) : '你記錄了 ' + dayText(input.eventDate) + ' 發生的一件事：「' + clip(input.title.replace(/^(?:真實事件|發生了一件事)（[^）]*）：/, ''), 80) + '」。Zero 據此擬定以下更新，每項經你確認後才會生效。',
-    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate, files: Array.isArray(input.files) ? input.files.map(String) : [], itemIds: items.map(item => item.itemId || item.id) }, questions: qs };
+    context: iv ? NAMES.t('interviewSaid', { d: dayText(input.eventDate), t: clip(input.title.replace(/^[^：]*：/, ''), 80) }) : input.dateAssumed === true ? NAMES.t('dpNoDateContext', { t: clip(input.title.replace(/^(?:真實事件|發生了一件事)（[^）]*）：/, ''), 80) }) : '你記錄了 ' + dayText(input.eventDate) + ' 發生的一件事：「' + clip(input.title.replace(/^(?:真實事件|發生了一件事)（[^）]*）：/, ''), 80) + '」。Zero 據此擬定以下更新，每項經你確認後才會生效。',
+    afterConfirm: '確認的項目即時更新公司紀錄及 CrewZero', next: null, askedBy: 'AI', askedAt: localIso(), fromRun: run.id, todoType: 'decision', realEvent: { inputId: input.id, date: input.eventDate, ...(input.dateAssumed === true ? { dateAssumed: true } : {}), files: Array.isArray(input.files) ? input.files.map(String) : [], itemIds: items.map(item => item.itemId || item.id) }, questions: qs };
 }
 async function finishEvent(run, sb, label, styleWarnings) {
   const out = path.join(sb, 'out');
@@ -2391,6 +2953,11 @@ async function finishEvent(run, sb, label, styleWarnings) {
   // 讀了甚麼、文件重點、沒有影響的原因：由 Zero 交回、外殼核對後存入這件輸入（recordReading 純函數）
   s = recordReading(s, input.id, { summary: chk.ev.summary, grade: chk.ev.grade, unreadable: chk.unreadable, read: chk.read, reason: chk.reason });
   input = s.inputs.find(i => i.id === 'in-' + run.ref);
+  recordOverviewNotes(s, input, chk.overviewNotes);
+  // 只有文字的款項（創辦人原話寫明款項已轉手，但沒有附件可證明）：事件 AI 以 unrecordedMoney 標示，沒有入帳建議時同樣提示「款項未能記入」（不機械抽金額，免誤標目標數字）
+  const textOnlyMoney = chk.ev && chk.ev.unrecordedMoney === true && !(chk.items || []).some(it => it && it.kind === 'money') ? 1 : 0;
+  if (chk.droppedMoney > 0 || textOnlyMoney) input.moneyNotRecorded = Math.max(chk.droppedMoney || 0, textOnlyMoney);
+  else delete input.moneyNotRecorded;
   const unread = chk.unreadable.length ? { unreadable: chk.unreadable } : {};
   // 會後紀錄的跟進日期走同一條路：創辦人寫了日期而 Zero 沒有同日的跟進建議，外殼補一條跟進題（仍要創辦人確認才入日程）
   const hint = input.followUpHint;
@@ -2426,18 +2993,28 @@ async function finishEvent(run, sb, label, styleWarnings) {
     } else compare.push({ now: contrast.now, past: contrast.past, note: contrast.note });
   }
   input.compare = compare;
+  // 修訂及以往說法的既有處理完成後，才按每一項的實際依據日期分流。
+  const gated = gateEventItems(s, input, items);
+  items = rematchNewActorItems(s, gated.items);
   const asked = new Set(input.askedEventItemIds || []);
+  for (const itemId of gated.removedIds) asked.add(itemId);
+  if (!items.length && gated.notes.length && !input.reason) input.reason = U.dpAllOlderReason;
   items = items.filter(item => item && item.itemId && !asked.has(item.itemId));
+  const merged = factMergeItems(s, input, items);
+  items = merged.items;
+  for (const itemId of merged.removedIds) asked.add(itemId);
+  writeFactSources(merged.sources);
   if (input.minutes && chk.minute.text) input.minuteItems = items.map(minuteItemRecord);
   if (!items.length) {
     input.status = 'processed'; input.processedAt = localIso(); saveState(s);
-    const noChange = revisionNotes.length ? revisionNotes.join('；') : U.eventNoChange;
+    const noChange = revisionNotes.length ? revisionNotes.join('；') : gated.notes.length ? U.dpAllOlderReason : input.moneyNotRecorded ? U.mnyNotRecorded : U.eventNoChange;
     run.result = { summary: input.summary + ' ' + noChange, artifacts: [], founderNext: [], styleWarnings, ...unread };
     step(run, 'ai', label, 'done', noChange); return finish(run, 'done');
   }
   const first = items.slice(0, 3), queued = items.slice(3);
   const pack = eventPack(run, s, input, first);
   const placed = placePacks(DIR, [pack]);
+  closeFactReplacements(pack, s, merged.replacements);
   input.askedEventItemIds = [...asked, ...first.map(item => item.itemId)];
   if (queued.length) input.pendingEventItems = queued; else delete input.pendingEventItems;
   input.status = 'awaitingFounder'; input.awaitingFounderText = U.eventAwaiting; input.packId = placed[0].id;
@@ -2453,7 +3030,7 @@ function handleEventConfirm(run, pack, store) {
   // 帳本寫入走 ledger-ops 的純函數（回傳新狀態），這裏把結果放回 s 並重新取得 input
   const sync = next => { mergeInPlace(s, next); input = (s.inputs || []).find(i => i.id === pack.realEvent.inputId); };
   if (!input) { run.result = { summary: '已記錄你的答案；找不到這件事的紀錄。', artifacts: [], founderNext: [] }; return finish(run, 'done'); }
-  const applied = new Set(input.appliedQids || []), date = pack.realEvent.date, said = [], doneIds = [], celebrations = [];
+  const applied = new Set(input.appliedQids || []), appliedFacts = new Set(), date = pack.realEvent.date, said = [], doneIds = [], celebrations = [];
   const replyAt = replySubmittedAt(run, Object.values(store.answers || {})[0]);
   let keptNewerFounderAction = false;
   const keepNewerFounderAction = action => {
@@ -2462,17 +3039,37 @@ function handleEventConfirm(run, pack, store) {
     keptNewerFounderAction = true;
     return true;
   };
+  // 兩包同時等待答案時，不能只相信出題時的結果；每次真正寫入前重讀現況再比較一次。
+  const keepDatedWrite = (kind, id, ap, proposed, currentValue) => {
+    if (!ap) return false;
+    const current = recordBasis(s, kind === 'assumption' ? { kind, id } : kind === 'task' ? { kind, id } : { kind: 'nextAction' });
+    const compared = compareByDate({ basisDate: ap.basisDate || date, basisAssumed: ap.basisDate ? ap.basisAssumed === true : input.dateAssumed === true, hasCurrent: current.has, currentDate: current.date, currentAssumed: current.assumed, newestDate: newestEventDate(s, input.id) });
+    if (compared.result !== 'olderDiffers') return false;
+    const change = NAMES.t('dpOlderNote', { d: dayText(compared.basisDate), where: eventDateWhere(input), x: proposed, now: currentValue, c: dayText(compared.currentDate) });
+    sync(addEffect(s, input.id, { targetKind: 'dated', targetId: id || 'nextAction', change }));
+    said.push(NAMES.t('dpApplyKept', { a: proposed, c: dayText(compared.currentDate) }));
+    return true;
+  };
   let nextSet = false;
   input.effects = input.effects || []; s.events = s.events || [];
   const ev = (type, title, relatedIds, moduleIds) => s.events.push({ id: 'e' + stamp() + '-' + s.events.length, at: localIso(), actor: 'founder', type, title, relatedIds, moduleIds });
   for (const q of pack.questions) {
     const a = store.answers[q.id];
     if (!a || applied.has(q.id)) continue;
+    if (factMergeOn() && q.closed) { said.push(U.factClosedStale); continue; }
     applied.add(q.id);
+    const key = factMergeOn() ? factKey(q, s) : null;
+    if (key) appliedFacts.add(key);
     if (q.kind === 'money') {
       const base = q.money || {}, edited = a.value === U.mnyConfirmEdit && a.edit && Object.hasOwn(a.edit, 'amount') ? toCents(a.edit.amount) : null;
       const amount = formatMoney(Number.isSafeInteger(edited) ? edited : base.amountCents, base.currency);
       said.push(a.value === U.mnyReject ? U.mnyReceiptSkipped : NAMES.t('mnyReceiptDone', { amount }));
+      // 入帳是這件事的改動：記入 effects，回饋頁不再顯示「沒有影響」（0.43.0 收據補丁新發現第 1 項；同一題重做不重複）
+      if (a.value !== U.mnyReject) {
+        input.effects = input.effects || [];
+        const change = NAMES.t('mnyReceiptDone', { amount });
+        if (!input.effects.some(e => e && e.targetKind === 'money' && e.targetId === q.id)) input.effects.push({ targetKind: 'money', targetId: q.id, change });
+      }
       continue;
     }
     const opts = q.options || [], opt = opts.find(o => o.text === a.value);
@@ -2482,12 +3079,30 @@ function handleEventConfirm(run, pack, store) {
       // 新對象題：加入名單／記為別名才寫；其他答案（不加入、自訂）只記「沒有加入名單」。同一題做兩次不重複（編號由輸入＋題號決定）
       const sel = opt && opt.apply && opt.apply.op === 'addActor' ? opt.apply : null, it = { kind: 'newActor', ...naOpt.apply.item };
       const tx = { kind: Object.fromEntries(['customer', 'partner', 'investor', 'advisor', 'team'].map(k => [k, NAMES.dash['ppl_kind_' + k]])), added: U.peopleAdded, aliased: U.peopleAliased, skipped: U.peopleSkipped };
+      const hasAliasChoice = opts.some(option => option.apply && option.apply.op === 'addActor' && option.apply.mode === 'alias');
+      // 二選一題出題後，另一包可能已把同一人加入；先重比對，改派為三選項題。原來已有三選項而明確選「另一個對象」者照常加入。
+      if (sel && sel.mode === 'add' && !hasAliasChoice) {
+        const matched = matchActorName((s.company || {}).actors || [], it.name);
+        if (matched) {
+          const itemId = 'newActor:rematch:' + q.id + ':' + matched.id;
+          const rematched = { ...it, id: itemId, itemId, similarTo: matched.id, similarHow: matched.how, why: q.why };
+          input.pendingEventItems = [rematched, ...(input.pendingEventItems || []).filter(item => item && item.itemId !== itemId)];
+          continue;
+        }
+      }
+      const beforeActors = JSON.stringify((s.company || {}).actors || []);
       sync(applyNewActor(s, { inputId: input.id, qid: q.id, item: it, answer: sel ? sel.mode : 'skip', aliasOf: sel && sel.aliasOf, today: todayIso(), now: localIso(), addedFrom: input.source === 'chat' ? 'chat' : it.fromDoc ? 'doc' : 'event', t: tx }));
       // 答「不加入」：計一次（同一名稱兩次後不再建議；整理名單一次即止）
       // 自訂答案（不在選項內）不是「不加入」：照整理名單同一做法，記下原話並留待再問一次（只問一次）
       if (!sel && !opt) { s.peopleSync = s.peopleSync || {}; const sim = opts.find(o => o.apply && o.apply.op === 'addActor' && o.apply.mode === 'alias'); const t = customAnswered(s, s.peopleSync, pnorm(it.name), { ...it, why: q.why, ...(sim ? { similarTo: sim.apply.aliasOf } : {}) }, it.name, a.value); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); continue; }
       if (!sel) { s.peopleSync = s.peopleSync || {}; s.peopleSync.declined = { ...(s.peopleSync.declined || {}) }; s.peopleSync.declined[pnorm(it.name)] = (s.peopleSync.declined[pnorm(it.name)] || 0) + 1; }
-      if (sel) { const t = mixSpace(sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(a => a.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] })); ev('input', t, [input.id], ['now', 'inputs']); said.push(t); }
+      if (sel) {
+        if (sel.mode === 'add' && beforeActors !== JSON.stringify((s.company || {}).actors || [])) {
+          const added = (s.company.actors || []).find(actor => actor && actor.id === nextActorId(input.id, q.id));
+          if (added) rematchOpenActorQuestions(s, added.id, pack.id);
+        }
+        const t = mixSpace(sel.mode === 'alias' ? NAMES.t('peopleAliased', { n: ((s.company.actors || []).find(a => a.id === sel.aliasOf) || {}).name || '' }) : NAMES.t('peopleAdded', { n: it.name, k: tx.kind[it.actorKind] })); ev('input', t, [input.id], ['now', 'inputs']); said.push(t);
+      }
       continue;
     }
     const ntOpt = opts.find(o => o.apply && o.apply.op === 'addTerm');
@@ -2517,7 +3132,9 @@ function handleEventConfirm(run, pack, store) {
       const selectedApply = selected ? selected.apply : fuOpt.apply;
       const chosenDate = /^\d{4}-\d{2}-\d{2}$/.test(String(a.value || '')) ? String(a.value) : selectedApply.date;
       const accepted = !!selected || (!opt && /^\d{4}-\d{2}-\d{2}$/.test(String(a.value || '')));
-      sync(applyFollowUp(s, { inputId: input.id, qid: q.id, answer: accepted ? 'accept' : 'reject', item: { date: chosenDate, action: selectedApply.action, station: selectedApply.station, why: q.why }, now: localIso() }));
+      const oldRevisionTask = selectedApply.revisionOfTaskId && (s.tasks || []).find(task => task && task.id === selectedApply.revisionOfTaskId);
+      if (accepted && oldRevisionTask && !input.minutes?.revisionOf && (oldRevisionTask.title !== selectedApply.action || oldRevisionTask.dueAt !== chosenDate) && keepDatedWrite('task', oldRevisionTask.id, selectedApply, `${selectedApply.action}（${dayText(chosenDate)}）`, `${oldRevisionTask.title}（${dayText(oldRevisionTask.dueAt)}）`)) continue;
+      sync(applyFollowUp(s, { inputId: input.id, qid: q.id, answer: accepted ? 'accept' : 'reject', item: { date: chosenDate, action: selectedApply.action, station: selectedApply.station, why: q.why, basisDate: selectedApply.basisDate, ...(selectedApply.basisAssumed === true ? { basisAssumed: true } : {}), basisFrom: selectedApply.basisFrom }, now: localIso() }));
       let revisedTaskId = '';
       if (accepted && selectedApply.revisionOfTaskId) {
         const newTaskId = followUpTaskId(input.id, q.id), oldTask = (s.tasks || []).find(task => task && task.id === selectedApply.revisionOfTaskId), newTask = (s.tasks || []).find(task => task && task.id === newTaskId);
@@ -2525,6 +3142,9 @@ function handleEventConfirm(run, pack, store) {
           const beforeDue = oldTask.dueAt;
           oldTask.title = newTask.title; oldTask.dueAt = newTask.dueAt; oldTask.next = newTask.next; oldTask.updatedAt = newTask.updatedAt;
           if (newTask.milestoneId) oldTask.milestoneId = newTask.milestoneId; else delete oldTask.milestoneId;
+          if (newTask.basisDate) oldTask.basisDate = newTask.basisDate; else delete oldTask.basisDate;
+          if (newTask.basisAssumed === true) oldTask.basisAssumed = true; else delete oldTask.basisAssumed;
+          if (newTask.basisFrom) oldTask.basisFrom = newTask.basisFrom; else delete oldTask.basisFrom;
           s.tasks = s.tasks.filter(task => !task || task.id !== newTaskId);
           const effect = (input.effects || []).find(entry => entry && entry.targetId === newTaskId);
           // 回饋寫「已更新」而不是「已加入」：這是修改原有一項日程，沒有新增
@@ -2542,16 +3162,17 @@ function handleEventConfirm(run, pack, store) {
     }
     // 自訂答案：下一個對外動作題自行填寫了新內容，就以該內容作為下一個對外動作（之後照常經較新答案保護）
     const nextOpt = opts.find(o => o.apply && o.apply.op === 'setNextExternalAction');
-    if (!opt && (nextOpt || q.id === 'nad') && typeof a.value === 'string' && a.value.trim()) ap = { op: 'setNextExternalAction', text: clip(a.value.trim(), 120), milestoneId: nextOpt ? nextOpt.apply.milestoneId || '' : '' };
+    if (!opt && (nextOpt || q.id === 'nad') && typeof a.value === 'string' && a.value.trim()) ap = { op: 'setNextExternalAction', text: clip(a.value.trim(), 120), milestoneId: nextOpt ? nextOpt.apply.milestoneId || '' : '', ...(nextOpt && nextOpt.apply.basisDate ? { basisDate: nextOpt.apply.basisDate } : {}), ...(nextOpt && nextOpt.apply.basisAssumed === true ? { basisAssumed: true } : {}), ...(nextOpt && nextOpt.apply.basisFrom ? { basisFrom: nextOpt.apply.basisFrom } : {}) };
     // 自訂答案：證據級題寫咗一個級別名稱就照套用；其餘只記錄
-    if (!opt && opts[0] && opts[0].apply.op === 'setAssumptionGrade') { const k = NAMES.evKey(String(a.value).replace(/^(?:改為|維持)/, '').replace(/[「」\s]/g, '')); ap = k ? { op: 'setAssumptionGrade', id: opts[0].apply.id, grade: k } : null; }
+    if (!opt && opts[0] && opts[0].apply.op === 'setAssumptionGrade') { const k = NAMES.evKey(String(a.value).replace(/^(?:改為|維持)/, '').replace(/[「」\s]/g, '')); ap = k ? { op: 'setAssumptionGrade', id: opts[0].apply.id, grade: k, basisDate: opts[0].apply.basisDate, ...(opts[0].apply.basisAssumed === true ? { basisAssumed: true } : {}), basisFrom: opts[0].apply.basisFrom } : null; }
     if (ap && ap.op === 'setAssumptionGrade') {
       const as = ((s.company || {}).assumptions || []).find(x => x.id === ap.id);
       if (!as) continue;
       const from = as.grade || 'guess';
       if (from === ap.grade) { sync(addEffect(s, input.id, { targetKind: 'assumption', targetId: as.id, change: '「' + clip(as.text, 30) + '」維持「' + NAMES.evName(from) + '」' })); continue; }
+      if (keepDatedWrite('assumption', as.id, ap, NAMES.evName(ap.grade), NAMES.evName(from))) continue;
       if (EV_RANK(ap.grade) > EV_RANK(from)) noteCelebration(s, { assumption: as, from, grade: ap.grade, batch: celebrations });
-      as.grade = ap.grade; as.sourceId = input.id; as.changedAt = date; ADVANCED = true;
+      as.grade = ap.grade; as.sourceId = input.id; as.changedAt = ap.basisDate || date; if (ap.basisAssumed === true) as.changedAtAssumed = true; else delete as.changedAtAssumed; ADVANCED = true;
       as.status = EV_RANK(ap.grade) < EV_RANK(from) ? 'weakened' : EV_RANK(ap.grade) >= 2 ? 'supported' : 'open';
       const t = '「' + clip(as.text, 30) + '」由「' + NAMES.evName(from) + '」改為「' + NAMES.evName(ap.grade) + '」';
       sync(addEffect(s, input.id, { targetKind: 'assumption', targetId: as.id, change: t, before: NAMES.evName(from), after: NAMES.evName(ap.grade) }));
@@ -2568,8 +3189,10 @@ function handleEventConfirm(run, pack, store) {
       if (keepNewerFounderAction((s.company || {}).nextExternalAction)) { nextSet = true; continue; }
       s.company = s.company || {};
       const prevNext = (s.company.nextExternalAction || {}).text;
-      s.company.nextExternalAction = { text: ap.text, milestoneId: ap.milestoneId || '', ...(input.minutes && input.minutes.id && ap.sourceLine ? { minutesSource: { id: input.minutes.id, line: ap.sourceLine } } : {}) }; nextSet = true;
-      const t = '下一個對外動作改為：' + clip(ap.text, 40);
+      if (prevNext !== ap.text && keepDatedWrite('nextAction', '', ap, ap.text, prevNext)) { nextSet = true; continue; }
+      s.company.nextExternalAction = { text: ap.text, milestoneId: ap.milestoneId || '', basisDate: ap.basisDate || date, ...(ap.basisAssumed === true ? { basisAssumed: true } : {}), basisFrom: ap.basisFrom || input.id, ...(input.minutes && input.minutes.id && ap.sourceLine ? { minutesSource: { id: input.minutes.id, line: ap.sourceLine } } : {}) }; nextSet = true;
+      // 補記較舊而缺項的資料：回饋寫明「已補記 某日的資料」（DPF-3-6）
+      const t = ap.missing === true && ap.basisDate ? NAMES.t('dpMissingDone', { d: dayText(ap.basisDate), t: clip(ap.text, 40) }) : '下一個對外動作改為：' + clip(ap.text, 40);
       sync(addEffect(s, input.id, { targetKind: 'decision', targetId: pack.id, change: t, before: prevNext ? clip(prevNext, 60) : U.fxNextNone, after: clip(ap.text, 60) }));
       ev('decision', t, [input.id].concat(ap.milestoneId ? [ap.milestoneId] : []), ['now', 'paths']); said.push(t);
     } else input.effects.push({ targetKind: 'decision', targetId: pack.id, change: '「' + clip(q.about || q.ask, 30) + '」維持不變' });
@@ -2586,21 +3209,36 @@ function handleEventConfirm(run, pack, store) {
       const nextQuestion = { id: 'nad', priority: pack.questions.length + 1, about: U.nextActionAsk, ask: NAMES.t('nextAfterDone', { s: m0.short }), kind: 'choice', effect: 'now',
         options: (sug ? [{ text: sug, rec: true, apply: { op: 'setNextExternalAction', text: sug, milestoneId: nx.id } }] : []).concat([{ text: U.unknownLater, ...(sug ? {} : { rec: true }), apply: { op: 'keep' } }]),
         value: sug || U.unknownLater, why: U.nextAfterDoneWhy + (sug ? '建議按「' + nx.short + '」這一站要發生的事填寫。' : '') };
-      if (pack.questions.length < 3) { pack.questions.push(nextQuestion); writeJSON(path.join(DIR.asks, pack.id + '.json'), pack); }
+      if (pack.questions.length < 3) pack = appendPackQuestion(pack, nextQuestion);
       else input.pendingNextQuestion = nextQuestion;
       s.company.nextExternalAction = { ...nea, pendingUpdate: true };
       said.push('下一站「' + (nx ? nx.short : '') + '」已開始；下一個對外動作待你確認');
     }
   }
   input.appliedQids = [...applied];
-  const left = pack.questions.filter(q => !store.answers[q.id]).length;
+  const left = pack.questions.filter(q => !store.answers[q.id] && (!factMergeOn() || !q.closed)).length;
   input.status = left ? 'awaitingFounder' : 'processed';
   if (!left) {
     input.processedAt = localIso(); delete input.awaitingFounderText;
     if (Array.isArray(input.pendingEventItems) && input.pendingEventItems.length) {
+      const gated = gateEventItems(s, input, input.pendingEventItems);
+      input.pendingEventItems = rematchNewActorItems(s, gated.items);
+      input.askedEventItemIds = [...new Set([...(input.askedEventItemIds || []), ...gated.removedIds])];
+      if (!input.pendingEventItems.length && gated.notes.length && !input.reason) input.reason = U.dpAllOlderReason;
+    }
+    if (Array.isArray(input.pendingEventItems) && input.pendingEventItems.length) {
+      const merged = factMergeItems(s, input, input.pendingEventItems);
+      input.pendingEventItems = merged.items;
+      input.askedEventItemIds = [...new Set([...(input.askedEventItemIds || []), ...merged.removedIds])];
+      writeFactSources(merged.sources);
+      input.factPendingReplacements = merged.replacements;
+    }
+    if (Array.isArray(input.pendingEventItems) && input.pendingEventItems.length) {
       const nextItems = input.pendingEventItems.splice(0, 3), next = eventPack(run, s, input, nextItems);
       if (!input.pendingEventItems.length) delete input.pendingEventItems;
       const placed = placePacks(DIR, [next]);
+      closeFactReplacements(next, s, input.factPendingReplacements || []);
+      delete input.factPendingReplacements;
       input.askedEventItemIds = [...new Set([...(input.askedEventItemIds || []), ...nextItems.map(item => item.itemId)])];
       input.status = 'awaitingFounder'; input.packId = placed[0].id; input.awaitingFounderText = U.eventAwaiting; delete input.processedAt;
     } else if (input.pendingNextQuestion) {
@@ -2611,6 +3249,11 @@ function handleEventConfirm(run, pack, store) {
     }
   }
   finishCelebration(s, celebrations);
+  if (factMergeOn() && appliedFacts.size) {
+    const packs = factPacks(), plan = planCleanup({ packs, answers: factAnswers(packs), state: s, today: todayIso() });
+    const byQuestion = new Map(packs.flatMap(item => (item.questions || []).map(question => [item.id + '\u0000' + question.id, question])));
+    writeFactClosures(plan.closures.filter(closure => closure.status === 'applied' && appliedFacts.has(factKey(byQuestion.get(closure.packId + '\u0000' + closure.qId), s))));
+  }
   saveState(s);
   run.result = { summary: said.length ? '已更新：' + said.join('；') + '。' : '已記錄；證據級及站點進度維持不變。', artifacts: [], founderNext: [] };
   return finish(run, 'done');
@@ -2703,6 +3346,8 @@ async function handleIntake(run, file) {
   step(run, 'received', U.stepIntakeReceived, 'done', '');
   const sb = newSandbox(run);
   const files = intakeFiles(id);
+  const intakeMachine = parseFounderReply(fs.readFileSync(path.join(DIR.inbox, file), 'utf8')).machine || {};
+  run.journey = intakeMachine.journey && typeof intakeMachine.journey === 'object' ? intakeMachine.journey : null;
   fs.copyFileSync(path.join(DIR.inbox, file), path.join(sb, 'intake.md'));
   fs.mkdirSync(path.join(sb, 'files'), { recursive: true });
   for (const f of files) fs.copyFileSync(path.join(DIR.inbox, f), path.join(sb, 'files', f.slice((id + '-intake-').length).replace(/^\d+-/, '')));
@@ -2713,7 +3358,7 @@ async function handleIntake(run, file) {
   fs.mkdirSync(dest, { recursive: true });
   for (const f of [file, ...files, ...(mi.meta ? [mi.name] : [])]) fs.renameSync(path.join(DIR.inbox, f), path.join(dest, f));
   step(run, 'applied', U.stepIntakeRegistered, 'done', files.length ? `${files.length} 份文件` : '沒有附件');
-  intakeTask(sb);
+  intakeTask(sb, run.journey);
   await runAIStep(run, sb, U.stepIntakeAI, true);
 }
 
@@ -2759,79 +3404,251 @@ function finishPrefill(run, sb, label) {
   step(run, 'ai', label, 'done', run.result.summary);
   return finish(run, 'done');
 }
-/* ---------- 陪創辦人想：三份問題包，然後沿用八題預填 ---------- */
-// 每次讀回才更新，避免 AI 等候期間交資料已把流程關閉，卻被舊結果重開。
+/* ---------- 陪創辦人想：0.44.0 五步旅程 ---------- */
+// 與伺服器共用創辦人操作鎖：AI 等候時重讀狀態，不能蓋過剛提交的選擇。
 function updateIdeate(s, patch, recordClosed = false) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const updated = withFounderOpsLock(() => {
+      const current = readJSON(IDEATE, null);
+      if (!current || current.id !== s.id || current.state === 'closed' && !recordClosed) return null;
+      const next = { ...current, ...patch, ...(current.state === 'closed' ? { state: 'closed' } : {}), updatedAt: localIso() };
+      writeJSON(IDEATE, next);
+      return next;
+    });
+    if (updated) return updated;
+  }
+  return null;
+}
+function markIdeateFailed(s, reason) {
+  const updated = updateIdeate(s, { state: 'failed', reason });
+  if (updated) return updated;
+  // 兩次鎖逾時後不可把 AI 工作記成完成；只在同一旅程仍在等候時留下可重試狀態。
   const current = readJSON(IDEATE, null);
-  if (!current || current.id !== s.id || current.state === 'closed' && !recordClosed) return null;
-  const next = { ...current, ...patch, ...(current.state === 'closed' ? { state: 'closed' } : {}), updatedAt: localIso() };
-  writeJSON(IDEATE, next);
-  return next;
+  if (!current || current.id !== s.id || current.state !== 'running') return null;
+  const failed = { ...current, state: 'failed', reason, updatedAt: localIso() };
+  try { writeJSON(IDEATE, failed); return failed; } catch { return null; }
+}
+function closeLegacyIdeate(s) {
+  if (!s || s.state === 'closed' || s.state === 'ready') return s;
+  for (const round of Array.isArray(s.rounds) ? s.rounds : []) {
+    const packId = String(round && round.packId || '');
+    if (/^[\w-]{1,80}$/.test(packId)) try { fs.rmSync(path.join(DIR.asks, packId + '.json'), { force: true }); } catch { }
+  }
+  return updateIdeate(s, { state: 'closed', reason: 'upgraded' }, true);
+}
+function reclaimLegacyIdeateFile(file) {
+  const legacy = readJSON(file, null);
+  if (!legacy || legacy.v === 2 || !['running', 'asking', 'failed'].includes(legacy.state)) return false;
+  return !!withFounderOpsLock(() => {
+    const current = readJSON(file, null);
+    if (!current || current.v === 2 || !['running', 'asking', 'failed'].includes(current.state)) return false;
+    for (const round of Array.isArray(current.rounds) ? current.rounds : []) {
+      const packId = String(round && round.packId || '');
+      if (/^[\w-]{1,80}$/.test(packId)) try { fs.rmSync(path.join(DIR.asks, packId + '.json'), { force: true }); } catch { }
+    }
+    writeJSON(file, { ...current, state: 'closed', reason: 'upgraded', updatedAt: localIso() });
+    return true;
+  });
+}
+function reclaimLegacyIdeates() {
+  reclaimLegacyIdeateFile(IDEATE);
+  reclaimLegacyIdeateFile(path.join(DIR.ledger, 'ideate-legacy.json'));
+}
+function journeyReason(step) { return ({ who: U.jrBadWho, model: U.jrBadModel, canvas: U.jrBadCanvas })[step] || U.jrBadCanvas; }
+// 創辦人原話（構思一句、自己寫的對象）內即使有像卡號的字（例如「G1」），也屬原話，不可當卡號檢查或刪走。
+let journeyKeep = [];
+function withoutFounderText(text) {
+  let out = String(text);
+  for (const keep of journeyKeep) if (keep && out.includes(keep)) out = out.split(keep).join(' ');
+  return out;
+}
+function visibleHasCard(value) {
+  if (value == null) return false;
+  if (typeof value === 'string') { CARD_ID.lastIndex = 0; return CARD_ID.test(withoutFounderText(value)); }
+  if (Array.isArray(value)) return value.some(visibleHasCard);
+  if (typeof value === 'object') return Object.entries(value).some(([key, item]) => key !== 'card' && key !== 'quote' && key !== 'src' && visibleHasCard(item));
+  return false;
+}
+function stripJourneyCards(value) {
+  if (typeof value === 'string') {
+    const keep = journeyKeep.find(text => text && value.includes(text));
+    if (keep) return value.split(keep).map(part => part.trim() ? stripJourneyCards(part) : part).join(keep).trim();
+    const mark = /\s*〔含內部用語〕/g;
+    CARD_ID.lastIndex = 0;
+    let out = value.replace(CARD_ID, '').replace(/[（(]\s*[、，,]?\s*[）)]/g, '').replace(/\s{2,}/g, ' ').trim();
+    if (!NAMES.styleIssues(out.replace(mark, '')).length) out = out.replace(mark, '').trim();
+    return out;
+  }
+  if (Array.isArray(value)) return value.map(stripJourneyCards);
+  if (!value || typeof value !== 'object') return value;
+  const machine = new Set(['card', 'quote', 'src', 'zero', 'tag', 'rec']);
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, machine.has(key) ? item : stripJourneyCards(item)]));
+}
+// 旅程畫面文字的最後清理沿用 stripJourneyCards；保留這層以確保所有寫回路徑都清走同樣的殘餘文字。
+function finalizeJourneyText(cleaned) {
+  const walk = value => Array.isArray(value) ? value.map(walk) : value && typeof value === 'object'
+    ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ['card', 'quote', 'src', 'zero', 'tag', 'rec', 'id'].includes(key) ? item : walk(item)]))
+    : typeof value === 'string' ? stripJourneyCards(value) : value;
+  return walk(cleaned);
+}
+function cleanJourneyModels(raw, s, stripCards = false) {
+  const source = stripCards ? stripJourneyCards(raw) : raw;
+  if (!source || !Array.isArray(source.models) || source.models.length !== 3) return { ok: false, errors: ['必須交回剛好三個模式組合。'] };
+  const lib = loadModelCards(ROOT), answers = { q1: String(s.say || '') };
+  if (s.who && s.who.pick === -1 && s.who.own) answers.q2 = String(s.who.own);
+  const names = new Set(), excluded = new Set((s.model?.exclude || []).map(name => String(name || '').trim()).filter(Boolean)), models = [], repairErrors = [];
+  for (let index = 0; index < source.models.length; index++) {
+    const original = source.models[index], hadCardId = visibleHasCard(raw && raw.models && raw.models[index]);
+    const checked = checkModelPick(original, lib, { answers, needDiagnosis: false });
+    const model = checked.cleaned;
+    // 卡號、原句、陷阱等具體問題一併交修正一輪（只給 AI 看，可寫卡號）
+    for (const problem of checked.problems || []) if (problem && problem.why) repairErrors.push(`「${String(original && original.name || '').trim() || '未命名組合'}」：${problem.why}`);
+    const hasCard = Object.values(model.faces || {}).some(face => Array.isArray(face) && face.some(pick => pick && pick.card));
+    const complete = String(model.name || '').trim() && String(model.payer || '').trim() && model.trap && model.firstTest && hasCard;
+    if (!complete) repairErrors.push('每個模式組合必須有名稱、誰付錢、最大陷阱、第一個驗證及至少一張有效卡。');
+    if (hadCardId || visibleHasCard(model)) repairErrors.push('給創辦人看的模式文字不可包含卡號。');
+    const name = String(model.name || '').trim();
+    if (hadCardId && stripCards) continue;
+    if (excluded.has(name)) { repairErrors.push('不可重用已提出過的模式組合名稱。'); continue; }
+    if (names.has(name)) { repairErrors.push('三個模式組合的名稱不可相同。'); continue; }
+    // checkModelPick 已移走不存在的卡及不符原句；不合格組合只會被剔除，不會拖累其他組合。
+    if (complete && !visibleHasCard(model)) { names.add(name); models.push(model); }
+  }
+  const goal = source.goal && ['fast', 'steady', 'scale', 'raise', 'open'].includes(source.goal.suggest) ? { suggest: source.goal.suggest, why: String(source.goal.why || '').trim() } : { suggest: 'open', why: '' };
+  if (visibleHasCard({ said: source.said, why: goal.why })) repairErrors.push('給創辦人看的「said」及目標理由不可包含卡號。');
+  return { ok: models.length >= 2, errors: repairErrors, repairErrors, models, goal, said: String(source.said || '').trim() };
+}
+function cleanJourneyWho(raw, stripCards = false) {
+  const source = stripCards ? stripJourneyCards(raw) : raw;
+  const options = source && Array.isArray(source.options) ? source.options : [];
+  const ok = options.length === 3 && options.filter(item => item && item.rec === true).length === 1 && options.every(item => item && ['who', 'pain', 'now'].every(key => String(item[key] || '').trim()));
+  const repairErrors = visibleHasCard({ said: source && source.said, value: source && source.value, options }) ? ['給創辦人看的對象文字不可包含卡號。'] : [];
+  return { ok, errors: ok ? repairErrors : ['必須剛好有三個對象，每個都寫明誰、麻煩及現時怎樣解決，而且只有一個 rec: true。'], repairErrors, who: { said: String(source && source.said || '').trim(), value: String(source && source.value || '').trim(), options } };
+}
+function cleanJourneyCanvas(raw, s, stripCards = false) {
+  const cleanedRaw = stripCards ? stripJourneyCards(raw) : raw;
+  const source = cleanedRaw && cleanedRaw.cells && typeof cleanedRaw.cells === 'object' ? cleanedRaw.cells : {};
+  const required = CANVAS_KEYS.concat(['problem', 'alternatives']);
+  if (!required.every(key => source[key] && typeof source[key] === 'object')) return { ok: false, errors: ['cells 必須有 ' + required.join('、') + ' 十一項，每項都是物件。'], cells: null, said: '' };
+  const ownText = [s.say, s.who?.pick === -1 ? s.who.own : ''].join(' ');
+  const normalizedOwn = String(ownText || '').normalize('NFKC');
+  const numericAllowed = text => [...String(text || '').normalize('NFKC').matchAll(/\d+/g)].every(match => new RegExp(`(^|[^0-9])${match[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[^0-9])`).test(normalizedOwn));
+  const founderText = text => [s.say, s.who?.pick === -1 ? s.who.own : ''].some(value => String(value || '').includes(String(text || '')) && String(text || '').trim());
+  const openCell = suggest => ({ text: '', tag: 'open', suggest: String(suggest || '').trim() });
+  const fixedCell = (text, tag, suggest) => {
+    const value = String(text || '').trim();
+    return value && numericAllowed(value) ? { text: value, tag, suggest: String(suggest || '').trim() } : openCell(suggest);
+  };
+  const selectedCell = (text, tag, suggest) => {
+    const value = String(text || '').trim().replace(/\d+/g, number => numericAllowed(number) ? number : '').replace(/\s{2,}/g, ' ').trim();
+    return value ? { text: value, tag, suggest: String(suggest || '').trim() } : openCell(suggest);
+  };
+  const cells = {};
+  for (const key of required) {
+    const item = source[key], text = String(item.text || '').trim();
+    cells[key] = !text ? openCell(item.suggest) : fixedCell(text, item.tag === 'mine' && founderText(text) ? 'mine' : 'zero', item.suggest);
+  }
+  const choice = s.who?.pick === -1 ? { who: s.who.own, pain: '', now: '', mine: true } : (s.who?.options || [])[s.who?.pick];
+  if (!choice || !String(choice.who || '').trim()) return { ok: false, errors: ['未能找到已選的對象。'], cells: null, said: '' };
+  const value = String(s.who.value || '').trim();
+  cells.value = fixedCell(value, founderText(value) ? 'mine' : 'zero', cells.value.suggest);
+  cells.customer = selectedCell(choice.who, choice.mine ? 'mine' : 'pick', cells.customer.suggest);
+  if (!choice.mine) {
+    cells.problem = selectedCell(choice.pain, 'pick', cells.problem.suggest);
+    cells.alternatives = selectedCell(choice.now, 'pick', cells.alternatives.suggest);
+  }
+  cells.customer.sub = { problem: { ...cells.problem }, alternatives: { ...cells.alternatives } };
+  for (const key of ['revenue', 'channel', 'partners']) if (cells[key].text) cells[key].tag = 'pick';
+  const repairErrors = visibleHasCard({ said: cleanedRaw && cleanedRaw.said, cells }) ? ['給創辦人看的生意模式圖文字不可包含卡號。'] : [];
+  return { ok: true, errors: repairErrors, repairErrors, cells, said: String(cleanedRaw && cleanedRaw.said || '').trim() };
+}
+async function repairJourney(run, sb, step, errors) {
+  writeJSON(path.join(sb, 'job.json'), { type: 'journey-' + step, repair: true, errors });
+  // 保留原有工作說明（格式及規則），只在後面加修正清單；修正時 AI 仍看得到格式
+  const taskFile = path.join(sb, 'task.md'), prior = fs.existsSync(taskFile) ? fs.readFileSync(taskFile, 'utf8').replace(/\n## 今次要修正的問題[\s\S]*$/, '') : '';
+  fs.writeFileSync(taskFile, prior + '\n## 今次要修正的問題\n\n上一次交回的 out/ 內容有以下問題。照上面的格式及規則修正，覆寫 out/ 內對應的 JSON，其他內容不改：\n\n' + [...new Set(errors)].slice(0, 12).map((error, index) => `${index + 1}. ${error}`).join('\n') + '\n');
+  const result = await runAI(sb);
+  if (result.meta) run.aiCost = { usd: ((run.aiCost && run.aiCost.usd) || 0) + (result.meta.total_cost_usd || 0), ms: ((run.aiCost && run.aiCost.ms) || 0) + (result.meta.duration_ms || 0) };
+  return result.ok;
+}
+async function finishIdeate(run, sb, label, styleWarnings) {
+  const s = readJSON(IDEATE, null);
+  if (!s || s.id !== run.ideateId || s.state !== 'running') return finish(run, 'done');
+  const fail = reason => { markIdeateFailed(s, reason); step(run, 'ai', label, 'failed', reason); return finish(run, 'failed', reason); };
+  const receipt = checkReceipt(path.join(sb, 'out'), true);
+  if (!receipt.ok) return fail(journeyReason(s.step));
+  const stepKey = s.step, out = path.join(sb, 'out');
+  // 只在本次整理期間保護創辦人原話（較長的先比對）
+  journeyKeep = [s.say, s.who && s.who.pick === -1 ? s.who.own : ''].map(text => String(text || '').trim()).filter(text => text.length >= 4).sort((a, b) => b.length - a.length);
+  let cleaned;
+  const read = (stripCards = false) => stepKey === 'who' ? cleanJourneyWho(readJSON(path.join(out, 'who.json'), null), stripCards) : stepKey === 'model' ? cleanJourneyModels(readJSON(path.join(out, 'models.json'), null), s, stripCards) : cleanJourneyCanvas(readJSON(path.join(out, 'canvas.json'), null), s, stripCards);
+  cleaned = read();
+  const repairs = (cleaned.repairErrors && cleaned.repairErrors.length ? cleaned.repairErrors : null) || (!cleaned.ok ? (cleaned.errors || []) : []);
+  if (repairs.length) { await repairJourney(run, sb, stepKey, repairs); cleaned = read(true); }
+  if (!cleaned.ok) return fail(journeyReason(stepKey));
+  // 寫回前一律清走畫面文字的卡號（Opus 覆核第 4 項；組合一步的 said、goal.why 不在組合內，以前會漏）
+  cleaned = finalizeJourneyText(cleaned);
+  let next;
+  // 對象交回後未有選擇（pick -1，同組合一步）：否則「下一步」一按便靜靜選了第一張卡（原型對照第二輪）
+  if (stepKey === 'who') next = updateIdeate(s, { state: 'choose', step: 'who', reason: '', who: { ...s.who, ...cleaned.who, pick: -1 } });
+  else if (stepKey === 'model') next = updateIdeate(s, { state: 'choose', step: 'model', reason: '', model: { ...s.model, said: cleaned.said, options: cleaned.models, pick: -1, goal: cleaned.goal }, test: { text: '', watch: '', counts: '', trap: '', edited: false }, canvas: { cells: {}, said: '' } });
+  else next = updateIdeate(s, { state: 'choose', step: 'canvas', reason: '', canvas: { ...s.canvas, cells: cleaned.cells, said: cleaned.said } });
+  if (!next) return fail(journeyReason(stepKey));
+  run.result = { ...receipt.receipt, styleWarnings };
+  step(run, 'ai', label, 'done', run.result.summary || '已完成');
+  return finish(run, 'done');
+}
+function copyJourneyFiles(sb, state) {
+  const root = path.resolve(DIR.ledger), prefix = 'ideate-files/' + String(state.id || '') + '/', target = path.join(sb, 'files');
+  const copied = [], lines = [], used = new Set();
+  fs.mkdirSync(target, { recursive: true });
+  for (const file of Array.isArray(state.files) ? state.files : []) {
+    const stored = String(file && file.stored || '').replace(/\\/g, '/');
+    if (!stored.startsWith(prefix)) continue;
+    const source = path.resolve(root, stored.replace(/\//g, path.sep));
+    if (!source.startsWith(root + path.sep)) continue;
+    let stat; try { stat = fs.statSync(source); } catch { continue; }
+    if (!stat.isFile()) continue;
+    const original = path.basename(String(file && file.name || ''));
+    if (!original || original === '.' || original === path.sep) continue;
+    const ext = path.extname(original), base = ext ? original.slice(0, -ext.length) : original;
+    let name = original, n = 2;
+    while (used.has(name) || fs.existsSync(path.join(target, name))) { name = base + '-' + n + ext; n++; }
+    try { fs.copyFileSync(source, path.join(target, name)); } catch { continue; }
+    used.add(name);
+    const record = { name: String(file.name), stored, bytes: Number.isInteger(file.bytes) ? file.bytes : stat.size };
+    copied.push(record);
+    lines.push('  - files/' + name);
+    try {
+      const sidecar = source + '.md';
+      if (fs.statSync(sidecar).isFile()) {
+        fs.copyFileSync(sidecar, path.join(target, name + '.md'));
+        lines.push('    - ' + NAMES.t('textSidecarNote', { f: 'files/' + name + '.md' }));
+      }
+    } catch { }
+  }
+  if (lines.length) fs.writeFileSync(path.join(sb, 'files.md'), ['# 文件清單（在 files/）', '', ...lines].join('\n') + '\n');
+  return copied;
 }
 async function handleIdeate(run) {
   const s = readJSON(IDEATE, null);
-  if (!s || s.state === 'closed' || run.ideateId && run.ideateId !== s.id) return finish(run, 'done');
+  if (!s || run.ideateId && run.ideateId !== s.id) return finish(run, 'done');
   run.ideateId = s.id; run.kind = 'note'; run.noteType = 'ideate';
-  if (s.state === 'ready') return finish(run, 'done');
-  let round = 1;
-  while (round <= 3) {
-    const r = s.rounds.find(x => x.round === round), pack = r && loadPack(DIR, r.packId);
-    if (!r || !pack || r.qa.length < pack.questions.length) break;
-    round++;
-  }
-  const previous = s.rounds.find(r => r.round === round);
-  if (previous && loadPack(DIR, previous.packId)) {
-    updateIdeate(s, { state: 'asking', round, reason: '' });
+  if (s.v !== 2) {
+    if (s.state === 'ready') return finish(run, 'done');
+    closeLegacyIdeate(s);
     return finish(run, 'done');
   }
-  const current = updateIdeate(s, { state: 'running', round, reason: '' });
-  if (!current) return finish(run, 'done');
-  run.ideateRound = round;
+  if (s.state !== 'running' || !['who', 'model', 'canvas'].includes(s.step)) return finish(run, 'done');
   const sb = newSandbox(run);
-  writeJSON(path.join(sb, 'ideate.json'), current);
+  try { fs.rmSync(path.join(sb, 'ask-format.md'), { force: true }); } catch { }
+  const files = copyJourneyFiles(sb, s);
+  writeJSON(path.join(sb, 'ideate.json'), { ...s, files });
+  if (['model', 'canvas'].includes(s.step)) fs.copyFileSync(path.join(ROOT, 'model-cards.md'), path.join(sb, 'model-cards.md'));
   datedTask(sb, 'ai-ideate.md');
-  fs.appendFileSync(path.join(sb, 'task.md'), round <= 3 ? `\n\n## 今次是第 ${round} 步\n` : '\n\n## 今次是收尾\n');
-  writeJSON(path.join(sb, 'job.json'), { type: round <= 3 ? 'ideate-ask' : 'ideate-final', round, today: todayIso() });
-  return runAIStep(run, sb, round <= 3 ? NAMES.t('ideateStep', { n: round }) : U.ideateFinal, true);
-}
-function finishIdeate(run, sb, label, styleWarnings) {
-  const s = readJSON(IDEATE, null);
-  if (!s || s.id !== run.ideateId || s.state === 'closed') return finish(run, 'done');
-  const fail = reason => { step(run, 'ai', label, 'failed', reason); return finish(run, 'failed', reason); };
-  const receipt = checkReceipt(path.join(sb, 'out'), true);
-  if (!receipt.ok) return fail(receipt.reason);
-  run.result = { ...receipt.receipt, styleWarnings };
-  const round = run.ideateRound;
-  if (round <= 3) {
-    const raw = readJSON(path.join(sb, 'out', 'ask.json'), null);
-    if (!raw || !Array.isArray(raw.questions)) return fail(U.ideateBadAsk);
-    // 先限至最重要三題，再沿用格式、去重及放包核對；不接受 AI 自行開其他工作。
-    const questions = raw.questions.map((q, i) => ({ q, p: Number(q && q.priority) || i + 1 })).sort((a, b) => a.p - b.p).slice(0, 3).map(x => x.q);
-    const prep = preparePacks({ format: raw.format, title: raw.title, context: raw.context, questions }, { dirs: DIR, askedBy: 'AI', fromRun: run.id, strictTitle: false });
-    if (!prep.ok || prep.packs.length !== 1) return fail(U.ideateBadAsk);
-    const pack = prep.packs[0];
-    pack.ideate = { id: s.id, round }; pack.todoType = 'question';
-    pack.afterConfirm = round === 3 ? U.ideateFinalNext : U.ideateNext;
-    const placed = placePacks(DIR, [pack]);
-    run.result.asks = placed;
-    updateIdeate(s, { state: 'asking', round, rounds: [...s.rounds.filter(r => r.round !== round), { round, packId: placed[0].id, qa: [] }], reason: '' });
-  } else {
-    const raw = readJSON(path.join(sb, 'out', 'prefill.json'), null);
-    if (raw && raw.answers && typeof raw.answers === 'object') for (const q of PREFILL_Q) {
-      const a = raw.answers[q];
-      if (a && typeof a === 'object') { a.quote = false; a.source = U.ideateSource; }
-    }
-    const chk = checkPrefill(raw, []);
-    if (!chk.ok || !chk.answers.q1) return fail(U.ideateBadPrefill);
-    for (const a of Object.values(chk.answers)) a.source = U.ideateSource;
-    const rec = { id: run.ref, at: localIso(), files: [], answers: chk.answers, missing: PREFILL_Q.filter(q => !chk.answers[q]), runId: run.id, from: 'ideate' };
-    fs.mkdirSync(path.join(DIR.ledger, 'prefill'), { recursive: true });
-    writeJSON(path.join(DIR.ledger, 'prefill', run.ref + '.json'), rec);
-    updateIdeate(s, { state: 'ready', prefillId: run.ref, reason: '' });
-    run.result.summary = U.ideateReady;
-  }
-  step(run, 'ai', label, 'done', run.result.summary);
-  return finish(run, 'done');
+  writeJSON(path.join(sb, 'job.json'), { type: 'journey-' + s.step, today: todayIso() });
+  run.ideateStep = s.step;
+  return runAIStep(run, sb, NAMES.t('jrStepAi', { step: U['jrS' + ({ who: 2, model: 3, canvas: 5 }[s.step])] }), true);
 }
 async function handleIdeateAnswer(run, pack, store) {
   const s = readJSON(IDEATE, null);
@@ -2927,12 +3744,13 @@ function checkCheckup(raw, L, at) {
   const byId = Object.fromEntries(L.assumptions.map(a => [a.id, a])), tag = at.replace(/\D/g, '').slice(0, 12);
   if (raw.weak.slice(0, 3).some(w => !w || !byId[w.assumptionId])) return { ok: false, invalidAssumption: true, reason: '弱位指向不存在的假設' };
   // 證據級由帳本假設讀，唔係 AI 寫
-  const weak = raw.weak.slice(0, 3).map((w, i) => { const a = byId[w && w.assumptionId]; return { id: 'weak-' + tag + '-' + (i + 1), title: txt(w && w.title, 80), assumptionId: a ? a.id : '', evidence: a ? Math.max(0, NAMES.EV_KEYS.indexOf(a.grade)) : 0, source: 'Zero 解讀', why: txt(w && w.why, 300), cheapestTest: txt(w && w.cheapestTest, 200), stop: txt(w && w.stop, 200) }; }).filter(w => w.title && w.why && w.cheapestTest);
+  const weak = raw.weak.slice(0, 3).map((w, i) => { const a = byId[w && w.assumptionId]; return { id: 'weak-' + tag + '-' + (i + 1), title: txt(w && w.title, 80), assumptionId: a ? a.id : '', evidence: a ? Math.max(0, NAMES.EV_KEYS.indexOf(a.grade)) : 0, source: 'Zero 解讀', why: txt(w && w.why, 300), cheapestTest: txt(w && w.cheapestTest, 200), stop: txt(w && w.stop, 200), numbers: (Array.isArray(w && w.numbers) ? w.numbers : []).slice(0, 3).map(item => ({ what: txt(item && item.what, 100), how: txt(item && item.how, 160) })).filter(item => item.what && item.how) }; }).filter(w => w.title && w.why && w.cheapestTest);
   const unseen = (Array.isArray(raw.unseen) ? raw.unseen : []).slice(0, 3).map((u, i) => ({ id: 'unseen-' + tag + '-' + (i + 1), text: txt(u && (u.text || u), 200), source: 'Zero 解讀' })).filter(u => u.text);
   const notNow = (Array.isArray(raw.notNow) ? raw.notNow : []).slice(0, 3).map((u, i) => ({ id: 'notnow-' + tag + '-' + (i + 1), text: txt(u && (u.text || u), 200), why: txt(u && u.why, 200) })).filter(u => u.text);
   const industryCheck = L.webAccess === 'none' ? [] : (Array.isArray(raw.industryCheck) ? raw.industryCheck : []).slice(0, 5).map(x => ({ text: txt(x?.text, 300), source: txt(x?.source, 160), url: /^https:\/\/[^\s]{4,300}$/.test(String(x?.url || '')) ? String(x.url) : '', readOn: /^\d{4}-\d{2}-\d{2}$/.test(String(x?.readOn || '')) ? x.readOn : '', fullText: !!x && x.fullText === true && L.webAccess !== 'search' })).filter(x => x.text && x.source && x.url && x.readOn).map(x => ({ ...x, source: markSource(x.source, x, L.webAccess) }));
   if (!weak.length && !(raw.partial === true && (unseen.length || notNow.length))) return { ok: false, reason: '生意體檢未有寫出可用的環節' };
-  return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_checkup, partial: raw.partial === true, weak, unseen, notNow, industryCheck } };
+  const canvasSuggest = (Array.isArray(raw.canvasSuggest) ? raw.canvasSuggest : []).slice(0, 1).map(item => ({ cell: String(item && item.cell || ''), text: txt(item && item.text, 300), why: txt(item && item.why, 300) })).filter(item => CANVAS_KEYS.concat(['problem', 'alternatives']).includes(item.cell) && item.text && item.why);
+  return { ok: true, result: { status: 'done', updatedAt: at, summary: txt(raw.summary, 120) || NAMES.dash.brainDone_checkup, partial: raw.partial === true, weak, unseen, notNow, industryCheck, canvasSuggest } };
 }
 function zeroPerformanceSummary() {
   try {
@@ -2988,6 +3806,7 @@ async function brainStep(run, item, opts = {}) {
   if (item === 'opportunities') chk.result.list = await markBrokenLinks(chk.result.list, 'source');
   fs.mkdirSync(path.dirname(brainFile(DIR, item)), { recursive: true });
   writeJSON(brainFile(DIR, item), chk.result);
+  if (item === 'checkup') offerCanvasSuggestion(run, chk.result);
   if (item !== 'checkup') { addEvent({ actor: 'ai', type: 'brain', title: (chk.result.partial ? '商機掃描部分完成' : NAMES.dash['brainDone_' + item]) + '：' + clip((chk.result.list[0] || {}).title || '', 30), relatedIds: [], moduleIds: ['ai-week'] }); step(run, key, label, chk.result.partial ? 'partial' : 'done', chk.result.summary); if (!chk.result.partial) offerOpportunities(run, chk.result); return true; }
   // 弱位寫成假設清單嘅最便宜測試（規劃書 4.6）：未有測試、或者上次由生意體檢寫嘅，用今次嘅；其他來源寫嘅（例如創辦人自己寫）唔郁；唔改級別
   const s = loadState(); let filled = 0;
@@ -3002,6 +3821,45 @@ async function brainStep(run, item, opts = {}) {
 const OFFERS = path.join(DIR.ledger, 'brain-offers.json');
 const offered = (k, at) => { const o = (readJSON(OFFERS, {}) || {})[k]; return !!(o && o.resultAt === at); };
 function noteOffer(k, at, packId) { const all = readJSON(OFFERS, {}) || {}; all[k] = { resultAt: at, packId, at: localIso() }; writeJSON(OFFERS, all); }
+function offerCanvasSuggestion(run, checkup) {
+  const item = (checkup.canvasSuggest || [])[0];
+  const page = loadPage(), confirmed = readJSON(CONFIRMED, null);
+  if (!item || !page || !confirmed || confirmed.pageId !== page.page?.id) return null;
+  const file = canvasFile();
+  const base = readJSON(file, null) || buildCanvasBase(page, confirmed.values || {}, confirmed.pageId, null, localIso());
+  if ((base.suggestions || []).some(suggestion => suggestion && suggestion.from === 'checkup' && suggestion.at === checkup.updatedAt)) return null;
+  const field = (page.detail?.reading || []).find(entry => entry && entry.plan === 'canvas.' + item.cell);
+  const cell = field ? field.label : item.cell;
+  const id = 'cs-' + String(checkup.updatedAt || localIso()).replace(/\D/g, '').slice(0, 14);
+  const raw = { format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-canvas', title: NAMES.t('cvSugTitle', { cell }), context: U.cvSugContext, afterConfirm: U.cvSugNote, todoType: 'decision', fromRun: run.id,
+    questions: [{ id: 'canvas-suggestion', priority: 1, ask: NAMES.t('cvSugAsk', { cell }), kind: 'choice', effect: 'now', canvasSug: { id }, options: [{ text: U.cvAdopt, rec: item.rec !== false }, { text: U.cvReject, rec: item.rec === false }], value: item.rec === false ? U.cvReject : U.cvAdopt, why: item.why }] };
+  const prep = preparePacks(raw, { dirs: DIR, askedBy: 'AI', fromRun: run.id, strictTitle: false, system: true });
+  if (!prep.ok || prep.packs.length !== 1) return null;
+  const placed = placePacks(DIR, prep.packs);
+  if (!placed.length) return null;
+  base.suggestions = Array.isArray(base.suggestions) ? base.suggestions : [];
+  base.suggestions.push({ id, cell: item.cell, now: String(base.cells?.[item.cell]?.text || ''), text: item.text, why: item.why, from: 'checkup', at: checkup.updatedAt, state: 'open', packId: placed[0].id });
+  if (!replaceCanvasFile(file, base)) return null;
+  run.result = run.result || { summary: '', artifacts: [], founderNext: [] };
+  run.result.asks = (run.result.asks || []).concat(placed);
+  return placed[0];
+}
+function handleCanvasSuggestionAnswer(run, pack, store) {
+  const question = (pack.questions || []).find(item => item && item.canvasSug && item.canvasSug.id);
+  const answer = question && store.answers[question.id];
+  if (!question || !answer) { run.result = { summary: U.cvSugNote, artifacts: [], founderNext: [] }; return finish(run, 'done'); }
+  const action = answer.value === U.cvAdopt ? 'adopt' : answer.value === U.cvReject ? 'reject' : '';
+  if (!action) { run.result = { summary: U.cvSugNote, artifacts: [], founderNext: [] }; return finish(run, 'done'); }
+  const id = 'canvas-suggestion-' + pack.id;
+  const queued = withFounderOpsLock(() => {
+    const list = readListStrict(FOUNDER_OPS); if (!list) return false; // 讀不到就不寫回，以免蓋掉未合併的更正
+    if (!list.some(op => op && op.id === id)) list.push({ id, at: localIso(), op: 'canvasSugAnswer', target: question.canvasSug.id, value: { action } });
+    writeJSON(FOUNDER_OPS, list);
+    return true;
+  });
+  run.result = { summary: queued ? (action === 'adopt' ? U.cvSugDone : U.cvSugKept) : U.cvSugNote, artifacts: [], founderNext: [] };
+  return finish(run, 'done');
+}
 // AI 寫嘅句子放上待決事項 之前：假設編號換成假設內容（同生意大腦頁一樣嘅最後保險）
 const plainOf = s => deCodeInfo(String(s || ''), { assumptions: ledgerAssumptions(DIR) }).text;
 // 有一場辯論做緊或者等你（未採用轉強卡、未失敗）就唔再建議；失敗咗嘅唔擋（你仍然可以喺 CrewZero 重跑嗰場）
@@ -3141,6 +3999,7 @@ async function handleProofread(run, files) {
   const prev = readJSON(CONFIRMED, null);
   c.firstConfirmedAt = prev && (prev.firstConfirmedAt || prev.confirmedAt) || c.confirmedAt;
   writeJSON(CONFIRMED, c);
+  if (!ensureCanvasBase(page, c)) log('生意模式圖底稿未能建立，下一次外殼會再試');
   const bizField = Object.values(reg).find(f => f.plan === 'biz.type');
   const bizType = bizField && Object.keys(BIZ_TYPES).find(id => BIZ_TYPES[id].label === values[bizField.id]);
   if (bizType) writeJSON(path.join(DIR.company, 'biz.json'), { type: bizType, other: '', source: 'founder' });
@@ -3183,7 +4042,7 @@ const requiresFounderAnswer = (pack, q) => !!(q && (pack.ideate || q.effect === 
 const hasAnswer = answer => !!(answer && String(answer.value == null ? '' : answer.value).trim());
 function requiredLeft(pack, store) {
   const answers = store && store.answers || {};
-  return (pack.questions || []).filter(q => requiresFounderAnswer(pack, q) && !hasAnswer(answers[q.id]));
+  return (pack.questions || []).filter(q => (!factMergeOn() || !q.closed) && requiresFounderAnswer(pack, q) && !hasAnswer(answers[q.id]));
 }
 function answersMarkdown(pack, ans) {
   const L = [`# ${pack.title}：而家嘅答案`, ''];
@@ -3234,7 +4093,7 @@ async function handleAsk(run, file) {
   else if (head.kind !== 'ask-answer' || !machine) why = '這次答案未能記錄：頁面內容與最新紀錄不一致。請按「重新載入」，再確認一次。';
   else if (!pack) why = '找不到此問題包';
   else if (!validateAskReply(parsed, pack).ok) { log('拒收問題包答案：' + validateAskReply(parsed, pack).reason); why = U.errAnswerIdentity; }
-  else if (head.hash !== fnv(JSON.stringify(pack))) why = '問題包已經更改，請重新開啟頁面再作答';
+  else if (head.hash !== packHash(pack)) why = '問題包已經更改，請重新開啟頁面再作答';
   if (why) { archive([file]); step(run, 'applied', U.stepApplyAns, 'failed', why); return finish(run, 'failed', why); }
   if (!pack.debate) {
     const mapping = readJSON(path.join(DIR.ledger, 'brain-decisions.json'), {}) || {};
@@ -3282,6 +4141,7 @@ async function handleAsk(run, file) {
   if (pack.peopleSync) return handlePeopleSyncAnswer(run, pack, store);
   if (pack.rolesSync) return handleRolesAnswer(run, pack, store);
   if (pack.realEvent) return handleEventConfirm(run, pack, store);
+  if ((pack.questions || []).some(question => question && question.canvasSug)) return handleCanvasSuggestionAnswer(run, pack, store);
   if (pack.depth) return handleDepthAnswer(run, pack, store);
   if (pack.acceptance) return handleAcceptance(run, pack, store);
   if (pack.actionConfirm) return handleActionConfirm(run, pack, store);
@@ -3478,8 +4338,21 @@ function debateSandbox(run, m, pass) {
   const all = fs.readFileSync(path.join(ROOT, 'ai-debate.md'), 'utf8');
   const head = all.split(/\r?\n## 回合：/)[0], sec = all.split(/\r?\n## 回合：/).find(s => s.split(/\r?\n/)[0].trim() === pass) || '';
   fs.writeFileSync(path.join(sb, 'task.md'), head + '\n## 今次回合：' + sec + '\n');
-  writeJSON(path.join(sb, 'job.json'), { type: 'debate-' + pass, matchId: m.id, seats, level: m.level, round: m.round || 1, format: m.format });
+  if (MODEL_TRAPS_IN_DEBATE) writeDebateModelTraps(sb);
+  writeJSON(path.join(sb, 'job.json'), { type: 'debate-' + pass, matchId: m.id, seats, level: m.level, round: m.round || 1, format: m.format, modelTraps: MODEL_TRAPS_IN_DEBATE });
   return sb;
+}
+function writeDebateModelTraps(sb) {
+  const canvas = readCanvas(DIR, { proto: ROOT }), lib = loadModelCards(ROOT), model = canvas.model || {};
+  const lines = [];
+  for (const face of ['charge', 'form', 'scale']) for (const pick of Array.isArray(model.faces?.[face]) ? model.faces[face] : []) {
+    const card = lib.byId && lib.byId[pick && pick.card];
+    if (card) lines.push(...(card.traps || []), ...(card.unfit || []));
+  }
+  if (lines.length) fs.writeFileSync(path.join(sb, 'model-traps.md'), '# 可逐字引用的模式陷阱\n\n' + [...new Set(lines)].map(line => '- ' + line).join('\n') + '\n');
+}
+function modelTrapsFor(sb) {
+  try { return fs.readFileSync(path.join(sb, 'model-traps.md'), 'utf8').split(/\r?\n/).filter(line => line.startsWith('- ')).map(line => line.slice(2)); } catch { return []; }
 }
 function nextAfter(m, pass, v) {
   if (pass === 'blue') return 'red';
@@ -3535,7 +4408,7 @@ async function runDebatePass(run, m) {
   if (pass === 'blue') chk = checkBlue(out, { ledger, access });
   else if (pass === 'red') {
     const seats = (m.roles && m.roles.red && m.roles.red.personas) || [], actors = ((loadState().company || {}).actors || []).map(a => a.id);
-    chk = checkRed(out, blue, seats, actors, { access });
+    chk = checkRed(out, blue, seats, actors, { access, traps: modelTrapsFor(sb) });
     if (chk.errors.length === 1 && chk.errors[0] === '紅方攻擊覆蓋不足' && !m.budget.redCoverageRetry && (m.budget.aiStarts || 0) < HARD_CAP) {
       m.budget.redCoverageRetry = 1; saveMatch(m);
       fs.writeFileSync(path.join(sb, 'task.md'), '# 修正紅方攻擊\n\n請補足每條藍方論點的攻擊，保留所有席位卡，覆寫 out/red.json。\n');
@@ -3547,7 +4420,7 @@ async function runDebatePass(run, m) {
       }
       if (!retry.ok) return fail(retry.reason || '紅方修正未完成');
       access = effectiveAccess(retry.webAccess);
-      out = readJSON(path.join(sb, 'out', PASS_OUT[pass]), null); chk = checkRed(out, blue, seats, actors, { access, allowIncomplete: true });
+      out = readJSON(path.join(sb, 'out', PASS_OUT[pass]), null); chk = checkRed(out, blue, seats, actors, { access, allowIncomplete: true, traps: modelTrapsFor(sb) });
     }
   }
   else if (pass === 'rebuttal') chk = checkRebuttal(out, red);
@@ -3955,7 +4828,12 @@ function recordRun(r) {
   s.runs = s.runs.slice(-200);
   saveState(s);
 }
-const openRhythm = kind => listPacks(DIR).filter(p => p.open).map(p => loadPack(DIR, p.id)).find(p => p && p.rhythm && (Array.isArray(kind) ? kind.includes(p.rhythm.kind) : p.rhythm.kind === kind)) || null;
+const openRhythm = kind => listPacks(DIR).filter(p => p.open).map(p => loadPack(DIR, p.id)).find(p => {
+  if (!p || !p.rhythm || !(Array.isArray(kind) ? kind.includes(p.rhythm.kind) : p.rhythm.kind === kind)) return false;
+  if (p.rhythm.kind !== 'interview' || !(factMergeOn() || JIA_IN_RELEASE)) return true;
+  const answers = loadAnswers(DIR, p.id).answers || {};
+  return (p.questions || []).some(q => (!factMergeOn() || !q.closed) && requiresFounder(p, q) && !hasAnswer(answers[q.id]));
+}) || null;
 const rhythmPack = (suffix, o) => ({ format: 'startup-os.ask/0.1', id: 'ask-' + stamp() + '-' + suffix, next: null, askedBy: 'AI', askedAt: localIso(), fromRun: null, ...o,
   questions: o.questions || [] });
 // 你嘅輸入（回覆、交資料、要求、記錄真實事件）：解除自動停、重設計數（3.8）；「暫停」嘅持續暫停唔會因此解除
@@ -4132,7 +5010,7 @@ function placeInterviewIfDue() {
 }
 function handleInterviewAnswer(run, pack, store, fresh) {
   const s = loadState(), iv = s.interviews = s.interviews || {}, today = todayIso(), said = [], texts = [], extra = [], placedNow = [], celebrations = [];
-  const resultsPending = pack.questions.some(q => q.bind === 'results' && !String((store.answers[q.id] || {}).value || '').trim());
+  const resultsPending = pack.questions.some(q => (!factMergeOn() || !q.closed) && q.bind === 'results' && !String((store.answers[q.id] || {}).value || '').trim());
   iv.applied = iv.applied || {};
   const done = new Set(iv.applied[pack.id] || []);
   let structuredSeen = false;
@@ -4153,7 +5031,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   const setNext = (text, milestoneId, t, fields = {}) => {
     if (keepNewerFounderAction(neaNow())) return false;
     const title = t || '下一個對外動作改為：' + clip(text, 40);
-    s.company = s.company || {}; s.company.nextExternalAction = { text: clip(text, 120), milestoneId: milestoneId || '', ...fields };
+    s.company = s.company || {}; s.company.nextExternalAction = { text: clip(text, 120), milestoneId: milestoneId || '', basisDate: today, basisFrom: 'founder', ...fields };
     said.push(title); ev('decision', title, [pack.id]);
     return true;
   };
@@ -4161,6 +5039,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   for (const q of pack.questions) {
     const a = store.answers[q.id];
     if (!a || done.has(q.id) || !fresh.has(q.id)) continue;
+    if (factMergeOn() && q.closed) { said.push(U.factClosedStale); continue; }
     done.add(q.id);
     const val = String(a.value ?? '').trim(), opt = (q.options || []).find(o => o.text === val), unknown = !val || val === U.unknownLater;
     if (q.bind === 'results') {
@@ -4275,7 +5154,7 @@ function handleInterviewAnswer(run, pack, store, fresh) {
   }
   iv.applied[pack.id] = [...done];
   // 要補嘅題目加入同一份訪問（下次打開就見到）
-  if (extra.length) { const n = pack.questions.length; pack.questions.push(...extra.map((q, i) => ({ ...q, priority: n + i + 1 }))); writeJSON(path.join(DIR.asks, pack.id + '.json'), pack); }
+  if (extra.length) { const n = pack.questions.length; pack = appendPackQuestions(pack, extra.map((q, i) => ({ ...q, priority: n + i + 1 }))); }
   let monthly = null;
   // 同一份訪問收到至少一題選項答案（包括「無變化」）先算做咗：更新上次、下次（3.9 (3)）
   if (structuredSeen && !resultsPending && iv.lastFor !== pack.rhythm.on) {
@@ -5235,6 +6114,7 @@ async function rhythmRun() {
   // 第一步：同步帳本、機械工作（唔使 AI）；所有排程 run 都記入帳本，跳過都記
   if (!fs.readdirSync(DIR.replies).some(f => f.endsWith('.md'))) migrateOverview();
   syncLedger();
+  startupFactCleanup();
   // 衝刺到期（Z48）：sprintUntil 過後首次開工，pace 寫回標準（sprintUntil 保留作紀錄）
   { const e0 = loadState(), e1 = PACE.expireSprint(e0, todayIso()); if (e1 !== e0) { saveState(e1); log('衝刺已到期，節奏回到標準'); } }
   const s0 = loadState(), today = todayIso(), r = rhythmOf(s0);
@@ -5304,6 +6184,7 @@ async function main() {
   if (!takeLock()) { log('另一個 run 做緊，今次唔做'); return; }
   let run = null, hadInput = false;
   try {
+    reclaimLegacyIdeates();
     mergeFounderOps();
     mergeRereads();
     applyObserve();
@@ -5333,6 +6214,7 @@ async function main() {
     // 舊安裝：公司概覽先遷移到新格式；已確認公司概覽但帳本未有里程碑同假設清單，喺有工作時先補種子（冇改動就唔寫）
     if (!replies.some(f => parseReply(fs.readFileSync(path.join(DIR.replies, f), 'utf8')).head.kind === 'proofread')) migrateOverview();
     syncLedger();
+    startupFactCleanup();
     { const sl = readJSON(STATE, null); if (sl && sl.ledgerFrom && sl.depthPackFor !== sl.ledgerFrom && !sl.demo) placeDepthPack(null); }
     placeInterviewIfDue();
     run = { id: 'R' + stamp() + '-' + String(process.pid).slice(-3), startedAt: localIso(), state: 'running', replyFiles: [], steps: [] };
@@ -5369,7 +6251,8 @@ async function main() {
         fs.copyFileSync(path.join(old, 'intake.md'), path.join(sb, 'intake.md'));
         if (fs.existsSync(path.join(old, 'files'))) fs.cpSync(path.join(old, 'files'), path.join(sb, 'files'), { recursive: true });
         if (fs.existsSync(path.join(old, 'files.md'))) fs.copyFileSync(path.join(old, 'files.md'), path.join(sb, 'files.md'));
-        intakeTask(sb);
+        run.journey = readJSON(path.join(old, 'journey.json'), null);
+        intakeTask(sb, run.journey);
         await runAIStep(run, sb, U.stepIntakeAI, true);
         return;
       }

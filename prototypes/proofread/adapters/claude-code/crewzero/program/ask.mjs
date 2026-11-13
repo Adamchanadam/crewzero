@@ -7,6 +7,7 @@
 //       node ask.mjs <問題包.json> --no-open
 //       node ask.mjs --list              列出等緊答嘅問題包
 //       node ask.mjs --read <檔案>        只讀附件，辨認逐字稿、講者例句、字數及已確認常用名稱表與公司概覽的名稱及用詞
+//       node ask.mjs --check-minutes <紀錄檔> [--transcript <逐字稿檔>] [--print-fixed] 只讀核對會議紀錄
 //       node ask.mjs --dashboard --sim <實例資料夾>   模擬實例（資料喺 <實例>/data，預設 4650；假 AI 喺 <實例>/../tools）
 // 格式同出題規則：ask-format.md。超過 12 條會按優先自動拆包；答過嘅題目會自動拎走。
 import fs from 'node:fs';
@@ -24,10 +25,13 @@ import { officeKind, officeToText } from './office-text.mjs';
 import { isPdf, pdfToText } from './pdf-text.mjs';
 import { detect, samples } from './transcript-lib.mjs';
 import { overviewLines, termLines } from './minutes-lib.mjs';
+import { checkMinutes, fixMinutes } from './minutes-check.mjs';
 import { readMoney } from './money-store.mjs';
 import { liveRecords, monthMetrics, monthsBack } from './money-lib.mjs';
+import { FILE_MAX_BYTES, FILE_MAX_MB } from './limits.mjs';
 import { validate as validateExtension } from './ext-lib.mjs';
 import { listExtensions, readExtensionRows } from './ext-store.mjs';
+import { readCanvas } from './canvas-store.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -36,6 +40,7 @@ const BRIEF = args.includes('--brief');
 const READ_AT = args.indexOf('--read');
 const RECORDS = args.includes('--records');
 const CHECK_EXTENSION_AT = args.indexOf('--check-extension');
+const CHECK_MINUTES_AT = args.indexOf('--check-minutes');
 // 模擬實例（設計稿第 8 節）：獨立資料夾、模擬時鐘、預設 4650；唔係生意證據
 const si = args.indexOf('--sim');
 const PORT0 = si >= 0 ? 4650 : BASE_PORT;
@@ -46,7 +51,7 @@ if (si >= 0) {
 }
 // 示範（虛構公司「月月鮮烘」）：用另一個資料夾，唔會郁真實資料；未有就建
 if (args.includes('--demo')) process.env.SOS_DATA = DEMO_DIR;
-const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF && !RECORDS && CHECK_EXTENSION_AT < 0 && READ_AT < 0 });
+const DIR = dataDirs(ROOT, { create: !STATUS_ONLY && !BRIEF && !RECORDS && CHECK_EXTENSION_AT < 0 && CHECK_MINUTES_AT < 0 && READ_AT < 0 });
 if (STATUS_ONLY) {
   if (!fs.existsSync(DIR.data)) {
     console.log('未能讀取目前安排：尚未找到 CrewZero 資料。');
@@ -68,33 +73,63 @@ if (STATUS_ONLY) {
   console.log('重新打開：在 AI 對話輸入 /crewzero:dashboard（或說「打開 CrewZero」）');
   process.exit(0);
 }
-// --read：只讀一份附件，讓「和 Zero 討論」先辨認會議逐字稿及講者，並附已確認常用名稱表與公司概覽的名稱及用詞；不建立資料夾、不寫旁檔。
-if (READ_AT >= 0) {
-  const file = args[READ_AT + 1] || '';
-  if (!file) { console.log(NAMES.ui.minReadMissing); process.exit(1); }
+// 會議逐字稿及會議紀錄共用的只讀讀檔方式；不建立資料夾、不寫旁檔。
+function readSupportedText(file) {
+  if (!file) return { ok: false, message: NAMES.ui.minReadMissing };
   let buf;
   try {
     const st = fs.statSync(file);
     if (!st.isFile()) throw new Error('not-file');
     buf = fs.readFileSync(file);
   } catch {
-    console.log(NAMES.ui.minReadMissing);
-    process.exit(1);
+    return { ok: false, message: NAMES.ui.minReadMissing };
   }
   const name = path.basename(file);
-  let text = '', converted;
+  let converted;
   if (isPdf(name)) converted = pdfToText(buf, name);
   else if (officeKind(name)) converted = officeToText(buf, name);
   else if (/\.(?:txt|md)$/i.test(name)) converted = { ok: true, text: buf.toString('utf8') };
-  else {
-    console.log(NAMES.ui.minReadUnsupported);
-    process.exit(1);
-  }
+  else return { ok: false, message: NAMES.ui.minReadUnsupported };
   if (!converted || !converted.ok || typeof converted.text !== 'string') {
-    console.log(NAMES.ui.minReadFailed);
+    return { ok: false, message: NAMES.ui.minReadFailed };
+  }
+  return { ok: true, name, text: converted.text };
+}
+// --check-minutes：只讀核對對話路徑寫出的會議紀錄；需要時印出機械補正後全文，不寫回任何檔案。
+if (CHECK_MINUTES_AT >= 0) {
+  const minutes = readSupportedText(args[CHECK_MINUTES_AT + 1] || '');
+  if (!minutes.ok) {
+    console.log('會議紀錄檢查：有 1 項要修正');
+    console.log('- ' + minutes.message);
     process.exit(1);
   }
-  text = converted.text;
+  const transcriptAt = args.indexOf('--transcript');
+  let transcript = '';
+  if (transcriptAt >= 0) {
+    const source = readSupportedText(args[transcriptAt + 1] || '');
+    if (!source.ok) {
+      console.log('會議紀錄檢查：有 1 項要修正');
+      console.log('- 無法讀取逐字稿，未能核對會議紀錄。');
+      process.exit(1);
+    }
+    transcript = source.text;
+  }
+  const detected = transcript ? detect(transcript) : null;
+  const speakers = detected ? detected.generic.concat(detected.named).length : 0;
+  const checked = checkMinutes(minutes.text, { transcript, speakers });
+  console.log(checked.ok ? '會議紀錄檢查：合格' : `會議紀錄檢查：有 ${checked.errors.length} 項要修正`);
+  for (const error of checked.errors) console.log('- ' + error);
+  if (args.includes('--print-fixed')) {
+    console.log('---');
+    console.log(fixMinutes(minutes.text, { transcript, speakers }).replace(/\n$/u, ''));
+  }
+  process.exit(checked.ok ? 0 : 1);
+}
+// --read：只讀一份附件，讓「和 Zero 討論」先辨認會議逐字稿及講者，並附已確認常用名稱表與公司概覽的名稱及用詞；不建立資料夾、不寫旁檔。
+if (READ_AT >= 0) {
+  const read = readSupportedText(args[READ_AT + 1] || '');
+  if (!read.ok) { console.log(read.message); process.exit(1); }
+  const { text, name } = read;
   const found = detect(text), labels = found.generic.concat(found.named);
   console.log(NAMES.t('minReadTranscript', { v: found.transcript ? NAMES.ui.minReadYes : NAMES.ui.minReadNo }));
   console.log(NAMES.t('minReadLabels', { v: labels.length ? labels.join('、') : NAMES.ui.minReadNone }));
@@ -109,7 +144,7 @@ if (READ_AT >= 0) {
     console.log(NAMES.ui.minReadTerms);
     terms.forEach(line => console.log(line));
   }
-  const companyNames = overviewLines(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null));
+  const companyNames = overviewLines(readJSON(path.join(DIR.company, 'page.json'), null), readJSON(path.join(DIR.ledger, 'confirmed.json'), null), readCanvas(DIR, { proto: ROOT }));
   if (companyNames.length) {
     console.log(NAMES.ui.minReadOverview);
     companyNames.forEach(line => console.log(line));
@@ -162,6 +197,16 @@ if (BRIEF) {
   if (todo.length) out.push('待決事項（最多 5 項）：' + todo.map(t => safe(t.text)).join('；'));
   const as = ((state.company || {}).assumptions || []).slice(0, 8);
   if (as.length) out.push('假設及對方做到哪一步：' + as.map(a => safe(a.text) + '（' + NAMES.evName(a.grade || 'guess') + '）').join('；'));
+  const modelCanvas = readCanvas(DIR, { proto: ROOT });
+  if (modelCanvas.confirmed && modelCanvas.view) {
+    const labels = { partners: '關鍵伙伴', activities: '關鍵活動', resources: '關鍵資源', value: '價值', relationship: '客戶關係', channel: '渠道', customer: '客戶', cost: '成本', revenue: '收入', problem: '對方的問題', alternatives: '現有替代方案' };
+    const cells = Object.entries(labels).map(([key, label]) => {
+      const cell = key === 'problem' || key === 'alternatives' ? modelCanvas.view.cells.customer?.sub?.[key] || modelCanvas.view.cells[key] : modelCanvas.view.cells[key];
+      const text = safe(cell && cell.text);
+      return text ? label + '：' + text : '';
+    }).filter(Boolean);
+    if (cells.length) out.push(NAMES.ui.readingTitle + '：' + cells.join('；'));
+  }
   // 人物及機構名單：每個仍有效的外部對象一行（名稱、類別、推進格位、最近接觸、下一步及日期），按類別分段，段內先列十四日以上沒有接觸或下一步逾期者，每段最多 4 個；團隊成員一行（名稱、角色、負責）。不印編號、聯絡方式、已不再接觸的對象
   {
     const d0 = new Date(), p2 = n => String(n).padStart(2, '0'), todayS = `${d0.getFullYear()}-${p2(d0.getMonth() + 1)}-${p2(d0.getDate())}`;
@@ -280,7 +325,7 @@ if (ti >= 0) {
     const st = fs.statSync(real);
     if (!st.isFile()) bad(shown + ' 不是檔案');
     if (!EXTS.includes(path.extname(real).slice(1).toLowerCase())) bad(shown + ' 的檔案類型未能接收，請改為 PDF 或 Word 文件');
-    if (st.size > 10 * 1024 * 1024) bad(shown + ' 太大，每份須在 10MB 以內');
+    if (st.size > FILE_MAX_BYTES) bad(NAMES.t('tellFileTooLarge', { name: shown, mb: FILE_MAX_MB }));
     total += st.size; if (total > 50 * 1024 * 1024) bad('附件合共太大，須在 50MB 以內');
     files.push({ name: path.basename(real), data: fs.readFileSync(real).toString('base64') });
   }
@@ -288,16 +333,16 @@ if (ti >= 0) {
   if (!url) { console.log(NAMES.ui.tellNoServer); process.exit(1); }
   let res = null, body = null;
   try {
-    res = await fetch(url + 'api/tell', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: draft.type, text, ...(draft.date ? { date: draft.date } : {}), files }), signal: AbortSignal.timeout(60000) });
+    res = await fetch(url + 'api/tell', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: draft.type, text, ...(draft.date ? { date: draft.date } : {}), files }), signal: AbortSignal.timeout(180000) });
     try { body = await res.json(); } catch { }
-  } catch { console.log(NAMES.ui.tellNoServer); process.exit(1); }
+  } catch (error) { console.log(error?.name === 'AbortError' || error?.name === 'TimeoutError' ? NAMES.ui.tellTimeout : NAMES.ui.tellNoServer); process.exit(1); }
   if (!res.ok || !body || body.ok !== true) {
     const why = typeof body?.message === 'string' && /[一-鿿]/.test(body.message) ? body.message : NAMES.ui.tellNoServer;
     console.log(res.status === 403 ? NAMES.ui.tellNoServer : why);
     process.exit(1);
   }
   const one = text.replace(/\s+/g, ' ');
-  console.log('已交給 Zero：' + (one.length > 40 ? one.slice(0, 39) + '…' : one) + '。可在 CrewZero 首頁『最近交給 Zero 的事』查看。');
+  console.log(body.duplicate === true ? NAMES.ui.tellDupSame : '已交給 Zero：' + (one.length > 40 ? one.slice(0, 39) + '…' : one) + '。可在 CrewZero 首頁『最近交給 Zero 的事』查看。');
   console.log('CrewZero：' + url);
   process.exit(0);
 }

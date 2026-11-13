@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { officeKind, writeTextSidecar } from './office-text.mjs';
 import { isPdf, writePdfSidecar } from './pdf-text.mjs';
 import { parseGoogleLink, findGoogleLinks, fetchGoogleLink } from './link-fetch.mjs';
+import { FILE_MAX_BYTES, TOTAL_FILE_MAX_BYTES } from './limits.mjs';
 
 const KIND_OF = { doc: 'google-doc', sheet: 'google-sheet', slides: 'google-slides' };
 const pad = n => String(n).padStart(2, '0');
@@ -100,7 +101,7 @@ export async function storeGoogle(res, { dir, storedFor, created }) {
 // 收件處理：attachments 是 takeFiles 核對過的 [{ name, bytes }]；回傳 { records, meta }。
 // records：[{ name, stored }]（上載的附件及取回的 Google 原件；文字版不在內）；meta：寫入說明檔的內容（可能是空的）。
 // 不擋送出：Google 取回失敗只記入 meta.linkErrors。
-export async function receiveAttachments({ id, type, base, metaName, attachments, text, links, inboxDir, fetchImpl, now = () => new Date(), created, source, maxFiles = 20, maxTotal = 50 * 1024 * 1024, perFile = 10 * 1024 * 1024 }) {
+export async function receiveAttachments({ id, type, base, metaName, attachments, text, links, inboxDir, fetchImpl, now = () => new Date(), created, source, maxFiles = 20, maxTotal = TOTAL_FILE_MAX_BYTES, perFile = FILE_MAX_BYTES }) {
   const records = [], fileInfo = [], linkErrors = [], jobs = [];
   const prefix = n => (base ? base : `${id}-note-${type}-file-`) + `${pad(n)}-`;
   let total = 0;
@@ -153,7 +154,7 @@ export async function rereadLink({ url, dir, baseName, fetchImpl, now = () => ne
   if (!link) return { ok: false, reason: 'not-found' };
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'crewzero-g-')), created = [];
   try {
-    const res = await fetchGoogleLink(link, { destDir: tmp, fetchImpl, maxBytes: 10 * 1024 * 1024, timeoutMs: 15000, now });
+    const res = await fetchGoogleLink(link, { destDir: tmp, fetchImpl, maxBytes: FILE_MAX_BYTES, timeoutMs: 15000, now });
     if (!res.ok) return { ok: false, reason: res.reason };
     const d = now(), tail = `-r${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
     try {

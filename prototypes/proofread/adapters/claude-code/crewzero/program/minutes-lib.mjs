@@ -59,7 +59,7 @@ function cleanOverviewValue(value) {
 }
 
 // 只可用確認屬於目前 pageId 的整頁內容；頁面改版而未重新確認時，所有名稱及用詞都不可帶入草稿。
-export function overviewLines(page, confirmed) {
+export function overviewLines(page, confirmed, canvas = null) {
   try {
     if (!page || typeof page !== 'object' || !page.page || !page.page.id || !confirmed || typeof confirmed !== 'object' || confirmed.pageId !== page.page.id || !confirmed.values || typeof confirmed.values !== 'object' || Array.isArray(confirmed.values)) return [];
     const stringValue = value => typeof value === 'string' ? cleanOverviewValue(value) : '';
@@ -75,12 +75,23 @@ export function overviewLines(page, confirmed) {
     if (name && name !== '待你補充' && name !== '不適用') lines.push('公司：' + name);
     if (oneLiner && oneLiner !== '待你補充' && oneLiner !== '不適用') lines.push('一句話：' + oneLiner);
 
-    const canvas = (Array.isArray(page.detail && page.detail.reading) ? page.detail.reading : []).filter(field => field && String(field.plan || '').startsWith('canvas.'))
+    const fields = Array.isArray(page.detail && page.detail.reading) ? page.detail.reading : [];
+    const cells = canvas && canvas.view && canvas.view.cells ? canvas.view.cells : null;
+    const canvasLines = cells ? fields.filter(field => field && String(field.plan || '').startsWith('canvas.')).map(field => {
+      const key = String(field.plan).slice('canvas.'.length);
+      const cell = key === 'problem' || key === 'alternatives' ? cells.customer?.sub?.[key] || cells[key] : cells[key];
+      const value = cleanOverviewValue(cell && cell.text);
+      // 已確認後才補寫的格同樣屬現行模式圖內容，不能因舊欄位沒有值而漏出；
+      // 但格內文字若仍是公司概覽上未經確認的草稿值（欄位不在已確認值內、文字亦未改過），不可帶入。
+      const unconfirmedDraft = !Object.prototype.hasOwnProperty.call(values, field.id) && cell && String(cell.text || '').trim() === String(field.value == null ? '' : field.value).trim();
+      if (unconfirmedDraft) return '';
+      return field.label && value && value !== '待你補充' && value !== '不適用' ? `${stringValue(field.label)}：${value}` : '';
+    }).filter(Boolean) : fields.filter(field => field && String(field.plan || '').startsWith('canvas.'))
       .map(field => {
         const label = stringValue(field.label), value = confirmedValue(field);
         return label && value ? `${label}：${value}` : '';
       }).filter(Boolean);
-    if (canvas.length) lines.push('生意模式一覽', ...canvas);
+    if (canvasLines.length) lines.push(NAMES.ui.readingTitle, ...canvasLines);
 
     const glance = (Array.isArray(page.glance && page.glance.rows) ? page.glance.rows : []).filter(field => field && field.kind !== 'date' && field.kind !== 'grade')
       .map(field => {

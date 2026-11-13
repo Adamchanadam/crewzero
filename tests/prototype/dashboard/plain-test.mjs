@@ -13,6 +13,8 @@ const P = await imp('plain-lib.mjs'), A = await imp('ask-lib.mjs'), SC = await i
 const N = A.NAMES;
 const kit = await import(new URL('../lib/testkit.mjs', import.meta.url).href);
 const MARK = '〔含內部用語〕';
+// 主線全面審查 2026-11-12 第二項：dash 內 nextL 曾被分頁的「下一頁」重複定義蓋掉，令生意大腦卡「下一步」顯示錯字
+ok('dash.nextL 是「下一步」（分頁字句另用 pageNextL）', N.dash.nextL === '下一步' && N.dash.pageNextL === '下一頁', { nextL: N.dash.nextL, pageNextL: N.dash.pageNextL });
 try {
   /* ---------- 1. 機械步（單元） ---------- */
   const ctx = { claims: { B1: '有餐廳願意付較高價錢' }, routes: { S2: '先辦試食會' }, assumptions: { H1: '餐廳願意為來源付錢' }, tasks: { t5: '約見三間餐廳' }, milestones: { m2: '首張訂單' }, attacks: { R1: '餐廳只看價錢' } };

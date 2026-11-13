@@ -43,6 +43,8 @@ export async function buildV0400(dir, PROTO, { confirmed = true, now = new Date(
   const R = f => JSON.parse(fs.readFileSync(f, 'utf8'));
   const at = (back, hh = 9, mm = 0) => localIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - back, hh, mm, 0));
   const ymd = (back) => at(back).slice(0, 10);
+  // 最舊一筆（舊紀錄 G）一定落在上個月，令「跨兩個月份」不隨跑測試的日子變化；同時仍比其他紀錄舊（原為 11 日前，每月 12 日起便不跨月）
+  const G_BACK = Math.max(11, now.getDate() + 1);
   // 示範帳本換成一般帳本：相對時間按今日算好，不再標示範
   let st = dash.resolveTimes(R(path.join(ledger, 'state.json')), now);
   delete st.demo;
@@ -113,7 +115,7 @@ export async function buildV0400(dir, PROTO, { confirmed = true, now = new Date(
     inputs.push({ id: 'in-' + stamp, kind: 'inbox', via: 'event', title: '真實事件（' + dayText(ev) + '）：與工房乙通話，對方表示考慮兩星期', file: '', files: [], eventDate: ev, receivedAt: at(9, 16, 20), status: 'processed', processedAt: at(9, 16, 30), summary: '工房乙表示會考慮兩星期。', effects: [{ targetKind: 'assumption', targetId: 'H2', change: '「兩間工房可以每月穩定供貨」維持「口頭表示」' }] }); }
   // H：想改計劃（上個月）
   { const stamp = stampOf(11, 11, 0, 81), m = mk(stamp, 'order', [], '收款及寄送須於開放訂閱前辦妥；另想新增一站「試飲裝」。', 11, 11, 0);
-    inputs.push({ id: 'in-' + stamp, kind: 'inbox', via: 'order', title: '想改計劃：收款及寄送須於開放訂閱前辦妥，並新增「試飲裝」一站', file: m.note, files: [], receivedAt: at(11, 11, 0), status: 'processed', processedAt: at(11, 11, 20), summary: '路線次序已按你的要求調整。',
+    inputs.push({ id: 'in-' + stamp, kind: 'inbox', via: 'order', title: '想改計劃：收款及寄送須於開放訂閱前辦妥，並新增「試飲裝」一站', file: m.note, files: [], receivedAt: at(G_BACK, 11, 0), status: 'processed', processedAt: at(G_BACK, 11, 20), summary: '路線次序已按你的要求調整。',
       read: { summary: '讀了你的要求；對照現有 5 個站點，擬了 1 條路線確認題。', highlights: [] }, effects: [{ targetKind: 'milestone', targetId: 'm4', change: '站點「收款及寄送」', before: '第 3 站', after: '第 1 站' }] }); }
 
   st.inputs = inputs;

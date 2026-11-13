@@ -1,6 +1,6 @@
 ---
 name: install
-description: "安裝 CrewZero（零號隊員：Zero 團隊同創辦人一齊經營初創嘅工具）到創辦人嘅項目，同埋開啟、重新登記或者移除每日自動開工；登入啟動必須另行同意。Only for CrewZero, not a general installer. Use when the founder asks to install CrewZero (e.g. /crewzero:install in Claude Code, $crewzero:install in Codex, /install in Antigravity, 「安裝 CrewZero」), or says 「安裝排程」「重新登記排程」「移除排程」「排程狀態」. Every write, daily auto-start approval, and login auto-start registration needs the founder's explicit approval in this conversation first."
+description: "安裝 CrewZero（零號隊員：Zero 團隊與創辦人一起經營初創的工具）到創辦人的項目，並可開啟、重新登記或移除每日自動開工；登入時自動啟動須另行同意。Only for CrewZero, not a general installer. Use when the founder asks to install CrewZero (e.g. /crewzero:install in Claude Code, $crewzero:install in Codex, /install in Antigravity, 「安裝 CrewZero」), or says 「安裝排程」「重新登記排程」「移除排程」「排程狀態」. Every write, daily auto-start approval, and login auto-start registration needs the founder's explicit approval in this conversation first."
 ---
 
 <!--

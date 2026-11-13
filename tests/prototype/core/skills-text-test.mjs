@@ -22,6 +22,10 @@ for (const n of NAMES) {
   const name = (fm.match(/^name:\s*(.+)$/m) || [])[1];
   const desc = (fm.match(/^description:\s*(.+)$/m) || [])[1];
   ok(`${n}：有 frontmatter name 與 description`, name && name.trim() === n && desc && desc.trim().length > 20, { name, desc: desc && desc.slice(0, 60) });
+  // 技能描述會在插件頁直接顯示給用戶：去掉「」內的用戶原話例子後，不可有廣東話口語字（0.44.0）
+  const plainDesc = String(desc || '').replace(/「[^」]*」/g, '');
+  const spoken = plainDesc.match(/嘅|喺|咗|唔|啲|嚟|佢|冇|同埋|而家|點樣|邊個|傾|搵|睇|揀|係/g);
+  ok(`${n}：描述（不計「」內的用戶原話）用商用書面語，沒有口語字`, !spoken, spoken);
   ok(`${n}：沒有本機絕對路徑`, !/(?:^|[^A-Za-z])[A-Za-z]:[\\/]|\/Users\/|\/home\/|\\Users\\/.test(s), (s.match(/(?:^|[^A-Za-z])[A-Za-z]:[\\/]\S*|\/Users\/\S*|\/home\/\S*/) || [])[0]);
 }
 
@@ -46,7 +50,7 @@ ok('discuss：先讀 VERSION 查程式夠不夠新；輸出含「用法：」「
 const dash = text.dashboard;
 ok('dashboard：description 保留舊叫法作觸發別名（Founder Desk、營運監察台、決定紀錄），並說明打開的是 CrewZero', /description:.*Founder Desk.*營運監察台.*決定紀錄.*CrewZero/.test(dash.replace(/\r\n/g, '\n')));
 const pj = JSON.parse(read(path.join(SKILLS, '..', '.claude-plugin', 'plugin.json')) || '{}');
-ok('plugin.json：四個指令 install、update、dashboard、discuss，沒有 desk／Founder Desk／營運監察台／founder-desk', ['install', 'update', 'dashboard', 'discuss'].every(k => (pj.description || '').includes(k)) && !/desk|Desk|營運監察台/.test((pj.description || '') + (pj.keywords || []).join(' ')), pj.description);
+ok('plugin.json：五個指令 install、update、dashboard、discuss、extend，沒有 desk／Founder Desk／營運監察台／founder-desk', ['install', 'update', 'dashboard', 'discuss', 'extend', '五個指令'].every(k => (pj.description || '').includes(k)) && !/desk|Desk|營運監察台/.test((pj.description || '') + (pj.keywords || []).join(' ')), pj.description);
 ok('dashboard：描述為打開 CrewZero，併入卡住時的 --status 與問題包做法，生意問題指向 discuss', /description:.*打開 CrewZero/.test(dash) && dash.includes('--status') && dash.includes('問題包') && dash.includes('/crewzero:discuss') && dash.includes('$crewzero:discuss') && dash.includes('/discuss') && !/需要幫助/.test(dash.replace(/唔好叫佢去頁面按「需要幫助」/, '')));
 ok('dashboard：保留示範與生意大腦試驗', dash.includes('--dashboard --demo') && dash.includes('--brain'));
 const extend = text.extend;
@@ -78,7 +82,7 @@ ok('介紹頁：四個指令齊、介紹和 Zero 討論及三類輸入、署名�
 // 插件目錄以插件資料夾的 README 作介紹（最少 40 個字，不計程式碼區塊），並要寫明插件在電腦上做的事
 const pr = read(path.join(PROTO, 'adapters', 'claude-code', 'crewzero', 'README.md'));
 const prWords = pr.replace(/```[\s\S]*?```/g, '').split(/\s+/).filter(w => /[A-Za-z]/.test(w)).length;
-ok('插件 README：四個指令、英文段落至少 40 個英文字、列明本機伺服器、啟動 AI 工具、自動開工及網絡連線', ['/crewzero:install', '/crewzero:dashboard', '/crewzero:discuss', '/crewzero:update'].every(k => pr.includes(k)) && prWords >= 40 && ['127.0.0.1', 'docs.google.com', 'example.com', 'LaunchAgent', 'No analytics'].every(k => pr.includes(k)) && !/陶土|clay/i.test(pr), { englishWords: prWords });
+ok('插件 README：五個指令（三種工具叫法）、英文段落至少 40 個英文字、列明本機伺服器、啟動 AI 工具、自動開工及網絡連線', ['/crewzero:install', '/crewzero:dashboard', '/crewzero:discuss', '/crewzero:update', '/crewzero:extend', '$crewzero:extend', '/extend'].every(k => pr.includes(k)) && prWords >= 40 && ['127.0.0.1', 'docs.google.com', 'example.com', 'LaunchAgent', 'No analytics'].every(k => pr.includes(k)) && !/陶土|clay/i.test(pr), { englishWords: prWords });
 const sh = read(path.join(PROTO, 'start-here-template.md')), wl = read(path.join(PROTO, 'welcome.html'));
 ok('開始說明與歡迎頁：只教 dashboard 一個日常入口，並提到和 Zero 討論', sh.includes('/crewzero:dashboard') && sh.includes('/crewzero:discuss') && wl.includes('/crewzero:dashboard') && /和 Zero 討論/.test(wl) && /和 Zero 討論/.test(sh));
 

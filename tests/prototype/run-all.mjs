@@ -95,13 +95,28 @@ const TESTS = [
   ['測試輸出清理', 'core/test-output-test.mjs', ['{proto}', '{out}']],
   ['真實事件', 'core/event-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['帳本寫入純函數', 'core/ledger-state-test.mjs', ['{proto}', '{out}']],
+  // 0.44.0 帳本讀取失敗不可清空（主線全面審查 2026-11-12 06-architecture 第 1 項）
+  ['帳本讀取保護', 'core/state-guard-test.mjs', ['{proto}', '{out}']],
   ['人物及機構名單', 'core/people-test.mjs', ['{proto}', '{out}']],
   ['人物及機構名單後台', 'core/people-backend-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  // 0.44.0 共用名稱比對 matchActorName（N 線；docs/evidence/journey-0440/dispatch/brief-n1.md 第 4 節）
+  ['名單比對純函數', 'core/people-match-test.mjs', ['{proto}', '{out}']],
+  // 0.44.0 K 線：改類別為團隊成員、角色寫入（setActorRole）
+  ['改類別純函數', 'core/people-kind-test.mjs', ['{proto}', '{out}']],
+  // 0.44.0 K 線：改類別對話框「團隊成員」的端點及頁面（回歸第 7、8 項）；伺服器 port，Chrome port+1
+  ['改類別團隊成員', 'core/cdp-people-kind.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  // 0.44.0 F 線：事實鍵及題目收起純函數
+  ['事實合併純函數', 'core/fact-ops-test.mjs', ['{proto}', '{out}']],
+  // 0.44.0 資訊模型第一期流程驗收（開關打開；驗收 1、2、3、5、7 及升級清理）
+  ['事實合併流程（開關打開）', 'core/fact-flow-test.mjs', ['{proto}', '{out}']],
+  ['已代你收起：網頁作答及取回（開關打開）', 'core/cdp-fact-answer.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['常用名稱表頁面', 'core/cdp-terms.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['會議紀錄資料脈絡頁面', 'core/cdp-context.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['Zero 整理名單', 'core/people-sync-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['公司概覽確認後狀態', 'core/overview-state-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['後台收件與回饋', 'core/inputs-v040-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  // 0.44.0 附件「重新讀取」真的叫伺服器（主線全面審查 2026-11-12）
+  ['重新讀取按鈕', 'core/cdp-reread-button.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['0.40.2 十項修正', 'core/fixes-0402-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['Zero 團隊分工設計純函數', 'core/roles-design-test.mjs', []],
   ['Zero 團隊崗位接線', 'core/roles-run-test.mjs', ['{proto}', '{out}', '{port}']],
@@ -119,6 +134,8 @@ const TESTS = [
   ['會議紀錄外殼', 'core/minutes-run-test.mjs', ['{proto}', '{out}', '{port}']],
   ['會議紀錄伺服器', 'core/minutes-server-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
   ['會議紀錄頁面', 'core/cdp-minutes.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  // 0.44.0 交事類型切換與逐字稿講者確認（ARL 反審 2026-11-12 第二節問題 5）
+  ['交事類型切換', 'core/cdp-minutes-switch.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['Google 連結取回', 'core/link-fetch-test.mjs', []],
   ['試開外部連結', 'core/link-check-test.mjs', []],
   ['輸入狀態純函數', 'core/input-status-test.mjs', ['{proto}', '{out}', '{port}']],
@@ -170,6 +187,8 @@ const TESTS = [
   ['自動開工設定', 'rhythm/rhythm-edit-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
   ['每週訪問', 'rhythm/interview-test.mjs', ['{proto}', '{out}', '{port}', '{fake}', '{chrome}'], true],
   ['業績純函數', 'core/money-lib-test.mjs', ['{proto}', '{out}']],
+  // 0.44.0 可能重複入帳提示（brief-r1 第 2.2 節；主線全面審查 M1 第 17–19 項）
+  ['業績重複提示純函數', 'core/money-dup-test.mjs', ['{proto}', '{out}']],
   ['延伸功能純函數', 'core/ext-lib-test.mjs', ['{proto}', '{out}']],
   ['業績匯入解讀', 'core/money-import-test.mjs', ['{proto}', '{out}']],
   ['延伸功能讀寫', 'core/ext-store-test.mjs', ['{proto}', '{out}']],
@@ -192,7 +211,29 @@ const TESTS = [
   ['審閱修正乙', 'core/review-fix-b-test.mjs', ['{proto}', '{out}']],
   ['最後修正甲', 'core/review-fix-c-test.mjs', ['{proto}', '{out}']],
   ['最後修正乙', 'core/review-fix-d-test.mjs', ['{proto}', '{out}']],
-  ['最後修正丙（畫面）', 'core/cdp-final-fix.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true]
+  ['最後修正丙（畫面）', 'core/cdp-final-fix.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  // 0.44.0 開局旅程及商業模式卡（接口文件 docs/evidence/journey-0440/contracts-0440.md 第 8 節）
+  ['商業模式卡解析', 'core/model-cards-lib-test.mjs', ['{proto}', '{out}']],
+  ['生意模式圖純函數', 'core/canvas-lib-test.mjs', ['{proto}', '{out}']],
+  ['開局旅程後端', 'core/journey-backend-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['開局旅程頁面', 'core/cdp-journey.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  ['生意模式圖頁面', 'core/cdp-canvas.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  // 0.44.0 會議紀錄改版（方案 B；docs/evidence/journey-0440/dispatch/brief-m1.md）
+  ['會議紀錄改版', 'core/minutes-v2-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  ['會議紀錄共用檢查', 'core/minutes-check-test.mjs', ['{proto}', '{out}']],
+  // 0.43.0 收據入帳修正（併入 0.44.0；docs/evidence/release-0430/receipt-fix/README.md）
+  // 0.44.0 R 線加了庚段（埠 port+10 至 port+16），埠段改為 20 個
+  ['收據入帳（真實 AI 形狀）', 'core/receipt-event-test.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true, 20],
+  // 0.44.0 按日期逐項判斷（docs/evidence/journey-0440/dispatch/p-plan.md）；頁面測試用 port 起 8 個埠（伺服器 +0／+2／+4／+6，Chrome +1）
+  ['日期判斷流程', 'core/date-precedence-flow-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['日期判斷頁面', 'core/cdp-date-precedence.mjs', ['{chrome}', '{out}', '{proto}', '{fake}', '{port}'], true],
+  // 0.44.0 附件每份 25MB、合共 50MB（docs/evidence/attachment-size-2026-11-12/fable-analysis.md「回歸測試」）；port 延遲代理、+5 主伺服器、+8 造 500 實例
+  ['附件上限', 'core/attach-size-test.mjs', ['{proto}', '{out}', '{port}', '{fake}']],
+  // 0.44.0 名單比對（N 線；docs/evidence/people-team-2026-11-12/fable-analysis.md「回歸測試」第 1、2、4、6、9 項）；直接叫外殼，不用埠
+  ['名單比對流程', 'core/people-match-flow-test.mjs', ['{proto}', '{out}', '{port}']],
+  // 0.44.0 每週訪問被舊一期阻擋（docs/evidence/journey-0440/dispatch/brief-f2.md 第 4.4a 節）；直接叫外殼，不用埠
+  ['每週訪問下一期', 'core/interview-period-test.mjs', ['{proto}', '{out}', '{port}']],
+  ['每週訪問下一期（開關打開）', 'core/interview-period-test.mjs', ['{proto}', '{out}', '{port}', 'on']]
 ];
 // 結果：最後一行「x / y」「x/y passed」「x/y 通過」；冇總數就睇有冇 FAIL 行
 function verdict(text, code) {

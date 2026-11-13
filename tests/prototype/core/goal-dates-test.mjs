@@ -1454,6 +1454,11 @@ try {
   await cF.send('DOM.enable');
   await cF.go(BASEF + '/#/intake', 1280, 2200);
   if (await cF.ev(`!!document.querySelector('#intake-anyway')`)) await cF.ev(`document.querySelector('#intake-anyway').click()`);
+  // 0.44.0 已批設計：沒有八題草稿時先顯示起點，按「直接填八條問題」才出八題表格（附件欄 #intake-files 在表格內）
+  { const FILL_GO = JSON.stringify(N.ui.jrPathFillGo);
+    for (let i = 0; i < 40 && !await cF.ev(`!!document.querySelector('#q1')||[...document.querySelectorAll('button,a,[role=button]')].some(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0)`); i++) await sleep(250);
+    if (!await cF.ev(`!!document.querySelector('#q1')`)) await cF.ev(`[...document.querySelectorAll('button,a,[role=button]')].find(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0).click()`);
+    for (let i = 0; i < 40 && !await cF.ev(`!!document.querySelector('#intake-files')`); i++) await sleep(250); }
   const docx = path.join(OUT, '計劃書.docx'); fs.writeFileSync(docx, 'PK fake docx');
   const dom = await cF.send('DOM.getDocument', { depth: -1 });
   const inp = await cF.send('DOM.querySelector', { nodeId: dom.root.nodeId, selector: '#intake-files' });

@@ -145,8 +145,8 @@ try {
   fs.mkdirSync(path.join(INSTALL, 'data'), { recursive: true }); fs.writeFileSync(path.join(INSTALL, 'data', 'secret.md'), '機密'); fs.writeFileSync(path.join(DATA, 'company', 'x.md'), '公司資料');
   reject('安裝資料夾 data/ 內的檔', { type: 'event', text: '附檔', files: [path.join(INSTALL, 'data', 'secret.md')] }, /資料夾內/);
   reject('正在使用的資料夾內的檔', { type: 'event', text: '附檔', files: [path.join(DATA, 'company', 'x.md')] }, /資料夾內/);
-  fs.writeFileSync(path.join(PROJ, 'big.pdf'), Buffer.alloc(10 * 1024 * 1024 + 1, 1));
-  reject('超大檔（超過 10MB）', { type: 'event', text: '附檔', files: ['big.pdf'] }, /10MB/);
+  fs.writeFileSync(path.join(PROJ, 'big.pdf'), Buffer.alloc(25 * 1024 * 1024 + 1, 1));
+  reject('超大檔（超過 25MB）', { type: 'event', text: '附檔', files: ['big.pdf'] }, /25MB/);
   fs.writeFileSync(path.join(PROJ, 'tool.exe'), 'x');
   reject('檔案類型不收', { type: 'event', text: '附檔', files: ['tool.exe'] }, /類型/);
   reject('附件是資料夾', { type: 'event', text: '附檔', files: ['notes'] }, /不是檔案/);

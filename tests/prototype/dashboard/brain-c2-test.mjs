@@ -51,7 +51,7 @@ function proofread() {
 function answer(P, values = {}) {
   const answers = P.questions.map(q => { const v = values[q.id] ?? q.value; return { id: q.id, value: v, ai: q.value, changed: v !== q.value }; });
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: P.questions.map(q => q.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
   return post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
 }
 async function answerRun(P, values) { const seen = await seenIds(); await answer(P, values); return newRun(seen, r => r.kind === 'ask' && r.ref === P.id); }

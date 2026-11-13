@@ -16,6 +16,8 @@ import { titleOf, liveCards, cardById, resolveCardId, avatarKindOf, AVATAR_KINDS
 import { PACES, PACE_KEYS, PACE_ESTIMATE, PACE_OPS, paceKey, fuseOf, itemsCapOf, countStarts, runIdsOfDay, proofreadStarts, applyPaceOps, addDays, SPRINT_MAX_DAYS, sprintDefaultUntil, unreadCount } from './pace-lib.mjs';
 import { readMoney, listImportBatches } from './money-store.mjs';
 import { samePeriodMetrics, compareMonths, cashRunway, goalProgress, trend as moneyTrend, topUnlistedPayers, payerStats, monthMetrics, liveRecords, hasEvidence } from './money-lib.mjs';
+import { readCanvas } from './canvas-store.mjs';
+import { factMergeOn } from './features.mjs';
 
 // 公司標誌：創辦人自己上載嘅 data/company/logo.<png|jpg|webp>（伺服器先寫得入）；有幾個就用最新嗰個。
 // v 係修改時間，頁面用嚟分辨換咗新圖；冇就 null。
@@ -52,6 +54,8 @@ const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const parseDay = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
 const daysBetween = (a, b) => Math.round((dayStart(b) - dayStart(a)) / DAY);
 const isDay = s => { const d = parseDay(s); return !!d && ymd(d) === String(s || ''); };
+// 待決事項標題截短（F2-8 用到；以前未定義，開關打開時 /api/home、/api/asks 回 500）
+const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 const snoozeDays = (s, now) => {
   if (!s || !isDay(s.until) || !s.startedAt) return 0;
   const start = parseDay(String(s.startedAt).slice(0, 10)), end = parseDay(s.until);
@@ -250,11 +254,8 @@ export function moneyView(DIR, { today, full = false } = {}) {
     if (record.currency !== money.mainCurrency || record.dir !== 'out' || String(record.date || '').slice(0, 7) !== period.month) continue;
     categoryTotals.set(record.category, (categoryTotals.get(record.category) || 0) + (record.refund ? -record.amountCents : record.amountCents));
   }
-  const canvas = page && page.canvas && Array.isArray(page.canvas.rows) ? page.canvas.rows : [];
-  const valueOfPlan = plan => {
-    const row = canvas.find(item => item && item.plan === plan);
-    return row ? String(values[row.id] ?? row.value ?? '') : '';
-  };
+  const currentCanvas = readCanvas(DIR).view;
+  const valueOfPlan = key => String(currentCanvas?.cells?.[key]?.text || '');
   return {
     ...base,
     records: money.records,
@@ -265,7 +266,7 @@ export function moneyView(DIR, { today, full = false } = {}) {
       const total = Array.isArray(batch.rows) ? batch.rows.filter(row => row?.include === true && ['ok', 'dup'].includes(row.status)).length : 0;
       return { id: batch.id, state: batch.state, file: batch.file?.name ? { name: path.basename(batch.file.name) } : null, summary: { ...(batch.summary || {}), total }, confirmedAt: batch.confirmedAt || '', createdAt: batch.createdAt || '' };
     }),
-    plan: { income: valueOfPlan('canvas.revenue'), expense: valueOfPlan('canvas.cost') }
+    plan: { income: valueOfPlan('revenue'), expense: valueOfPlan('cost') }
   };
 }
 
@@ -558,7 +559,13 @@ export function depthOf(items) {
 export function assumptionsFromPage(page) {
   const dt = page && page.detail || {};
   const x = dt.assumptions, list = Array.isArray(x) ? x : x && Array.isArray(x.items) ? x.items : [];
-  return list.filter(a => a && (a.label || a.value)).map((a, i) => ({ id: 'H' + (i + 1), pageRef: a.id || '', text: String(a.label || a.value), cheapestTest: String((a.tentative && a.tentative.test) || a.test || ''), grade: 'guess', status: 'open', milestoneIds: [] }));
+  const validCell = new Set(['partners', 'activities', 'resources', 'value', 'relationship', 'channel', 'customer', 'cost', 'revenue', 'problem', 'alternatives']);
+  return list.filter(a => a && (a.label || a.value)).map((a, i) => ({
+    id: 'H' + (i + 1), pageRef: a.id || '', text: String(a.label || a.value),
+    cheapestTest: String((a.tentative && a.tentative.test) || a.test || ''), grade: 'guess', status: 'open',
+    ...(validCell.has(a.cell) ? { cell: a.cell } : {}),
+    milestoneIds: Array.isArray(a.milestoneIds) ? [...new Set(a.milestoneIds.filter(id => typeof id === 'string' && id))] : []
+  }));
 }
 
 /* ---------- 主函數 ---------- */
@@ -996,7 +1003,11 @@ function buildTodoLists(DIR, { state, milestones, company, page, now }) {
     const q0 = (full.questions || [])[0] || {};
     const rec = full.rec || (q0.options || []).find(o => o.rec)?.text || (q0.value != null && !Array.isArray(q0.value) ? String(q0.value) : '');
     const lane = brainLane(full);
-    add({ id: p.id, type, text: full.todoText || d.title || p.title, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(askedAt ? { staleDays: Math.max(0, waited) } : {}), lane, brain: full.brainItem || (lane === 'brain' ? 'wargame' : ''), forNextAction: full.forNextAction === true,
+    const input = full.realEvent && (state.inputs || []).find(row => row && row.id === full.realEvent.inputId);
+    const baseText = full.todoText || d.title || p.title;
+    const inputTitle = input && String(input.title || '').replace(/^[^：]*：/, '').trim();
+    const todoText = factMergeOn() && inputTitle ? clip(baseText + '：' + clip(inputTitle, 48), 90) : baseText;
+    add({ id: p.id, type, text: todoText, milestoneId: full.milestoneId || d.milestoneId || '', milestone: msTitle(full.milestoneId || d.milestoneId), rec, due, askedAt, waited, overdueDays, ...(askedAt ? { staleDays: Math.max(0, waited) } : {}), lane, brain: full.brainItem || (lane === 'brain' ? 'wargame' : ''), forNextAction: full.forNextAction === true, inputReceivedAt: input && (input.receivedAt || input.createdAt || ''),
       state: overdueDays > 0 ? 'overdue' : 'open', count: p.open, href: '/#/ask/' + p.id, kind: 'ask' });
   }
   // 排程節奏改咗（交資料第 9 題或者系統頁）：放一張「重新登記排程」提示卡，按下去系統頁（或者喺對話輸入「重新登記排程」）
@@ -1011,6 +1022,8 @@ function buildTodoLists(DIR, { state, milestones, company, page, now }) {
   const at = t => { const v = new Date(t.askedAt).getTime(); return Number.isFinite(v) ? v : Infinity; };
   const rankOf = t => t.forNextAction ? 7.5 : (TODO_RANK[t.type] ?? 9);
   const sort = (a, b) => (b.overdueDays - a.overdueDays) || (rankOf(a) - rankOf(b)) || (at(a) - at(b));
+  const sameTitles = factMergeOn() ? new Set(todo.filter(item => item.kind === 'ask' && item.inputReceivedAt && todo.some(other => other !== item && other.text === item.text)).map(item => item.text)) : new Set();
+  for (const item of todo) if (sameTitles.has(item.text)) item.text = NAMES.t('pendingSameTitle', { t: item.text, d: String(item.inputReceivedAt).slice(0, 16).replace('T', ' ') });
   return { todo: todo.sort(sort), snoozed: snoozed.sort(sort) };
 }
 export function buildTodo(DIR, args) {
@@ -1132,7 +1145,7 @@ export function inputStatus(input, { pack = null, answers = {}, runs = [], said 
     const button = { working: 'feedback', failed: 'retry', awaiting: 'answer', updated: 'feedback', noeffect: 'feedback' }[code];
     return { ...base, code, tag, button, steps, legacy: i.status === 'processed' && !hasDetail(i), ...extra };
   };
-  if (i.status === 'processed') return out(effects.length ? 'updated' : 'noeffect');
+  if (i.status === 'processed') return out(effects.length ? 'updated' : 'noeffect', effects.length && effects.every(effect => effect.targetKind === 'dated' || effect.targetKind === 'overview') ? { tag: 'inStKeptNewer' } : !effects.length && Number(i.moneyNotRecorded) > 0 ? { tag: 'inStMoneyNotRecorded', moneyNotRecorded: true } : {});
   if (i.status === 'awaitingFounder') {
     if (pack && open > 0) return out('awaiting');
     // 問題包不見了（被取代或移除）或已全部作答但仍在套用：不可叫人作答，狀態回到「Zero 處理中」並寫明原因
@@ -1178,7 +1191,7 @@ export function inputView(DIR, input, ctx = {}, { detail = false } = {}) {
     status, files: inputFiles(DIR, input), effects, linkErrors: Array.isArray(input.linkErrors) ? input.linkErrors.map(x => ({ url: String(x.url || ''), kind: String(x.kind || ''), reason: String(x.reason || '') })) : [],
     unreadable: Array.isArray(input.unreadable) ? input.unreadable.map(u => ({ file: String(u.file || ''), reason: String(u.reason || '') })) : [],
     read: input.read && typeof input.read === 'object' ? { summary: String(input.read.summary || ''), highlights: (Array.isArray(input.read.highlights) ? input.read.highlights : []).map(h => ({ text: String(h.text || ''), page: h.page == null ? '' : h.page, file: String(h.file || '') })) } : null,
-    reason: input.reason || '' };
+    reason: input.reason || '', moneyNotRecorded: Number(input.moneyNotRecorded) > 0 };
   if (detail) {
     const qa = full && Array.isArray(full.questions) ? full.questions.map(q => { const a = answers[q.id]; return { ask: String(q.ask || q.about || ''), answer: a ? String(Array.isArray(a.value) ? a.value.join('、') : a.value) : '', at: a ? a.at || '' : '', suggest: String(q.value || '') }; }) : [];
     v.said = said; v.qa = qa; v.confirmedAt = qa.map(x => x.at).filter(Boolean).sort().pop() || ''; v.packTitle = full ? full.title || '' : '';

@@ -11,10 +11,12 @@ const ops = await import(new URL('ledger-ops.mjs', root).href);
 const people = await import(new URL('people-ops.mjs', root).href);
 const part = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 let state, sim = false;
-const context = vm.createContext({ NAMES, randomUUID, isSim: () => sim, stamp: () => '20261105-000000', localIso: () => '2026-11-05T00:00:00+00:00', clip: (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s,
+const context = vm.createContext({ factMergeOn: () => false, NAMES, randomUUID, isSim: () => sim, stamp: () => '20261105-000000', localIso: () => '2026-11-05T00:00:00+00:00', clip: (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s,
   loadState: () => state, saveState: () => {}, finish: () => {}, ensureActive: () => {}, replySubmittedAt: () => '', founderUpdatedAfter: () => false,
   dayText: x => x, todayIso: () => '2026-11-05', writeInterviewRecord: () => {}, step: () => {}, U: { interviewTitle: '訪問', ...NAMES.ui }, mergeInPlace: ops.mergeInPlace, applyNewActor: people.applyNewActor, applyActorOp: people.applyActorOp, resolveActorId: people.resolveActorId, pnorm: people.norm, nameKeys: people.nameKeys, addDays: (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }, addEffect: ops.addEffect, applyFollowUp: ops.applyFollowUp, followUpTaskId: ops.followUpTaskId, ADVANCED: false,
-  readJSON: (_f, fallback) => fallback, DIR: { company: '' }, path: { join: (...parts) => parts.join('/') }, deriveActors: () => [], loadPage: () => null });
+  readJSON: (_f, fallback) => fallback, DIR: { company: '' }, path: { join: (...parts) => parts.join('/') }, deriveActors: () => [], loadPage: () => null,
+  // 0.44.0 handleEventConfirm 寫入前按日期再判斷（keepDatedWrite）及名單重新比對：用 ledger-ops／people-ops 的真函數（與 run.mjs 匯入一致）
+  recordBasis: ops.recordBasis, compareByDate: ops.compareByDate, newestEventDate: ops.newestEventDate, matchActorName: people.matchActorName, nextActorId: people.nextActorId });
 vm.runInContext(part('const EV_RANK =', 'async function handleEvent('), context);
 vm.runInContext(part('function handleEventConfirm(', '/* ---------- 深化站點'), context);
 vm.runInContext(part('function handleInterviewAnswer(', 'function writeInterviewRecord('), context);

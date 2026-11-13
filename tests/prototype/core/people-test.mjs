@@ -51,9 +51,11 @@ ok('hasContactInfo：電郵、八位以上數字（含空格短橫）視為聯�
   ok('S1 與現有對象 name 完全相同：靜默丟棄', chk({ name: '陳經理' }).status === 'drop' && chk({ name: '陳經理' }).reason === 'duplicate');
   ok('S2 與別名相同：丟棄（含已合併者的名稱）', chk({ name: '陳總' }).status === 'drop');
   ok('S2 與不再接觸者同名：丟棄，不重新啟用', chk({ name: '王先生' }, ['王先生又來電']).status === 'drop');
-  ok('S3 機構相同且首字相同：標疑似變體（陳經理 對 陳工）', (() => { const r = chk({ name: '陳工', org: '甲餐廳', role: '採購' }, ['陳工打來']); return r.status === 'ok' && r.item.similarTo === 'pr-1'; })());
+  // 0.44.0 共用比對 matchActorName：刪去「同機構同首字」分支，只認名稱或別名互相包含（雙方至少兩字、只對上唯一一個）
+  ok('S3 機構相同而只是首字相同：0.44.0 起不再標疑似變體（陳經理 對 陳工）', (() => { const r = chk({ name: '陳工', org: '甲餐廳', role: '採購' }, ['陳工打來']); return r.status === 'ok' && !r.item.similarTo; })());
   ok('S3 機構不同：不標疑似變體，當新對象', (() => { const r = chk({ name: '陳工', org: '丁餐廳' }, ['陳工打來']); return r.status === 'ok' && !r.item.similarTo; })());
-  ok('S4 名稱是現有名稱的子字串：標疑似變體', (() => { const r = chk({ name: '陳', org: '' }, ['陳來電']); return r.status === 'ok' && r.item.similarTo === 'pr-1'; })());
+  // 0.44.0：一個字的名稱不作包含比對；兩字或以上的子字串才標疑似變體
+  ok('S4 名稱是現有名稱的子字串（至少兩字）：標疑似變體；只有一個字則不標', (() => { const r = chk({ name: '陳經', org: '' }, ['陳經來電']), one = chk({ name: '陳', org: '' }, ['陳來電']); return r.status === 'ok' && r.item.similarTo === 'pr-1' && one.status === 'ok' && !one.item.similarTo; })());
   ok('S20 名稱沒有逐字出現在原話或文字版（只在 PDF／圖片）：退回修正', chk({ name: '周先生' }).status === 'error');
   ok('S20 全形半形、空白不影響逐字核對', chk({ name: 'Wong 先生' }, ['ＷＯＮＧ先生 來電']).status === 'ok');
   ok('S21 名稱、機構、角色含電郵或長數字：退回修正', chk({ name: '黃小姐', org: 'a@b.com' }).status === 'error' && chk({ role: '電話 91234567' }).status === 'error');

@@ -1,6 +1,6 @@
 ---
 name: discuss
-description: "和 Zero 討論（創辦人想先傾一傾、想一個問題、問意見或研究一下，傾完把結論交給 Zero 跟進；也可把會議逐字稿轉成會議紀錄）。Use when the founder asks to discuss with Zero (e.g. /crewzero:discuss in Claude Code, $crewzero:discuss in Codex, /discuss in Antigravity; may carry a topic, e.g. /crewzero:discuss 第一個客先搵邊類), or says 「和 Zero 討論」「想和 Zero 討論」「想和 Zero 傾下」「同 Zero 傾一傾」「同 Zero 商量」「會議逐字稿」「轉會議紀錄」「整理會議紀錄」「逐字稿」. Zero first reads CrewZero's current situation as background, discusses freely (web research allowed), and only hands a conclusion to Zero after the founder says yes."
+description: "和 Zero 討論（創辦人想先討論、想清楚一個問題、問意見或研究一下，討論後把結論交給 Zero 跟進；也可把會議逐字稿轉成會議紀錄）。Use when the founder asks to discuss with Zero (e.g. /crewzero:discuss in Claude Code, $crewzero:discuss in Codex, /discuss in Antigravity; may carry a topic, e.g. /crewzero:discuss 第一位客戶先找哪一類), or says 「和 Zero 討論」「想和 Zero 討論」「想和 Zero 傾下」「同 Zero 傾一傾」「同 Zero 商量」「會議逐字稿」「轉會議紀錄」「整理會議紀錄」「逐字稿」. Zero first reads CrewZero's current situation as background, discusses freely (web research allowed), and only hands a conclusion to Zero after the founder says yes."
 ---
 
 <!--
@@ -33,7 +33,7 @@ CrewZero 插件入面嘅「和 Zero 討論」指令（只係轉接層，核心�
 - 分清兩樣嘢：「你說的」（創辦人講過嘅事實同決定）同「Zero 的估計」（你嘅推測、建議、研究所得）。估計唔好講成事實；冇依據嘅唔好作。
 - 唔替創辦人拍板：比較同建議可以，但最後點揀由創辦人講。對外發送、花錢、承諾、改路線都係創辦人決定。
 - 唔手改 `<安裝>/data/` 入面任何檔。
-- 唔自行開其他 CrewZero 命令：只用 `--brief`、`--read`、`--tell`，同埋打開頁面（`node "<安裝>/ask.mjs" --dashboard`，創辦人要睇時先開）。唔好為咗討論去放問題包、跑工作或者改設定。
+- 唔自行開其他 CrewZero 命令：只用 `--brief`、`--read`、`--check-minutes`、`--tell`，同埋打開頁面（`node "<安裝>/ask.mjs" --dashboard`，創辦人要睇時先開）。唔好為咗討論去放問題包、跑工作或者改設定。
 - 創辦人說「記住這個名稱」時，按現有做法問「要不要交給 Zero」。類型用「發生了一件事」，內容寫明名稱及它是甚麼；交出後由確認題決定是否加入。
 - 可以上網研究、核對資料；查詢嘅字句唔好夾帶公司嘅私人資料（客戶名、價錢、未公開計劃、聯絡方法）。
 - 可以用創辦人已經裝咗嘅其他技能同工具（例如做試算表、簡報、文件）幫手；產出放喺創辦人嘅項目資料夾，唔好放入 `<安裝>/data/`。
@@ -43,20 +43,26 @@ CrewZero 插件入面嘅「和 Zero 討論」指令（只係轉接層，核心�
 
 創辦人提到「會議逐字稿」「轉會議紀錄」「整理會議紀錄」或「逐字稿」時，改走以下流程；仍先完成上面的版本門及 `--brief`，不可跳過。
 
+會議紀錄流程另有一道版本門：`<安裝>/VERSION` 須為 0.17.0 或以上（即 CrewZero 0.44.0；較舊的程式不認得「<日期> <主題> 會議紀錄.md」這類檔名，附件超過約 3MB 亦會交出失敗）。版本較低或讀不到 `VERSION` 時，請創辦人先輸入更新指令（Claude Code `/crewzero:update`、Codex `$crewzero:update`、Antigravity `/update`），更新後再開始，然後停。
+
 1. 執行：`node "<安裝>/ask.mjs" --read "<逐字稿檔案>"`。它只讀檔案，會印出是否逐字稿、講者標籤、每位講者三句原文例句及字數。若不是逐字稿、檔案找不到或無法讀取，照輸出的白話原因處理，不猜測身份。如公司已有確認的常用名稱表或公司概覽，輸出最後會附相應名稱及用詞一段。
 2. 逐位列出建議身份及一至三句原文線索，請創辦人確認或改正。可建議「我自己」、名單中的人，或請創辦人寫出不在名單的人；每位都確認前，不可整理草稿。
 3. 讀 `<安裝>/meeting-minutes-format.md`，按其固定結構寫草稿。所有講者用已確認姓名；依規格保留 `⚠️`、`✏️` 標示及頂部說明行。相對日期先以會議日期核實；未能核實就按規格標示，不可當作事實。步驟 1 如有印出常用名稱表或已確認公司概覽的名稱及用詞，只可按規格的校正規則用來核對名稱寫法，每處校正列入「改動清單」；沒有印出就只按名單校正。`--brief` 的背景及步驟 1 的名稱清單只供理解及核對寫法，會議紀錄只可寫逐字稿的內容。
-4. 把草稿以 `會議紀錄.md` 存在創辦人項目資料夾，供創辦人全文檢查及修改。原逐字稿不改動。
-5. 草稿完成後，必須先問：
+4. 把草稿存在創辦人項目資料夾，檔名用 `<會議日期> <對方或主題> 會議紀錄.md`（例如 `2026-11-12 綠園小館 會議紀錄.md`），不可覆蓋舊紀錄；同名已存在就在主題後加「（2）」。原逐字稿不改動。
+4a. 存檔後一定要核對：執行 `node "<安裝>/ask.mjs" --check-minutes "<紀錄檔>" --transcript "<逐字稿檔案>"`。它只讀檔案，第一行是「會議紀錄檢查：合格」或「會議紀錄檢查：有 N 項要修正」，之後逐項列出。
+   - 有要修正的：照列出的逐項改好紀錄檔，再執行一次。
+   - 第二次仍有：加 `--print-fixed` 再執行一次，把輸出 `---` 之後的全文寫回紀錄檔（程式已補好欠缺的節、標示及說明行）。
+   - 第一行不是「會議紀錄檢查：」（即電腦上的 CrewZero 程式較舊）：請創辦人先說「更新 CrewZero」；更新前照 `meeting-minutes-format.md` 自行逐節核對，並告訴創辦人這份未經程式核對。
+5. 草稿完成及核對後，必須先問：
 
 > 要不要把以下內容交給 Zero？
 
 > 類型：發生了一件事
 > 內容：會議紀錄：<標題>，下一行為 `formatMap()` 的完整講者對照
 > 日期：會議日期；未能確定時說明待定
-> 附件：原逐字稿及 `會議紀錄.md`
+> 附件：原逐字稿及會議紀錄檔
 
-6. 創辦人明確同意後，沿用下面的 `--tell` 做法建立系統暫存草稿；`files` 必須同時列出原逐字稿及項目資料夾內名稱正確的 `會議紀錄.md`。成功後只刪系統暫存草稿，不刪創辦人的會議紀錄或逐字稿。
+6. 創辦人明確同意後，沿用下面的 `--tell` 做法建立系統暫存草稿；`files` 必須同時列出原逐字稿及項目資料夾內的會議紀錄檔（檔名以「會議紀錄.md」結尾）。成功後只刪系統暫存草稿，不刪創辦人的會議紀錄或逐字稿。
 
 ## 有結論就提議交給 Zero
 
@@ -71,7 +77,7 @@ CrewZero 插件入面嘅「和 Zero 討論」指令（只係轉接層，核心�
 類型分別：`event`＝發生了一件事（外面已經發生嘅真事，例如「陳經理肯試單」）；`adhoc`＝請 Zero 做一件事（例如擬一頁簡介、查資料）；`order`＝想改計劃（例如改先後次序、換方向）。
 
 - 創辦人答好（或者同樣明確嘅同意，亦可以先改草稿再答好）：
-  1. 將草稿寫成 JSON，**存喺系統暫存資料夾**（Windows 係環境變數 `TEMP` 指住嘅資料夾；macOS、Linux 係 `/tmp`），檔名用 `crewzero-tell-<日期時間>.json`（下面寫做 `<草稿>`）。**唔好存喺項目資料夾**（包括項目根同 `<安裝>`）。格式：`{ "type": "event" | "adhoc" | "order", "text": "內容（4000 字以內）", "date": "YYYY-MM-DD（有先寫）", "files": ["項目資料夾入面已存在嘅檔案路徑（有先寫）"] }`。`files` 只可以係創辦人項目資料夾入面已經存在嘅檔。
+  1. 將草稿寫成 JSON，**存喺系統暫存資料夾**（Windows 係環境變數 `TEMP` 指住嘅資料夾；macOS、Linux 係 `/tmp`），檔名用 `crewzero-tell-<日期時間>.json`（下面寫做 `<草稿>`）。**唔好存喺項目資料夾**（包括項目根同 `<安裝>`）。格式：`{ "type": "event" | "adhoc" | "order", "text": "內容（4000 字以內）", "date": "YYYY-MM-DD（有先寫）", "files": ["項目資料夾入面已存在嘅檔案路徑（有先寫）"] }`。`files` 只可以係創辦人項目資料夾入面已經存在嘅檔。要附上的檔案（例如原逐字稿）不在項目資料夾內時，先徵得創辦人同意，把它複製入項目資料夾（不移動、不改原檔；同名已存在就在檔名後加「（2）」），再把複製後的路徑寫入 `files`。
   2. 執行：`node "<安裝>/ask.mjs" --tell "<草稿>"`
   3. 成功（印「已交給 Zero：…」同網址）：刪走 `<草稿>`，用一兩句講已經交咗乜、Zero 之後會喺 CrewZero 頁面放一兩條確認題，創辦人確認先生效。唔好叫創辦人執行任何檔案。
   4. 失敗（結束碼唔係 0，印出中文原因）：

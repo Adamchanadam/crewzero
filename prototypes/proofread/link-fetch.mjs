@@ -5,6 +5,7 @@
 // 不帶 cookie 或任何登入資料；取回內容只核對檔頭，不執行、不解析；檔案只寫入 destDir 之內。
 import fs from 'node:fs';
 import path from 'node:path';
+import { FILE_MAX_BYTES } from './limits.mjs';
 
 const HOST = 'docs.google.com';
 const ID_RE = /^[A-Za-z0-9_-]{20,}$/;
@@ -228,7 +229,7 @@ const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0
 // 同一連結的多個格式只要有一個成功即算成功；全部失敗則回報最先遇到的原因。
 // 內容先讀入記憶體（每份不超過 maxBytes）並核對通過後才寫檔，所以失敗不會留下殘檔。
 export async function fetchGoogleLink(link, opts = {}) {
-  const { destDir, fetchImpl = globalThis.fetch, maxBytes = 10 * 1024 * 1024, timeoutMs = 30000, now = () => new Date() } = opts;
+  const { destDir, fetchImpl = globalThis.fetch, maxBytes = FILE_MAX_BYTES, timeoutMs = 30000, now = () => new Date() } = opts;
   if (!destDir || typeof destDir !== 'string') throw new TypeError('fetchGoogleLink 需要 destDir');
   const kind = link && link.kind, id = link && link.id;
   if (!SEG_OF[kind] || typeof id !== 'string' || !ID_RE.test(id)) return { ok: false, kind: kind || null, url: (link && link.url) || '', reason: 'not-found' };

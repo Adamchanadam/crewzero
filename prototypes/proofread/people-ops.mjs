@@ -52,13 +52,31 @@ export const liveActors = actors => (actors || []).filter(isLive);
 export const nameKeys = a => [...new Set([a && a.name, ...((a && a.aliases) || [])].map(norm).filter(Boolean))];
 export const hasKey = (a, text) => { const t = norm(text); return !!t && nameKeys(a).some(k => t.includes(k)); };
 
+// 共用名稱比對：正規化一律以本檔的 norm 為準；先精確，再以至少兩字的互相包含比對。
+// 同一名稱對上多個對象時不猜；已合併者永遠不是目標，呼叫者可再用 filter 收窄可比對範圍。
+export function matchActorName(actors, name, { filter } = {}) {
+  const key = norm(name);
+  if (!key) return null;
+  const allowed = (actors || []).filter(actor => actor && !isMerged(actor) && (!filter || filter(actor)));
+  const exact = allowed.filter(actor => nameKeys(actor).includes(key));
+  if (exact.length) return exact.length === 1 ? { id: exact[0].id, how: 'exact' } : null;
+  if (key.length < 2) return null;
+  const contains = allowed.filter(actor => nameKeys(actor).some(actorKey => actorKey.length >= 2 && (key.includes(actorKey) || actorKey.includes(key))));
+  if (contains.length === 1) return { id: contains[0].id, how: 'contains' };
+  // 「機構＋人名」（例如「乙餐廳黃小姐」同時包含機構「乙餐廳」及人「黃小姐」）：只有一個對象的所屬機構亦寫在名稱內時，取那個人；否則不猜
+  if (contains.length > 1) {
+    const withOrg = contains.filter(actor => { const org = norm(actor.org); return org.length >= 2 && key.includes(org); });
+    if (withOrg.length === 1) return { id: withOrg[0].id, how: 'contains' };
+  }
+  return null;
+}
+
 // 完全相同的名稱（含已合併、不再接觸、離開者）
 export const duplicateActor = (actors, name) => { const k = norm(name); return k ? (actors || []).find(a => nameKeys(a).includes(k)) || null : null; };
-// 疑似變體：名稱互為子字串，或機構相同（非空）且首字相同；已合併者不比對
+// 疑似變體：共用比對只在唯一對象時才回傳；不再以同機構同首字猜測。
 export function similarActor(actors, cand) {
-  const k = norm(cand.name), org = norm(cand.org);
-  if (!k) return null;
-  return (actors || []).find(a => !isMerged(a) && (nameKeys(a).some(x => x !== k && (x.includes(k) || k.includes(x))) || (org && norm(a.org) === org && nameKeys(a).some(x => x[0] === k[0])))) || null;
+  const hit = matchActorName(actors, cand && cand.name);
+  return hit ? (actors || []).find(actor => actor && actor.id === hit.id) || null : null;
 }
 export const nextActorId = (inputId, qid) => 'pc-' + String(inputId || '').replace(/^in-/, '').replace(/[^\w-]/g, '').slice(0, 40) + '-' + String(qid || '').replace(/[^\w-]/g, '').slice(0, 20);
 
@@ -132,6 +150,24 @@ function pushEffect(s, inputId, eff) {
   i.effects.push({ targetKind: eff.targetKind, targetId: eff.targetId, change: eff.change });
   return s;
 }
+// 角色是創辦人確認後的名單資料；每次實質變更都留下舊值及依據日期，重播同一個值不重複記錄。
+export function setActorRole(state, actorId, role, { basisDate = '', basisFrom = 'founder' } = {}) {
+  const value = String(role == null ? '' : role).trim();
+  if (!value || value.length > ROLE_MAX || hasContactInfo(value)) return state;
+  const s = clone(state || {}); s.company = s.company || {}; const actors = Array.isArray(s.company.actors) ? s.company.actors : (s.company.actors = []);
+  const a = actors.find(x => x && x.id === actorId);
+  if (!a || isMerged(a)) return state;
+  const oldRole = String(a.role || '').trim();
+  if (oldRole === value) return state;
+  const oldBasisDate = isDay(a.roleBasisDate) ? a.roleBasisDate : '';
+  const newBasisDate = isDay(basisDate) ? basisDate : '';
+  a.role = value;
+  a.roleBasisDate = newBasisDate;
+  // 來源照傳入值（覆核 K5）；歷史按工作票 K1 每次實質變更都記（包括舊值空白）
+  a.roleBasisFrom = String(basisFrom || 'founder');
+  a.roleHistory = [...(Array.isArray(a.roleHistory) ? a.roleHistory : []), { oldRole, oldBasisDate, newBasisDate }];
+  return s;
+}
 // answer：'add'（加入名單）／'alias'（記為 aliasOf 的另一個稱呼）／'skip'（不加入，只記一筆）
 export function applyNewActor(state, { inputId, qid, item, answer, aliasOf = '', today = '', now = '', addedFrom = 'event', t = TXT } = {}) {
   if (!item || item.kind !== 'newActor' || !['add', 'alias', 'skip'].includes(answer)) return state;
@@ -147,6 +183,7 @@ export function applyNewActor(state, { inputId, qid, item, answer, aliasOf = '',
   const id = nextActorId(inputId, qid);
   if (actors.some(a => a.id === id)) return state;            // 冪等：同一題只加一次
   if (duplicateActor(actors, item.name) || liveActors(actors).length >= MAX_ACTIVE) return state;
+  // 事件加入名單照 0.43.0 寫法直接帶角色，只有約定欄位（「真實事件」N2）；角色依據及歷史只屬創辦人改正路徑（setActorRole）
   const a = { id, name: item.name, label: item.name, kind: item.actorKind, ...(item.org ? { org: item.org } : {}), ...(item.role ? { role: item.role } : {}), aliases: [], status: 'active',
     addedFrom: ADDED_FROM.includes(addedFrom) ? addedFrom : 'event', ...(isDay(today) ? { addedAt: today } : {}), ...(now ? { confirmedAt: now } : {}), fromMilestoneIds: [],
     ...(item.actorKind === 'team' ? { team: { type: item.teamType, state: 'active', owns: [] } } : {}) };
@@ -205,7 +242,25 @@ export function applyActorOp(state, op, v = {}) {
     if (!KINDS.includes(v.kind)) return fail(state, 'invalid');
     if (isMerged(a)) return fail(state, 'merged');
     // 改離成員：team 資料（類型、狀態、負責的站及工作）原樣保留，只標 dormant（不生效，各處讀取以 kind 為準）；改回成員時還原
-    if (v.kind === 'team') { if (!String(a.role || '').trim()) return fail(state, 'needRole'); if (!a.team) a.team = { type: 'parttime', state: 'active', owns: [] }; else { const { dormant, ...rest } = a.team; a.team = rest; } }
+    if (v.kind === 'team') {
+      const suppliedRole = String(v.role == null ? '' : v.role).trim();
+      const role = suppliedRole || String(a.role || '').trim();
+      if (!role) return fail(state, 'needRole');
+      if (role.length > ROLE_MAX) return fail(state, 'roleTooLong');
+      if (hasContactInfo(role)) return fail(state, 'roleContact');
+      const type = v.teamType || (a.team && TEAM_TYPES.includes(a.team.type) ? a.team.type : 'parttime');
+      if (!TEAM_TYPES.includes(type)) return fail(state, 'needTeamType');
+      const withRole = setActorRole(s, a.id, role, { basisDate: String(v.basisDate || v.at || '').slice(0, 10), basisFrom: v.basisFrom });
+      const actor = ((withRole.company || {}).actors || []).find(x => x && x.id === a.id);
+      if (!actor) return fail(state, 'notFound');
+      if (!actor.team) actor.team = { type, state: 'active', owns: [] };
+      else {
+        const { dormant, ...rest } = actor.team;
+        actor.team = { ...rest, type, state: TEAM_STATES.includes(rest.state) ? rest.state : 'active', owns: Array.isArray(rest.owns) ? rest.owns : [] };
+      }
+      actor.kind = 'team';
+      return { ok: true, state: withRole };
+    }
     else if (a.team) a.team = { ...a.team, dormant: true };
     a.kind = v.kind;
     return { ok: true, state: s };
@@ -364,7 +419,7 @@ const SYNC_RANK = { team: 0, advisor: 1, investor: 2, partner: 3, customer: 4 };
 export const orderSyncItems = items => (items || []).map((x, i) => ({ x, i })).sort((a, b) => ((a.x.kind === 'actorKind' ? 9 : SYNC_RANK[a.x.actorKind] ?? 8) - (b.x.kind === 'actorKind' ? 9 : SYNC_RANK[b.x.actorKind] ?? 8)) || a.i - b.i).map(o => o.x);
 /* 核對 Zero 交回的 out/people.json：{ summary?, items[] }，項目是 newActor（沿 checkNewActorItem）或 actorKind { name, actorKind, role?, why }。
    texts：已確認概覽原文（欄值、項目 label／value、里程碑決策者）。回傳 { ok, errors, items, dropped[] }；errors 非空時由呼叫者退回修正一次（lenient 時只丟棄不合格項）。 */
-// reasked：自訂答案已再問兩次（值為 2）的對象不再建議（新對象以名稱、改類別以 kind:編號:類別 為鍵）
+// reasked 只保留改類別題的第二次自訂答案；新對象的名稱不會永久封鎖。
 export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, founderNames = [], lenient = false, reasked = {} } = {}) {
   const errors = [], items = [], dropped = [], seen = new Set(), str = (v, n) => typeof v === 'string' && v.trim() && v.trim().length <= n;
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return { ok: false, errors: ['out/people.json 必須有 items 清單（沒有建議就寫空清單）'], items, dropped };
@@ -373,11 +428,13 @@ export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, f
     const at = `items 第 ${i + 1} 項`;
     if (!it || typeof it !== 'object') return bad(at, '格式不正確', '');
     if (it.kind === 'newActor') {
-      if (str(it.name, NAME_MAX) && (reasked[norm(it.name)] || 0) >= 2) return dropped.push({ name: String(it.name), reason: 'reasked' });
       const r = checkNewActorItem(it, { actors, texts, at, declined, declineLimit: 1, founderNames });
       if (r.status === 'drop') return dropped.push({ name: String(it.name || ''), reason: r.reason });
       if (r.status === 'error') return bad(at, r.errors[0].replace(/^[^：]*：/, ''), String(it.name || ''));
       const key = 'n:' + norm(r.item.name); if (seen.has(key)) return; seen.add(key);
+      // 同一批內已收的新對象當作名單比對（名稱互相包含、唯一才算）：同一人兩種寫法只出一題（N 線驗收缺陷乙）
+      const batch = items.filter(x => x && x.kind === 'newActor').map((x, n) => ({ id: 'batch-' + n, name: x.name, aliases: [] }));
+      if (matchActorName(batch, r.item.name)) return dropped.push({ name: r.item.name, reason: 'duplicate' });
       return items.push(r.item);
     }
     if (it.kind === 'actorKind') {
@@ -398,12 +455,12 @@ export function checkPeopleSync(raw, { actors = [], texts = [], declined = {}, f
   });
   return { ok: !errors.length, errors, items: orderSyncItems(items), dropped };
 }
-// 改類別題答「改為」：改為成員而沒有角色時先寫建議的 role；純函數，失敗原樣返回
-export function applyKindFix(state, { id, kind, role = '' } = {}) {
-  const s = clone(state || {}); const a = ((s.company || {}).actors || []).find(x => x && x.id === id);
-  if (!a || isMerged(a)) return state;
-  if (kind === 'team' && !String(a.role || '').trim() && role) a.role = String(role).trim().slice(0, ROLE_MAX);
-  const r = applyActorOp(s, 'actorKind', { id, kind });
+// 改類別題答「改為」：改為成員時一律經 setActorRole 寫入角色；純函數，失敗原樣返回
+export function applyKindFix(state, { id, kind, role = '', teamType = '', basisDate = '', basisFrom = 'founder' } = {}) {
+  // Zero 整理名單建議的角色只在對象未有角色時才用，不可蓋過創辦人已確認的角色（Opus 覆核第 2 項）
+  const current = (((state || {}).company || {}).actors || []).find(a => a && a.id === id);
+  const keepRole = current && String(current.role || '').trim();
+  const r = applyActorOp(state, 'actorKind', { id, kind, role: keepRole ? '' : role, teamType, basisDate, basisFrom });
   return r.ok ? r.state : state;
 }
 

@@ -6,9 +6,9 @@
 
 `path.milestones` 至少一項，每項有 `id`、`short`、`why`；可改項目 `event`、`actor`、`witness`、`proof`、`deliver`、`owner`、`target` 分別代表事件、決策者、見證人、證明、完成條件、負責人及目標日期；`depth` 可有五個可改項目，依次代表對方同意原因、決策方式和時間、前置條件、失敗原因、日期或數字依據。`watch` 是 `{label,value}` 清單。`beyondGoal` 標示目標以後的里程碑。
 
-`detail` 可包含 `guide`、`tip`（`headline`、`why`）、`missing`（`title`、`how`，以及 `ref` 或可改項目 `edit`）、`reading`（可改項目清單）、`actors`（`title`、`judge`、`items`）、`lens`（可改項目）、`assumptions`（可改項目清單及 `test`）、`rules`（可改項目清單及 `boxes.auto`、`boxes.tellAfter`、`boxes.askFirst`）。各區可有 `title`、`guide` 和 `tip`。
+`detail` 可包含 `guide`、`tip`（`headline`、`why`）、`missing`（`title`、`how`，以及 `ref` 或可改項目 `edit`）、`reading`（可改項目清單）、`model`（模式組合）、`actors`（`title`、`judge`、`items`）、`lens`（可改項目）、`assumptions`（可改項目清單及 `test`、`cell`、`milestoneIds`）、`rules`（可改項目清單及 `boxes.auto`、`boxes.tellAfter`、`boxes.askFirst`）。各區可有 `title`、`guide` 和 `tip`。
 
-**`detail.actors.items`（公司以外的決策者，也是「人物及機構名單」的來源，必須寫）**：文件或創辦人答案明確寫到的每個人或機構各一項，涵蓋五類：客戶、供應或合作方、投資者或資助方、顧問或協助者、團隊成員（共同創辦人、全職、兼職、外判；創辦人本人不寫）。關鍵伙伴、投資者、顧問的名稱也寫在這裏，不要只寫在生意模式一覽的文字格。每項除可改項目的 `id`、`label`、`value`（對方的狀態）、`origin` 外，另帶：`actorKind`（`customer`、`partner`、`investor`、`advisor`、`team` 之一；**不可用 `kind`，那是可改項目的欄位類型**）、選填 `org`（機構，最多 40 字）、`role`（角色，最多 40 字；團隊成員必填）；團隊成員另帶 `team: {"type": "cofounder｜fulltime｜parttime｜contractor", "owns": ["負責的里程碑 id"]}`。`label` 的名稱（括號或「·」之前的部分）是名單的稱呼，要和文件寫法一致。**只寫名稱、機構和角色，不寫電話、電郵、地址、社交帳號，也不寫薪酬、合約、表現。** 名字只可來自創辦人的文件或答案，不可憑空補人。
+**`detail.actors.items`（公司以外的決策者，也是「人物及機構名單」的來源，必須寫）**：文件或創辦人答案明確寫到的每個人或機構各一項，涵蓋五類：客戶、供應或合作方、投資者或資助方、顧問或協助者、團隊成員（共同創辦人、全職、兼職、外判；創辦人本人不寫）。關鍵伙伴、投資者、顧問的名稱也寫在這裏，不要只寫在生意模式圖的文字格。每項除可改項目的 `id`、`label`、`value`（對方的狀態）、`origin` 外，另帶：`actorKind`（`customer`、`partner`、`investor`、`advisor`、`team` 之一；**不可用 `kind`，那是可改項目的欄位類型**）、選填 `org`（機構，最多 40 字）、`role`（角色，最多 40 字；團隊成員必填）；團隊成員另帶 `team: {"type": "cofounder｜fulltime｜parttime｜contractor", "owns": ["負責的里程碑 id"]}`。`label` 的名稱（括號或「·」之前的部分）是名單的稱呼，要和文件寫法一致。**只寫名稱、機構和角色，不寫電話、電郵、地址、社交帳號，也不寫薪酬、合約、表現。** 名字只可來自創辦人的文件或答案，不可憑空補人。
 
 可改項目有唯一 `id`、`label`、`value`、`origin`；`kind` 為 `choice`、`grade`、`date`、`text`、`multi`，選項放 `options`，每項可有 `text`、`note`、`rec`；亦可有 `why`、`ask`、`judge`、`hint`。`plan` 用 `biz.type`、`canvas.*`（見下列清單）、G1 至 G10、`milestone.event`、`milestone.actor`、`milestone.witness`、`milestone.evidence`、`milestone.deliveryCondition`、`milestone.targetDate`、`depth.1` 至 `depth.5` 表示欄位用途。
 
@@ -18,11 +18,12 @@
 
 ## 一定要齊（規劃書 3.1 就緒清單、3.3 四格；外殼會核對，唔齊會叫你修正一次）
 
-- **`detail.reading` 生意模式一覽十二項一定要齊**：照以下 `plan`、`label` 同次序，每格一句，只放詳細資料，唔可以放入 `decide.items`：
+- **`detail.reading` 生意模式圖十三項一定要齊**：照以下 `plan`、`label` 同次序，每格一句，只放詳細資料，唔可以放入 `decide.items`：
 
   | plan | label |
   |---|---|
   | biz.type | 生意類型 |
+  | biz.goal | 想做成哪種生意 |
   | canvas.customer | 客戶 |
   | canvas.problem | 對方的問題 |
   | canvas.alternatives | 現有替代方案 |
@@ -36,6 +37,8 @@
   | canvas.cost | 成本 |
 
   第一項用 `kind: "choice"`，`options` 依次係 `{"text":"服務"}`、`{"text":"實體貨品"}`、`{"text":"軟件、網上服務或內容"}`、`{"text":"平台或配對"}`、`{"text":"非牟利或社企"}`、`{"text":"其他"}`，AI 判斷嗰項加 `rec: true`；`value` 必須係其中一個 label，`origin: "ai"`，`why: "只影響問題及例子的用字，可以更改。"`。類別只可以喺呢一項出現，其他地方唔寫；其餘格嘅 label 保持上表原文，值按既有用字規則寫。
+
+  第二項用 `kind: "choice"`，選項依次為「盡快有收入」「小而穩的生意」「高速擴張」「準備融資」「未定」；Zero 建議的一項加 `rec: true`，`origin` 按出處，`why` 寫「影響 Zero 評估路線的標準，可以更改。」。`detail.model` 是模式組合：`name`、`payer`、三個 `faces`、`why`、`trap`、`firstTest`，可有 `altCharge`；卡號只可在 `card` 欄，其他可見文字不可含卡號。直接填路線另有剛好 16 項 `diagnosis`。
 
   其餘項目：創辦人答案或者文件寫明嘅用 `origin: "doc"` 並按現有來源規則附 `src`；AI 推斷用 `origin: "ai"`；不適用寫「不適用」；唔知而且推斷唔到嘅用 `origin: "missing"`、`value: "待你補充"`，並喺 `detail.missing` 說明。呢區嘅數字、人名、金額只可以來自答案或者文件，唔可以虛構。現有替代方案可以按行業常識或者公開資料估計，標 `origin: "ai"`；用到外部事實要按現有規則列標題、網址、查閱日期，只有摘要就寫明。
 

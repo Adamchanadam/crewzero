@@ -1,6 +1,6 @@
 ---
 name: update
-description: "把項目入面已安裝嘅 CrewZero 程式更新到插件嘅新版本，或者還原上一個版本；改名前裝嘅舊版（startup-os/ 資料夾）亦喺原位更新。Only for CrewZero, not a general updater. Use when the founder asks to update CrewZero (e.g. /crewzero:update in Claude Code, $crewzero:update in Codex, /update in Antigravity, 「更新 CrewZero」「有冇新版本」), or says 「還原上一個版本」. data/ is never touched. Every write needs the founder's explicit 「好」 in this conversation first."
+description: "把項目內已安裝的 CrewZero 程式更新到插件的新版本，或還原上一個版本；改名前安裝的舊版（startup-os/ 資料夾）亦會在原位更新。Only for CrewZero, not a general updater. Use when the founder asks to update CrewZero (e.g. /crewzero:update in Claude Code, $crewzero:update in Codex, /update in Antigravity, 「更新 CrewZero」「有冇新版本」), or says 「還原上一個版本」. data/ is never touched. Every write needs the founder's explicit 「好」 in this conversation first."
 ---
 
 <!--

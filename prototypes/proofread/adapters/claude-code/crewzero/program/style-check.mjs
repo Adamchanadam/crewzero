@@ -61,6 +61,14 @@ function visitOutput(out, fn) {
     function detail(o) {
       if (Array.isArray(o)) return o.forEach(detail);
       if (!o || typeof o !== 'object') return;
+      // 模式組合的選卡、來源、診斷及 zero 是機器欄位；只巡查創辦人看見的文字。
+      if (o === page.detail?.model) {
+        for (const key of ['name', 'payer', 'why']) check(o, key, 'company-page.json', '公司概覽細節');
+        check(o.trap, 'text', 'company-page.json', '公司概覽細節');
+        for (const key of ['text', 'watch', 'counts']) check(o.firstTest, key, 'company-page.json', '公司概覽細節');
+        for (const key of ['text', 'why']) check(o.altCharge, key, 'company-page.json', '公司概覽細節');
+        return;
+      }
       const skip = new Set(['id', 'plan', 'origin', 'kind', 'ref', 'src', 'until', 'by', 'flagTo']);
       for (const [k, v] of Object.entries(o)) if (!skip.has(k)) { if (typeof v === 'string' && !(k === 'value' && ['grade', 'date'].includes(o.kind))) check(o, k, 'company-page.json', '公司概覽細節'); else if (v && typeof v === 'object') detail(v); }
     }
@@ -70,7 +78,23 @@ function visitOutput(out, fn) {
   // 真實事件建議：AI 只寫摘要同每項理由（問題文字、選項由外殼按名稱表生成；級別機器值唔掃）
   const ev = readJSON(path.join(out, 'event.json'), null);
   if (ev) { check(ev, 'summary', 'event.json', '真實事件'); (Array.isArray(ev.items) ? ev.items : []).forEach((it, i) => check(it, 'why', 'event.json', `第 ${i + 1} 項理由`)); }
-  const objs = { 'receipt.json': receipt, 'ask.json': pack, 'company-page.json': page, 'event.json': ev };
+  // 旅程輸出中的選卡、來源及標籤是機器欄位；其餘字串均會在畫面顯示，包括未定格的 suggest。
+  const journeyFiles = { 'who.json': readJSON(path.join(out, 'who.json'), null), 'models.json': readJSON(path.join(out, 'models.json'), null), 'canvas.json': readJSON(path.join(out, 'canvas.json'), null) };
+  const journeyMachine = new Set(['card', 'quote', 'src', 'zero', 'tag', 'rec']);
+  function walkJourney(value, file, where) {
+    if (Array.isArray(value)) return value.forEach(item => walkJourney(item, file, where));
+    if (!value || typeof value !== 'object') return;
+    // 創辦人原話及與原話相同的值不應由語氣檢查改寫或降為 Zero 建議。
+    if (value.tag === 'mine') return;
+    for (const [key, item] of Object.entries(value)) {
+      if (journeyMachine.has(key)) continue;
+      if (key === 'value' && item === value.say) continue;
+      if (typeof item === 'string') check(value, key, file, where);
+      else if (item && typeof item === 'object') walkJourney(item, file, where);
+    }
+  }
+  for (const [file, value] of Object.entries(journeyFiles)) if (value) walkJourney(value, file, '開局旅程');
+  const objs = { 'receipt.json': receipt, 'ask.json': pack, 'company-page.json': page, 'event.json': ev, ...journeyFiles };
   for (const f of touched) if (objs[f]) fs.writeFileSync(path.join(out, f), JSON.stringify(objs[f], null, 2));
 }
 

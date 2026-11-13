@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { factMergeOn } from './features.mjs';
 
 export const pad = n => String(n).padStart(2, '0');
 // 模擬實例（設計稿第 8 節）：SOS_SIM=1 而且有獨立資料夾（SOS_DATA）先生效；時間 = 真時間 + founder/desk/sim-clock.json 嘅偏移。
@@ -22,6 +23,26 @@ export function localIso(d = clockNow()) {
 }
 export const stamp = (d = clockNow()) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 export const readJSON = (f, dflt) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return dflt; } };
+// 先讀後整份寫回的清單檔（例如 founder-ops.json）用：檔案不存在才回空清單；暫時讀不到會短暫重試；
+// 仍讀不到或內容不是清單就回 null，呼叫者不可寫回（否則會蓋掉未處理的項目；主線全面審查 2026-11-12 06-architecture 第 1 項）。
+// 問題包版本雜湊：保留全部題目，只去掉 closed／reopened 標記，所以收起或取回題目不會令創辦人已開着的作答頁失效；
+// 已收起的題逐題不套用（factClosedStale），其餘答案照常。開關打開時作答頁看到的問題包已濾走已收起的題，
+// 所以由伺服器 /api/ask 以磁碟上的完整問題包計好交給作答頁（hash 欄），作答頁照送。
+// 沒有這兩種標記的問題包，結果與 0.43.0 的 fnv(JSON.stringify(pack)) 相同。ask.html 的 packHash（後備）必須用同一算法。
+export function packHash(pack) {
+  const qs = pack && Array.isArray(pack.questions) ? pack.questions : null;
+  if (!qs || !qs.some(q => q && typeof q === 'object' && ('closed' in q || 'reopened' in q))) return fnv(JSON.stringify(pack));
+  return fnv(JSON.stringify({ ...pack, questions: qs.map(q => { if (!q || typeof q !== 'object') return q; const { closed, reopened, ...rest } = q; return rest; }) }));
+}
+export function readListStrict(f) {
+  for (let i = 0; i < 10; i++) {
+    let raw;
+    try { raw = fs.readFileSync(f, 'utf8'); }
+    catch (e) { if (e && e.code === 'ENOENT') return []; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); continue; }
+    try { const v = JSON.parse(raw); return Array.isArray(v) ? v : null; } catch { return null; }
+  }
+  return null;
+}
 // Founder 回覆由入口及外殼共用同一套解析規則：標頭不可重複，且只能有一個 JSON 區塊。
 // 否則入口與下游可能各自取到不同內容，令保護檢查失效。
 export function parseFounderReply(text) {
@@ -174,7 +195,7 @@ export function serverOwnership(port, reportedPid, programRoot) {
   const norm = s => process.platform === 'win32' ? String(s).replaceAll('/', '\\').toLocaleLowerCase('en-US') : String(s);
   return norm(command).includes(norm(path.join(programRoot, 'server.mjs'))) ? 'same' : 'other';
 }
-export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.43.0';
+export const ownsServerPort = (port, reportedPid, programRoot) => serverOwnership(port, reportedPid, programRoot) === 'same';export const SERVER_VERSION = 'proofread-chain-0.44.0';
 // 預設由 4380 開始；SOS_PORT 可以改（測試用，唔會撞到創辦人開緊嘅伺服器）
 export const BASE_PORT = Number(process.env.SOS_PORT) || 4380;
 
@@ -378,12 +399,18 @@ export function loadPack(dirs, id) {
   return readJSON(path.join(dirs.asks, id + '.json'), null);
 }
 export function loadAnswers(dirs, id) { return readJSON(path.join(dirs.answers, id + '.json'), { answers: {} }); }
+// 每週訪問續行判斷的共用定義；其餘既有流程暫時維持自己的既定判斷。
+export function requiresFounder(pack, q) {
+  return !!(q && (pack && pack.ideate || q.effect === 'now' || q.conflict || q.bind === 'results' || pack && pack.actionConfirm || pack && pack.acceptance && q.id === 'accept'));
+}
 export function listPacks(dirs) {
   return fs.readdirSync(dirs.asks).filter(f => f.endsWith('.json')).map(f => {
     const p = readJSON(path.join(dirs.asks, f), null);
     if (!p || !Array.isArray(p.questions)) return null;
     const a = loadAnswers(dirs, p.id).answers;
+    const merge = factMergeOn(), visible = q => !a[q.id] && (!merge || !q.closed);
     const answered = p.questions.filter(q => a[q.id]).length;
-    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.length - answered, urgent: p.questions.some(q => !a[q.id] && (q.effect === 'now' || q.conflict)), fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '', isHelp: !!p.help };
+    const closed = merge ? p.questions.filter(q => q && q.closed) : [];
+    return { id: p.id, title: p.title, askedBy: p.askedBy, askedAt: p.askedAt, total: p.questions.length, answered, open: p.questions.filter(visible).length, urgent: p.questions.some(q => visible(q) && (q.effect === 'now' || q.conflict)), fromRun: p.fromRun || null, helpForPackId: p.help && p.help.packId || '', isHelp: !!p.help, ...(merge && closed.length ? { closed } : {}) };
   }).filter(Boolean).sort((x, y) => String(y.askedAt).localeCompare(String(x.askedAt)));
 }

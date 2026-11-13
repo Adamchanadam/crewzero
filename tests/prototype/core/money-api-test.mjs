@@ -68,7 +68,7 @@ await certifyDirect(DATA, PROTO, ADAPTER);
 await certifyDirect(DEMO, PROTO, ADAPTER);
 const server = startServer(DATA, PORT);
 const demoServer = startServer(DEMO, PORT + 2);
-const { fnv } = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
+const { fnv, packHash } = await import(pathToFileURL(path.join(PROTO, 'ask-lib.mjs')).href);
 
 try {
   ok('MA-01 伺服器啟動', await ready(BASE) && await ready(DEMO_BASE));
@@ -212,7 +212,7 @@ try {
   const servedPack = served.json?.pack || pack;
   const replyText = shownAt => {
     const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: '2026-11-11T10:05:00+08:00', batch: ['q-money'], answers: [{ id: 'q-money', value: '修改後入帳', ai: '', changed: true, edit: { amount: '2,500.00', date: '2026-11-07', category: 'goods', what: '咖啡豆 3 公斤', payer: '工房乙' } }] };
-    const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + fnv(JSON.stringify(servedPack)), 'batch: false', 'shownAt: ' + shownAt];
+    const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + packHash(servedPack), 'batch: false', 'shownAt: ' + shownAt];
     return head.join('\n') + '\n\n# 答案：確認收據\n\n- 工房乙發票：咖啡豆 HK$2,350\n  - 你：已入帳 HK$2,500.00\n\n## 機器讀取部分（供 CrewZero 使用，毋須查閱）\n```json\n' + JSON.stringify(machine, null, 2) + '\n```\n';
   };
   const submit = text => api(BASE, '/api/submit', { kind: 'ask-answer', ref: pack.id, text });

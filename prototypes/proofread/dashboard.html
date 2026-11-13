@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CrewZero</title>
 <script src="/names.js"></script>
+<script src="/canvas-lib.js"></script>
+<script src="/canvas.js"></script>
 <script src="/md.js"></script>
 <script src="/pair.js"></script>
 <script src="/desk.js"></script>
@@ -394,11 +396,12 @@ details.legend-d .blegend{margin-top:6px}
 .own{width:100%;border-collapse:collapse;font-size:var(--fs-sub)}.own th,.own td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}.own th{color:var(--muted);font-weight:400;font-size:var(--fs-label);border-top:0}.own td.no{color:#ffc18e}
 .who-h{display:flex;gap:8px;align-items:baseline;margin:14px 0 4px;font-size:var(--fs-sub);font-weight:650}.who-h small{font-weight:400;color:var(--muted)}
 .sched .tx{flex:1;min-width:0}.who{display:inline-block;margin-left:8px;font-size:var(--fs-label);color:var(--mint);border:1px solid rgba(153,215,188,.4);border-radius:6px;padding:0 6px;white-space:nowrap}.who.warn{color:#ffc18e;border-color:rgba(232,141,79,.6)}.who.me{color:var(--blue);border-color:rgba(194,214,250,.4)}
-.ppl .fld{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center;margin:10px 0}.ppl .fld label{color:var(--muted);font-size:var(--fs-sub)}.ppl .fld .in{box-sizing:border-box;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font:inherit}
+.ppl .fld{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center;margin:10px 0}.ppl .fld label{color:var(--muted);font-size:var(--fs-sub)}.ppl .fld .in{box-sizing:border-box;width:100%;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font:inherit}
 .pair-modal .layer.ppl{width:min(520px,100%)}.pair-modal .mm{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin:10px 0}.mm .box{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:var(--fs-sub)}.mm .box small{display:block;color:var(--muted);font-size:var(--fs-label)}.mm .arrow{color:var(--amber);font-size:var(--fs-title)}
+.ppl-kind-team{margin-top:8px;padding:4px 12px 8px;border:1px solid rgba(153,215,188,.35);border-radius:7px;background:rgba(153,215,188,.03)}.ppl-kind-team[hidden]{display:none}.ppl .ppl-kind-team .fld{align-items:start}.ppl .ppl-kind-team .fld label{padding-top:9px}.ppl .ppl-kind-team .req{color:var(--amber);font-weight:400;margin-left:2px}.ppl-kind-hint{display:block;margin-top:4px;color:var(--muted);font-size:var(--fs-label)}.ppl-kind-hint.err{color:var(--red)}.ppl-kind-types{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.ppl-kind-types .opt{margin-top:0;padding:8px;font-size:var(--fs-sub);white-space:nowrap}
 @media (max-width:900px){.pr{grid-template-columns:1fr}.mem-grid{grid-template-columns:1fr}.fixwrap .btn{width:100%}.menu{left:0;right:0;min-width:0}}
 @media (max-width:700px){.ppl .term{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"tn fix" "tm tm"}.ppl .term .tn{grid-area:tn}.ppl .term .tmeta{grid-area:tm}.ppl .term .fixwrap{grid-area:fix}}
-@media (max-width:600px){.ppl .btn,.ppl .btn.small,.pair-modal .btn{min-height:44px;height:auto;padding:8px 16px}.ppl .chips .chip{min-height:44px}.menu a{min-height:44px}.pair-modal .opt{min-height:48px}.ppl .fld{grid-template-columns:1fr;gap:4px}.ppl .fld .in{height:44px}.pair-modal .mm{grid-template-columns:1fr}.mm .arrow{text-align:center;transform:rotate(90deg)}.ppl .closed summary{min-height:44px;display:flex;align-items:center}.own th,.own td{padding:8px 6px}}
+@media (max-width:600px){.pair-modal{overflow-y:auto}.pair-modal .layer.ppl{min-height:100vh;max-height:100vh;overflow-y:auto;justify-content:flex-start}.ppl .btn,.ppl .btn.small,.pair-modal .btn{min-height:44px;height:auto;padding:8px 16px}.ppl .chips .chip{min-height:44px}.menu a{min-height:44px}.pair-modal .opt{min-height:48px}.ppl .fld{grid-template-columns:1fr;gap:4px}.ppl .fld .in{height:44px}.ppl .ppl-kind-team .fld label{padding-top:0}.pair-modal .mm{grid-template-columns:1fr}.mm .arrow{text-align:center;transform:rotate(90deg)}.ppl .closed summary{min-height:44px;display:flex;align-items:center}.own th,.own td{padding:8px 6px}}
 .track5{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .track5 span{font-size:var(--fs-min);color:var(--muted);text-align:center;border-top:3px solid rgba(255,255,255,.08);padding-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .track5 span.on{border-top-color:var(--mint);color:var(--text)}
@@ -590,7 +593,8 @@ body.settled .panel.updated{animation:ov-panel-flash .32s ease-out}
 .num.tick{animation:pop .6s ease-out}
 @keyframes pop{0%{transform:scale(1.25);color:#ffd3ae;text-shadow:0 0 18px rgba(232,141,79,.8)}100%{transform:none}}
 /* A 帶壓縮條（方案 B）：里程碑量尺條＋小旗＋範圍＋待你處理三個數與首項 */
-.band.strip{grid-template-columns:minmax(0,1fr) 420px;align-items:stretch;margin-top:8px}
+.band.strip{grid-template-columns:minmax(0,1fr) 420px;align-items:start;margin-top:8px}
+.strip-side{display:grid;gap:14px;min-width:0}
 .strip-panel{padding:7px 12px 6px}
 .strip-cap{display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-min);color:var(--muted);margin:0 2px 5px;white-space:nowrap;overflow:hidden}
 .strip-cap b{color:#d9dde4;font-weight:500}.strip-cap .flag{color:#ffc18e;overflow:hidden;text-overflow:ellipsis}
@@ -1476,6 +1480,15 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
         h('a', { class: 'btn primary', href: top.href }, '★ ' + (top.kind === 'overview' ? D.toOverview : top.kind === 'schedule' ? N.ui.schedGoSystem : D.answerNowL)))
         : h('p', { class: 'sub empty' }, D.noTodo)];
   }
+  function canvasMini() {
+    var box = $('#canvas-mini'); if (!box) return;
+    fetch('/api/canvas', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+      if (!box || !data || !data.confirmed) { if (box) box.hidden = true; return; }
+      var key = JSON.stringify([data.pageId, data.view && data.view.rev, data.levelsShown, data.weakest, data.view && data.view.suggestions]);
+      if (box._canvasKey === key) return; box._canvasKey = key; box.hidden = false;
+      window.SOS_CANVAS_UI.render(box, data, { mode: 'mini', onSeeAll: function () { location.href = '/proofread.html'; } });
+    }).catch(function () { if (box) box.hidden = true; });
+  }
 
   /* 運作環資料：會話（宿主短名＋序號、標題、狀態、子代理、對應任務）、任務欄（≤ 8）、三個膠囊、並發數與等級 */
   var HOSTN = { claude: D.host_claude, codex: D.host_codex };
@@ -1670,7 +1683,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     panelSync('needs', JSON.stringify([(x.todo || []).map(function (t) { return [t.id, t.text, t.state]; }), x.inputs.awaiting.length, x.inputs.unprocessed.length]), todoMini, !scopeOnly);
     // 三個數真係改變：數字 pop 一下（.6 秒）
     if (!V.paused && !REDUCED) [].forEach.call(document.querySelectorAll('#needs .needn'), function (a) { var k = a.getAttribute('data-need'), n = a.querySelector('.num'); if (nb[k] != null && nb[k] !== n.textContent) { n.classList.add('tick'); setTimeout(function () { n.classList.remove('tick'); }, 700); } });
-    syncOrbit(scopeOnly);
+    canvasMini(); syncOrbit(scopeOnly);
     var n = syncEvents(); if (n && !scopeOnly) flowPanel($('#evstream'));
     syncIndex(); syncBrain(); syncSpark(); syncExtOverview();
   }
@@ -1679,7 +1692,9 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     return h('div', { id: 'ov' }, h('div', { id: 'block-wrap' }),
       mnyOverviewLine(),
       h('section', { class: 'panel', id: 'ext-overview' }),
-      h('div', { class: 'band strip' }, h('section', { class: 'panel strip-panel', id: 'strip', 'aria-label': D.stripTitle }), h('section', { class: 'panel todo-mini needs', id: 'needs', 'aria-label': D.todo })),
+      h('div', { class: 'band strip' }, h('section', { class: 'panel strip-panel', id: 'strip', 'aria-label': D.stripTitle }), h('div', { class: 'strip-side' }, h('section', { class: 'panel todo-mini needs', id: 'needs', 'aria-label': D.todo }))),
+      // 生意模式圖小卡獨佔一行：放在右欄會把左欄「業務路徑」下方拉出大片空白（截圖 c6b）
+      h('section', { class: 'panel', id: 'canvas-mini', hidden: true }),
       h('div', { class: 'band b' },
         h('section', { class: 'panel orbit-panel arena-panel', id: 'arena-panel', 'data-level': '0' }, h('div', { class: 'ph', id: 'orbit-head' }), h('div', { class: 'orbit', id: 'orbit', 'aria-label': D.workNet }), h('ul', { class: 'o-list arena-list', id: 'arena-list', 'aria-label': D.workNet })),
         h('section', { class: 'panel evstream', id: 'evstream' }, h('div', { class: 'ph' }, h('h2', null, D.eventStream)), h('div', { id: 'evbody' }), h('div', { class: 'tele' }, phTele(), h('span', { id: 'ev-spark' }), h('span', null, D.eventNote)))),
@@ -2382,7 +2397,10 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       h('div', null, h('div', { class: 'h3s', style: 'margin-top:0' }, D.weakest), h('div', { class: 'weaklist' }, d.weak.map(function (c, i) {
         return h('div', { class: 'weak' }, h('span', { class: 'rank' }, String(i + 1)), h('h4', null, c.title, srcTag(c.source)),
           h('div', { class: 'gauge' }, h('span', null, D.evidenceLevel), h('span', { class: 'bar' }, h('b', { style: 'width:' + ((Number(c.evidence) || 0) + 1) * 20 + '%' })), h('span', null, EV[Math.max(0, Math.min(4, Number(c.evidence) || 0))])),
-          h('dl', null, h('dt', null, D.weakWhy), h('dd', null, c.why), h('dt', null, D.cheapestTest), h('dd', null, c.cheapestTest), h('dt', null, D.stopCondition), h('dd', null, c.stop)), fbBar(x.id, c.id));
+          h('dl', null, h('dt', null, D.weakWhy), h('dd', null, c.why), h('dt', null, D.cheapestTest), h('dd', null, c.cheapestTest), h('dt', null, D.stopCondition), h('dd', null, c.stop),
+            // 0.44.0：體檢列出「需要的數字」及取得方法（方案 0.4 第 3 項；不填估計值）
+            Array.isArray(c.numbers) && c.numbers.length ? h('dt', null, N.ui.cvNumbersNeeded) : null,
+            Array.isArray(c.numbers) && c.numbers.length ? h('dd', null, c.numbers.map(function (n) { return String(n && n.what || '') + (n && n.how ? '（' + n.how + '）' : ''); }).filter(Boolean).join('；')) : null), fbBar(x.id, c.id));
       }))),
       h('div', null,
         h('div', { class: 'sidecard' }, h('h4', null, D.unseen), h('ul', null, (d.unseen || []).map(function (u) { return h('li', null, u.text, ' ', srcTag(u.source)); })), fbBar(x.id, 'unseen')),
@@ -2748,6 +2766,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   /* ---------- 人物及機構名單（0.40.0）：對象推進追蹤（五格推進板）＋更正；團隊成員見團隊頁。
      資料全部來自 /api/dashboard 的 brain.pipeline（格位）及 people（成員、已不再接觸、G6 生成）；更正經創辦人操作隊列，本機即時，不經 Zero。 */
   var PPL_KINDS = ['customer', 'partner', 'investor', 'advisor'];
+  // 瀏覽器端不載入 people-ops.mjs；此清單與其 TEAM_TYPES 對應，提交仍由伺服器按 TEAM_TYPES 驗證。
+  var PPL_TEAM_TYPES = ['cofounder', 'fulltime', 'parttime', 'contractor'];
   function pplKind(k) { return D['ppl_kind_' + k] || k; }
   // 舊資料（示範的結果卡）只有舊顯示字串，沒有代碼：讀時對應
   function pplCode(p) { return p.kindCode || ({ '客戶': 'customer', '供應': 'partner', '投資者': 'investor', '顧問': 'advisor' }[p.kind]) || 'customer'; }
@@ -2756,8 +2776,8 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
   function memberRole(m) { var t = m.team ? D['team_' + m.team.type] || '' : ''; return [t, m.role].filter(Boolean).join('・'); }
   function pplSub(p) { return [p.org, p.role].filter(Boolean).join('・'); }
   function fixError(e) {
-    var code = e && (e.error || (e.body && e.body.error));
-    var map = { duplicateName: D.ppl_errDuplicate, contactInfo: D.ppl_errContact, needRole: D.ppl_errNeedRole, merged: D.ppl_errMerged };
+    var code = e && (e.code || e.error || (e.body && e.body.error));
+    var map = { duplicateName: D.ppl_errDuplicate, contactInfo: D.ppl_errContact, roleContact: D.ppl_errRoleContact, roleTooLong: D.ppl_errRoleTooLong, needRole: D.ppl_errNeedRole, needTeamType: D.ppl_errNeedTeamType, merged: D.ppl_errMerged };
     return (code && map[code]) || (e && e.said) || D.ppl_errGeneric;
   }
   function sendFix(op, target, value) {
@@ -2783,10 +2803,34 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     openPplModal(D.ppl_fix + ' · ' + D.ppl_fixRename, D.ppl_renameTitle, [h('p', { class: 'small muted' }, D.ppl_renameBody), h('div', { class: 'fld' }, h('label', null, D.ppl_renameField), inp)], [go, pplCancel()]);
   }
   function dlgKind(p) {
-    var cur = pplCode(p);
-    var opts = PPL_KINDS.map(function (k) { return h('button', { type: 'button', class: 'opt' + (k === cur ? ' cur' : ''), 'data-kind': k, onclick: function () { cur = k; opts.forEach(function (o) { o.classList.toggle('cur', o.getAttribute('data-kind') === cur); }); } }, h('span', { class: 'dot' }), h('span', null, pplKind(k))); });
-    var go = h('button', { type: 'button', class: 'btn primary big', onclick: function () { if (cur === pplCode(p)) { closePplModal(); return; } go.disabled = true; sendFix('actorKind', p.id, { kind: cur }).catch(function () { go.disabled = false; }); } }, D.ppl_save);
-    openPplModal(D.ppl_fix + ' · ' + D.ppl_fixKind, D.ppl_kindTitle, [h('p', { class: 'small muted' }, D.ppl_kindBody), opts], [go, pplCancel()]);
+    var cur = pplCode(p), teamType = '';
+    var role = h('input', { type: 'text', id: 'ppl-kind-role', class: 'in', maxlength: '40', value: p.role || '', placeholder: D.ppl_kindRolePh, 'aria-describedby': 'ppl-kind-role-hint' });
+    var roleHint = h('span', { class: 'ppl-kind-hint', id: 'ppl-kind-role-hint' }, D.ppl_kindRoleHint);
+    var teamNote = h('p', { class: 'small muted', id: 'ppl-kind-team-note', style: 'margin:6px 0 0' }, D.ppl_kindTeamNote);
+    var typeOpts = PPL_TEAM_TYPES.map(function (type) { return h('button', { type: 'button', class: 'opt', 'data-team-type': type, onclick: function () { teamType = type; draw(); } }, h('span', { class: 'dot' }), h('span', null, D['team_' + type])); });
+    var teamFields = h('div', { class: 'ppl-kind-team', id: 'ppl-kind-team-fields', hidden: true },
+      h('div', { class: 'fld' }, h('label', { for: 'ppl-kind-role' }, D.ppl_kindRole, h('b', { class: 'req' }, '*')), h('div', null, role, roleHint)),
+      h('div', { class: 'fld' }, h('label', null, D.ppl_kindTeamType, h('b', { class: 'req' }, '*')), h('div', { class: 'ppl-kind-types', role: 'radiogroup', 'aria-label': D.ppl_kindTeamType }, typeOpts)),
+      teamNote);
+    var opts = PPL_KINDS.concat('team').map(function (k) { return h('button', { type: 'button', class: 'opt' + (k === cur ? ' cur' : ''), 'data-kind': k, onclick: function () { cur = k; roleHint.textContent = D.ppl_kindRoleHint; roleHint.classList.remove('err'); teamNote.textContent = D.ppl_kindTeamNote; teamNote.classList.remove('err'); draw(); } }, h('span', { class: 'dot' }), h('span', null, pplKind(k))); });
+    function draw() {
+      opts.forEach(function (o) { o.classList.toggle('cur', o.getAttribute('data-kind') === cur); });
+      typeOpts.forEach(function (o) { o.classList.toggle('cur', o.getAttribute('data-team-type') === teamType); });
+      teamFields.hidden = cur !== 'team';
+    }
+    role.addEventListener('input', function () { roleHint.textContent = D.ppl_kindRoleHint; roleHint.classList.remove('err'); });
+    var go = h('button', { type: 'button', class: 'btn primary big', onclick: function () {
+      if (cur === pplCode(p) && cur !== 'team') { closePplModal(); return; }
+      if (cur === 'team') {
+        var roleValue = role.value.trim();
+        if (!roleValue) { roleHint.textContent = D.ppl_errNeedRole; roleHint.classList.add('err'); role.focus(); return; }
+        if (!teamType) { teamNote.textContent = D.ppl_errNeedTeamType; teamNote.classList.add('err'); return; }
+        go.disabled = true; sendFix('actorKind', p.id, { kind: cur, role: roleValue, teamType: teamType }).catch(function () { go.disabled = false; }); return;
+      }
+      go.disabled = true; sendFix('actorKind', p.id, { kind: cur }).catch(function () { go.disabled = false; });
+    } }, D.ppl_save);
+    openPplModal(D.ppl_fix + ' · ' + D.ppl_fixKind, D.ppl_kindTitle, [h('p', { class: 'small muted' }, D.ppl_kindBody), opts, teamFields], [go, pplCancel()]);
+    draw();
   }
   function dlgMerge(p, pool) {
     var others = pool.filter(function (x) { return x.id !== p.id; }), pick = null, body = h('div', null), acts = h('div', { style: 'display:contents' });
@@ -3103,12 +3147,53 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
     var currency = h('input', { id: 'mny-currency', value: money.mainCurrency || form.currency || 'HKD', disabled: !!money.mainCurrency });
     var what = h('textarea', { id: 'mny-what' }, form.what), files = h('input', { type: 'file', multiple: true, class: 'mny-file', id: 'mny-files' });
     var more = h('details', { class: 'mny-box' }, h('summary', null, N.ui.mnyMoreFields), h('div', { class: 'mny-form' }, h('label', null, N.ui.mnyFieldCurrency, currency), h('label', null, N.ui.mnyFieldCategory, category), h('label', null, N.ui.mnyFieldWhat, what), h('label', null, N.ui.mnyFieldFiles, files)));
-    var submit = h('button', { type: 'button', id: 'mny-add-submit', class: 'btn primary', onclick: function () {
-      submit.disabled = true; form.amount = amount.value; form.date = date.value; form.payer = payer.value; form.counterpartId = counterpart.value; form.currency = currency.value; form.category = category.value; form.what = what.value; form.list = list.value;
-      mnyFileData(files.files).then(function (encoded) { return mnyPost({ action: 'add', dir: form.dir, amount: form.amount, currency: money.mainCurrency || form.currency || 'HKD', date: form.date, payer: form.payer, counterpartId: form.counterpartId || '', category: form.category, what: form.what, files: encoded, ...(form.list === 'name' ? {} : { addToList: { kind: form.list } }) }); }).catch(function () { submit.disabled = false; });
-    } }, N.ui.mnyRecord);
-    var switches = ['in', 'out'].map(function (key) { return h('button', { type: 'button', class: 'btn' + (form.dir === key ? ' primary' : ''), onclick: function () { form.dir = key; form.category = key === 'in' ? 'sales' : 'goods'; fillCategories(); switches.forEach(function (button) { button.classList.toggle('primary', button === this); }, this); } }, key === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut); });
-    return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyAdd), h('button', { type: 'button', class: 'btn small', onclick: function () { V.moneyForm = null; mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('div', { class: 'mny-form' }, h('div', { class: 'mny-switch' }, switches), h('label', null, N.ui.mnyFieldAmount, amount), h('label', null, N.ui.mnyFieldDate, date), h('label', null, N.ui['mnyFieldPayer'] || N.ui.mnyFieldWho, payer), h('label', null, N.ui['mnyFieldListedCounterpart'] || N.ui.mnyFieldWho, counterpart), h('label', null, N.ui.mnyAddToList, list), more, h('div', { class: 'mny-actions' }, submit, h('button', { type: 'button', class: 'btn', onclick: function () { V.moneyForm = null; mnyShow(''); } }, N.ui.mnyBalanceCancel))));
+    function syncForm() { form.amount = amount.value; form.date = date.value; form.payer = payer.value; form.counterpartId = counterpart.value; form.currency = currency.value; form.category = category.value; form.what = what.value; form.list = list.value; }
+    // 改動任何欄位後提示消失、按鈕回復：只在原位更新，不重畫整個表格（保留輸入焦點及已選附件）
+    function clearDup(e) {
+      if (!form.dup) return false;
+      syncForm(); delete form.dup;
+      if (e && e.target === files) delete form.files;
+      var hint = document.getElementById('mny-dup-hint'); if (hint) hint.remove();
+      if (actions) actions.replaceChildren(submit, cancel);
+      return true;
+    }
+    function dupDate(value) { var found = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '')); return found ? (+found[1]) + ' 年 ' + (+found[2]) + ' 月 ' + (+found[3]) + ' 日' : ''; }
+    function dupWhy(row) { return row.why === 'number' ? N.t('mnyDupWhyNumber', { no: String(row.noShown || row.no || '') }) : row.why === 'amount' ? N.ui.mnyDupWhyAmount : N.ui.mnyDupWhyPayer; }
+    function dupMoney(amountCents, currency) { var shown = mnyFmt(amountCents, currency); return /\.\d{2}$/.test(shown) ? shown : shown + '.00'; }
+    function dupNote() { return DESK.note('warn', [h('span', null, N.ui.mnyDupLead), h('ul', { class: 'm-sum dup-list', style: 'margin:6px 0 4px;padding:0;list-style:none;display:grid;gap:6px' }, (form.dup || []).map(function (row) { return h('li', { style: 'display:grid;gap:2px' }, h('span', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:baseline' }, h('span', null, dupDate(row.date)), h('span', null, row.payer || ''), h('span', { style: 'font-family:var(--mono)' }, dupMoney(row.amountCents, row.currency)), h('span', { class: 'tag' }, row.where === 'waiting' ? N.ui.mnyDupWhereWaiting : N.ui.mnyDupWhereLedger)), h('span', { class: 'small muted' }, dupWhy(row))); })), h('span', null, N.ui.mnyDupQuickHint)], { id: 'mny-dup-hint' }); }
+    function addBody(encoded, allowDup) { return { action: 'add', dir: form.dir, amount: form.amount, currency: money.mainCurrency || form.currency || 'HKD', date: form.date, payer: form.payer, counterpartId: form.counterpartId || '', category: form.category, what: form.what, files: encoded, ...(form.list === 'name' ? {} : { addToList: { kind: form.list } }), ...(allowDup ? { allowDup: true } : {}) }; }
+    function postAdd(body) {
+      return fetch('/api/money', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function () { throw DESK.netError(); }).then(function (response) {
+        return response.json().catch(function () { return null; }).then(function (result) {
+          if (result && result.error === 'dup') return result;
+          if (!response.ok || !result || result.ok === false) throw DESK.apiError(response, result);
+          return result;
+        });
+      });
+    }
+    function submitAdd(force, button) {
+      button.disabled = true; syncForm();
+      // 重畫後檔案欄是空的：已編碼的附件保存在 form.files，強制入帳或改欄位後再送都沿用
+      var picked = files.files && files.files.length;
+      var encoded = force || !picked ? Promise.resolve(form.files || []) : mnyFileData(files.files);
+      encoded.then(function (value) { form.files = value; return postAdd(addBody(value, force)); }).then(function (result) {
+        // 金額頁忙碌時 render 會略過重畫，要先標明需要重畫（R 線驗收 RE-48–55）
+        if (result && result.error === 'dup') { form.dup = result.dup || []; button.disabled = false; V.moneyDraw = true; render(true); return; }
+        V.moneyForm = null;
+        toast((result && result.message) || N.ui.mnySaved); V.moneyReadAt = 0; V.moneyMode = ''; V.moneyImport = null; return load();
+      }).catch(function (error) {
+        // 非重複的失敗（例如檔案過大、伺服器出錯）：清走已編碼的附件，下次按檔案欄現況重新讀取，不會送出舊附件（覆核第 5 項）
+        if (!force) form.files = null;
+        button.disabled = false; toast(why(error));
+      });
+    }
+    [amount, date, payer, counterpart, category, list, currency, what, files].forEach(function (field) { field.addEventListener(field === amount || field === payer || field === what ? 'input' : 'change', clearDup); });
+    var submit = h('button', { type: 'button', id: 'mny-add-submit', class: 'btn primary', onclick: function () { submitAdd(false, submit); } }, N.ui.mnyRecord);
+    var force = h('button', { type: 'button', id: 'mny-add-force', class: 'btn primary', onclick: function () { submitAdd(true, force); } }, N.ui.mnyDupForce);
+    var cancel = h('button', { type: 'button', class: 'btn', onclick: function () { V.moneyForm = null; mnyShow(''); } }, N.ui.mnyBalanceCancel);
+    var actions = h('div', { class: 'mny-actions' }, form.dup && form.dup.length ? [force, cancel] : [submit, cancel]);
+    var switches = ['in', 'out'].map(function (key) { return h('button', { type: 'button', class: 'btn' + (form.dir === key ? ' primary' : ''), onclick: function () { var wasDup = !!form.dup; form.dir = key; form.category = key === 'in' ? 'sales' : 'goods'; if (wasDup) { delete form.dup; V.moneyDraw = true; render(true); return; } fillCategories(); switches.forEach(function (button) { button.classList.toggle('primary', button === this); }, this); } }, key === 'in' ? N.ui.mnyDirIn : N.ui.mnyDirOut); });
+    return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyAdd), h('button', { type: 'button', class: 'btn small', onclick: function () { V.moneyForm = null; mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('div', { class: 'mny-form' }, h('div', { class: 'mny-switch' }, switches), h('label', null, N.ui.mnyFieldAmount, amount), h('label', null, N.ui.mnyFieldDate, date), h('label', null, N.ui['mnyFieldPayer'] || N.ui.mnyFieldWho, payer), h('label', null, N.ui['mnyFieldListedCounterpart'] || N.ui.mnyFieldWho, counterpart), h('label', null, N.ui.mnyAddToList, list), more, form.dup && form.dup.length ? dupNote() : null, actions));
   }
   function mnyGoalForm() {
     var target = V.data.goals && V.data.goals.quarter && V.data.goals.quarter.target || {}, metric = target.metric || 'payers';
@@ -3133,7 +3218,7 @@ body.paused .ev.fresh{animation:none;border-left-color:var(--amber)}
       return h('section', { class: 'panel mny-dialog' }, h('div', { class: 'mny-head' }, h('h2', null, N.ui.mnyImport), h('button', { type: 'button', class: 'btn small', onclick: function () { mnyShow(''); } }, N.ui.mnyBalanceCancel)), h('div', { class: 'mny-form' }, h('label', null, N.ui.mnyImportKind, kind)), h('div', { class: 'mny-actions' }, file, open));
     }
     var summary = V.moneyImportSummary || batch.summary || {}, fields = batch.map && batch.map.fields || {}, headers = batch.headers || batch.map && batch.map.headers || [], choices = function (value) { return h('select', null, h('option', { value: '' }, '—'), headers.map(function (head) { return h('option', { value: head, selected: value === head ? true : null }, head); })); };
-    var mapRows = [['date', N.ui.mnyFieldDate], ['amount', N.ui.mnyFieldAmount], ['currency', N.ui.mnyFieldCurrency], ['payer', N.ui.mnyFieldWho], ['category', N.ui.mnyFieldCategory], ['what', N.ui.mnyFieldWhat], ['orderNo', N.ui.mnyFieldOrderNo], ['status', N.ui.mnyFieldStatus], ['fee', N.ui.mnyFieldFee]].map(function (item) { var select = choices(fields[item[0]] || ''); select.setAttribute('data-mny-map', item[0]); return h('label', null, item[1], select); });
+    var mapRows = [['date', N.ui.mnyFieldDate], ['amount', N.ui.mnyFieldAmount], ['currency', N.ui.mnyFieldCurrency], ['payer', N.ui.mnyFieldWho], ['what', N.ui.mnyFieldWhat], ['orderNo', N.ui.mnyFieldOrderNo], ['status', N.ui.mnyFieldStatus], ['fee', N.ui.mnyFieldFee]].map(function (item) { var select = choices(fields[item[0]] || ''); select.setAttribute('data-mny-map', item[0]); return h('label', null, item[1], select); });
     var next = h('button', { type: 'button', class: 'btn primary', onclick: function () { var nextFields = Object.assign({}, fields); [].forEach.call(document.querySelectorAll('[data-mny-map]'), function (select) { nextFields[select.getAttribute('data-mny-map')] = select.value; }); next.disabled = true; mnyPost({ action: 'importMap', id: batch.id, kind: batch.kind || 'other', map: { ...(batch.map || {}), fields: nextFields } }).then(function () { mnyOpenImport(batch.id); }).catch(function () { next.disabled = false; }); } }, N.ui.mnyImportMap);
     var confirm = h('button', { type: 'button', id: 'mny-import-confirm', class: 'btn primary', disabled: Number(summary.total || 0) ? null : true, onclick: function () { confirm.disabled = true; mnyPost({ action: 'importConfirm', id: batch.id }).catch(function () { confirm.disabled = false; }); } }, N.ui.mnyImportAll);
     var cancel = h('button', { type: 'button', class: 'btn', onclick: function () { mnyPost({ action: 'importCancel', id: batch.id }).catch(function () { }); } }, N.ui.mnyImportCancel);

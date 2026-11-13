@@ -45,7 +45,7 @@ function proofread() {
 function answer(P, values = {}) {
   const answers = P.questions.map(q => { const v = values[q.id] ?? q.value; return { id: q.id, value: v, ai: q.value, changed: v !== q.value }; });
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: P.questions.map(q => q.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
   return post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
 }
 // 生意體檢之後嘅「建議開辯論」、商機掃描之後嘅「要跟進嗎？」（brain-c2-test 測試）：呢度一律答暫不，等原本嘅檢查照做
@@ -215,7 +215,7 @@ try {
   const repliesDir = path.join(DATA, 'founder', 'replies'), answersDir = path.join(DATA, 'ledger', 'answers'), personaDir = path.join(DATA, 'practice', 'scenarios');
   const filesSnapshot = dir => fs.existsSync(dir) ? fs.readdirSync(dir).sort().map(f => [f, fs.readFileSync(path.join(dir, f), 'utf8')]) : [];
   const beforeMismatch = JSON.stringify({ state: state(), replies: filesSnapshot(repliesDir), answers: filesSnapshot(answersDir), personas: filesSnapshot(personaDir) });
-  const wrongReply = ['kind: ask-answer', 'ref: ' + bp.id, 'hash: ' + lib.fnv(JSON.stringify(bp)), '', '```json', JSON.stringify({ format: 'startup-os.ask-reply/0.1', pack: 'another-pack', answers: [{ id: 'd1', value: bp.questions[0].value }] }), '```'].join('\n');
+  const wrongReply = ['kind: ask-answer', 'ref: ' + bp.id, 'hash: ' + (lib.packHash ? lib.packHash(bp) : lib.fnv(JSON.stringify(bp))), '', '```json', JSON.stringify({ format: 'startup-os.ask-reply/0.1', pack: 'another-pack', answers: [{ id: 'd1', value: bp.questions[0].value }] }), '```'].join('\n');
   const rejected = await post('/api/submit', { kind: 'ask-answer', ref: bp.id, text: wrongReply });
   ok('HTTP 拒收跨包同題號，帳本、人物卡、答案及回覆不變', rejected.code === 400 && JSON.stringify({ state: state(), replies: filesSnapshot(repliesDir), answers: filesSnapshot(answersDir), personas: filesSnapshot(personaDir) }) === beforeMismatch, rejected);
   const d2 = await get('/api/dashboard'), asks = await get('/api/asks');

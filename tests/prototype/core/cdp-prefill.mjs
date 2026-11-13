@@ -64,6 +64,9 @@ try {
   await waitFor(async () => { const s = await (await fetch(BASE + 'api/setup')).json(); return s.certify && s.certify.state !== 'running'; });
   await send('Page.navigate', { url: BASE + '#/intake' }); await sleep(1800);
   if (await ev(`!!document.querySelector('#intake-anyway')`)) await ev(`document.querySelector('#intake-anyway').click()`);
+  // 0.44.0 已批設計：沒有八題草稿時告訴 Zero 頁先顯示起點，要按「直接填八條問題」才出八題表格
+  await waitFor(async () => (await has('#q1')) || await ev(`[...document.querySelectorAll('button,a,[role=button]')].some(x=>x.textContent.trim()===${JSON.stringify(N.ui.jrPathFillGo)}&&x.getClientRects().length>0)`), 15000);
+  if (!(await has('#q1'))) { await ev(`[...document.querySelectorAll('button,a,[role=button]')].find(x=>x.textContent.trim()===${JSON.stringify(N.ui.jrPathFillGo)}&&x.getClientRects().length>0).click()`); await waitFor(() => has('#q1'), 15000); }
   ok('交資料頁：文件區排喺題目之前，有「由文件預填」掣', await ev(`(()=>{const b=document.querySelector('#pf-go'),q=document.querySelector('#q1');return !!b&&!!q&&!!(b.compareDocumentPosition(q)&Node.DOCUMENT_POSITION_FOLLOWING)})()`));
   ok('未加文件：「由文件預填」停用', await ev(`document.querySelector('#pf-go').disabled`));
   ok('交資料頁：毋須先選類別，八題可以直接填寫', await ev(`!document.querySelector('input[name="biz-type"]')&&Array.from({length:8},(_,i)=>!!document.querySelector('#q'+(i+1))).every(Boolean)`));

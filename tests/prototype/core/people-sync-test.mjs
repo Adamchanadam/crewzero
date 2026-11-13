@@ -42,7 +42,7 @@ const styleHits = texts => texts.flatMap(t => N.styleIssues(String(t || '')).map
 async function answer(Q, pick) {
   const answers = Q.questions.map(q => ({ q, v: pick(q) })).filter(x => x.v !== undefined).map(({ q, v }) => ({ id: q.id, value: v, ai: q.value, changed: v !== q.value }));
   const machine = { format: 'startup-os.ask-reply/0.1', pack: Q.id, confirmedAt: lib.localIso(), batch: answers.map(a => a.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + Q.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(Q)), 'batch: ' + (answers.length < Q.questions.length), 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + Q.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(Q) : lib.fnv(JSON.stringify(Q))), 'batch: ' + (answers.length < Q.questions.length), 'shownAt: ' + lib.localIso()];
   const r = await post('/api/submit', { kind: 'ask-answer', ref: Q.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
   await sleep(3500); shell();
   return r;
@@ -194,7 +194,8 @@ try {
   const nSyncPacks = syncPacks().length;
   await answer(pkC2, q => '還是再想想');
   s = state();
-  ok('8 第二次仍用自訂答案：不再問（沒有新包、擱置清空）、仍不算拒絕、再記下原話', syncPacks().length === nSyncPacks && s.peopleSync.pending.length === 0 && !s.peopleSync.packId && !s.peopleSync.declined[P.norm('自訂甲')] && s.peopleSync.reasked[P.norm('自訂甲')] === 2 && (s.events || []).some(e => e.title.includes('還是再想想')), { packs: syncPacks().length, pending: s.peopleSync.pending, reasked: s.peopleSync.reasked });
+  // 0.44.0：第二次自訂答案只結束這一題，不再以 reasked === 2 永久封鎖名稱（名稱鍵不留）；之後事件再提到同名照常出題（見 people-match-flow-test.mjs PM-6）
+  ok('8 第二次仍用自訂答案：這一題結束（沒有新包、擱置清空）、仍不算拒絕、再記下原話（peopleCustomClosed）、名稱不留封鎖', syncPacks().length === nSyncPacks && s.peopleSync.pending.length === 0 && !s.peopleSync.packId && !s.peopleSync.declined[P.norm('自訂甲')] && !(s.peopleSync.reasked || {})[P.norm('自訂甲')] && (s.events || []).some(e => e.title === N.t('peopleCustomClosed', { n: '自訂甲', s: '還是再想想' })), { packs: syncPacks().length, pending: s.peopleSync.pending, reasked: s.peopleSync.reasked, ev: (s.events || []).slice(-2).map(e => e.title) });
   ok('8 自訂答案的事件句不含內部編號及短日期', !styleHits((s.events || []).filter(e => e.title.includes('自訂甲')).map(e => e.title)).length);
   // 改類別題：自訂答案不算「維持」，下一批再問；之後選「改為」照常套用
   s = state(); s.peopleSync.pending = [{ kind: 'actorKind', id: 'pr-a2', name: '丙農場主', from: 'partner', actorKind: 'advisor', why: '測試：改類別自訂答案' }]; s.peopleSync.packId = ''; put(s);
@@ -251,8 +252,11 @@ try {
   s = state(); s.peopleSync.for = P.peopleSyncKey(s); delete s.peopleSync.lastTry; put(s);
 
   /* ---- 事件路徑：答「不加入」兩次後，同名不再建議 ---- */
+  // 0.44.0：十分鐘內同文字、同日期、同附件的再次提交當作重複（只入庫一次）；三次見面是三件不同日子的事，日期由前天起逐日遞增至今日
+  let roundsLeft = 3;
   const eventRound = async () => {
-    const ev = await post('/api/intake', { kind: 'note', type: 'event', text: '今日與乙餐廳黃小姐見面，她有興趣試單。', date: TODAY, files: [] });
+    const day = new Date(Date.now() - (--roundsLeft) * 86400000).toISOString().slice(0, 10);
+    const ev = await post('/api/intake', { kind: 'note', type: 'event', text: '今日與乙餐廳黃小姐見面，她有興趣試單。', date: day, files: [] });
     const inp = await waitFor(async () => { const st = state(); const i = (st.inputs || []).find(x => x.id === 'in-' + ev.j.id); return i && ['awaitingFounder', 'processed'].includes(i.status) ? i : null; }, 40000);
     const pk = inp && inp.packId ? packs().find(p => p.id === inp.packId) : null;
     return { inp, pk };

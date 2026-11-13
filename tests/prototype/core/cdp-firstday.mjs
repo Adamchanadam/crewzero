@@ -28,6 +28,16 @@ try {
   const ev = expression => chrome.ev(expression);
   const go = async (url, width = 1440) => { await chrome.go(BASE + url, width); await waitFor(() => ev(`!!document.querySelector('#first-steps, .desk-nav')`)); await sleep(500); };
   const shot = name => chrome.shot(path.join(OUT, name));
+  // 0.44.0 已批設計：沒有已存的八題草稿時，告訴 Zero 頁先顯示「起點」；要按「直接填八條問題」才見到八題表格。
+  const FILL_GO = JSON.stringify(N.ui.jrPathFillGo);
+  const startShown = () => ev(`[...document.querySelectorAll('button,a,[role=button]')].some(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0)`);
+  const fillPath = async () => {
+    await waitFor(async () => (await ev(`!!document.querySelector('#q1')`)) || (await startShown()));
+    if (await ev(`!!document.querySelector('#q1')`)) return false;
+    await ev(`[...document.querySelectorAll('button,a,[role=button]')].find(x=>x.textContent.trim()===${FILL_GO}&&x.getClientRects().length>0).click()`);
+    await waitFor(() => ev(`!!document.querySelector('#q1')`));
+    return true;
+  };
   await go('/#/intake');
   // 升級前未送出的草稿：按舊題意帶入新題，舊紀錄保留
   await ev(`localStorage.removeItem('startup-os-intake-draft-v2');localStorage.setItem('startup-os-intake-draft',JSON.stringify({q1:'舊第一題',q2:'舊收費',q3:'舊進展',q5:'舊協助',q11:'舊擔心'}))`);
@@ -36,8 +46,10 @@ try {
   ok('舊草稿按題意帶入新題，舊紀錄保留', oldDraft.q1 === '舊第一題' && oldDraft.q4 === '舊收費' && oldDraft.q5 === '舊進展' && oldDraft.q7 === '舊協助' && oldDraft.q8 === '舊擔心' && oldDraft.old && oldDraft.gone, oldDraft);
   // 送出或清除後，舊草稿不可再回來
   await ev(`localStorage.removeItem('startup-os-intake-draft-v2')`);
-  await chrome.send('Page.reload'); await sleep(900); await waitFor(() => ev(`!!document.querySelector('#q1')`));
-  ok('清除後舊草稿不會再出現', (await ev(`document.querySelector('#q1').value`)) === '');
+  await chrome.send('Page.reload'); await sleep(900);
+  const clearedStart = await fillPath();
+  ok('沒有八題草稿時先顯示起點，按「直接填八條問題」進入表格', clearedStart && await ev(`!!document.querySelector('#q1')`), { clearedStart });
+  ok('清除後舊草稿不會再出現', (await ev(`document.querySelector('#q1')?.value`)) === '');
   // 由舊預填而來的答案不帶入，否則伺服器會拒收又沒有確認按鈕
   await ev(`localStorage.removeItem('startup-os-intake-draft-v2');localStorage.setItem('startup-os-intake-draft',JSON.stringify({q1:'舊預填句',q2:'我自己寫的收費',_prefill:{id:'x',st:{q1:{s:'pending'}}}}))`);
   await chrome.send('Page.reload'); await sleep(900); await waitFor(() => ev(`!!document.querySelector('#q1')`));
@@ -47,6 +59,7 @@ try {
   await chrome.send('Page.reload'); await sleep(900); await go('/#/intake');
   const fresh = await ev(`(()=>{const s=document.querySelector('#first-steps');return {metrics:document.querySelectorAll('.metric').length,nav:!!document.querySelector('.desk-nav'),steps:[...s.children].filter(x=>x.getAttribute('aria-hidden')!=='true').map(x=>x.textContent),current:s.querySelector('[aria-current=step]')?.textContent,href:s.querySelector('[aria-current=step]')?.getAttribute('href'),start:s.lastElementChild.tagName,help:!!document.querySelector('#open-help'),system:!!document.querySelector('#tool-more a[href="/dashboard/system"]')}})()`);
   ok('全新：三步、目前告訴 Zero、系統和求助入口', fresh.metrics === 0 && !fresh.nav && fresh.steps.join('|') === '告訴 Zero|校對|開工' && fresh.current === '告訴 Zero' && fresh.href === '/#/intake' && fresh.start === 'SPAN' && fresh.help && fresh.system, fresh);
+  await fillPath();
   const intakeLabels = await ev(`({ breadcrumb:document.querySelector('#desk-head .eyebrow')?.textContent, eyebrow:document.querySelector('#intake-form .eyebrow')?.textContent, title:document.querySelector('#intake-form .layer-title')?.textContent })`);
   ok('第一步、麵包屑和表格標題一致', fresh.current === N.ui.intake && intakeLabels.breadcrumb?.endsWith(N.ui.intake) && intakeLabels.eyebrow === N.ui.intake && intakeLabels.title === N.ui.intake, intakeLabels);
   await ev(`document.querySelector('#open-help').click()`);

@@ -45,7 +45,7 @@ async function answer(id, pick) {
   const P = pack(id), done = answers(id);
   const list = P.questions.filter(q => !done[q.id]).map(q => { let v = pick ? pick(q) : q.value; if (v === undefined && q.bind === 'results') v = '沒有'; return v === undefined ? null : { id: q.id, value: v, ai: q.value, changed: JSON.stringify(v) !== JSON.stringify(q.value) }; }).filter(Boolean);
   const machine = { format: 'startup-os.ask-reply/0.1', pack: P.id, confirmedAt: lib.localIso(), batch: list.map(a => a.id), answers: list };
-  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(P)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + P.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(P) : lib.fnv(JSON.stringify(P))), 'batch: false', 'shownAt: ' + lib.localIso()];
   await post('/api/submit', { kind: 'ask-answer', ref: P.id, text: head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n' });
   await idle();
 }
@@ -145,7 +145,11 @@ try {
   await answer(iv.id, q => q.id === 'held' ? '農場丙主人答應下月試供兩箱（測試）' : undefined);
   await idle(60000);
   const ev = openPacks().find(p => p.realEvent && p.id !== (done1 && done1.id));
-  ok('二：寫咗結果 → 同記錄真實事件一樣交 AI 擬確認題', ev && ev.realEvent && (st().runs || []).slice(runsBefore).some(r => r.aiStarted), ev && ev.title);
+  // 「已代你收起」開關打開時，AI 擬的題若與已開着的站點完成確認同一事實，建題前已合併，不另出包；核對 AI 有開工、同一站點只有一條未答完成確認題
+  const aiRan = (st().runs || []).slice(runsBefore).some(r => r.aiStarted);
+  const doneQs = openPacks().flatMap(p => p.questions.filter(q => !q.closed && !answers(p.id)[q.id] && (q.options || []).some(o => o.apply && o.apply.op === 'markDone' && o.apply.id === 'm1')));
+  if (process.env.SOS_FACT_MERGE !== '0') ok('二（開關打開）：寫咗結果 → 交 AI 擬確認題；同一站點完成確認不重複', aiRan && (ev ? ev.realEvent : true) && doneQs.length <= 1, { ev: ev && ev.title, doneQs: doneQs.length });
+  else ok('二：寫咗結果 → 同記錄真實事件一樣交 AI 擬確認題', ev && ev.realEvent && aiRan, ev && ev.title);
   if (done1) await answer(done1.id);
   s = st();
   ok('二：確認完成 → 第一站完成、證明係你嘅訪問回覆、下一站進行中', s.milestones.find(m => m.id === 'm1').state === 'done' && (s.milestones.find(m => m.id === 'm1').doneEvidence || []).some(f => /ask-answer/.test(f) && fs.existsSync(path.join(DATA, f))) && s.milestones.find(m => m.id === 'm2').state === 'active', s.milestones.map(m => m.id + ':' + m.state + ':' + JSON.stringify(m.doneEvidence || [])));

@@ -1,15 +1,23 @@
 // 會議紀錄資料脈絡：只按呼叫者交來的資料選取；不讀寫檔、不呼叫 AI。
-import { hasContactInfo } from './people-ops.mjs';
+import { hasContactInfo, matchActorName, norm as peopleNorm } from './people-ops.mjs';
 
 const CAP = 6000;
 const SECTIONS = new Set(['對方的說法及承諾', '雙方決定', '待辦', '未定事項']);
 
-export const norm = value => String(value == null ? '' : value).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+// 名稱正規化的真源是 people-ops.norm；本檔只轉出同一個函數，避免兩條比對規則漂移。
+export const norm = peopleNorm;
 const hasPrivateContact = value => hasContactInfo(value) || /電話|電郵|地址|WhatsApp|聯絡方式/i.test(String(value == null ? '' : value).normalize('NFKC'));
 const clip = (value, n) => String(value == null ? '' : value).trim().slice(0, n);
 const list = value => Array.isArray(value) ? value : [];
+const actorKeys = actor => [...new Set([actor && actor.name, ...list(actor && actor.aliases)].map(norm).filter(Boolean))];
 const isOpen = task => task && !['done', 'cancelled'].includes(task.status);
 const dateOf = item => String((item && (item.eventDate || item.date || item.receivedAt)) || '').slice(0, 10);
+const isDay = value => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
+};
 const dateLabel = date => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
   if (!match) return '日期不詳';
@@ -17,8 +25,6 @@ const dateLabel = date => {
   const check = new Date(Date.UTC(year, month - 1, day));
   return check.getUTCFullYear() === year && check.getUTCMonth() === month - 1 && check.getUTCDate() === day ? `${month} 月 ${day} 日` : '日期不詳';
 };
-const actorKeys = actor => [...new Set([actor && actor.name, ...list(actor && actor.aliases)].map(norm).filter(Boolean))];
-
 function finalActorId(actors, id) {
   const byId = new Map(list(actors).map(actor => [actor && actor.id, actor]));
   const seen = new Set(); let current = id;
@@ -29,10 +35,6 @@ function finalActorId(actors, id) {
     seen.add(current); current = actor.mergedInto;
   }
   return '';
-}
-
-function externalActors(actors) {
-  return list(actors).filter(actor => actor && actor.id && !actor.mergedInto && actor.kind !== 'team' && !['我', '本人'].includes(String(actor.name || '').trim()));
 }
 
 function namesFromParticipants(text) {
@@ -72,11 +74,8 @@ function sameOrganisation(a, b) {
 function matchingActors(actors, speaker) {
   const id = finalActorId(actors, speaker && speaker.actorId);
   if (id) return [id];
-  const name = norm(speaker && speaker.name);
-  if (!name) return [];
-  const hits = externalActors(actors).filter(actor => actorKeys(actor).includes(name) && sameOrganisation(actor.org, speaker.org));
-  // 同名但沒有足夠機構資料可分辨時，不把舊會議當作任何一人。
-  return hits.length === 1 ? [hits[0].id] : [];
+  const hit = matchActorName(actors, speaker && speaker.name, { filter: actor => actor && actor.id && actor.kind !== 'team' && !['我', '本人'].includes(String(actor.name || '').trim()) && sameOrganisation(actor.org, speaker && speaker.org) });
+  return hit ? [hit.id] : [];
 }
 
 function currentParticipants(data) {
@@ -171,9 +170,9 @@ function relevantTasks(data, people, meetings) {
   });
 }
 
-function latestMeetings(data, people) {
+function latestMeetings(data, people, throughDate = '') {
   const current = data.current || {}, actors = data.actors || [], ids = people.map(actor => actor.id);
-  const candidates = list(data.meetings).filter(meeting => meeting && meeting.inputId !== current.inputId && meeting.id !== current.meetingId && meeting.text);
+  const candidates = list(data.meetings).filter(meeting => meeting && meeting.inputId !== current.inputId && meeting.id !== current.meetingId && meeting.text && (!throughDate || dateOf(meeting) <= throughDate));
   const latest = new Map();
   for (const meeting of candidates) {
     const key = meeting.id || meeting.inputId;
@@ -197,8 +196,9 @@ function confirmedBlocks(meetings) {
   return out;
 }
 
-function otherEvents(data, people) {
+function otherEvents(data, people, throughDate = '') {
   const names = people.flatMap(actor => actorKeys(actor)), meetingInputs = new Set(list(data.meetings).map(row => row && row.inputId));
+  if (throughDate) data = { ...data, events: list(data.events).filter(event => dateOf(event) <= throughDate) };
   const candidates = list(data.events).filter(event => event && !meetingInputs.has(event.id) && names.some(name => norm(`${event.title || ''}\n${event.founderText || ''}`).includes(name)));
   const latest = new Map();
   for (const person of people) {
@@ -231,14 +231,16 @@ export function buildMeetingContext(data = {}) {
   if (data.demo === true) return { text: '', sourceByLine: {}, lineSources: [], taskIds: [] };
   const people = currentParticipants(data);
   if (!people.length) return { text: '', sourceByLine: {}, lineSources: [], taskIds: [] };
-  const meetings = latestMeetings(data, people);
-  const tasks = relevantTasks(data, people, meetings);
+  const allMeetings = latestMeetings(data, people);
+  const throughDate = isDay((data.current || {}).date) ? data.current.date : '';
+  const meetings = throughDate ? allMeetings.filter(meeting => dateOf(meeting) <= throughDate) : allMeetings;
+  const tasks = relevantTasks(data, people, allMeetings);
   const blocks = [];
   let budget = CAP - '# 以往紀錄（外殼按今次參加者選出；只供對照，不是今次會議的內容）\n\n'.length;
   budget = addCategory(blocks, '相關的未完成日程', tasks, budget);
   budget = addCategory(blocks, '最近的會議紀錄節錄', meetings.map(meetingBlock), budget);
   budget = addCategory(blocks, '其後確認的結果', confirmedBlocks(meetings), budget);
-  addCategory(blocks, '最近的其他事件', otherEvents(data, people), budget);
+  addCategory(blocks, '最近的其他事件', otherEvents(data, people, throughDate), budget);
   const lines = blocks.map(line => typeof line === 'string' ? { text: line, source: '' } : line);
   if (!lines.length) return { text: '', sourceByLine: {}, lineSources: [], taskIds: [] };
   const text = ['# 以往紀錄（外殼按今次參加者選出；只供對照，不是今次會議的內容）', '', ...lines.map(line => line.text), ''].join('\n');

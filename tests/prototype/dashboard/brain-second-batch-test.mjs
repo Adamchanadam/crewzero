@@ -41,7 +41,10 @@ async function redPass(outputs, starts = 0, alreadyRetried = false, costs = []) 
     readJSON: p => p.endsWith('ledger.json') ? ledger : current, brainSource: () => ({}), matchDir: () => 'match',
     readMatchFile: (_dir, _src, _id, name) => name === 'blue.json' ? blue : null, loadState: () => ({ company: {} }), checkRed: d.checkRed,
     writeJSON: p => { if (p.endsWith('red.json')) throw new Error('accepted'); } };
-  ctx.markBrokenLinks = async e => e; vm.createContext(ctx); vm.runInContext(part('async function runDebatePass(', 'function handleDebateAnswer(') + '\nthis.runDebatePass = runDebatePass;', ctx);
+  ctx.markBrokenLinks = async e => e;
+  // 0.44.0：紅隊陷阱改由沙盒 model-traps.md 讀入（run.mjs 的 modelTrapsFor）；本測試沒有該檔，真函數亦回傳空清單
+  ctx.modelTrapsFor = () => [];
+  vm.createContext(ctx); vm.runInContext(part('async function runDebatePass(', 'function handleDebateAnswer(') + '\nthis.runDebatePass = runDebatePass;', ctx);
   const run = {}; let result; try { result = await ctx.runDebatePass(run, match); } catch (e) { if (e.message !== 'accepted') throw e; result = { state: 'accepted' }; }
   return { calls, match, result, run };
 }

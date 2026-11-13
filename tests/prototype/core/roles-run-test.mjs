@@ -80,7 +80,7 @@ async function world(name, { roles = false, mutate = null } = {}) {
       const done = W2.answers(pack.id);
       const list = pack.questions.filter(q => !done[q.id]).map(q => ({ q, v: pick(q) })).filter(x => x.v !== undefined).map(({ q, v }) => ({ id: q.id, value: v, ai: q.value, changed: v !== q.value }));
       const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: lib.localIso(), batch: list.map(a => a.id), answers: list };
-      const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: ' + (list.length < pack.questions.length), 'shownAt: ' + lib.localIso()];
+      const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(pack) : lib.fnv(JSON.stringify(pack))), 'batch: ' + (list.length < pack.questions.length), 'shownAt: ' + lib.localIso()];
       fs.mkdirSync(DIR.replies, { recursive: true });
       fs.writeFileSync(path.join(DIR.replies, lib.localIso().replace(/\D/g, '') + '-ask-answer-' + pack.id + '-' + (seq++) + '.md'), head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n');
       return shell();
@@ -175,7 +175,7 @@ await attempt('A6b', async () => {
   ok('A6b 只有題包答案而與任何站無關時，一件都不解除（覆核重現 r5）', ['t1', 't2'].every(id => s.tasks.find(t => t.id === id).blockedOn === TODAY), s.tasks.filter(t => ['t1', 't2'].includes(t.id)));
   const W4 = await world('a6b-note-input', { mutate: blocked });
   fs.mkdirSync(W4.DIR.inbox, { recursive: true });
-  fs.writeFileSync(path.join(W4.DIR.inbox, 'R20261109-100000-1-note-event.md'), 'kind: note\ntype: event\nref: R20261109-100000-1\n\n收到供應商回覆\n');
+  fs.writeFileSync(path.join(W4.DIR.inbox, 'R20261109-100000-1-note-event.md'), 'kind: note\ntype: event\nref: R20261109-100000-1\n\n收到供應商回覆\n\n```json\n{"date":"2026-11-09"}\n```\n');  // 0.44.0：正常使用時事件筆記帶日期
   W4.shell(); s = W4.state();
   ok('A6b 不經題包的輸入（筆記）可能與任何工作有關，解除全部卡住工作', ['t1', 't2'].every(id => !s.tasks.find(t => t.id === id).blockedOn), s.tasks.filter(t => ['t1', 't2'].includes(t.id)));
 });
@@ -699,16 +699,18 @@ await attempt('F2', async () => {
   ok('F2 下一次放出「整理名單」包再問一次', sp && sp.questions.length === 1 && /王伯/.test(sp.questions[0].ask), sp && sp.questions[0].ask);
   W.answer(sp, q => '還是先不要');
   s = W.state();
-  ok('F2 第二次仍是自訂答案：記原話、不再問（reasked 2）、不在擱置清單', s.peopleSync.reasked[key] === 2 && !(s.peopleSync.pending || []).length && !((s.peopleSync.declined || {})[key]), s.peopleSync);
-  // 下次整理：reasked===2 的名稱不再建議
+  // 0.44.0：第二次自訂答案只結束這一題，名稱不再以 reasked === 2 永久封鎖（名稱鍵不留）
+  ok('F2 第二次仍是自訂答案：記原話（peopleCustomClosed）、這一題結束（沒有新包、不在擱置清單）、名稱不留封鎖', !((s.peopleSync.reasked || {})[key]) && !(s.peopleSync.pending || []).length && W.packOf(p => p.peopleSync).length === 1 && !((s.peopleSync.declined || {})[key]) && s.events.some(e => e.title === N.t('peopleCustomClosed', { n: '王伯', s: '還是先不要' })), { ps: s.peopleSync, packs: W.packOf(p => p.peopleSync).length, ev: s.events.slice(-2).map(e => e.title) });
+  // 0.44.0：舊帳本的名稱封鎖鍵（reasked === 2）不再令整理名單丟棄該名稱；改類別鍵（kind:編號:類別）仍照舊
   const raw = { items: [{ kind: 'newActor', name: '王伯', role: '農務顧問', actorKind: 'advisor', why: '概覽提到。' }, { kind: 'newActor', name: '李叔', role: '顧問', actorKind: 'advisor', why: '概覽提到。' }] };
-  const chk = P.checkPeopleSync(raw, { actors: [], texts: ['王伯', '李叔'], reasked: s.peopleSync.reasked });
-  ok('F3 整理名單不再建議 reasked===2 的對象（單元）；其他照建議', chk.ok && chk.items.map(x => x.name).join() === '李叔' && chk.dropped.some(d => d.name === '王伯' && d.reason === 'reasked'), chk);
+  const chk = P.checkPeopleSync(raw, { actors: [], texts: ['王伯', '李叔'], reasked: { [key]: 2 } });
+  ok('F3 整理名單可再建議曾以自訂答案答兩次的名稱（單元，舊格式 reasked 2 亦不丟棄）', chk.ok && chk.items.map(x => x.name).sort().join() === ['王伯', '李叔'].sort().join() && !chk.dropped.some(d => d.reason === 'reasked'), chk);
   ok('F3 reasked 為 1 的仍可建議（只問過一次）', P.checkPeopleSync(raw, { actors: [], texts: ['王伯', '李叔'], reasked: { [key]: 1 } }).items.length === 2);
-  // 整合：擱置清單內有 reasked===2 的對象，放出前被濾掉
+  // 整合（0.44.0）：擱置清單再有同名對象時照常放出再問，不因先前兩次自訂答案而濾掉
   const t = W.state(); t.peopleSync.pending = [{ kind: 'newActor', ...item, why: 'x' }]; W.put(t);
   W.shell();
-  ok('F3 擱置項目放出前濾掉 reasked===2：不出題', W.packOf(p => p.peopleSync).length === 1 && (W.state().peopleSync.pending || []).length === 0, W.packOf(p => p.peopleSync).length);
+  const sp3 = W.packOf(p => p.peopleSync);
+  ok('F3 擱置項目再有「王伯」：照常放出新一包再問', sp3.length === 2 && sp3.some(p => p.id !== sp.id && /王伯/.test(p.questions[0].ask)) && (W.state().peopleSync.pending || []).length === 0, sp3.map(p => p.id + ':' + p.questions.map(q => q.ask).join('|')));
 });
 
 await attempt('E2', async () => {
@@ -834,7 +836,7 @@ await attempt('G7', async () => {
     const pickVal = mode === 'return' ? ((pk.questions[0].options.find(o => o.text !== '接受' && !/方向/.test(o.text)) || {}).text) : '接受';
     const list = pk.questions.map(q => ({ q, v: q.id === 'accept' ? pickVal : q.id === 'reason' ? '價錢要改' : undefined })).filter(x => x.v !== undefined).map(({ q, v }) => ({ id: q.id, value: v, ai: q.value, changed: v !== q.value }));
     const machine = { format: 'startup-os.ask-reply/0.1', pack: pk.id, confirmedAt: lib.localIso(), batch: list.map(a => a.id), answers: list };
-    const head = ['kind: ask-answer', 'ref: ' + pk.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pk)), 'batch: false', 'shownAt: ' + lib.localIso()];
+    const head = ['kind: ask-answer', 'ref: ' + pk.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(pk) : lib.fnv(JSON.stringify(pk))), 'batch: false', 'shownAt: ' + lib.localIso()];
     fs.writeFileSync(path.join(DATA, 'founder', 'replies', lib.localIso().replace(/\D/g, '') + '-ask-answer-' + pk.id + '-0.md'), head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n');
     const r = spawnSync(process.execPath, [path.join(PROTO, 'run.mjs')], { cwd: PROTO, env: { ...process.env, SOS_DATA: DATA, SOS_NO_OPEN: '1', CZ_NO_WELCOME: '1' }, encoding: 'utf8', timeout: 60000 });
     const after = jr(path.join(DATA, 'ledger', 'state.json'));

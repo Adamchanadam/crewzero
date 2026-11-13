@@ -122,12 +122,14 @@ button.mark:hover .pen,button.mark:focus-visible .pen{opacity:1}
 .btn.small{height:28px;font-size:var(--fs-label);padding:0 10px}
 .btn.big{height:42px;padding:0 20px;font-size:var(--fs-body);font-weight:600}
 .btn.link{border:0;padding:0;height:auto;color:var(--amber);text-decoration:underline;text-underline-offset:3px;background:none;box-shadow:none}
+.btn.zero{border-color:rgba(153,215,188,.45);color:var(--mint)}
 .btn[disabled]{opacity:.5;cursor:default;transform:none}
 .btn[aria-pressed="true"]{border-color:rgba(153,215,188,.5)}
 .btn:focus-visible,.opt:focus-visible,.chip:focus-visible,.tabs a:focus-visible,.metric:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-label);line-height:1;padding:3px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .tag.qdone{background:var(--mint);border-color:var(--mint);color:#0b1a13;font-weight:700}
 .tag.mine,.tag.mint{border-color:rgba(153,215,188,.65);color:var(--mint)}
+.tag.ok{border-color:rgba(153,215,188,.65);color:var(--mint)}
 .tag.eff,.tag.red{border-color:rgba(242,162,158,.6);color:var(--red)}
 .tag.ai,.tag.amber{border-color:var(--amber);color:var(--amber)}
 .tag.wait{border-color:var(--wait);color:var(--wait)}
@@ -320,7 +322,10 @@ body.paused .bg *{animation:none!important}
     mark.append(icon, el('span', { cls: 'note-emoji' }, emoji[type]));
     var a = {}; for (var k in attrs || {}) a[k] = attrs[k]; a.cls = 'note ' + type + (a.cls ? ' ' + a.cls : ''); if (type === 'error') a.role = 'alert';
     var body = el('div', null, el('b', null, labels[type] + '：'));
-    (Array.isArray(content) ? content : [content]).forEach(function (c, i) { if (i) body.append(document.createElement('br')); if (c != null) body.append(c); });
+    // 行內內容之間換行；前後任一項是區塊元素（清單、段落等）時不加，免得多出空行（已批「可能重複入帳」原型）
+    var isBlock = function (x) { return !!(x && x.nodeType === 1 && /^(UL|OL|DIV|P|TABLE|DL)$/.test(x.tagName)); };
+    var items = Array.isArray(content) ? content : [content];
+    items.forEach(function (c, i) { if (i && !isBlock(items[i - 1]) && !isBlock(c)) body.append(document.createElement('br')); if (c != null) body.append(c); });
     return el('div', a, mark, body);
   }
   function clip(x, n) { x = String(x || ''); return x.length > n ? x.slice(0, n - 1) + '…' : x; }
@@ -986,7 +991,7 @@ body.paused .bg *{animation:none!important}
     if (s.code === 'awaiting') line = s.open < s.total ? N.t('inLineAwaiting', { n: s.total, m: s.open }) : N.t('inLineAwaitingAll', { n: s.total });
     else if (s.code === 'working') line = s.applying ? U.inLineApplying : s.packGone ? U.inLinePackGone : s.aiWaiting ? U.inLineAiWait : U.inLineWorking;
     else if (s.code === 'failed') line = U.inLineFailed;
-    else if (s.code === 'noeffect') line = N.fix(v.reason) || U.eventNoChange;
+    else if (s.code === 'noeffect') line = v.moneyNotRecorded ? U.mnyNotRecorded : N.fix(v.reason) || U.eventNoChange;
     else line = v.effects.map(function (e) { return e.targetKind === 'followUp' && e.dueAt ? N.t('fbFollowUp', { d: zhDay(e.dueAt), t: N.fix(e.text) }) : e.before && e.after ? N.fix(e.text) + '：' + e.before + ' → ' + e.after : N.fix(e.text); }).filter(Boolean).join('；') || U.fbRecorded;
     return (v.files.length ? N.t('inFilesN', { n: v.files.length }) + ' · ' : '') + clip(line, 120);
   }
@@ -1002,7 +1007,13 @@ body.paused .bg *{animation:none!important}
         li.append(el('span', { cls: 'attach g' }, N.t('attGoogle', { n: f.name.replace(/\.[A-Za-z0-9]+$/, ''), k: U[gk], d: zhDay(f.readOn) })),
           el('span', { cls: 'att-acts' }, f.openable ? el('a', { href: fileHref(v, f), target: '_blank', rel: 'noopener noreferrer' }, U.attOpenSnap) : null,
             el('a', { href: f.url, target: '_blank', rel: 'noopener noreferrer' }, U.attOrigin),
-            opts && opts.reread ? el('button', { type: 'button', cls: 'btn link', 'data-reread': f.n, onclick: function () { toast(U.attRereadAsked); } }, U.attReread) : null));
+            opts && opts.reread ? el('button', { type: 'button', cls: 'btn link', 'data-reread': f.n, onclick: function (ev) {
+              // 真的叫伺服器重新讀取，並照實顯示結果（主線全面審查 2026-11-12：去掉假承諾）
+              var b = ev.currentTarget; b.disabled = true;
+              send('/api/input-reread', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: v.id, n: f.n }) })
+                .then(function (j) { toast((j && j.message) || U.rereadOk); }, function (e) { toast(why(e)); })
+                .then(function () { b.disabled = false; });
+            } }, U.attReread) : null));
       } else {
         li.append(el('span', { cls: 'attach' }, f.name),
           el('span', { cls: 'att-acts' }, f.openable ? el('a', { href: fileHref(v, f), target: '_blank', rel: 'noopener noreferrer', 'data-open': f.n }, U.attOpen) : null,

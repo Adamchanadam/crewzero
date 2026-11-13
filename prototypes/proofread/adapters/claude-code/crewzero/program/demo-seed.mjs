@@ -152,17 +152,36 @@ export function seedDemo(dir = DEMO_DIR, { reset = false, now = new Date(), copy
   if (reset && fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
   for (const d of ['founder/inbox', 'founder/replies', 'founder/desk', 'company', 'archive', 'ledger/answers', 'asks', 'sandbox', 'work']) fs.mkdirSync(path.join(dir, d), { recursive: true });
   // 帳本：保留相對時間
-  fs.copyFileSync(path.join(FIX, 'state.json'), path.join(dir, 'ledger', 'state.json'));
+  const demoState = JSON.parse(fs.readFileSync(path.join(FIX, 'state.json'), 'utf8'));
+  demoState.company.assumptions = [
+    { id: 'H1', text: '上班族表示願意為新鮮烘焙付較高月費。', grade: 'said', cell: 'value' },
+    { id: 'H2', text: '已付工房首月供貨成本。', grade: 'paid', cell: 'partners' },
+    { id: 'H3', text: '已付首批咖啡豆成本。', grade: 'paid', cell: 'resources' },
+    { id: 'H4', text: '已完成首批包裝及寄送流程。', grade: 'did', cell: 'activities' },
+    { id: 'H5', text: '上班族表示會經網店訂購。', grade: 'said', cell: 'channel' },
+    { id: 'H6', text: '上班族表示需要新鮮烘焙咖啡豆。', grade: 'said', cell: 'customer' },
+    { id: 'H7', text: '訂戶會持續訂閱，仍待驗證。', grade: 'guess', cell: 'relationship' },
+    { id: 'H8', text: '包裝及寄送成本仍待報價。', grade: 'guess', cell: 'cost' },
+    { id: 'H9', text: '每月訂閱收入仍是假設。', grade: 'guess', cell: 'revenue' }
+  ];
+  write(path.join(dir, 'ledger', 'state.json'), demoState);
   write(path.join(dir, 'ledger', 'money.json'), demoMoney());
   seedDemoExtension(dir, now);
   // 公司概覽同成頁確認（次序照附錄 C 更正句：工房、收款寄送、試訂、續訂、連續兩個月）
   const page = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures', 'example-company-page.json'), 'utf8'));
   page.page.preparedAt = resolveTimes('@-26d', now);
+  page.detail.reading.splice(1, 0, { id: 'biz-goal', plan: 'biz.goal', label: '想做成哪種生意', kind: 'choice', value: '小而穩的生意', origin: 'ai', picked: true, options: [{ text: '盡快有收入' }, { text: '小而穩的生意', rec: true }, { text: '高速擴張' }, { text: '準備融資' }, { text: '未定' }], why: '影響 Zero 評估路線的標準，可以更改。' });
+  page.detail.model = { name: '每月鮮豆訂閱', payer: '上班族按月付訂閱費，每月收到一包新鮮烘焙的咖啡豆。', faces: { charge: [{ card: 'C01', name: '訂閱制', quote: '顧客的需求每週或每月再度出現。' }], form: [{ card: 'C13', name: '網上直銷', quote: '顧客願意自行上網搜尋和購買。' }], scale: { undecided: true, missing: '首批訂戶穩定後再定。' } }, why: '每月補貨的需要可先測試訂閱。', trap: { card: 'C01', text: '顧客試飲一兩個月便取消。' }, firstTest: { card: 'C01', text: '向首批上班族提出首月收費試飲。', watch: '付款人數；第二個月續訂人數', counts: '只計真正付款及續訂；讚好或口頭說會買都不計', zero: true } };
   write(path.join(dir, 'company', 'page.json'), page);
   write(path.join(dir, 'company', 'biz.json'), { type: 'goods', other: '' });
   const values = {};
   (function walk(o) { if (Array.isArray(o)) return o.forEach(walk); if (!o || typeof o !== 'object') return; if (typeof o.id === 'string' && 'value' in o && 'label' in o) values[o.id] = String(o.value); for (const k in o) if (o[k] && typeof o[k] === 'object') walk(o[k]); })(page);
   write(path.join(dir, 'ledger', 'confirmed.json'), { company: page.company.name, pageId: page.page.id, confirmedAt: resolveTimes('@-25d 22:10', now), replyFile: 'demo', order: ['m1', 'm4', 'm2', 'm3', 'm5'], orderChanged: true, nextActionMilestone: 'm1', edits: [], stillMissing: [], note: '', values });
+  const reading = Object.fromEntries(page.detail.reading.map(item => [item.plan, item]));
+  const cell = key => ({ text: reading['canvas.' + key] ? reading['canvas.' + key].value : '', tag: 'zero' });
+  const cells = { partners: cell('partners'), activities: cell('activities'), resources: cell('resources'), value: cell('value'), relationship: cell('relationship'), channel: cell('channel'), customer: { ...cell('customer'), sub: { problem: cell('problem'), alternatives: cell('alternatives') } }, cost: cell('cost'), revenue: cell('revenue') };
+  const canvasAt = resolveTimes('@-25d 22:10', now), oldCells = JSON.parse(JSON.stringify(cells)); oldCells.revenue.text = '訂戶按月付訂閱費。';
+  write(path.join(dir, 'ledger', 'canvas.json'), { pageId: page.page.id, rev: 1, at: canvasAt, cells, history: [{ rev: 0, at: resolveTimes('@-25d 21:40', now), cells: oldCells, why: '示範上一版' }], suggestions: [{ id: 'canvas-demo-revenue', cell: 'revenue', now: oldCells.revenue.text, text: '訂戶按月付訂閱費；另設三個月預付。', why: '可分辨誰願意長期訂閱。', from: 'checkup', at: canvasAt, state: 'open', packId: '' }] });
   // 問題包
   for (const p of resolveTimes(JSON.parse(fs.readFileSync(path.join(FIX, 'asks.json'), 'utf8')), now)) write(path.join(dir, 'asks', p.id + '.json'), p);
   // 生意大腦（六項）：紅藍對打用同真實試驗一樣嘅三個檔；reveal.json 令示範由建立嗰刻起按秒數逐步出現

@@ -76,16 +76,25 @@ function meeting(W, suffix = String(seq).padStart(3, '0')) {
   minutes.createMinutes(W.DIR, { id, state: 'speakers', title: '首批安排', meetingDate: '2026-11-10', sources: [{ name: '逐字稿.txt', text: `ledger/minutes/${id}/transcript.md`, chars: text.length }], labels: [{ label: 'Speaker 1' }, { label: 'Speaker 2' }], suggest: { state: 'running', items: {} }, speakers: {}, version: 1, versions: [], inputId: '', error: '' });
   return { id, text };
 }
-function note(W, id, type, body = '') {
+// 0.44.0 按日期逐項判斷：正常使用時伺服器必定在事件筆記機讀區寫明 date；沒有日期的事件屬「日期屬假定」，AI 建議改為維持現有。
+// 本測試的場景是「有日期、先後清楚」的正常使用：事件筆記預設 2026-11-10（新會議），舊會議另傳 2026-11-03；同一會議的修訂版沿用同一日期。
+const EVENT_DAY = '2026-11-10', OLD_MEETING_DAY = '2026-11-03';
+function withDate(body, date) {
+  const blocks = [...String(body).matchAll(/```json\n([\s\S]*?)\n```/g)];
+  if (blocks.length === 1) return body.replace(blocks[0][0], '```json\n' + JSON.stringify({ date, ...JSON.parse(blocks[0][1]) }) + '\n```');
+  return body + '\n\n```json\n' + JSON.stringify({ date }) + '\n```';
+}
+function note(W, id, type, body = '', date = EVENT_DAY) {
   fs.mkdirSync(W.DIR.inbox, { recursive: true });
-  fs.writeFileSync(path.join(W.DIR.inbox, `${id}-note-${type}.md`), `kind: note\ntype: ${type}\nat: ${lib.localIso()}\n\n${body}`);
+  const text = type === 'event' || type === 'doc' ? withDate(body, date) : body;
+  fs.writeFileSync(path.join(W.DIR.inbox, `${id}-note-${type}.md`), `kind: note\ntype: ${type}\nat: ${lib.localIso()}\n\n${text}`);
 }
 function runs(W) { try { return read(path.join(W.DIR.ledger, 'status.json')).runs || []; } catch { return []; } }
 function latest(W) { return runs(W)[0] || null; }
 function answer(W, pack, pick) {
   const answers = pack.questions.map(q => ({ id: q.id, value: pick ? pick(q) : q.value, ai: q.value, changed: false }));
   const machine = { format: 'startup-os.ask-reply/0.1', pack: pack.id, confirmedAt: lib.localIso(), batch: answers.map(a => a.id), answers };
-  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + lib.fnv(JSON.stringify(pack)), 'batch: false', 'shownAt: ' + lib.localIso()];
+  const head = ['kind: ask-answer', 'ref: ' + pack.id, 'option: confirm', 'rev: 1', 'hash: ' + (lib.packHash ? lib.packHash(pack) : lib.fnv(JSON.stringify(pack))), 'batch: false', 'shownAt: ' + lib.localIso()];
   fs.mkdirSync(W.DIR.replies, { recursive: true });
   fs.writeFileSync(path.join(W.DIR.replies, `${Date.now()}-ask-answer-${pack.id}.md`), head.join('\n') + '\n\n# 答案\n\n```json\n' + JSON.stringify(machine) + '\n```\n');
   return W.shell();
@@ -117,7 +126,11 @@ try {
   minutes.patchMinutes(A.DIR, ma.id, { speakers: { 'Speaker 1': { kind: 'founder', name: '我' }, 'Speaker 2': { kind: 'actor', actorId: 'pc-1', name: '陳經理' } }, state: 'drafting' }, { who: 'server', from: 'speakers' });
   note(A, ma.id, 'minutes-draft'); A.shell(); rec = minutes.readMinutes(A.DIR, ma.id);
   const draft = rec.file && fs.readFileSync(path.join(minutes.minutesDir(PROTO, A.DIR), rec.file), 'utf8');
-  ok('草稿合格：ready、檔案、hash 與標示說明行齊全', rec.state === 'ready' && !!draft && rec.hash === minutes.sha256(draft) && /^> ⚠️ 不肯定，請核對（共 1 處）　✏️ 待你補充（共 1 處）$/m.test(draft) && transcript.marks(draft).length === 2, { rec, marks: draft && transcript.marks(draft) });
+  // 0.44.0 會議紀錄改版（brief-m1 第 2.2 節）：說明行數目由程式按正文重寫，不寫死數目；核對說明行數目等於正文實際的 ⚠️／✏️ 數目
+  const legendM = draft && /^>\s*⚠️ 不肯定，請核對（共\s*(\d+)\s*處）　✏️ 待你補充（共\s*(\d+)\s*處）\s*$/m.exec(draft);
+  const bodyOf = draft ? draft.split(/\r?\n/).filter(line => !/^>\s*⚠️ 不肯定，請核對/.test(line)).join('\n') : '';
+  const bodyWarn = bodyOf.split('⚠️').length - 1, bodyFill = bodyOf.split('✏️').length - 1;
+  ok('草稿合格：ready、檔案、hash 與標示說明行齊全（說明行數目等於正文實際的 ⚠️／✏️ 數目）', rec.state === 'ready' && !!draft && rec.hash === minutes.sha256(draft) && !!legendM && Number(legendM[1]) === bodyWarn && Number(legendM[2]) === bodyFill && transcript.marks(draft).length === bodyWarn + bodyFill, { rec, legend: legendM && legendM[0], bodyWarn, bodyFill, marks: draft && transcript.marks(draft) });
   const aRun = latest(A), aSandbox = aRun && path.join(A.DIR.sandbox, aRun.id), aNames = aSandbox && path.join(aSandbox, 'company-names.md');
   ok('M1 已確認公司概覽名稱清單寫入草稿資料夾，包含公司及十二格的確認值', !!aNames && fs.existsSync(aNames) && fs.readFileSync(aNames, 'utf8').includes('月月鮮烘') && fs.readFileSync(aNames, 'utf8').includes('星塵慢烘禮盒'), aRun);
   ok('M2 名稱清單不退回頁面原值，且草稿資料夾沒有完整公司概覽', !!aNames && !fs.readFileSync(aNames, 'utf8').includes('銀杏速遞行') && !fs.existsSync(path.join(aSandbox, 'confirmed-page.md')), aSandbox);
@@ -128,9 +141,20 @@ try {
   const D = await world('draft-bad'); const md = meeting(D, '004');
   minutes.patchMinutes(D.DIR, md.id, { speakers: { 'Speaker 1': { kind: 'founder', name: '我' }, 'Speaker 2': { kind: 'actor', actorId: 'pc-1', name: '陳經理' } }, state: 'drafting' }, { who: 'server', from: 'speakers' });
   D.mode('minutes-draft:bad'); note(D, md.id, 'minutes-draft'); D.shell(); rec = minutes.readMinutes(D.DIR, md.id);
-  ok('草稿連修正一次仍缺節：登記檔成為 failed', rec.state === 'failed' && rec.error, rec);
+  // 0.44.0 會議紀錄改版（brief-m1 第 2.3 節）：修正後仍缺節，一律由 fixMinutes 補好再存；登記檔 ready，缺的節補「沒有」
+  const dDraft = rec.file ? fs.readFileSync(path.join(minutes.minutesDir(PROTO, D.DIR), rec.file), 'utf8') : '';
+  const dHeads = dDraft.split(/\r?\n/).map(l => (/^##\s+(.+?)\s*$/.exec(l) || [])[1]).filter(Boolean);
+  // 假 AI「bad」模式刪去的是「下次會議」一節（與 minutes-missing-section 相同）
+  const dUndecided = (() => { const lines = dDraft.split(/\r?\n/), i = lines.findIndex(l => /^##\s+下次會議\s*$/.test(l)); if (i < 0) return ''; const rest = lines.slice(i + 1), j = rest.findIndex(l => /^##\s+/.test(l)); return (j < 0 ? rest : rest.slice(0, j)).join('\n'); })();
+  const V2_HEADS = ['會議資料', '參加者', '議題及討論要點', '已發生的事實', '對方的說法及承諾', '雙方決定', '待辦', '未定事項', '下次會議', '改動清單'];
+  ok('草稿連修正一次仍缺節：由程式補好存檔，登記檔 ready，十節齊全，缺的節為「沒有」', rec.state === 'ready' && JSON.stringify(dHeads) === JSON.stringify(V2_HEADS) && /^-\s*沒有\s*$/m.test(dUndecided), { state: rec.state, error: rec.error, headings: dHeads, undecided: dUndecided });
   const dRun = latest(D), dSandbox = dRun && path.join(D.DIR.sandbox, dRun.id);
   ok('M4 修正一次沿用同一草稿資料夾，名稱清單及工作說明仍在', !!dSandbox && fs.existsSync(path.join(dSandbox, 'company-names.md')) && fs.readFileSync(path.join(dSandbox, 'task-seen.md'), 'utf8').includes('修正一次') && fs.readFileSync(path.join(dSandbox, 'task-seen.md'), 'utf8').includes('company-names.md'), dRun);
+  // 不可自動修正的錯誤（未對照講者）仍令登記檔 failed
+  const U = await world('draft-unmapped'); const mu = meeting(U, '008');
+  minutes.patchMinutes(U.DIR, mu.id, { speakers: { 'Speaker 1': { kind: 'founder', name: '我' } }, state: 'drafting' }, { who: 'server', from: 'speakers' });
+  note(U, mu.id, 'minutes-draft'); U.shell(); rec = minutes.readMinutes(U.DIR, mu.id);
+  ok('草稿仍有未對照講者（不可自動修正）：登記檔成為 failed 並寫明原因', rec.state === 'failed' && !!rec.error, rec);
   const M = await world('draft-no-overview'); const mm = meeting(M, '006');
   fs.rmSync(path.join(M.DIR.ledger, 'confirmed.json'), { force: true });
   minutes.patchMinutes(M.DIR, mm.id, { speakers: { 'Speaker 1': { kind: 'founder', name: '我' }, 'Speaker 2': { kind: 'actor', actorId: 'pc-1', name: '陳經理' } }, state: 'drafting' }, { who: 'server', from: 'speakers' });
@@ -547,15 +571,15 @@ try {
 
   // 0.42.1 會議紀錄資料脈絡：以下均直接走 run.mjs + fake AI，沒有啟動伺服器。
   const contextBody = (date, lines) => ['# 會議紀錄：資料脈絡測試（' + date + '）', '> ⚠️ 不肯定，請核對（共 0 處）　✏️ 待你補充（共 0 處）', '', '## 參加者', '', '創辦人、陳經理。', '', '## 對方的說法及承諾', '', ...lines.map(line => '- ' + line), '', '## 雙方決定', '', '- 雙方確認安排。', '', '## 待辦', '', '- 陳經理：提供報價。', '', '## 未定事項', '', '- 仍待確認。', ''].join('\n');
-  const submitContextMinute = async (W, ref, body, mode, meta = null) => {
+  const submitContextMinute = async (W, ref, body, mode, meta = null, date = EVENT_DAY) => {
     W.mode('event:' + mode);
-    note(W, ref, 'event', '交出會議紀錄。' + (meta ? '\n\n```json\n' + JSON.stringify({ minutes: meta }) + '\n```' : ''));
+    note(W, ref, 'event', '交出會議紀錄。' + (meta ? '\n\n```json\n' + JSON.stringify({ minutes: meta }) + '\n```' : ''), date);
     fs.writeFileSync(path.join(W.DIR.inbox, `${ref}-note-event-file-1-會議紀錄.md`), body); W.shell();
     const input = W.state().inputs.find(item => item.id === 'in-' + ref) || {}, run = latest(W), pack = input.packId ? read(path.join(W.DIR.asks, input.packId + '.json')) : null;
     return { input, run, pack };
   };
   const contextWorld = async (name, oldLines = ['陳經理表示原有條件。']) => {
-    const W = await world(name), old = await submitContextMinute(W, 'R20261110-100000-' + name + '-old', contextBody('2026 年 11 月 3 日', oldLines), 'event-context-idle', { id: 'm-' + name + '-old', version: 1 });
+    const W = await world(name), old = await submitContextMinute(W, 'R20261110-100000-' + name + '-old', contextBody('2026 年 11 月 3 日', oldLines), 'event-context-idle', { id: 'm-' + name + '-old', version: 1 }, OLD_MEETING_DAY);
     const state = W.state(); state.tasks = [...(state.tasks || []),
       { id: 'fu-' + name, title: '提供報價', dueAt: '2026-11-18', status: 'open', owner: 'founder', fromInput: old.input.id, minutesSource: { id: old.input.minutes.id, line: '- 陳經理：提供報價。' } },
       { id: 'ai-' + name, title: 'Zero 自己建議的工作', dueAt: '2026-11-19', status: 'open', owner: 'ai', fromInput: old.input.id },
@@ -622,7 +646,7 @@ try {
   const CChain = await world('context-chain'), chainA = 'm-context-chain-a', chainB = 'm-context-chain-b';
   const chainA1 = contextBody('2026 年 11 月 3 日', ['陳經理會在 2026 年 11 月 18 日前提供報價。']);
   fs.mkdirSync(minutes.sourceDir(CChain.DIR, chainA), { recursive: true }); fs.writeFileSync(path.join(minutes.sourceDir(CChain.DIR, chainA), 'v1.md'), chainA1);
-  const ctxChainFirst = await submitContextMinute(CChain, 'R20261110-100000-context-chain-a1', chainA1, 'event-context-same', { id: chainA, version: 1 });
+  const ctxChainFirst = await submitContextMinute(CChain, 'R20261110-100000-context-chain-a1', chainA1, 'event-context-same', { id: chainA, version: 1 }, OLD_MEETING_DAY);
   if (ctxChainFirst.pack) answer(CChain, ctxChainFirst.pack);
   const ctxChainTask = (CChain.state().tasks || []).find(task => task && task.title === '提供報價');
   const chainB1 = contextBody('2026 年 11 月 10 日', ['陳經理會在 2026 年 11 月 25 日前提供報價。']);
@@ -631,7 +655,7 @@ try {
   if (ctxChainSecond.pack) answer(CChain, ctxChainSecond.pack);
   const ctxAfterB = (CChain.state().tasks || []).find(task => task && task.id === (ctxChainTask || {}).id);
   const chainA2 = contextBody('2026 年 11 月 3 日', ['陳經理會在 2026 年 11 月 27 日前提供報價。']);
-  const ctxRevA = await submitContextMinute(CChain, 'R20261110-100000-context-chain-a2', chainA2, 'event-context-revision', { id: chainA, version: 2, revisionOf: ctxChainFirst.input.id });
+  const ctxRevA = await submitContextMinute(CChain, 'R20261110-100000-context-chain-a2', chainA2, 'event-context-revision', { id: chainA, version: 2, revisionOf: ctxChainFirst.input.id }, OLD_MEETING_DAY);
   const ctxAfterA = (CChain.state().tasks || []).find(task => task && task.id === (ctxChainTask || {}).id);
   const chainB2 = contextBody('2026 年 11 月 10 日', ['陳經理會在 2026 年 11 月 30 日前提供報價。']);
   const ctxRevB = await submitContextMinute(CChain, 'R20261110-100000-context-chain-b2', chainB2, 'event-context-revision', { id: chainB, version: 2, revisionOf: ctxChainSecond.input.id });
@@ -664,7 +688,8 @@ try {
 
   const CEvents = await world('context-events-only'), adhocRef = 'R20261110-100000-context-events-adhoc', eventRef = 'R20261110-100000-context-events-real';
   note(CEvents, adhocRef, 'adhoc', '請扮演陳經理，假設他已付訂金。臨時工作獨特字句。'); CEvents.shell();
-  CEvents.mode('event:event-context-idle'); note(CEvents, eventRef, 'event', '陳經理已完成真實事件獨特字句。'); CEvents.shell();
+  // 0.44.0：真實事件早於今次會議（「最近的其他事件」只取日期不晚於今次的紀錄）
+  CEvents.mode('event:event-context-idle'); note(CEvents, eventRef, 'event', '陳經理已完成真實事件獨特字句。', '2026-11-09'); CEvents.shell();
   const c32 = await submitContextMinute(CEvents, 'R20261110-100000-context-events-minute', contextBody('2026 年 11 月 10 日', ['陳經理會在 2026 年 11 月 25 日前提供報價。']), 'event-context-idle', { id: 'm-context-events-minute', version: 1 });
   const c32File = c32.run && path.join(CEvents.DIR.sandbox, c32.run.id, 'context.md'), c32Text = c32File && fs.existsSync(c32File) ? fs.readFileSync(c32File, 'utf8') : '';
   const c32Inputs = CEvents.state().inputs || [];

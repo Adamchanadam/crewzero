@@ -14,6 +14,7 @@ const prefillLib = await import(pathToFileURL(path.join(PROTO, 'prefill-lib.mjs'
 const ops = await import(pathToFileURL(path.join(PROTO, 'ledger-ops.mjs')));
 const people = await import(pathToFileURL(path.join(PROTO, 'people-ops.mjs'))); // run.mjs 模組層從這裏取 orderEventItems 等函數，vm 環境要一併放入
 const pageCheck = await import(pathToFileURL(path.join(PROTO, 'company-page-check.mjs')));
+const moneyStore = await import(pathToFileURL(path.join(PROTO, 'money-store.mjs')));
 const temp = makeTestTemp('crewzero-first-batch-');
 const previous = process.cwd(), previousData = process.env.SOS_DATA;
 let passed = 0, total = 0;
@@ -32,7 +33,7 @@ try {
   const ck = JSON.parse(fs.readFileSync(path.join(sb, 'out', 'checkup.json')));
   const src = fs.readFileSync(path.join(PROTO, 'run.mjs'), 'utf8');
   const section = (a, b) => src.slice(src.indexOf(a), src.indexOf(b, src.indexOf(a)));
-  const ctx = { NAMES, Date, readJSON: (f, fallback) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : fallback, brainFile: () => path.join(data, 'ledger', 'checkup.json'), DIR: { data, sandbox: sb, ledger: path.join(data, 'ledger'), company: path.join(data, 'company') }, clockNow: () => Date.parse('2026-11-12T00:00:00Z'), fs, path, loadState: () => state, log() {}, U: NAMES.ui, matchDelivered: prefillLib.matchDelivered };
+  const ctx = { factMergeOn: () => false, NAMES, Date, readJSON: (f, fallback) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f)) : fallback, brainFile: () => path.join(data, 'ledger', 'checkup.json'), DIR: { data, sandbox: sb, ledger: path.join(data, 'ledger'), company: path.join(data, 'company') }, clockNow: () => Date.parse('2026-11-12T00:00:00Z'), fs, path, loadState: () => state, log() {}, U: NAMES.ui, matchDelivered: prefillLib.matchDelivered };
   ctx.writeJSON = j;
   vm.createContext(ctx);
   vm.runInContext(section('function checkCheckup(', '// 一次工作入面加一步') + '\n' + section('const checkupStale =', 'function brainLedger()') + '\nthis.checkCheckup=checkCheckup; this.checkupStale=checkupStale;', ctx);
@@ -64,7 +65,11 @@ try {
   state.inputs = [input]; state.events = [];
   Object.assign(ctx, { U: NAMES.ui, stamp: () => 'test', localIso: () => '2026-11-05T00:00:00Z', dayText: x => x, clip: (x,n) => String(x || '').slice(0,n),
     replySubmittedAt: () => '', founderUpdatedAfter: () => false, EV_RANK: g => NAMES.EV_KEYS.indexOf(g), noteCelebration() {}, finishCelebration() {},
-    saveState: v => j(stateFile, v), finish() {}, placePacks: () => [], PRACTICE_DIR: path.join(data, 'practice', 'scenarios'), ADVANCED: false, deriveActors: brain.deriveActors, loadPage: () => null });
+    saveState: v => j(stateFile, v), finish() {}, placePacks: () => [], PRACTICE_DIR: path.join(data, 'practice', 'scenarios'), ADVANCED: false, deriveActors: brain.deriveActors, loadPage: () => null,
+    // 0.43.0 起 eventPack 先取業績重複比對池（money-store.mjs 的 dupPool）：用真函數，DIR 指向本測試的隔離資料夾（沒有業績紀錄，回傳空池）
+    dupPool: moneyStore.dupPool,
+    // 0.44.0 按日期逐項判斷：eventPack 的 datedQuestion 用 company-page-check.mjs 的 validDay（與 run.mjs 匯入一致）
+    validDay: pageCheck.validDay });
   vm.runInContext(section('function eventPack(', 'async function finishEvent(') + section('function handleEventConfirm(', '/* ---------- 深化站點') + '\nthis.eventPack=eventPack; this.handleEventConfirm=handleEventConfirm;', ctx);
   const ev = ctx.checkEvent(path.join(sb, 'out'));
   const pack = ctx.eventPack({ id: 'run' }, state, input, ev.items);
@@ -154,13 +159,17 @@ try {
     runAI: async () => { j(path.join(chainSb, 'out', 'event.json'), { summary: '會面已記錄', grade: 'paid', personaUpdate: { key: 'concerns', text: '不可寫回' }, items: [{ kind: 'assumption', id: 'H1', grade: 'said', why: '對方口頭表示' }] }); return { ok: true }; },
     rewriteOnce: async () => [], placePacks: (_d, ps) => { madePacks.push(...ps); return ps.map(p => ({ id: p.id, count: p.questions.length })); },
     parseFounderReply: ask.parseFounderReply, validateAskReply: ask.validateAskReply, replyVia: () => 'test', archive() {}, fnv: ask.fnv,
-    loadPack: () => madePacks[0], loadAnswers: () => { throw Error('錯配答案不可讀取或寫入'); } });
+    loadPack: () => madePacks[0], loadAnswers: () => { throw Error('錯配答案不可讀取或寫入'); },
+    // 0.44.0：finishEvent 抽取範圍內的 recordOverviewNotes 讀已確認公司概覽（run.mjs 模組層常數 CONFIRMED）；本測試沒有該檔，讀到 null
+    CONFIRMED: path.join(data, 'ledger', 'confirmed.json'),
+    // 0.44.0 F2：開關關閉時事實合併不改動事件項目
+    factMergeItems: (state, input, items) => ({ items, removedIds: [], sources: [], replacements: [] }), writeFactSources: () => [], closeFactReplacements: () => [], writeFactClosures: () => [], packHash: ask.packHash });
   vm.runInContext(section('async function finishEvent(', '// 你確認真實事件') + section('async function runAIStep(', '/* ---------- 臨時工作') + section('async function handleDebrief(', 'function noteTask(') + section('async function handleAsk(', 'function handleActionConfirm(') + '\nthis.handleDebrief=handleDebrief; this.handleAsk=handleAsk;', ctx);
   await ctx.handleDebrief({ id: 'chain-run', ref: 'chain', kind: 'note', noteType: 'debrief' }, { commitment: 'yes', scenarioId: 'S1' }, '對方口頭表示');
   check('會後正式處理鏈只建立確認包，證據級不變', madePacks.length === 1 && state.company.assumptions[0].grade === 'guess' && madePacks[0].realEvent.inputId === 'in-chain' && !madePacks[0].questions.some(q => q.options?.some(o => o.apply?.op === 'updatePersona')) && !('personaUpdate' in JSON.parse(fs.readFileSync(path.join(work, 'chain-run', 'event.json')))));
   fs.mkdirSync(ctx.DIR.replies, { recursive: true }); fs.mkdirSync(ctx.DIR.answers, { recursive: true });
   const p = madePacks[0], wrong = { format: 'startup-os.ask-reply/0.1', pack: 'PACK-B', answers: [{ id: p.questions[0].id, value: p.questions[0].value }] };
-  fs.writeFileSync(path.join(ctx.DIR.replies, 'wrong.md'), 'kind: ask-answer\nref: ' + p.id + '\nhash: ' + ask.fnv(JSON.stringify(p)) + '\n\n```json\n' + JSON.stringify(wrong) + '\n```');
+  fs.writeFileSync(path.join(ctx.DIR.replies, 'wrong.md'), 'kind: ask-answer\nref: ' + p.id + '\nhash: ' + (ask.packHash ? ask.packHash(p) : ask.fnv(JSON.stringify(p))) + '\n\n```json\n' + JSON.stringify(wrong) + '\n```');
   const beforeWrong = JSON.stringify(state), beforeCards = fs.readFileSync(path.join(scenarioDir, 'S1.json'), 'utf8');
   await ctx.handleAsk({ id: 'wrong' }, 'wrong.md');
   check('正式答案入口拒收跨包同題號，帳本、人物卡及答案儲存不變', JSON.stringify(state) === beforeWrong && fs.readFileSync(path.join(scenarioDir, 'S1.json'), 'utf8') === beforeCards && fs.readdirSync(ctx.DIR.answers).length === 0);
@@ -170,7 +179,9 @@ try {
     loadState: () => state, saveState: v => j(stateFile, v), pausedNow: () => false, certified: () => ({ host: {} }), webAccess: () => 'none', listMatches: () => [], brainSource: () => null, writeCounterparts() {}, writeBizContext() {}, writeConfirmedPage() {},
     todayIso: () => '2026-11-05', localIso: ctx.localIso, clockNow: Date.now, datedTask: folder => fs.writeFileSync(path.join(folder, 'task.md'), 'task'),
     markBrokenLinks: async e => e, runAI: async folder => { j(path.join(folder, 'out', 'checkup.json'), output); return aiReply; }, step: (_r, _k, _l, st, detail) => steps.push({ st, detail }),
-    addEvent: e => events.push(e), offerDebate: () => offeredCount++, offerOpportunities: () => offeredCount++, clip: ctx.clip, log() {} };
+    addEvent: e => events.push(e), offerDebate: () => offeredCount++, offerOpportunities: () => offeredCount++, clip: ctx.clip, log() {},
+    // 0.44.0 生意模式圖：體檢結果有 canvasSuggest 才出建議題（另有 cdp-canvas.mjs 等測試）；本測試的體檢輸出沒有該欄，真函數亦即時回傳 null，這裏用同樣結果的替身
+    offerCanvasSuggestion: () => null };
   vm.createContext(bc);
   vm.runInContext(section('const BRAIN_JOBS =', '// 生意大腦放上待決事項') + '\nthis.brainStep=brainStep;', bc);
   await bc.brainStep({ id: 'partial', steps: [] }, 'checkup');

@@ -101,6 +101,28 @@ try {
   const c29Sources = c29.lineSources.map(row => row.source.replace(/^日程\s+[^；\]]+；/, ''));
   const c29SourcePattern = /^(?:\d{1,2} 月 \d{1,2} 日(?:會議紀錄|已確認結果|其他事件|記下的事)|(?:以往會議紀錄|既有日程)|日期不詳(?:會議紀錄|已確認結果|其他事件|記下的事)?)$/;
   ok('TC29 多類資料同時存在時，全部對外出處只由月日及受控類別組成', c29Sources.length > 0 && c29Sources.every(source => c29SourcePattern.test(source) && !/(?:\d{4}-\d{2}-\d{2}|(?:fu|in|m|ai)-|@|(?:\+?\d[\s.-]?){8,})/i.test(source)) && ['11 月 3 日會議紀錄', '11 月 3 日已確認結果', '11 月 4 日記下的事', '11 月 5 日其他事件', '既有日程'].every(source => c29Sources.includes(source)), c29Sources);
+
+  // 0.44.0：紀錄常寫「機構＋人名」。名稱互相包含而只對上名單上唯一一個對象，才算對上；對上兩個或以上當作對不上（協調會話 2026-11-12）
+  const g1 = actor('g1', '工房丙'), g2 = actor('g2', '工房丁'), g3 = actor('g3', '陳經理', { aliases: ['陳生'] });
+  const gOld = minutes('m-g-old', 'in-g-old', '2026-11-03', { kind: 'actor', actorId: 'g1', name: '工房丙' }, meetingText(['- 工房丙承諾十一月底交貨。']));
+  const gBase = name => ({ actors: [g1, g2, g3], milestones: [], meetings: [gOld], inputs: [{ id: 'in-g-old', eventDate: '2026-11-03', title: '會議：工房丙' }], events: [], tasks: [],
+    current: { inputId: 'in-g-now', meetingId: 'm-g-now', date: '2026-11-10', speakers: { '對方': { kind: 'other', name } }, speakerCounts: { 對方: 3 }, text: meetingText(['- 今次再談交貨。']), founderText: '' } });
+  ok('TC30 紀錄寫「工房丙何師傅」：包含名單上的「工房丙」，唯一對上，帶入以往會議', buildMeetingContext(gBase('工房丙何師傅')).text.includes('工房丙承諾十一月底交貨'), buildMeetingContext(gBase('工房丙何師傅')).text);
+  ok('TC31 紀錄只寫「工房」：同時對上「工房丙」「工房丁」，當作對不上，不帶入', !buildMeetingContext(gBase('工房')).text.includes('工房丙承諾十一月底交貨'), buildMeetingContext(gBase('工房')).text);
+  ok('TC32 名稱完全相同照舊對上', buildMeetingContext(gBase('工房丙')).text.includes('工房丙承諾十一月底交貨'), buildMeetingContext(gBase('工房丙')).text);
+  const gOld2 = minutes('m-g-old2', 'in-g-old2', '2026-11-03', { kind: 'other', name: '工房丙（何師傅）' }, meetingText(['- 何師傅說豆會先試烘。']));
+  const gBase2 = { ...gBase('工房丙'), meetings: [gOld2], inputs: [{ id: 'in-g-old2', eventDate: '2026-11-03', title: '會議：工房丙' }] };
+  gBase2.current.speakers = { '對方': { kind: 'actor', actorId: 'g1', name: '工房丙' } };
+  ok('TC33 舊紀錄寫「工房丙何師傅」一類而今次有名單編號：同樣對上', buildMeetingContext({ ...gBase2, meetings: [{ ...gOld2, speakers: { '對方': { kind: 'other', name: '工房丙何師傅' } } }] }).text.includes('何師傅說豆會先試烘'), buildMeetingContext({ ...gBase2, meetings: [{ ...gOld2, speakers: { '對方': { kind: 'other', name: '工房丙何師傅' } } }] }).text);
+  ok('TC34 別名一併比對：紀錄寫「乙公司陳生」，經別名「陳生」只對上陳經理', (() => {
+    const cOld = minutes('m-c-old', 'in-c-old', '2026-11-03', { kind: 'actor', actorId: 'g3', name: '陳經理' }, meetingText(['- 陳經理答應寄樣本。']));
+    const data = { ...gBase('乙公司陳生'), meetings: [cOld], inputs: [{ id: 'in-c-old', eventDate: '2026-11-03', title: '會議：陳經理' }] };
+    return buildMeetingContext(data).text.includes('陳經理答應寄樣本');
+  })());
+  ok('TC35 一個字的名稱不作包含比對（免得「丙」對上任何含「丙」的名稱）', (() => {
+    const one = actor('g9', '丙'); const data = gBase('工房丙何師傅'); data.actors = [one]; data.meetings = [minutes('m-one', 'in-one', '2026-11-03', { kind: 'actor', actorId: 'g9', name: '丙' }, meetingText(['- 一字名稱的紀錄。']))]; data.inputs = [{ id: 'in-one', eventDate: '2026-11-03', title: '會議' }];
+    return !buildMeetingContext(data).text.includes('一字名稱的紀錄');
+  })());
 } catch (error) {
   ok('TC 程式本身沒有拋錯', false, String(error && error.stack || error));
 }

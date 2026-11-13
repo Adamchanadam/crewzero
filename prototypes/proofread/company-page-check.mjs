@@ -10,6 +10,7 @@ const NAMES = createRequire(import.meta.url)('./names.js');
 // 只在新草稿核對時補齊；舊公司概覽遷移不加生意模式欄位。
 export const READING_FIELDS = [
   ['biz.type', '生意類型'],
+  ['biz.goal', '想做成哪種生意'],
   ['canvas.customer', '客戶'],
   ['canvas.problem', '對方的問題'],
   ['canvas.alternatives', '現有替代方案'],
@@ -28,6 +29,7 @@ function completeReading(page) {
   const reading = listOf(detail.reading), ids = new Set(fieldsOf(page).map(f => f.id));
   const uid = base => { let id = base, n = 2; while (ids.has(id)) id = base + '-' + n++; ids.add(id); return id; };
   const labels = Object.values(BIZ_TYPES).map(x => x.label);
+  const goals = ['fast', 'steady', 'scale', 'raise', 'open'].map(key => ({ key, text: NAMES.ui['goal_' + key] }));
   detail.reading = READING_FIELDS.map(([plan, label]) => {
     const f = reading.find(x => x && x.plan === plan) || { plan, value: '待你補充', origin: 'missing' };
     if (typeof f.id !== 'string' || !f.id) f.id = uid(plan.replaceAll('.', '-'));
@@ -38,6 +40,13 @@ function completeReading(page) {
       f.kind = 'choice'; f.origin = 'ai';
       f.options = labels.map(text => ({ text, ...(text === f.value ? { rec: true } : {}) }));
       f.why = '只影響問題及例子的用字，可以更改。';
+      delete f.src;
+    } else if (plan === 'biz.goal') {
+      f.value = goals.some(goal => goal.text === f.value) ? f.value : NAMES.ui.goal_open;
+      f.kind = 'choice';
+      f.origin = ['doc', 'ai', 'default', 'missing'].includes(f.origin) ? f.origin : 'ai';
+      f.options = goals.map(goal => ({ text: goal.text, ...(goal.text === f.value ? { rec: true } : {}) }));
+      f.why = NAMES.ui.goalWhy;
       delete f.src;
     } else if (!f.kind) f.kind = 'text';
     return f;
@@ -188,7 +197,7 @@ export function checkCompanyPage(page, options = {}) {
       if (!o.kind) o.kind = Array.isArray(o.options) ? 'choice' : 'text';
       if (!['choice','grade','date','text','multi'].includes(o.kind)) errors.push('項目類型不正確');
       if (!['doc','ai','default','missing'].includes(o.origin)) errors.push('項目來源不正確');
-      if (o.origin === 'doc' && (!Array.isArray(o.src) || !o.src.length)) { o.origin = 'ai'; warnings.push('有一項資料未註明出處，已改為 Zero 建議'); }
+      if (o.origin === 'doc' && (!Array.isArray(o.src) || !o.src.length)) { o.origin = 'ai'; if (!warnings.includes('有一項資料未註明出處，已改為 Zero 建議')) warnings.push('有一項資料未註明出處，已改為 Zero 建議'); }
     }
     Object.values(o).forEach(walk);
   }

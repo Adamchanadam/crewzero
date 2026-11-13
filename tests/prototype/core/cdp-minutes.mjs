@@ -52,15 +52,16 @@ try {
   ok('草稿頁顯示標示數目、下一處及儲存', !!ready && await chrome.ev('document.querySelectorAll("#minutes-ready .min-count span").length===2 && !!document.getElementById("minutes-save") && !!document.querySelector(".min-mark .btn")'));
   ok('1440 闊度沒有橫向捲動', await chrome.ev('document.documentElement.scrollWidth<=innerWidth'));
   await chrome.shot(path.join(OUT, 'minutes-ready-1440.png'), '#app');
-  const liveMarks = await chrome.ev(`(()=>{const e=document.querySelector('#minutes-text'),number=t=>Number((String(t).match(/(\\d+)/)||[])[1]),old=e.value,before=number(document.querySelectorAll('#minutes-ready .min-count span')[0].innerText),sideBefore=document.querySelectorAll('.min-mark').length;e.value=old.replace(/^⚠️（[^）]*）[^\\n]*(?:\\n|$)/m,'');e.dispatchEvent(new Event('input',{bubbles:true}));const after=number(document.querySelectorAll('#minutes-ready .min-count span')[0].innerText),sideAfter=document.querySelectorAll('.min-mark').length;e.value=old;e.dispatchEvent(new Event('input',{bubbles:true}));return {before,after,sideBefore,sideAfter};})()`);
-  ok('刪去一處不肯定標示後立即重算數目及清單', liveMarks.before === 1 && liveMarks.after === 0 && liveMarks.sideAfter === liveMarks.sideBefore - 1, liveMarks);
+  const liveMarks = await chrome.ev(`(()=>{const e=document.querySelector('#minutes-text'),number=t=>Number((String(t).match(/(\\d+)/)||[])[1]),old=e.value,before=number(document.querySelectorAll('#minutes-ready .min-count span')[0].innerText),sideBefore=document.querySelectorAll('.min-mark').length;e.value=old.replace(/⚠️（[^）]*）/,'');e.dispatchEvent(new Event('input',{bubbles:true}));const after=number(document.querySelectorAll('#minutes-ready .min-count span')[0].innerText),sideAfter=document.querySelectorAll('.min-mark').length;e.value=old;e.dispatchEvent(new Event('input',{bubbles:true}));return {before,after,sideBefore,sideAfter};})()`);
+  // 0.44.0 會議紀錄改版（brief-m1）：標示寫在清單項目之內（不在行首），程式另會為逐字稿找不到的引句加 ⚠️；不寫死數目，只核對刪去一處後少一處
+  ok('刪去一處不肯定標示後立即重算數目及清單', liveMarks.before >= 1 && liveMarks.after === liveMarks.before - 1 &&liveMarks.sideAfter === liveMarks.sideBefore - 1, liveMarks);
   // 在原文末尾加字（cdp-lib 的 type 會先清空輸入框，會把整份草稿換掉）
   const append = (sel, t) => chrome.ev(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});e.focus();e.value+=${JSON.stringify(t)};e.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);
   await append('#minutes-text', '\n補充：已由創辦人核對。');
   await chrome.click('#minutes-save');
   const mid = await chrome.ev('location.hash.split("/").pop()');
   const saved = await waitFor(async () => { const r = await get('/api/minutes?id=' + encodeURIComponent(mid)); return r.j && /創辦人核對/.test(r.j.text || '') ? r.j : null; });
-  ok('全文編輯可儲存：加字後原有內容及標示保留', !!saved && (saved.marks || {}).warn === 1 && (saved.marks || {}).fill === 1 && /## 參加者/.test(saved.text || ''), saved && { hash: saved.hash, marks: saved.marks && { warn: saved.marks.warn, fill: saved.marks.fill } });
+  ok('全文編輯可儲存：加字後原有內容及標示保留', !!saved && (saved.marks || {}).warn === liveMarks.before && (saved.marks || {}).fill === 1 && /## 參加者/.test(saved.text || ''), saved && { hash: saved.hash, marks: saved.marks && { warn: saved.marks.warn, fill: saved.marks.fill } });
   const external = await post('/api/minutes', { action: 'save', id: mid, text: (saved.text || '') + '\n本機修改。', hash: saved.hash });
   ok('測試先模擬本機已改過草稿', external.code === 200, external.code);
   await append('#minutes-text', '\n網頁舊版本。');

@@ -55,6 +55,64 @@ function ready(p) {
 }
 function farmPage() { return JSON.parse(fs.readFileSync(FIX, 'utf8').trim().replace(/^window\.STARTUP_OS_PAGE\s*=\s*/, '').replace(/;\s*$/, '')); }
 
+// 開局旅程用的模式卡原句一律從沙盒副本讀取，避免假 AI 自行改寫卡片內容。
+function journeyCardSource() {
+  if (!fs.existsSync('model-cards.md')) return {
+    c01: { id: 'C01', name: '訂閱制', fit: '顧客的需求每週或每月再度出現。', trap: '持續價值不足，顧客試用後便取消。', firstTest: '請約 10－20 位目標顧客參加首月收費試用，統計付款者及第二個月繼續付款者。' },
+    c09: { id: 'C09', name: '預收款／預售', fit: '需求已有初步信號。', trap: '交付延誤會傷害信譽。', firstTest: '預訂的測試可採用訂金或群眾集資；最低目標數量需預先訂明，若未達到便全額退款。' },
+    c10: { id: 'C10', name: '會員與忠誠計劃', fit: '顧客購買頻率高。', trap: '優惠的成本超出它帶來的額外消費。', firstTest: '向現有熟客試行收費會籍或積分方案，為期三個月；比較入會者與未入會者的消費相差多少。' },
+    c13: { id: 'C13', name: '網上直銷', fit: '品牌故事清晰。', trap: '網上廣告成本持續增加，使獲客愈來愈昂貴。', firstTest: '先選網店或社交媒體其中一種渠道，以小批量產品測試銷售；少額推廣後，核算首月的獲客成本及毛利。' },
+    c26: { id: 'C26', name: '特許經營', fit: '單店模式已證明可獲利。', trap: '難以管控品質，一間分店出問題便會連累整個品牌。', firstTest: '能否維持業績，可由非創辦人的員工進行一段時間的獨立經營來測試；他們須按自營店做法整理的手冊執行。' },
+    s29: { id: 'S29', name: '聯盟分銷', when: '不增加銷售人手而又要擴闊銷售，可考慮聯盟分銷。' }
+  };
+  const source = fs.readFileSync('model-cards.md', 'utf8');
+  const core = id => {
+    const at = source.indexOf('- 編號：' + id);
+    const from = source.lastIndexOf('#### ', at), to = source.indexOf('\n#### ', at);
+    return source.slice(from, to < 0 ? source.length : to);
+  };
+  const firstList = (block, label) => {
+    const at = block.indexOf('- ' + label + '：');
+    if (at < 0) return '';
+    const lines = block.slice(at + label.length + 4).split(/\r?\n/);
+    for (const line of lines) { const match = /^\s+-\s+(.+)$/.exec(line); if (match) return match[1].trim(); if (/^- .+：/.test(line)) break; }
+    return '';
+  };
+  const one = id => {
+    const block = core(id), heading = (/^####\s+(.+)$/m.exec(block) || [])[1] || id;
+    const line = label => ((new RegExp('^- ' + label + '：(.+)$', 'm')).exec(block) || [])[1] || '';
+    return { id, name: heading, fit: firstList(block, '適合信號'), trap: firstList(block, '常見陷阱'), firstTest: line('第一個驗證') };
+  };
+  const extra = id => {
+    const line = source.split(/\r?\n/).find(value => value.startsWith('| ' + id + ' |')) || '';
+    const cells = line.replace(/^\||\|$/g, '').split('|').map(value => value.trim());
+    return { id, name: cells[1] || id, when: cells[4] || '' };
+  };
+  return { c01: one('C01'), c09: one('C09'), c10: one('C10'), c13: one('C13'), c26: one('C26'), s29: extra('S29') };
+}
+
+function journeyModels(ideate) {
+  const card = journeyCardSource(), said = String(ideate?.say || '');
+  const pick = (item, quote, q = 1) => ({ card: item.id, quote, src: Object.assign({ q }, said ? { said } : {}) });
+  const test = item => ({ card: item.id, text: item.firstTest, watch: '付款人數及後續購買情況', counts: '只計實際付款或承諾，不計口頭讚好。', zero: true });
+  const make = (name, payer, charge, form, scale, why) => ({
+    name, payer, faces: { charge: [pick(charge, charge.fit)], form: [pick(form, form.fit)], scale }, why,
+    trap: { card: charge.id, text: charge.trap }, firstTest: test(charge)
+  });
+  return [
+    make('每月鮮豆訂閱', '上班族按月付款，收到新鮮烘焙的咖啡豆。', card.c01, card.c13, [pick(card.s29, card.s29.when)], '咖啡需求可重複出現，適合先測試按月安排。'),
+    make('工房限量預購', '顧客先付款預訂限量烘焙豆，再按約定交付。', card.c09, card.c13, { undecided: true, missing: '未知道可由哪一方協助擴大，先完成首批交付再定。' }, '先收款可同時了解需求和交付能力。'),
+    make('熟客會籍', '熟客付會費，取得優先選購和專屬安排。', card.c10, card.c13, [pick(card.c26, card.c26.fit)], '先確認熟客是否重複購買，再考慮長期擴大。'),
+    make('新鮮豆直送試行', '顧客按次付款，先用小批量了解是否願意持續購買。', card.c09, card.c13, [pick(card.s29, card.s29.when)], '先以小批量交付核對需求和渠道。'),
+    make('辦公室咖啡補給', '小型辦公室按月付款，定期收到咖啡豆補給。', card.c01, card.c13, { undecided: true, missing: '未知道是否有伙伴可協助服務更多辦公室，先核對首批回應。' }, '先測試辦公室是否願意為定期補給付款。'),
+    make('熟客預購會籍', '熟客先付款預訂並享有會籍安排。', card.c10, card.c13, [pick(card.s29, card.s29.when)], '先以熟客群測試預訂和會籍安排。')
+  ];
+}
+
+function journeyReceipt(summary) {
+  fs.writeFileSync('out/receipt.json', JSON.stringify({ summary, artifacts: [], founderNext: [], needsFounder: [] }));
+}
+
 const sandboxAt = process.argv.indexOf('--sandbox-probe');
 if (sandboxAt >= 0) {
   const target = process.argv[sandboxAt + 1] || '', content = process.argv[sandboxAt + 2] || '';
@@ -83,7 +141,75 @@ const type = job && job.type;
 if (type !== 'rewrite' && type !== 'work') fs.copyFileSync('task.md', 'task-seen.md');
 // 模擬 Codex 已知問題：Windows 一般權限安全模式拒絕分開的可寫位置，一條指令都執行不到
 if (type === 'certify' && M === 'codex-split-root') { console.error('ERROR codex_core::tools::router: error=exec_command failed: windows unelevated restricted-token sandbox cannot enforce split writable root sets directly; refusing to run unsandboxed'); process.exit(0); }
-if (type === 'work' && outputMode === 'agy') {
+// 只有文字的款項（收據跟進 FOLLOWUP.md 第 1 項）：event-text-money 只有文字、unrecordedMoney、沒有其他項目；event-text-money-actor 另有一項新對象確認題；
+// event-text-target 原話只是目標數字（不加旗號、沒有項目）。獨立分支，不影響其他事件模式。
+if ((type === 'event' || type === 'event-repair') && /^event-text-(money|money-actor|target)$/.test(M)) {
+  const said = fs.readFileSync('event.md', 'utf8').split('## 創辦人原話').pop().trim();
+  const items = M === 'event-text-money-actor' ? [{ kind: 'newActor', name: '黃小姐', org: '乙餐廳', role: '負責人', actorKind: 'customer', why: '原話提到乙餐廳的黃小姐付了訂金，之後可能成為長期客戶。' }] : [];
+  fs.writeFileSync('out/event.json', JSON.stringify({ summary: '測試 AI：' + said.slice(0, 40), grade: 'guess', read: { summary: '測試 AI：讀了創辦人原話，沒有附件。', highlights: [] }, contrasts: [], reason: M === 'event-text-target' ? '原話只是目標數字，沒有已轉手的款項。' : '原話寫明款項已轉手，但沒有附件可證明，未能提出入帳建議。', items, ...(M === 'event-text-target' ? {} : { unrecordedMoney: true }) }, null, 2));
+  done();
+} else if (type === 'journey-who') {
+  const ideate = JSON.parse(fs.readFileSync('ideate.json', 'utf8'));
+  const options = [
+    { who: '在家沖咖啡的上班族', pain: '超市的咖啡豆多數烘焙已久；想喝新鮮豆，卻沒有時間逐間工房找。', now: '在超市、咖啡店或大型網購平台買豆。', rec: true },
+    { who: '十人以下的小型辦公室', pain: '茶水間咖啡質素一般，負責行政的同事沒有時間挑選及補貨。', now: '買膠囊或即溶咖啡，或由同事各自購買外賣咖啡。' },
+    { who: '獨立小咖啡店及小餐館', pain: '想用本地新鮮豆做出特色，但逐家工房議價及取貨很花時間。', now: '向大型咖啡豆批發商訂貨。' }
+  ];
+  // journey-cardids：畫面文字夾帶卡號；journey-who-digits：價值一句帶創辦人沒有寫過的數字（Opus 覆核第 4、12 項）
+  const whoSaid = '你寫的是「' + String(ideate.say || '').slice(0, 40) + '」，先從最接近的個人買家開始比較。' + (M === 'journey-cardids' ? '（參考 C01）' : '');
+  if (M === 'journey-cardids') options[0].pain += '（C05）';
+  const whoValue = M === 'journey-who-digits' ? '每月 30 包本地烘焙的新鮮咖啡豆。' : '本地小型烘焙工房的新鮮咖啡豆，讓愛喝咖啡的人容易取得。';
+  // 第二輪覆核第 4、5 項：價值一句與創辦人原話相同（應保持 mine、不被改寫）；所選對象名稱含創辦人沒寫過的數字
+  const whoValueFinal = M === 'journey-who-say-value' ? String(ideate.say || '') : whoValue;
+  if (M === 'journey-who-digits-customer') options[0].who = '開業 1 至 3 年的獨立咖啡店';
+  fs.writeFileSync('out/who.json', JSON.stringify({ said: whoSaid, value: whoValueFinal, options: M === 'journey-who-short' ? options.slice(0, 2) : options }, null, 2));
+  journeyReceipt('測試 AI：已提出可先了解的對象。');
+  done();
+} else if (type === 'journey-model') {
+  const ideate = JSON.parse(fs.readFileSync('ideate.json', 'utf8'));
+  const excluded = new Set((ideate.model && Array.isArray(ideate.model.exclude) ? ideate.model.exclude : []).map(value => String(value)));
+  const models = journeyModels(ideate).filter(model => !excluded.has(model.name)).slice(0, 3);
+  // Opus 覆核第 13 項：組合名稱含卡號、名稱重複、重提已排除的名稱
+  if (M === 'journey-model-cardname' && models[1]) models[1].name = '組合 C05 試行';
+  if (M === 'journey-model-dupname' && models[2] && models[0]) models[2].name = models[0].name;
+  if (M === 'journey-model-exclude-leak') { const leak = journeyModels(ideate).find(model => excluded.has(model.name)); if (leak) models[0] = leak; }
+  const bad = M === 'journey-bad-card' || job.repair === true && fs.existsSync('journey-bad-card');
+  if (M === 'journey-bad-card') fs.writeFileSync('journey-bad-card', '1');
+  if (bad && models[0]) models[0].faces.charge[0].card = 'C99';
+  if (bad && models[1]) models[1].faces.charge[0].quote = models[1].faces.charge[0].quote.replace('需求', '需要');
+  // 組合完整（接口文件 5.4，Fable 反審 M5）驗收模式：只在指明模式時改動輸出，預設輸出不變。
+  // journey-model-incomplete：第一次缺陷阱及缺第一個驗證，修正那一次交齊；-stuck：第三個組合兩次都缺陷阱；
+  // journey-model-one：第二、三個組合兩次都缺第一個驗證（只剩一個）；journey-model-zero-trap：第一個組合的陷阱是 Zero 自寫（沒有卡、zero: true）。
+  const stickyMode = name => { if (M === name) fs.writeFileSync(name, '1'); return M === name || job.repair === true && fs.existsSync(name); };
+  if (M === 'journey-model-incomplete' && job.repair !== true) { if (models[0]) delete models[0].trap; if (models[1]) delete models[1].firstTest; }
+  if (stickyMode('journey-model-incomplete-stuck') && models[2]) delete models[2].trap;
+  if (stickyMode('journey-model-one')) { if (models[1]) delete models[1].firstTest; if (models[2]) delete models[2].firstTest; }
+  if (M === 'journey-model-zero-trap' && models[0]) models[0].trap = { text: 'Zero 自寫：首批顧客或會試用一次便停止購買。', zero: true };
+  fs.writeFileSync('out/models.json', JSON.stringify({ said: '先比較誰付錢、怎樣交付及可否擴大；未有目標資料，先保持未定。' + (M === 'journey-cardids' ? '（C01）' : ''), models, goal: { suggest: 'open', why: '你尚未說明想做成哪一種生意。' + (M === 'journey-cardids' ? '（C02）' : '') } }, null, 2));
+  journeyReceipt('測試 AI：已提出三個生意模式組合。');
+  done();
+} else if (type === 'journey-canvas') {
+  const cells = {
+    partners: { text: '本地小型烘焙工房及協助推介的伙伴。', tag: 'pick', suggest: '' },
+    activities: { text: '選豆、包裝、寄送，並記錄首輪試用結果。', tag: 'zero', suggest: '' },
+    resources: { text: '與本地烘焙工房的供貨關係及顧客回應。', tag: 'zero', suggest: '' },
+    value: { text: '本地小型烘焙工房的新鮮咖啡豆。', tag: 'mine', suggest: '' },
+    relationship: { text: '', tag: 'open', suggest: '先詢問首批顧客甚麼安排會令他們願意再次購買。' },
+    channel: { text: '網店及社交媒體直接銷售。', tag: 'pick', suggest: '' },
+    customer: { text: '在家沖咖啡的上班族。', tag: 'pick', suggest: '' },
+    cost: { text: M === 'journey-canvas-digits' ? '每包 45 元的成本。' : '', tag: 'open', suggest: '請你補充進貨、包裝及寄送會涉及哪些成本。' },
+    revenue: { text: '訂戶按月付款，價錢仍待確認。', tag: 'pick', suggest: '' },
+    problem: { text: '想喝新鮮咖啡豆，卻沒有時間逐間工房找。', tag: 'pick', suggest: '' },
+    alternatives: { text: '在超市、咖啡店或大型網購平台買豆。', tag: 'pick', suggest: '' }
+  };
+  // Opus 覆核第 3、4、12 項：AI 自報出處、九格夾帶卡號、數字（半形 10、全形１０；創辦人寫過的 100 可保留）
+  if (M === 'journey-canvas-selftag') { cells.activities.tag = 'mine'; cells.resources.tag = 'pick'; }
+  if (M === 'journey-cardids') cells.activities.text += '（C05）';
+  if (M === 'journey-canvas-digits2') { cells.cost = { text: '每包 10 元。', tag: 'zero', suggest: '請你補充每包成本。' }; cells.revenue = { text: '每月１０元訂閱費。', tag: 'pick', suggest: '' }; cells.activities = { text: '先聯絡 100 位上班族試飲。', tag: 'zero', suggest: '' }; }
+  fs.writeFileSync('out/canvas.json', JSON.stringify({ said: '已把已選內容放進模式圖；兩個未定位置保留給你補充。' + (M === 'journey-cardids' ? '（C01）' : ''), cells }, null, 2));
+  journeyReceipt('測試 AI：已填好生意模式圖。');
+  done();
+} else if (type === 'work' && outputMode === 'agy') {
   // Neutral 認證每次為獨立提示，不能假設有 task.md，也不能用 GET 冒充 POST。
   const prompt = process.argv[process.argv.indexOf('--fake-prompt') + 1] || '';
   const turn = { prompt, home: process.env.HOME, userprofile: process.env.USERPROFILE, model: process.argv[process.argv.indexOf('--model') + 1] };
@@ -154,6 +280,24 @@ if (type === 'work' && outputMode === 'agy') {
   if (M === 'intake-srcfile') page.sources = [...(page.sources || []), { id: 'zz2', title: '商業計劃', file: '商業計劃.md' }, { id: 'zz3', title: '不存在', file: '沒有這份.pdf' }, { id: 'zz4', title: '出界甲', file: 'archive/../ledger/state.json' }, { id: 'zz5', title: '出界乙', file: 'archive' + String.fromCharCode(92) + '..' + String.fromCharCode(92) + 'ledger' + String.fromCharCode(92) + 'state.json' }, { id: 'zz6', title: '出界丙', file: 'archive/x/../../company/page.json' }];
   if (/^intake-badurl/.test(M)) page.sources = [...(page.sources || []), { id: 'zz1', title: '政策', url: type === 'intake-repair' && M === 'intake-badurl-fix' ? 'https://example.hk/procurement_schs.html' : 'https://example.hk/procurement_schools.html', from: 'answer' }];
   if (M === 'intake-jargon' || M === 'jargon-stuck') page.glance.rows[0].value = '季末 G1：三間餐廳連續四週每週下單（run 計）';
+  // intake-jargon-badcard：目標一句有內部用語，同時選了不存在的卡；第一次及修正那一次都這樣交（沙盒標記檔），之後的改寫照常改走內部用語
+  const jargonBadCard = M === 'intake-jargon-badcard' || fs.existsSync('jargon-badcard');
+  if (M === 'intake-jargon-badcard') fs.writeFileSync('jargon-badcard', '1');
+  if (jargonBadCard) page.glance.rows[0].value = '季末 G1：三間餐廳連續四週每週下單（run 計）';
+  // 直接填沒有開局旅程時，補上可逐字核對的三面向模式組合及「未定」目標；旅程資料由外殼覆蓋，這裏不重選卡。
+  const intakeText = fs.existsSync('intake.md') ? fs.readFileSync('intake.md', 'utf8') : '';
+  if (!/\bjourney\b/.test(intakeText)) {
+    const model = journeyModels({ say: '' })[0];
+    model.diagnosis = Array.from({ length: 16 }, (_, index) => ({ n: index + 1, a: '紀錄未有' }));
+    if (M === 'intake-bad-card' && type === 'intake') model.faces.charge[0].card = 'C99';
+    if (jargonBadCard) model.faces.charge[0].card = 'C99';
+    // intake-short-diagnosis：第一次只交 15 項診斷題（修正那一次交齊 16 項）
+    if (M === 'intake-short-diagnosis' && type === 'intake') model.diagnosis = model.diagnosis.slice(0, 15);
+    page.detail ||= {};
+    page.detail.model = model;
+    page.detail.reading = Array.isArray(page.detail.reading) ? page.detail.reading : [];
+    if (!page.detail.reading.some(field => field && field.plan === 'biz.goal')) page.detail.reading.push({ id: 'biz-goal', plan: 'biz.goal', label: '想做成哪種生意', kind: 'choice', value: '未定', origin: 'ai', why: '未有足夠目標資料。' });
+  }
   fs.writeFileSync('out/company-page.json', JSON.stringify(page, null, 2));
   fs.writeFileSync('out/receipt.json', JSON.stringify({ summary: '已按你提交的資料擬好公司概覽，請你校對。', artifacts: [], founderNext: [], needsFounder: [] }));
   if (M === 'jargon-stuck') fs.writeFileSync('jargon-stuck', '1');
@@ -207,24 +351,44 @@ if (type === 'work' && outputMode === 'agy') {
   const date = (/會議日期：(\d{4})-(\d{2})-(\d{2})/.exec(input) || []).slice(1);
   const shownDate = date.length ? `${date[0]} 年 ${Number(date[1])} 月 ${Number(date[2])} 日` : '日期待定';
   const people = [...new Set([...input.matchAll(/^\d{1,2}:\d{2}(?::\d{2})?\s+([^\r\n]+)/gm)].map(m => m[1].trim()))].slice(0, 3);
-  const who = people.join('、') || '創辦人及與會者';
-  const bad = M === 'bad' || fs.existsSync('minutes-draft-bad');
-  if (M === 'bad') fs.writeFileSync('minutes-draft-bad', '1');
-  const sections = [
+  const participantLines = (people.length ? people : ['創辦人', '與會者']).map(person => '- ' + person);
+  const oldFormat = M === 'minutes-v1';
+  const missingSection = M === 'bad' || M === 'minutes-missing-section';
+  const quote = M === 'minutes-bad-quote' ? '這句不在逐字稿內。' : '首批大概二百件。';
+  const sections = oldFormat ? [
     `# 會議紀錄：測試會議（${shownDate}）`,
     '',
     '> ⚠️ 不肯定，請核對（共 1 處）　✏️ 待你補充（共 1 處）',
     '',
-    '## 參加者', '', who + '。', '',
-    '## 已發生的事實', '', '雙方已進行會議並交換現況。', '',
-    '## 對方的說法及承諾', '', '⚠️（數字不確定）對方口頭表示首批約二百件，尚待核對。', '',
-    '## 雙方決定', '', '先整理需要核對的資料後再確認安排。', '',
+    '## 參加者', '', participantLines.join('\n'), '',
+    '## 已發生的事實', '', '- 雙方已進行會議並交換現況。', '',
+    '## 對方的說法及承諾', '', '- ⚠️（數字不確定）對方口頭表示首批約二百件，尚待核對。', '',
+    '## 雙方決定', '', '- 先整理需要核對的資料後再確認安排。', '',
     '## 待辦', '', '- 對方：補交首批數量資料；✏️（請補負責人）。', '',
-    '## 未定事項', '', '首批數量及負責人仍待確認。', '',
-    '## 改動清單', '', '沒有。', ''
+    '## 未定事項', '', '- 首批數量及負責人仍待確認。', '',
+    '## 改動清單', '', '- 沒有。', ''
+  ] : [
+    `# 會議紀錄：測試會議（${shownDate}）`,
+    '',
+    '> ⚠️ 不肯定，請核對（共 1 處）　✏️ 待你補充（共 1 處）',
+    '',
+    '## 會議資料', '', `- 日期及時間：${shownDate}`, '- 形式：視像', '- 紀錄來源：逐字稿', '',
+    '## 參加者', '', ...participantLines, '',
+    '## 議題及討論要點', '', '### 1. 首批安排', '', '- 創辦人提出先核對首批數量，陳經理回應會提供資料。', '',
+    '## 已發生的事實', '', '- 雙方已進行會議並交換現況。', '',
+    '## 對方的說法及承諾', '', `- 對方口頭表示首批約二百件，「${quote}」；上述只屬口頭表示。`, '',
+    '## 雙方決定', '', '- 決定 1：先整理需要核對的資料後再確認安排。', '',
+    '## 待辦', '', '- 待辦 1｜負責人：✏️（請補負責人）｜期限：⚠️（由「下星期」換算）2026 年 11 月 18 日｜事項：陳經理提供資料。', '',
+    '## 未定事項', '', '- 未定 1：首批數量；尚欠對方確認。', '',
+    '## 下次會議', '', '- 沒有', '',
+    '## 改動清單', '', '- 沒有', ''
   ];
-  if (bad) sections.splice(sections.indexOf('## 未定事項'), 4);
+  if (missingSection && !oldFormat) sections.splice(sections.indexOf('## 下次會議'), 4);
   fs.writeFileSync('out/minutes.md', sections.join('\n'));
+  done();
+} else if ((type === 'event' || type === 'event-repair') && process.env.SOS_DATA && fs.existsSync(path.join(process.env.SOS_DATA, 'replay-event.json'))) {
+  // 重播：測試把真實 AI 交回的 event.json 放在 <SOS_DATA>/replay-event.json，事件及修正工作都原樣交回
+  fs.copyFileSync(path.join(process.env.SOS_DATA, 'replay-event.json'), 'out/event.json');
   done();
 } else if (type === 'event' || type === 'event-repair') {
   // 真實事件：揀第一條仲係「假設」嘅假設升一級到實際行動、第一個未完成嘅站標完成。模式：event-bad 第一次交錯格式（修正一次後改好）、event-none 冇影響、event-pick-<站 id> 指定標完成嘅站
@@ -455,8 +619,15 @@ if (type === 'work' && outputMode === 'agy') {
   const OFFICE_EV = /\.(docx?|pptx?|xlsx?)$/i;
   const looseName = f => 'files/' + f.replace(/\.[^.]+$/, e => e.toUpperCase()), loose = /-loose$/.test(M);
   const unreadable = [...(fs.existsSync('files') ? fs.readdirSync('files') : []).filter(f => OFFICE_EV.test(f) && !fs.existsSync(path.join('files', f + '.md'))).map(f => ({ file: loose ? looseName(f) : f, reason: loose ? 'Word 檔目前讀唔到' : M === 'event-unread-longreason' ? '長'.repeat(90) : '測試：Word／PowerPoint／Excel 檔目前讀不到' })), ...(M === 'event-unread-bogus' ? [{ file: '不是這次附件的檔案.docx', reason: '虛構' }] : [])];
-  const finalItems = M === 'event-none' || /^event-unread/.test(M) ? [] : items;
   const fl = fs.existsSync('files') ? fs.readdirSync('files') : [];
+  // event-receipt：照真實 AI 的形狀交回一筆入帳建議（金額是數字、類別是中文字），不附其他事項
+  if (M === 'event-receipt') items.splice(0, items.length, { kind: 'money', dir: 'out', amount: 1293.5, currency: 'HKD', date: '2026-11-06', payer: '青嶺咖啡器材行', what: '手沖濾紙、電子咖啡磅及磨豆機刀盤', category: '器材', file: fl.find(f => /\.(jpe?g|png)$/i.test(f)) || fl[0] || '', quote: 'HK$1,293.50', why: '收據列明合計金額及日期，建議記為一筆支出，請創辦人確認。' });
+  if (M === 'event-receipt-self-payer') items.splice(0, items.length, { kind: 'money', dir: 'out', amount: 1293.5, currency: 'HKD', date: '2026-11-06', payer: '月月鮮烘', what: '咖啡器材', category: 'tools', file: fl.find(f => /\.(jpe?g|png)$/i.test(f)) || fl[0] || '', quote: 'HK$1,293.50', why: '收據列明合計金額及日期，建議記為一筆支出，請創辦人確認。' });
+  if (M === 'event-receipt-refund') items.splice(0, items.length, { kind: 'money', dir: 'out', amount: 300, currency: 'HKD', date: '2026-11-09', payer: '溪石烘焙原料有限公司', what: '退回貨款', category: 'goods', refund: true, file: fl.find(f => /\.(jpe?g|png)$/i.test(f)) || fl[0] || '', quote: 'HK$300.00', why: '貸記單列明退款金額及日期，建議記為退款。' });
+  if (M === 'event-receipt-statement') items.splice(0, items.length, ...[180, 160, 200].map(function (amount, index) { return { kind: 'money', dir: 'out', amount: amount, currency: 'HKD', date: '2026-11-0' + (3 + index), payer: '迅運物流', what: '月結單運單 ' + (index + 1), category: 'shipping', file: fl.find(f => /\.(jpe?g|png)$/i.test(f)) || fl[0] || '', quote: 'HK$' + amount + '.00', why: '月結單列明這筆已付款項，建議分開入帳。' }; }));
+  if (M === 'event-followup-past') items.splice(0, items.length, { kind: 'followUp', date: '2026-11-01', action: '跟進供應商付款安排', why: '文件列明要跟進付款安排。' });
+  if (M === 'event-receipt-dup') items.splice(0, items.length, { kind: 'money', dir: 'out', amount: 4860, currency: 'HKD', date: '2026-11-10', payer: '綠山生豆貿易', what: '生豆貨款 單據號碼 INV-2026-0187', category: 'goods', file: fl.find(f => /\.(jpe?g|png)$/i.test(f)) || fl[0] || '', quote: 'HK$4,860.00', why: '付款證明列明單據號碼及金額，建議記為一筆支出，請創辦人確認。' });
+  const finalItems = M === 'event-none' || /^event-unread/.test(M) ? [] : items;
   const ev = { summary: '測試 AI：' + said, grade: 'did', read: { summary: '測試 AI：讀了創辦人原話及 ' + fl.length + ' 份附件，對照了假設及站點。', highlights: [{ text: '會議紀錄寫明須在兩星期內回覆報價。', page: 2, ...(fl[0] ? { file: fl[0] } : {}) }] }, ...(finalItems.length ? {} : { reason: '測試理由：這件事沒有改變對方做到哪一步，也沒有新的日期。' }), items: finalItems, contrasts, ...(unreadable.length ? { unreadable } : {}) };
   if (type === 'event' && M === 'event-bad') ev.items = [{ kind: 'assumption', id: 'H99', grade: 'great' }];
   fs.writeFileSync('out/event.json', JSON.stringify(ev, null, 2));
@@ -573,6 +744,16 @@ if (type === 'work' && outputMode === 'agy') {
   const ck = { summary: '（測試）按紀錄找出 ' + weak.length + ' 個最弱環節' + (fbN ? '；已考慮你的 ' + fbN + ' 條意見' : ''), weak, unseen: [{ text: '（測試）送貨時間未有人負責' }], notNow: [{ text: '（測試）暫時不做網上零售', why: '測試理由：本季未有客戶' }] };
   if (M === 'bad-assumption' && ck.weak.length) ck.weak[0].assumptionId = 'H99';
   if (M === 'partial-one') { ck.weak = ck.weak.slice(0, 1); ck.partial = true; }
+  if (M === 'checkup-suggest') {
+    ck.canvasSuggest = [{ cell: 'revenue', text: '先向首批顧客確認他們願意為哪一種交付安排付款。', why: '收入格尚未有付款一方的實際證據。' }];
+    if (ck.weak[0]) ck.weak[0].numbers = [{ what: '首批實際付款人數', how: '向每位試用對象記錄是否付款及付款安排。' }];
+    journeyReceipt('測試 AI：已加入一項生意模式圖建議。');
+  }
+  // checkup-suggest-cost：另一格（成本）的建議，用於同一份公司概覽第二次體檢
+  if (M === 'checkup-suggest-cost') {
+    ck.canvasSuggest = [{ cell: 'cost', text: '先向工房取得每包咖啡豆的進貨價，再計算包裝及寄送成本。', why: '成本格未有實際報價。' }];
+    journeyReceipt('測試 AI：已加入一項生意模式圖建議。');
+  }
   fs.writeFileSync('out/checkup.json', M === 'checkup-bad' ? '{"weak": 1' : JSON.stringify(ck, null, 2));
   done();
 } else if (type === 'opportunities') {
@@ -643,7 +824,7 @@ if (type === 'work' && outputMode === 'agy') {
     if (M === 'fact-offline') { b.sources = [{ n: 1, title: '測試', url: 'https://example.com/', readOn: job.today || '2026-01-01' }]; b.aiChecked = [{ finding: '測試', label: 'fact', sources: [b.sources[0]] }]; }
     w('blue.json', b);
   }
-  else if (pass === 'red') { const r = ex('red.json'); r.blindAttacks = ['未被考慮的風險']; r.attacks.forEach((a, i) => { a.persona = seats[i % seats.length]; }); r.seats = seats.map(s => ({ persona: s, cares: '測試：' + s + '最在意成本', interests: '穩定收入', fears: '失去客戶', criteria: '成本', changeMind: '試行成功', source: M === 'seat-source-bad' ? '網上' : 'Zero 解讀' })); if (M === 'skip-half') { const b = JSON.parse(fs.readFileSync('blue.json', 'utf8')); const keep = new Set(b.claims.slice(0, Math.floor(b.claims.length / 2)).map(c => c.id)); r.attacks = r.attacks.filter(a => keep.has(a.claimId)); } w('red.json', r); }
+  else if (pass === 'red') { const r = ex('red.json'); r.blindAttacks = ['未被考慮的風險']; r.attacks.forEach((a, i) => { a.persona = seats[i % seats.length]; }); if (M === 'red-trap') { if (r.attacks[0]) r.attacks[0].trap = '持續價值不足，顧客試用後便取消。'; if (r.attacks[1]) r.attacks[1].trap = '持續價值不足，顧客試用後便取銷。'; journeyReceipt('測試 AI：已加入模式卡陷阱攻擊。'); } r.seats = seats.map(s => ({ persona: s, cares: '測試：' + s + '最在意成本', interests: '穩定收入', fears: '失去客戶', criteria: '成本', changeMind: '試行成功', source: M === 'seat-source-bad' ? '網上' : 'Zero 解讀' })); if (M === 'skip-half') { const b = JSON.parse(fs.readFileSync('blue.json', 'utf8')); const keep = new Set(b.claims.slice(0, Math.floor(b.claims.length / 2)).map(c => c.id)); r.attacks = r.attacks.filter(a => keep.has(a.claimId)); } w('red.json', r); }
   else if (pass === 'rebuttal') w('rebuttal.json', ex('rebuttal.json'));
   else if (pass === 'judge') { const j = ex('judge.json'); if (M === 'uncited-fact') { j.verdicts[0].reason += ' 外部 [99]'; j.factChecks = j.factChecks.filter(f => f.n !== 99); } w('judge.json', j); }
   else if (pass === 'rejudge') {

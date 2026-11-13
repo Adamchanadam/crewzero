@@ -257,6 +257,8 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 }
 </style>
 <script src="names.js"></script>
+<script src="canvas-lib.js"></script>
+<script src="canvas.js"></script>
 <script src="pair.js"></script>
 <script src="desk.js"></script>
 </head>
@@ -639,7 +641,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     var list = [];
     function push(id) {
       if (!id || list.indexOf(id) >= 0) return;
-      if (REG[id] && (REG[id].plan === 'biz.type' || String(REG[id].plan || '').startsWith('canvas.'))) return;
+      if (REG[id] && (REG[id].plan === 'biz.type' || REG[id].plan === 'biz.goal' || String(REG[id].plan || '').startsWith('canvas.'))) return;
       if (id === '@status' ? statusItems().length : REG[id]) list.push(id);
     }
     var want = D.decide && D.decide.items;
@@ -1044,7 +1046,9 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
   function render() {
     var app = $('#app');
     S.repaint = false;   // 整頁重畫後不再有待重畫（見 poll() 的輸入中途處理）
-    var parts = [header(), h('div', { id: 'track', 'aria-live': 'polite' }), notices(), hero(), decideBlock(), restBlock()];
+    var parts = [header(), h('div', { id: 'track', 'aria-live': 'polite' }), notices(), hero(), decideBlock()];
+    if ((D.detail && D.detail.reading && D.detail.reading.length) || isConfirmed()) parts.push(canvasReading());
+    parts.push(restBlock());
     if (S.fullOpen) parts.push(layer1(), layer2(), layer3());
     parts.push(footer());
     app.replaceChildren.apply(app, parts.filter(Boolean));
@@ -1502,6 +1506,57 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
     announce('已移到第 ' + (j + 1) + ' 站');
   }
 
+  function canvasDataFromPage() {
+    var values = {}, reading = D.detail && D.detail.reading || [];
+    reading.forEach(function (field) { if (field && field.id) values[field.id] = { value: cur(field.id), origin: field.origin, picked: field.picked }; });
+    var base = window.SOS_CANVAS.canvasFromPage(D, values);
+    return { confirmed: true, view: { rev: 0, cells: base.cells, history: [], suggestions: [] }, type: base.type, goal: window.SOS_CANVAS.goalKeyOf(base.goal, N), model: base.model, cards: [], levelsShown: false };
+  }
+  function canvasEditLocal(target, value, text) {
+    var id = value && value.fieldId;
+    if (!id && /^customer\.(problem|alternatives)$/.test(target)) { var sub = target.split('.')[1], f = (D.detail.reading || []).filter(function (item) { return item.plan === 'canvas.' + sub; })[0]; id = f && f.id; }
+    if (!id) return;
+    setVal(id, text, 'r');
+  }
+  function canvasChoiceEditors() {
+    var reading = D.detail && D.detail.reading || [], type = reading.filter(function (field) { return field && field.plan === 'biz.type'; })[0], goal = reading.filter(function (field) { return field && field.plan === 'biz.goal'; })[0];
+    if (!type && !goal) return null;
+    var box = h('div', { class: 'cv-faces' });
+    [[type, 'face_type'], [goal, 'face_goal']].forEach(function (item) {
+      if (item[0] && item[0].id) box.append(h('div', { class: 'cv-face' }, h('small', null, N.ui[item[1]]), ed(item[0].id, 'r', 'compact')));
+    });
+    return box;
+  }
+  function renderConfirmedCanvas() {
+    var box = $('#canvas-confirmed'); if (!box || !/^https?:$/.test(location.protocol)) return;
+    fetch('/api/canvas', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+      if (!box) return;
+      // 頁面當作已確認（例如已送出確認、外殼未處理），但伺服器九格仍未確認：照確認前顯示公司概覽的九格，不留空白
+      if (!data || !data.confirmed) {
+        // 同樣加回類型及目標的逐欄修改（Opus 覆核第 7 項；頁面當作已確認時 canvasReading() 不會加）
+        if (box.parentNode && !box.parentNode.querySelector('.cv-faces-edit')) { var choices = canvasChoiceEditors(); if (choices) { choices.classList.add('cv-faces-edit'); box.parentNode.insertBefore(choices, box); } }
+        window.SOS_CANVAS_UI.render(box, canvasDataFromPage(), { mode: 'full', hideLevels: true, altCharge: true, onEdit: canvasEditLocal }); return;
+      }
+      var prior = S.canvasPrevious === 0 ? window.SOS_CANVAS.historyEntry(data.view, 0) : null, view = prior ? { ...data.view, cells: prior.cells, suggestions: [] } : data.view;
+      window.SOS_CANVAS_UI.render(box, { ...data, view: view }, { mode: 'full', previous: !!prior, suggestions: !prior,
+        // 格內編輯：伺服器只收 300 字；回傳 promise，儲存失敗時保留編輯框及內容（主線全面審查 2026-11-12 第一項）
+        editMax: 300,
+        onEdit: prior ? null : function (target, value, text) { return fetch('/api/canvas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'edit', cell: target, text: text, forRev: data.view.rev }) }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (result) { if (r.ok) return result; var error = new Error(result.message || N.ui.errGeneric); error.status = r.status; throw error; }); }).then(function () { toast(N.ui.cvEditSaved); renderConfirmedCanvas(); }).catch(function (error) { if (error.status === 409) { toast(error.message); S.canvasPrevious = null; renderConfirmedCanvas(); } else toast(error && /[\u4e00-\u9fff]/.test(error.message || '') ? error.message : N.ui.errGeneric); throw error; }); },
+        onSuggestion: prior ? null : function (item, choice, text) { return fetch('/api/canvas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'suggestion', id: item.id, choice: choice, text: text || '' }) }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function () { toast(choice === 'reject' ? N.ui.cvSugKept : N.ui.cvSugDone); renderConfirmedCanvas(); }).catch(function (error) { toast(N.ui.errGeneric); if (choice === 'edit') throw error; }); },
+        onPrevious: window.SOS_CANVAS.historyEntry(data.view, 0) ? function () { S.canvasPrevious = 0; renderConfirmedCanvas(); } : null,
+        onBackNow: prior ? function () { S.canvasPrevious = null; renderConfirmedCanvas(); } : null
+      });
+    }).catch(function () { });
+  }
+  function canvasReading() {
+    var outer = h('section', { class: 'layer', id: 'canvas-reading' });
+    var box = h('div', { id: 'canvas-confirmed' }), choices = !isConfirmed() ? canvasChoiceEditors() : null;
+    if (choices) { choices.classList.add('cv-faces-edit'); outer.append(choices); }
+    outer.append(box);
+    if (isConfirmed()) setTimeout(renderConfirmedCanvas, 0); else window.SOS_CANVAS_UI.render(box, canvasDataFromPage(), { mode: 'full', hideLevels: true, altCharge: true, onEdit: canvasEditLocal });
+    return outer;
+  }
+
   function layer3() {
     var dt = D.detail || {}, open = S.detailOpen;
     var miss = missingList().length;
@@ -1525,11 +1580,6 @@ body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
           it.how ? h('div', { class: 'm-how' }, N.ui.howFind + '：' + it.how) : null));
       });
       sec.append(ml);
-    }
-    if (dt.reading && dt.reading.length) {
-      sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.readingTitle),
-        h('p', { class: 'small muted' }, N.ui.readingCredit),
-        dt.reading.map(function (r) { return h('div', { class: 'kv' }, h('div', { class: 'k' }, r.label), ed(r.id, 'r', 'small')); })));
     }
     if (dt.actors && dt.actors.items) {
       sec.append(h('div', { class: 'sub' }, h('h3', null, N.ui.actorsTitle),
